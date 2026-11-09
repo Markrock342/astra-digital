@@ -19,7 +19,8 @@
     "cloud:check": "wrangler deploy --dry-run",
     "cloud:setup": "node scripts/init-cloud-dev.mjs",
     "qa:cloud": "node scripts/cloud-qa.mjs",
-    "deploy:pages": "node scripts/deploy-pages.mjs"
+    "deploy:pages": "node scripts/deploy-pages.mjs",
+    "db:migrate:local": "npx wrangler d1 migrations apply astra-commerce --local -c db/wrangler.jsonc"
   },
   "dependencies": {
     "lucide-react": "0.468.0",
