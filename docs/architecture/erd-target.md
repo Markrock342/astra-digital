@@ -1,6 +1,7 @@
 # ERD เป้าหมาย — NOTT Sprint 1 (Design only)
 
-สถานะ: **ร่าง Task 0.3.1** — ยังไม่ใช่ migration ที่รันได้  
+สถานะ: **Approved** โดย Owner (2026-11-09) — ส่วน design ของ Task 0.3.3  
+ยังไม่ใช่ migration ที่รันได้จนกว่าปลดล็อก Phase 1  
 เป้าหมาย runtime ตาม brief: **Cloudflare D1** (ของปัจจุบัน = Durable Object SQLite / local SQLite)  
 เงินทั้งหมดเป็น **integer satang** (ของเดิมในรีโปใช้จำนวนเต็มแบบเดียวกัน เช่นราคา `10000`, top-up `amount * 100`)  
 อิง: `server/migrations/001–003`, [auth-rbac.md](auth-rbac.md), [../modules/nott-gap-map.md](../modules/nott-gap-map.md)

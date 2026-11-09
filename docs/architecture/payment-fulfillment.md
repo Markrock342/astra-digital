@@ -1,6 +1,7 @@
 # PaymentAdapter + Fulfillment Flow (Proposed)
 
-สถานะ: **ร่าง Task 0.3.2** — design only · **ห้าม activate** SlipOK / Gateway จนกว่า Client ยืนยัน provider + credentials  
+สถานะ: **Approved** โดย Owner (2026-11-09) — ส่วน design ของ Task 0.3.3 · design only  
+**ห้าม activate** SlipOK / Gateway จนกว่า Client ยืนยัน provider + credentials  
 เงิน: **integer satang** · ไม่ส่ง digital key ก่อน server ยืนยันว่า payment สำเร็จ  
 คู่กับ: [erd-target.md](erd-target.md) · [auth-rbac.md](auth-rbac.md) · ของจริง sandbox ใน `server/domain.mjs` (`pay`, `topup`)
 
@@ -142,5 +143,6 @@ export interface PaymentAdapter {
 
 ## 9. ขั้นถัดไป
 
-- Task **0.3.3**: Owner Approve ชุด design Phase 0 (Auth + ERD + Payment/Fulfillment) และตัดสินใจปลดล็อก Phase 1+  
+- [x] Task **0.3.3** Approve design (Auth + ERD + Payment/Fulfillment) — 2026-11-09  
+- [ ] Owner ปลดล็อก Phase 1+ ก่อนลงมือโค้ด DB/API/Payment  
 - Phase 4 (หลังปลดล็อก): code interface + เทส race/retry/webhook-replay (sandbox ก่อน)

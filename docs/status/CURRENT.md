@@ -7,22 +7,18 @@
 |-------|-----|
 | โปรเจกต์ | ASTRA DIGITAL — ownership **NOTT** |
 | Roadmap | [NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md) — Approved |
-| Phase / Milestone / Task | Phase 0 → **รอ Owner ที่ Task 0.3.3** (ปลดล็อก Phase 1+) |
+| Phase / Milestone / Task | Phase 0 design **Approved** · **รอปลดล็อก Phase 1+** |
 
 ## สรุปรอบนี้
-- Owner Approve Auth/RBAC → ปิด M0.2
-- ร่าง ERD เป้าหมาย (0.3.1) + Payment/Fulfillment (0.3.2)
-- ชุด design Phase 0 พร้อมให้โก-โนโก้ที่ 0.3.3
+Owner Approve ข้อ 1 ของ Task 0.3.3: ชุด design ERD + Payment/Fulfillment  
+ยัง**ไม่**เริ่ม Phase 1 จนกว่า Owner ตอบข้อ 2 (ปลดล็อกหรือล็อกต่อ)
 
 ## ที่เสร็จแล้ว
-- [x] M0.1 Inventory + Gap Map
-- [x] M0.2 Auth/RBAC (Approved)
-- [x] 0.3.1 ERD target draft
-- [x] 0.3.2 Payment/Fulfillment draft
+- [x] Phase 0 เอกสาร: Inventory, Gap Map, Auth (Approved), ERD (Approved), Payment/Fulfillment (Approved)
+- [x] 0.3.3 ส่วน Approve design
 
 ## กำลังทำ / รอ
-- [ ] **Task 0.3.3** Owner Approve ชุด design + ตัดสินใจปลดล็อก Phase 1+
+- [ ] Owner ตัดสินใจข้อ 2: **ปลดล็อก Phase 1+** หรือยังล็อกโค้ด DB/API/Payment
 
 ## Blockers
-- รอ Owner ที่ 0.3.3
-- Payment provider จริงยัง BLOCKED จาก Client (ไม่ขวาง sandbox/interface)
+- รอคำตอบปลดล็อก Phase 1+
