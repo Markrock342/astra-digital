@@ -10,12 +10,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { createCommerceCore } from "./domain.mjs";
+import { executeSqliteMigration } from "./sqlite-migrations.mjs";
 export { ApiError } from "./domain.mjs";
-
-const stripMigrationPragmas = (sql) =>
-  sql
-    .replace(/PRAGMA foreign_keys\s*=\s*OFF\s*;/gi, "")
-    .replace(/PRAGMA foreign_keys\s*=\s*ON\s*;/gi, "");
 
 export function createCommerce(options = {}) {
   const path = options.path ?? ":memory:";
@@ -37,19 +33,14 @@ export function createCommerce(options = {}) {
         new URL("./migrations/" + file, import.meta.url),
         "utf8",
       );
-      const needsFkOff = /PRAGMA foreign_keys\s*=\s*OFF/i.test(sql);
-      // SQLite ignores foreign_keys pragma changes inside an open transaction.
-      if (needsFkOff) db.exec("PRAGMA foreign_keys=OFF");
       db.exec("BEGIN IMMEDIATE");
       try {
-        db.exec(stripMigrationPragmas(sql));
+        executeSqliteMigration(db, sql);
         db.prepare("INSERT INTO schema_migrations(name) VALUES(?)").run(file);
         db.exec("COMMIT");
       } catch (e) {
         db.exec("ROLLBACK");
         throw e;
-      } finally {
-        if (needsFkOff) db.exec("PRAGMA foreign_keys=ON");
       }
     }
   }

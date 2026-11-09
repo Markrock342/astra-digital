@@ -7,6 +7,7 @@ import {
   createHash,
 } from "node:crypto";
 import { createCommerceCore } from "../server/domain.mjs";
+import { executeSqliteMigration } from "../server/sqlite-migrations.mjs";
 import {
   createAPIHandler,
   securityHeaders,
@@ -17,10 +18,6 @@ import reviews from "../server/migrations/002_reviews.sql";
 import referenceLayout from "../server/migrations/003_reference_layout.sql";
 import commerceOps from "../server/migrations/004_commerce_ops.sql";
 const cookieName = "astra_space";
-const stripMigrationPragmas = (sql) =>
-  sql
-    .replace(/PRAGMA foreign_keys\s*=\s*OFF\s*;/gi, "")
-    .replace(/PRAGMA foreign_keys\s*=\s*ON\s*;/gi, "");
 function signingKey(env) {
   if (!env.SPACE_SIGNING_KEY || !env.INVENTORY_KEY)
     throw Error("Demo runtime secrets are missing");
@@ -70,14 +67,7 @@ export class Commerce extends DurableObject {
             .prepare("SELECT name FROM schema_migrations WHERE name=?")
             .get(name)
         ) {
-          const sql = stripMigrationPragmas(content);
-          if (/004_commerce_ops/.test(name)) {
-            db.exec("PRAGMA foreign_keys=OFF");
-            db.exec(sql);
-            db.exec("PRAGMA foreign_keys=ON");
-          } else {
-            db.exec(sql);
-          }
+          executeSqliteMigration(db, content);
           db.prepare("INSERT INTO schema_migrations(name) VALUES(?)").run(name);
         }
       }
