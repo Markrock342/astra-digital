@@ -144,5 +144,5 @@ export interface PaymentAdapter {
 ## 9. ขั้นถัดไป
 
 - [x] Task **0.3.3** Approve design (Auth + ERD + Payment/Fulfillment) — 2026-11-09  
-- [ ] Owner ปลดล็อก Phase 1+ ก่อนลงมือโค้ด DB/API/Payment  
+- [ ] Owner ปลดล็อก Phase 1+ — ปัจจุบันเลือก **B ล็อกไว้ก่อน** (2026-11-09)  
 - Phase 4 (หลังปลดล็อก): code interface + เทส race/retry/webhook-replay (sandbox ก่อน)

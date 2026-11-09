@@ -1,16 +1,17 @@
 # Module: Backend / NOTT (Ownership)
 
-Design: [../architecture/auth-rbac.md](../architecture/auth-rbac.md) · [../architecture/erd-target.md](../architecture/erd-target.md) · [../architecture/payment-fulfillment.md](../architecture/payment-fulfillment.md) — **Approved**  
+Design (Approved): [../architecture/auth-rbac.md](../architecture/auth-rbac.md) · [../architecture/erd-target.md](../architecture/erd-target.md) · [../architecture/payment-fulfillment.md](../architecture/payment-fulfillment.md)  
 Inventory · Gap: [nott-backend-inventory.md](nott-backend-inventory.md) · [nott-gap-map.md](nott-gap-map.md)
 
 ## สถานะปัจจุบันของฟีเจอร์นี้ (Current Status)
 
-- ชุด design Phase 0 ถูก Owner Approve แล้วทั้ง Auth / ERD / Payment·Fulfillment
-- **ยังไม่ปลดล็อก** โค้ด DB/API/Payment (รอ Owner ข้อ 2 ของ 0.3.3)
+- Phase 0 design ถูก Approve แล้ว
+- Owner เลือก **B (2026-11-09)**: **ล็อก** โค้ด DB / API / Payment — ยังไม่เริ่ม Phase 1+
+- เมื่อพร้อม แนะนำปลดล็อกเฉพาะ Phase 1 ก่อน ไม่เปิด Phase 3–4 พร้อมกัน
 
 ## งานที่เพิ่งทำเสร็จ (Recently Completed)
 
-- 0.3.3 Approve design
+- ชุด design Phase 0 + ตัดสินใจล็อกโค้ด (B)
 
 ## บันทึกการแก้บัค (Bug & Troubleshooting Log)
 
@@ -18,10 +19,11 @@ Inventory · Gap: [nott-backend-inventory.md](nott-backend-inventory.md) · [not
 
 ## สิ่งที่ยังค้างอยู่และปัญหาที่ทราบ (Pending & Known Issues)
 
-- รอปลดล็อก Phase 1+
-- Client ยังไม่เลือก payment provider (gateway จริง)
+- Phase 1+ ล็อกอยู่
+- Client ยังไม่เลือก payment provider
 
 ## Checklist งานต่อไป (Next Steps)
 
-1. Owner ตอบ: ปลดล็อก Phase 1+ หรือล็อกต่อ
-2. ถ้าปลดล็อก → Task 1.1.1 migration skeleton / D1 path
+1. Owner ทบทวน design ตามสะดวก
+2. เมื่อพร้อม: สั่งปลดล็อก Phase 1 (D1/migration) โดยเฉพาะ
+3. หลังนั้นค่อย Phase 2 → 3 → 4 ตาม Roadmap

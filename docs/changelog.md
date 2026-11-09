@@ -3,7 +3,8 @@
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
 ## 2026-11-09
-- Owner Approve ชุด design Phase 0 (0.3.3 ข้อ 1: ERD + Payment/Fulfillment); **ยังรอ** คำตอบปลดล็อก Phase 1+
+- Owner เลือก **B**: ล็อกโค้ด DB/API/Payment ไว้ก่อนหลัง Approve design Phase 0 — รอคำสั่งปลดล็อก Phase 1 ในภายหลัง
+- Owner Approve ชุด design Phase 0 (0.3.3 ข้อ 1: ERD + Payment/Fulfillment)
 - Owner Approve Auth/RBAC (0.2.2); ร่าง ERD (0.3.1) + Payment/Fulfillment (0.3.2)
 - Task **0.2.1** ร่าง Auth/RBAC design — [architecture/auth-rbac.md](architecture/auth-rbac.md)
 - Task **0.1.2** เสร็จ / Milestone 0.1 ปิด: Gap Map — [modules/nott-gap-map.md](modules/nott-gap-map.md)
