@@ -7,7 +7,7 @@
 **PR:** https://github.com/Markrock342/astra-digital/pull/1  
 **Branch:** `feat/nott-database-audit`  
 **Base:** `main` @ `9eebc6f`  
-**หัว Commit:** `d48e3b3` (รายงานนี้จะตามด้วย commit ล่าสุดบน branch เดียวกัน)
+**หัว Commit รายงานนี้:** `a164897`
 
 ---
 
@@ -125,7 +125,7 @@
 |-----|---------|
 | `74a34c2` | เอกสาร: Review Pack ฐานข้อมูล NOTT (DB-01 ถึง DB-05) |
 | `d48e3b3` | เอกสาร: ใส่ลิงก์ PR Review Pack ฐานข้อมูล |
-| *(commit ตามหลังรายงานนี้)* | เอกสาร: รายงานส่งมาร์ค DB Review Pack |
+| `a164897` | เอกสาร: รายงานส่งมาร์ค DB Review Pack |
 
 ---
 
