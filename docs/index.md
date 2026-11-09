@@ -21,6 +21,7 @@
 |--------|------|
 | Prompt pack LCS×FIFA (Mark/Nott/Bank) | [requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md](requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md) |
 | Module: Backend NOTT (ขอบเขตทีมนี้) | [modules/backend-nott.md](modules/backend-nott.md) |
+| Catalog API contract (Phase 3) | [modules/api-contract-catalog.md](modules/api-contract-catalog.md) |
 | NOTT backend inventory (Task 0.1.1) | [modules/nott-backend-inventory.md](modules/nott-backend-inventory.md) |
 | NOTT Gap Map (Task 0.1.2) | [modules/nott-gap-map.md](modules/nott-gap-map.md) |
 

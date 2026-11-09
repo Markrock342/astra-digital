@@ -13,8 +13,8 @@ Roadmap: [../roadmaps/NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md)
 | # | ข้อ brief | สถานะ | ของจริง / ช่องว่าง | แผนใน Roadmap |
 |---|-----------|--------|---------------------|----------------|
 | 1 | Review/fix ERD + constraints/indexes + migration: users, catalog, orders, payments, key inventory, allocations, preorder, chat, notifications, audit | **บางส่วน** | มีแทร็ก B แล้ว: `db/migrations/0001_init.sql` (D1 local apply ✅) ตาม ERD · แทร็ก A `server/migrations` ยังใช้กับ DO · Worker ยังไม่ cutover D1 · remote database_id ยัง placeholder | Phase 1 M1.1 เสร็จ → รอ Phase 2–3 + cutover |
-| 2 | Catalog list + product detail API บน local D1 ไม่รั่ว key | **บางส่วน** | มี `GET /api/products` (list+variants ในก้อนเดียว) บน DO/local SQLite — ไม่คืน unused keys · **ไม่มี** product detail endpoint แยก · **ไม่มี** D1 | Phase 3 (**พักโค้ด**) |
-| 3 | Publish I/O types → `packages/contracts` ตกลง Mark/Bank | **ขาด** | ไม่มีโฟลเดอร์ `packages/` | Phase 3.2 · dependency **Mark/Bank** agree |
+| 2 | Catalog list + product detail API บน local D1 ไม่รั่ว key | **มี** (local schema) | `GET /api/d1/products` + `/:id` บน schema จาก `db/migrations`; เทสไม่รั่ว secret · Worker ยังไม่ cutover D1 รีโมต | Phase 3 เสร็จ |
+| 3 | Publish I/O types → `packages/contracts` ตกลง Mark/Bank | **บางส่วน** | มี `packages/contracts` draft · **รอ Mark/Bank agree** | BLOCKED รีวิวภายนอก |
 | 4 | Auth/RBAC design ก่อน แล้ว implement คนละ PR; ไม่รับ role จาก client | **มี** | design Approved + Phase 2: `server/auth-policy.mjs` / domain · เทส register/profile strip role, expired session, anonymous 401 | M2.1 เสร็จ |
 | 5 | Design PaymentAdapter เดียว — ห้ามเปิด SlipOK/Gateway จนกว่าลูกค้ายืนยัน | **ขาด** (ออกแบบ) / **พัก** (โค้ด) | มีแค่ sandbox `pay` + TEST top-up · ไม่มี adapter interface | Phase 0.3.2 doc → Phase 4.1 · dependency **Client** เลือก provider |
 | 6 | Document + test idempotent payment / one-key-per-order-item; race/retry | **บางส่วน** | มี atomic allocate + unique fingerprint/ledger.reference + เทส race/retry ใน `tests/commerce.test.mjs` · ยังผูก sandbox ไม่ใช่ provider webhook replay | Phase 0.3.2 doc + Phase 4.2 ขยายเมื่อมี adapter |

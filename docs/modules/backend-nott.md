@@ -1,18 +1,18 @@
 # Module: Backend / NOTT (Ownership)
 
-Auth: [../architecture/auth-rbac.md](../architecture/auth-rbac.md) · โค้ด `server/auth-policy.mjs`  
-D1: [../architecture/adr-d1-migration-path.md](../architecture/adr-d1-migration-path.md) · `db/migrations/0001_init.sql`
+Catalog D1: `server/d1/*` · routes `GET /api/d1/products` · contracts `@astra/contracts`  
+Contract doc: [api-contract-catalog.md](api-contract-catalog.md)
 
 ## สถานะปัจจุบันของฟีเจอร์นี้ (Current Status)
 
-- **Phase 2 / M2.1 เสร็จ** — verified auth ตาม design
-- Phase 3–4 ยังล็อก
-- `npm test` 20 passed (รวมเคส role injection / expired session / anonymous 401)
+- **Phase 3 เสร็จ** (list/detail + contracts draft)
+- Phase 4 ยังล็อก
+- `npm test` 22 passed
 
 ## งานที่เพิ่งทำเสร็จ (Recently Completed)
 
-- ปลดล็อก Phase 2
-- `auth-policy.mjs` + เชื่อม domain + เทสใหม่
+- ปลดล็อก Phase 3
+- D1 catalog module/API + packages/contracts + เทสไม่รั่ว key
 
 ## บันทึกการแก้บัค (Bug & Troubleshooting Log)
 
@@ -20,11 +20,10 @@ D1: [../architecture/adr-d1-migration-path.md](../architecture/adr-d1-migration-
 
 ## สิ่งที่ยังค้างอยู่และปัญหาที่ทราบ (Pending & Known Issues)
 
-- Product API บน D1 (Phase 3) ยังไม่ทำ
-- PaymentAdapter code (Phase 4) ยังล็อก
-- Worker ยังเป็น DO dual-track
+- Mark/Bank ยังไม่ agree contracts
+- Worker ยังไม่ cutover D1
+- Phase 4 PaymentAdapter ยังล็อก
 
 ## Checklist งานต่อไป (Next Steps)
 
-1. รอ Owner ปลดล็อก Phase 3
-2. หรือสั่งงานอื่น
+1. รอปลดล็อก Phase 4 หรือส่ง contracts ให้ Mark/Bank รีวิว

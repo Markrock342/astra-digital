@@ -7,19 +7,21 @@
 |-------|-----|
 | โปรเจกต์ | ASTRA DIGITAL — ownership **NOTT** |
 | Roadmap | [NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md) |
-| Phase / Milestone / Task | **Phase 2 · M2.1 เสร็จ** · Phase 3–4 ยังล็อก |
+| Phase / Milestone / Task | **Phase 3 เสร็จ (M3.1 + M3.2)** · Phase 4 ยังล็อก |
 
 ## สรุปรอบนี้
-ปลดล็อก Phase 2 → เพิ่ม `server/auth-policy.mjs` · domain ใช้ guards · เทสเชิงลบเพิ่ม  
-หลักฐาน: `npm test` → **20 passed**
+ปลดล็อก Phase 3 → D1 catalog API + `@astra/contracts` + เอกสาร contract  
+หลักฐาน: `npm test` → **22 passed**
 
 ## ที่เสร็จแล้ว
-- [x] Phase 0 design
-- [x] Phase 1 M1.1 D1 migration local
-- [x] Phase 2 M2.1 Auth/RBAC implement (2.1.1–2.1.3)
+- [x] Phase 0–2
+- [x] Phase 3.1 Product list/detail บน schema D1 (local)
+- [x] Phase 3.2 packages/contracts + api-contract-catalog.md
 
 ## กำลังทำ / รอ
-- [ ] Owner สั่งปลดล็อก Phase 3 เมื่อพร้อม
+- [ ] Mark/Bank agree contracts (BLOCKED ภายนอก)
+- [ ] Owner ปลดล็อก Phase 4 เมื่อพร้อม
 
 ## Blockers
-- Phase 3–4 ยังล็อก
+- Phase 4 ยังล็อก
+- Contracts รอ Mark/Bank รีวิว
