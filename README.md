@@ -131,3 +131,7 @@ npm run qa:cloud -- https://astra-demo-133.pages.dev
 
 
 รายละเอียดการเทียบ UI และ motion ล่าสุด: [reference-analysis](docs/reference-analysis.md) · [ขอบเขตเดโม](docs/feature-matrix.md) · [ผลตรวจออนไลน์](docs/cloud-qa-result.json)
+
+## ทำงานร่วมกับเพื่อนและ deploy อัตโนมัติ
+
+ดู [continuous-deployment.md](docs/continuous-deployment.md): push/merge เข้า `main` → build + tests → deploy Worker และ Pages → ตรวจเว็บออนไลน์ เพื่อนที่มีสิทธิ์ write ใน repo ใช้ระบบเดียวกันได้โดยไม่ต้องมีบัญชี Cloudflare ส่วน branch อื่นและ PR จะตรวจโค้ดก่อน ยังไม่แทนที่เดโมลูกค้า

@@ -1,0 +1,141 @@
+name: Test and deploy demo
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: astra-checks-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Check out commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.14.0"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - name: Install Chromium for browser tests
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Stamp verified build
+        env:
+          DEPLOY_COMMIT: ${{ github.sha }}
+        run: node scripts/stamp-build.mjs
+      - name: Save verified build
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: astra-dist-${{ github.sha }}
+          path: dist/
+          retention-days: 3
+          if-no-files-found: error
+      - name: Save browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-failure-${{ github.run_id }}
+          path: test-results/
+          retention-days: 3
+          if-no-files-found: ignore
+
+  deploy:
+    name: Deploy Cloudflare demo
+    needs: checks
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: astra-demo-production
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CI: "true"
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: Check out commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Skip superseded commits
+        id: head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          if [ "$latest" = "$GITHUB_SHA" ]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'current=false' >> "$GITHUB_OUTPUT"
+            echo 'A newer main commit exists; this run will not replace it.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Verify deployment credentials
+        if: steps.head.outputs.current == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo '::error::Set repository secret CLOUDFLARE_API_TOKEN and variable CLOUDFLARE_ACCOUNT_ID. See docs/continuous-deployment.md.'
+            exit 1
+          fi
+      - name: Set up Node.js
+        if: steps.head.outputs.current == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.14.0"
+          cache: npm
+      - name: Install deployment tools
+        if: steps.head.outputs.current == 'true'
+        run: npm ci
+      - name: Restore verified build
+        if: steps.head.outputs.current == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: astra-dist-${{ github.sha }}
+          path: dist/
+      - name: Check Cloudflare authentication
+        if: steps.head.outputs.current == 'true'
+        run: npx wrangler whoami
+      - name: Deploy API and durable storage bindings
+        if: steps.head.outputs.current == 'true'
+        run: npx wrangler deploy
+      - name: Package Pages frontend
+        if: steps.head.outputs.current == 'true'
+        run: node scripts/build-pages.mjs
+      - name: Deploy storefront and merchant frontend
+        if: steps.head.outputs.current == 'true'
+        run: npm run deploy:pages
+      - name: Verify live release
+        if: steps.head.outputs.current == 'true'
+        env:
+          DEPLOY_COMMIT: ${{ github.sha }}
+        run: node scripts/verify-deployment.mjs https://astra-demo-133.pages.dev
+      - name: Publish release links
+        if: steps.head.outputs.current == 'true'
+        shell: bash
+        run: |
+          {
+            echo '### ASTRA demo deployed'
+            echo "Commit: $GITHUB_SHA"
+            echo '- [Storefront](https://astra-demo-133.pages.dev/)'
+            echo '- [Merchant portal](https://astra-demo-133.pages.dev/stores)'
+            echo '- [Administration](https://astra-demo-133.pages.dev/admin)'
+          } >> "$GITHUB_STEP_SUMMARY"
