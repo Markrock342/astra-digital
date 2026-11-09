@@ -17,6 +17,8 @@
 - Secrets ไม่อยู่ในรีโป
 
 ## เอกสารที่เกี่ยวข้อง
-- Auth/RBAC design: [auth-rbac.md](auth-rbac.md)
+- Auth/RBAC design: [auth-rbac.md](auth-rbac.md) (Approved)
+- ERD เป้าหมาย: [erd-target.md](erd-target.md)
+- Payment/Fulfillment: [payment-fulfillment.md](payment-fulfillment.md)
 - Security policy: [security.md](security.md)
 - ผลิตภัณฑ์: [../architecture.md](../architecture.md)

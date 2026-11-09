@@ -1,7 +1,7 @@
 # Auth / RBAC Design — ASTRA (NOTT)
 
-สถานะ: **ร่างสำหรับ Owner รีวิว (Task 0.2.1)** → รอ Approve ที่ Task **0.2.2**  
-ยัง **ไม่** เป็นใบสั่ง implement จนกว่า Owner Approve  
+สถานะ: **Approved** โดย Owner (2026-11-09) — Task 0.2.2  
+ใช้เป็นเกณฑ์ Phase 2 Auth implement (PR แยก)  
 อิงของจริง: `server/domain.mjs`, `server/api-handler.mjs`, `cloud/worker.mjs`, `tests/commerce.test.mjs`  
 คู่กับ: [../modules/nott-backend-inventory.md](../modules/nott-backend-inventory.md) · [security.md](security.md)
 
@@ -141,12 +141,11 @@ Mutation เพิ่ม: ต้องมี `X-Astra-Request: 1` + JSON + same-
 | 3 Product API | สิทธิ์อ่าน catalog เป็น public; ห้ามผูก key กับ anonymous |
 | 4 Payment | การยืนยันจ่ายต้องเป็น user owner + server token — ไม่ใช้ role จาก client |
 
-## 11. คำขอ Approve จาก Owner (Task 0.2.2)
+## 11. Owner Approve (Task 0.2.2)
 
-กรุณายืนยันว่า:
-1. ยอมรับ roles แค่ `CUSTOMER` | `ADMIN` ใน Sprint 1  
-2. ยอมรับขอบเขต `demo-merchant` เป็นเดโมต่อ workspace เท่านั้น  
-3. ยอมรับว่า email recovery/MFA อยู่นอก Sprint นี้  
-4. ให้ใช้เอกสารนี้เป็นเกณฑ์ Phase 2  
+- [x] ยอมรับ roles แค่ `CUSTOMER` | `ADMIN` ใน Sprint 1  
+- [x] ยอมรับขอบเขต `demo-merchant` เป็นเดโมต่อ workspace เท่านั้น  
+- [x] ยอมรับว่า email recovery/MFA อยู่นอก Sprint นี้  
+- [x] ใช้เอกสารนี้เป็นเกณฑ์ Phase 2  
 
-ถ้าขอแก้ — ระบุข้อที่ต้องการเปลี่ยนก่อนเริ่ม Task 0.3.1
+Approved: 2026-11-09

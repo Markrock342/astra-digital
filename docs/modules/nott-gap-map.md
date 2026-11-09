@@ -55,7 +55,7 @@ Roadmap: [../roadmaps/NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md)
 
 | รายการ | สถานะ | ความเสี่ยงถ้าข้าม |
 |--------|--------|-------------------|
-| Auth/RBAC design doc | **ขาด** | implement กระจัดกระจาย / ไม่ตรง brief |
+| Auth/RBAC design doc | **มี** (Approved 2026-11-09) | — |
 | Session + role server-side | **มี** | — |
 | `demo-merchant` boundary | **มี** (workspace) | ต้องคงใน design ว่าไม่ใช่ production identity |
 | D1 runtime | **ขาด** | งาน migration/API ตาม brief ยังไม่ตรงสภาพแวดล้อมเป้าหมาย |

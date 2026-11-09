@@ -3,7 +3,8 @@
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
 ## 2026-11-09
-- Task **0.2.1** ร่าง Auth/RBAC design — [architecture/auth-rbac.md](architecture/auth-rbac.md) รอ Owner Approve (0.2.2)
+- Owner Approve Auth/RBAC (0.2.2); ร่าง ERD (0.3.1) + Payment/Fulfillment (0.3.2) — รอเกต [0.3.3](status/CURRENT.md)
+- Task **0.2.1** ร่าง Auth/RBAC design — [architecture/auth-rbac.md](architecture/auth-rbac.md)
 - Task **0.1.2** เสร็จ / Milestone 0.1 ปิด: Gap Map — [modules/nott-gap-map.md](modules/nott-gap-map.md)
 - Task **0.1.1** เสร็จ: inventory backend ของจริง — [modules/nott-backend-inventory.md](modules/nott-backend-inventory.md); Roadmap Approved โดย Owner
 - ร่าง Roadmap NOTT Sprint 1 ตามลำดับความสำคัญ Phase 0–5 — [roadmaps/NOTT-SPRINT1.md](roadmaps/NOTT-SPRINT1.md)

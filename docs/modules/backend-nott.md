@@ -1,20 +1,20 @@
 # Module: Backend / NOTT (Ownership)
 
-แหล่ง requirement: [../requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md](../requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md) — §2 NOTT  
 Roadmap: [../roadmaps/NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md)  
-Inventory: [nott-backend-inventory.md](nott-backend-inventory.md) · Gap: [nott-gap-map.md](nott-gap-map.md)  
-Auth design: [../architecture/auth-rbac.md](../architecture/auth-rbac.md) (**รอ Owner Approve**)
+Inventory · Gap: [nott-backend-inventory.md](nott-backend-inventory.md) · [nott-gap-map.md](nott-gap-map.md)  
+Design: [../architecture/auth-rbac.md](../architecture/auth-rbac.md) (Approved) · [../architecture/erd-target.md](../architecture/erd-target.md) · [../architecture/payment-fulfillment.md](../architecture/payment-fulfillment.md)
 
 ## สถานะปัจจุบันของฟีเจอร์นี้ (Current Status)
 
-- M0.1 เสร็จ · Task 0.2.1 เสร็จ (ร่าง Auth/RBAC)
-- รอ Task **0.2.2** Owner รีวิว design ก่อนเข้า 0.3.x
-- โค้ด DB/API/Payment ยังพักจนเกต 0.3.3
+- Phase 0 design ครบร่างแล้ว รอ **Task 0.3.3** ให้ Owner Approve + ปลดล็อก Phase 1+
+- Auth/RBAC Approved
+- ยังไม่ลงมือ migration D1 / Product API / PaymentAdapter code
 
 ## งานที่เพิ่งทำเสร็จ (Recently Completed)
 
-- Gap Map 0.1.2
-- Auth/RBAC design draft 0.2.1
+- 0.2.2 Owner Approve Auth
+- 0.3.1 ERD เป้าหมาย
+- 0.3.2 PaymentAdapter + Fulfillment proposal
 
 ## บันทึกการแก้บัค (Bug & Troubleshooting Log)
 
@@ -22,10 +22,10 @@ Auth design: [../architecture/auth-rbac.md](../architecture/auth-rbac.md) (**ร
 
 ## สิ่งที่ยังค้างอยู่และปัญหาที่ทราบ (Pending & Known Issues)
 
-- ดู [nott-gap-map.md](nott-gap-map.md)
-- Design ยังไม่ถูก Approve → ยังไม่เริ่ม Phase 2 implement
+- เกต 0.3.3
+- Client ยังไม่เลือก payment provider (BLOCKED สำหรับ gateway จริง)
 
 ## Checklist งานต่อไป (Next Steps)
 
-1. Owner Approve Auth/RBAC (0.2.2)
-2. 0.3.1 ERD · 0.3.2 Payment/Fulfillment docs · 0.3.3 ปลดล็อก
+1. Owner ตอบ 0.3.3 (Approve design + ปลดล็อกหรือล็อก Phase 1+)
+2. ถ้าปลดล็อก → Phase 1 Task 1.1.1
