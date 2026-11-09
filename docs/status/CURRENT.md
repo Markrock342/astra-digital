@@ -6,22 +6,25 @@
 | ระดับ | ค่า |
 |-------|-----|
 | โปรเจกต์ | ASTRA DIGITAL — ownership **NOTT** |
-| Roadmap | [NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md) — Approved |
-| Phase / Milestone / Task | Phase 0 design **Approved** · โค้ด DB/API/Payment = **ล็อก (เลือก B)** |
+| Roadmap | [NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md) |
+| Phase / Milestone / Task | **Phase 1 · M1.1 เสร็จ** (1.1.1–1.1.3) · Phase 2–4 ยังล็อก |
 
 ## สรุปรอบนี้
-Owner เลือก **B**: ยังไม่ปลดล็อก Phase 1+  
-ช่วงนี้ไม่ลงมือ migration D1 / Product API / PaymentAdapter code  
-งานที่เหมาะต่อ: ทบทวน design หรือรอคำสั่งปลดล็อกเฉพาะ Phase 1 ในภายหลัง
+Owner ปลดล็อก Phase 1 → dual-track D1 (`db/`) + migration `0001_init.sql` apply local ผ่าน  
+หลักฐาน: `npm run db:migrate:local` → `0001_init.sql ✅` (30 commands)
 
 ## ที่เสร็จแล้ว
-- [x] Phase 0 เอกสารครบและ Approve (Auth / ERD / Payment·Fulfillment)
-- [x] 0.3.3 ข้อ 1 Approve design
-- [x] 0.3.3 ข้อ 2 = **ล็อกต่อ (B)** — 2026-11-09
+- [x] Phase 0 design Approved
+- [x] ปลดล็อก Phase 1
+- [x] Task 1.1.1 skeleton + ADR
+- [x] Task 1.1.2 `0001_init.sql` + local apply
+- [x] Task 1.1.3 [erd-sprint1.md](../architecture/erd-sprint1.md)
 
 ## กำลังทำ / รอ
-- [ ] Owner ทบทวน design (ถ้าต้องการ)
-- [ ] Owner สั่งปลดล็อกเมื่อพร้อม (แนะนำเริ่มแค่ Phase 1)
+- [ ] Owner สั่งปลดล็อก Phase 2 (Auth implement) เมื่อพร้อม
+- [ ] หรืองานอื่นตามสั่ง
 
 ## Blockers
-- Phase 1+ ถูกล็อกตามคำสั่ง Owner (B)
+- Phase 2–4 ยังล็อก
+- Remote D1 `database_id` จริงยังไม่สร้าง
+- Worker หลักยังเป็น DO (ตั้งใจ)

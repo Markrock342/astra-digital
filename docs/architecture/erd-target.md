@@ -1,7 +1,7 @@
 # ERD เป้าหมาย — NOTT Sprint 1 (Design only)
 
 สถานะ: **Approved** โดย Owner (2026-11-09) — ส่วน design ของ Task 0.3.3  
-ยังไม่ใช่ migration ที่รันได้จนกว่าปลดล็อก Phase 1  
+Phase 1 ปลดล็อกแล้ว · migration ที่ apply ได้ดู `db/migrations/0001_init.sql` และ [erd-sprint1.md](erd-sprint1.md)  
 เป้าหมาย runtime ตาม brief: **Cloudflare D1** (ของปัจจุบัน = Durable Object SQLite / local SQLite)  
 เงินทั้งหมดเป็น **integer satang** (ของเดิมในรีโปใช้จำนวนเต็มแบบเดียวกัน เช่นราคา `10000`, top-up `amount * 100`)  
 อิง: `server/migrations/001–003`, [auth-rbac.md](auth-rbac.md), [../modules/nott-gap-map.md](../modules/nott-gap-map.md)
@@ -124,4 +124,5 @@ audit (append-only)
 
 - [x] Task **0.3.2** PaymentAdapter + Fulfillment flow  
 - [x] Task **0.3.3** Approve design (ERD + Payment) — 2026-11-09  
-- [ ] ปลดล็อก Phase 1+ — Owner เลือก **B ล็อกไว้ก่อน** (2026-11-09); รอคำสั่งใหม่ก่อนเขียน migration D1
+- [x] ปลดล็อก Phase 1 (2026-11-09) → migration local เสร็จที่ M1.1  
+- [ ] Phase 2–4 ยังล็อกจนกว่า Owner สั่ง

@@ -3,6 +3,8 @@
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
 ## 2026-11-09
+- Phase 1 M1.1 เสร็จ: dual-track D1 (`db/migrations/0001_init.sql`) + `npm run db:migrate:local` ผ่าน; ดู [architecture/erd-sprint1.md](architecture/erd-sprint1.md)
+- Owner ปลดล็อก Phase 1 (หลังเคยเลือก B); Phase 2–4 ยังล็อก
 - Owner เลือก **B**: ล็อกโค้ด DB/API/Payment ไว้ก่อนหลัง Approve design Phase 0 — รอคำสั่งปลดล็อก Phase 1 ในภายหลัง
 - Owner Approve ชุด design Phase 0 (0.3.3 ข้อ 1: ERD + Payment/Fulfillment)
 - Owner Approve Auth/RBAC (0.2.2); ร่าง ERD (0.3.1) + Payment/Fulfillment (0.3.2)

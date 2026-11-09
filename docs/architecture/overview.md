@@ -18,7 +18,8 @@
 
 ## เอกสารที่เกี่ยวข้อง
 - Auth/RBAC design: [auth-rbac.md](auth-rbac.md) (Approved)
-- ERD เป้าหมาย: [erd-target.md](erd-target.md)
+- ERD เป้าหมาย: [erd-target.md](erd-target.md) · applied: [erd-sprint1.md](erd-sprint1.md)
+- D1 path ADR: [adr-d1-migration-path.md](adr-d1-migration-path.md)
 - Payment/Fulfillment: [payment-fulfillment.md](payment-fulfillment.md)
 - Security policy: [security.md](security.md)
 - ผลิตภัณฑ์: [../architecture.md](../architecture.md)

@@ -12,7 +12,7 @@ Roadmap: [../roadmaps/NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md)
 
 | # | ข้อ brief | สถานะ | ของจริง / ช่องว่าง | แผนใน Roadmap |
 |---|-----------|--------|---------------------|----------------|
-| 1 | Review/fix ERD + constraints/indexes + migration: users, catalog, orders, payments, key inventory, allocations, preorder, chat, notifications, audit | **บางส่วน** | มี users/catalog/orders/inventory/preorder(`reservations`)/audit (+ reviews/ledger) ใน `server/migrations/001–003` · **ไม่มี** ตาราง `payments` / `allocations` แยก / `chat` / `notifications` · ยังเป็น DO SQLite ไม่ใช่ D1 · ไม่มี `db/migrations/0001_init.sql` | Phase 0.3.1 design → Phase 1 migration (**พักโค้ด**) |
+| 1 | Review/fix ERD + constraints/indexes + migration: users, catalog, orders, payments, key inventory, allocations, preorder, chat, notifications, audit | **บางส่วน** | มีแทร็ก B แล้ว: `db/migrations/0001_init.sql` (D1 local apply ✅) ตาม ERD · แทร็ก A `server/migrations` ยังใช้กับ DO · Worker ยังไม่ cutover D1 · remote database_id ยัง placeholder | Phase 1 M1.1 เสร็จ → รอ Phase 2–3 + cutover |
 | 2 | Catalog list + product detail API บน local D1 ไม่รั่ว key | **บางส่วน** | มี `GET /api/products` (list+variants ในก้อนเดียว) บน DO/local SQLite — ไม่คืน unused keys · **ไม่มี** product detail endpoint แยก · **ไม่มี** D1 | Phase 3 (**พักโค้ด**) |
 | 3 | Publish I/O types → `packages/contracts` ตกลง Mark/Bank | **ขาด** | ไม่มีโฟลเดอร์ `packages/` | Phase 3.2 · dependency **Mark/Bank** agree |
 | 4 | Auth/RBAC design ก่อน แล้ว implement คนละ PR; ไม่รับ role จาก client | **บางส่วน** | พฤติกรรมจริงมี session hash + CUSTOMER/ADMIN + เทสกัน role injection · **ยังไม่มีเอกสาร design** ตาม brief · implement ใหม่ต้องรอหลัง design | Phase 0.2 design → Phase 2 implement |
