@@ -126,6 +126,12 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, { user: service.publicUser(user) });
         if (path === "/api/products")
           return send(200, { products: service.products() });
+        if (/^\/api\/products\/[^/]+$/.test(path))
+          return send(200, {
+            product: service.productDetail(
+              decodeURIComponent(path.split("/")[3]),
+            ),
+          });
         if (path === "/api/overview") return send(200, service.overview());
         if (path === "/api/reviews")
           return send(200, { reviews: service.reviews() });
@@ -133,8 +139,30 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, { orders: service.orders(user) });
         if (/^\/api\/orders\/[^/]+$/.test(path))
           return send(200, service.orderDetail(user, path.split("/")[3]));
+        if (path === "/api/staff/orders")
+          return send(200, { orders: service.staffOrders(user) });
         if (path === "/api/ledger")
           return send(200, { entries: service.ledger(user) });
+        if (path === "/api/payment-channel")
+          return send(200, { channel: service.getPaymentChannel() });
+        if (path === "/api/queue")
+          return send(200, { queue: service.queueBoard(user) });
+        if (path === "/api/queue/me")
+          return send(200, { queue: service.myQueue(user) });
+        if (path === "/api/chat/threads")
+          return send(200, { threads: service.chatThreads(user) });
+        if (/^\/api\/chat\/threads\/[^/]+\/messages$/.test(path))
+          return send(200, {
+            messages: service.chatMessages(user, path.split("/")[4]),
+          });
+        if (path === "/api/notifications")
+          return send(200, {
+            notifications: service.notifications(user),
+          });
+        if (path === "/api/rankings/buyers")
+          return send(200, {
+            buyers: service.buyerRanking(url.searchParams.get("limit")),
+          });
         if (path === "/api/admin")
           return send(200, service.adminOverview(user));
       } else {
@@ -160,9 +188,26 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, { user: service.profile(user, input) });
         if (path === "/api/reviews")
           return send(201, service.addReview(user, input));
+        if (path === "/api/chat/threads")
+          return send(201, service.openChatThread(user, input));
+        if (/^\/api\/chat\/threads\/[^/]+\/messages$/.test(path))
+          return send(201, {
+            messages: service.postChatMessage(
+              user,
+              path.split("/")[4],
+              input,
+            ),
+          });
+        if (/^\/api\/notifications\/[^/]+\/read$/.test(path))
+          return send(200, service.markNotificationRead(user, path.split("/")[3]));
+        if (path === "/api/admin/payment-channel")
+          return send(200, {
+            channel: service.setPaymentChannel(user, input),
+          });
         if (path === "/api/admin/inventory")
           return send(200, service.importCodes(user, input));
-        if (path === "/api/admin/settings")return send(200,service.saveSettings(user,input));
+        if (path === "/api/admin/settings")
+          return send(200, service.saveSettings(user, input));
         if (path === "/api/admin/products")
           return send(200, service.saveProduct(user, input));
       }

@@ -13,6 +13,8 @@ import {
   withoutClientPrivileges,
   assertAuthenticated,
   assertAdmin,
+  assertStaff,
+  isStaff,
 } from "./auth-policy.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
@@ -101,6 +103,38 @@ export function createCommerceCore({
     );
   const requireUser = (user) => assertAuthenticated(user, fail);
   const requireAdmin = (user) => assertAdmin(user, fail);
+  const requireStaff = (user) => assertStaff(user, fail);
+  const paymentChannel = () =>
+    one("SELECT * FROM payment_channel WHERE id='primary'") ?? {
+      id: "primary",
+      provider: "unset",
+      active: 0,
+      note: "ช่องทางเดียว — ห้ามเปิด SlipOK/Gateway จนกว่าลูกค้าเลือก",
+    };
+  const assertSandboxPayAllowed = () => {
+    const channel = paymentChannel();
+    if (channel.provider !== "unset" && channel.provider !== "sandbox")
+      fail(
+        501,
+        "ช่องทางจ่ายนี้รอการเชื่อมต่อ — ตอนนี้รับเฉพาะ sandbox",
+      );
+  };
+  const notify = (userId, kind, title, body) => {
+    run(
+      "INSERT INTO notifications(id,user_id,kind,title,body,created_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)",
+      randomUUID(),
+      userId,
+      kind,
+      title,
+      body,
+    );
+  };
+  const nextQueueNumber = () => {
+    const row = one(
+      "SELECT COALESCE(MAX(queue_number),0)+1 AS n FROM reservations",
+    );
+    return row.n;
+  };
   const integer = (v, min, max, label) => {
     if (!Number.isSafeInteger(v) || v < min || v > max)
       fail(400, label + "ไม่ถูกต้อง");
@@ -426,27 +460,39 @@ export function createCommerceCore({
       ) ?? null
     );
   }
+  function mapProduct(p) {
+    return {
+      ...p,
+      variants: all(
+        "SELECT v.*, CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND i.order_id IS NULL) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=? ORDER BY CASE WHEN v.id='stream-plus-full' THEN 0 WHEN v.id LIKE '%-30' THEN 1 ELSE 2 END,price",
+        p.id,
+      ).map((v) => ({
+        ...v,
+        price: p.preorder && v.id === "cinema-max-30" ? 0 : v.price,
+      })),
+      rating: one(
+        "SELECT AVG(r.rating) AS average,COUNT(*) AS count FROM reviews r JOIN orders o ON o.id=r.order_id JOIN variants v ON v.id=o.variant_id WHERE v.product_id=?",
+        p.id,
+      ),
+      sold: one(
+        "SELECT COALESCE(SUM(o.quantity),0) AS count FROM orders o JOIN variants v ON v.id=o.variant_id WHERE v.product_id=? AND o.status='DELIVERED'",
+        p.id,
+      ).count,
+    };
+  }
   function products() {
     return all("SELECT * FROM products WHERE active=1 AND hidden_seed=0").map(
-      (p) => ({
-        ...p,
-        variants: all(
-          "SELECT v.*, CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND i.order_id IS NULL) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=? ORDER BY CASE WHEN v.id='stream-plus-full' THEN 0 WHEN v.id LIKE '%-30' THEN 1 ELSE 2 END,price",
-          p.id,
-        ).map((v) => ({
-          ...v,
-          price: p.preorder && v.id === "cinema-max-30" ? 0 : v.price,
-        })),
-        rating: one(
-          "SELECT AVG(r.rating) AS average,COUNT(*) AS count FROM reviews r JOIN orders o ON o.id=r.order_id JOIN variants v ON v.id=o.variant_id WHERE v.product_id=?",
-          p.id,
-        ),
-        sold: one(
-          "SELECT COALESCE(SUM(o.quantity),0) AS count FROM orders o JOIN variants v ON v.id=o.variant_id WHERE v.product_id=? AND o.status='DELIVERED'",
-          p.id,
-        ).count,
-      }),
+      mapProduct,
     );
+  }
+  function productDetail(id) {
+    const productId = clean(id, 1, 80, "สินค้า");
+    const p = one(
+      "SELECT * FROM products WHERE id=? AND active=1 AND hidden_seed=0",
+      productId,
+    );
+    if (!p) fail(404, "ไม่พบสินค้า");
+    return mapProduct(p);
   }
   function settings() {
     const raw = one(
@@ -605,35 +651,115 @@ export function createCommerceCore({
   }
   function orderDetail(user, id) {
     requireUser(user);
-    const order = one(
+    const orderId = clean(id, 1, 80, "คำสั่งซื้อ");
+    let order = one(
       "SELECT o.*,p.name,p.art,v.label FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.id=? AND o.user_id=?",
-      id,
+      orderId,
       user.id,
     );
+    let ownerView = !!order;
+    if (!order && isStaff(user)) {
+      order = one(
+        "SELECT o.*,p.name,p.art,v.label FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.id=?",
+        orderId,
+      );
+    }
     if (!order) {
-      const reservation = one(
+      let reservation = one(
         "SELECT o.*,p.name,p.art,v.label FROM reservations o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.id=? AND o.user_id=?",
-        id,
+        orderId,
         user.id,
       );
+      ownerView = !!reservation;
+      if (!reservation && isStaff(user)) {
+        reservation = one(
+          "SELECT o.*,p.name,p.art,v.label FROM reservations o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.id=?",
+          orderId,
+        );
+      }
       if (!reservation) fail(404, "ไม่พบคำสั่งซื้อ");
       const { payment_hash, request_key, ...safe } = reservation;
-      return { ...safe, preorder: true, reviewed: true, codes: [] };
+      return {
+        ...safe,
+        preorder: true,
+        reviewed: true,
+        codes: [],
+        queueNumber: reservation.queue_number ?? null,
+      };
     }
     const { payment_hash, request_key, ...safe } = order;
     return {
       ...safe,
-      reviewed: !!one("SELECT id FROM reviews WHERE order_id=?", id),
+      reviewed: !!one("SELECT id FROM reviews WHERE order_id=?", orderId),
       codes:
-        order.status === "DELIVERED"
-          ? all("SELECT secret FROM inventory WHERE order_id=?", id).map((c) =>
-              decrypt(c.secret),
+        ownerView && order.status === "DELIVERED"
+          ? all("SELECT secret FROM inventory WHERE order_id=?", orderId).map(
+              (c) => decrypt(c.secret),
             )
           : [],
     };
   }
+  function staffOrders(user) {
+    requireStaff(user);
+    return all(
+      `SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product,0 AS preorder,NULL AS queue_number
+       FROM orders o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id
+       UNION ALL
+       SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product,1 AS preorder,o.queue_number
+       FROM reservations o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id
+       ORDER BY 5 DESC`,
+    ).map(({ payment_hash, request_key, ...row }) => ({
+      ...row,
+      codes: undefined,
+    }));
+  }
+  function getPaymentChannel() {
+    const channel = paymentChannel();
+    return {
+      id: channel.id,
+      provider: channel.provider,
+      active: !!channel.active,
+      note: channel.note,
+      sandboxOnly:
+        channel.provider === "unset" || channel.provider === "sandbox",
+    };
+  }
+  function setPaymentChannel(user, rawInput) {
+    requireAdmin(user);
+    const input = withoutClientPrivileges(rawInput);
+    const provider = clean(input.provider ?? "", 1, 32, "ช่องทางจ่าย");
+    if (!["unset", "sandbox", "slipok", "gateway"].includes(provider))
+      fail(400, "ช่องทางจ่ายไม่รองรับ");
+    if (
+      (provider === "slipok" || provider === "gateway") &&
+      process.env.ASTRA_CLIENT_PAYMENT_PROVIDER !== provider
+    )
+      fail(
+        501,
+        "ยังไม่เปิด SlipOK/Gateway จนกว่าลูกค้าเลือกและยืนยันช่องทาง",
+      );
+    const active = input.active === true || input.active === 1 ? 1 : 0;
+    if (active && provider === "unset")
+      fail(400, "ต้องเลือก sandbox ก่อนเปิดใช้งานช่องทาง");
+    const note = clean(
+      input.note ??
+        "ช่องทางเดียว — ห้ามเปิด SlipOK/Gateway จนกว่าลูกค้าเลือก",
+      1,
+      200,
+      "หมายเหตุ",
+    );
+    run(
+      "INSERT INTO payment_channel(id,provider,active,note) VALUES('primary',?,?,?) ON CONFLICT(id) DO UPDATE SET provider=excluded.provider, active=excluded.active, note=excluded.note",
+      provider,
+      active,
+      note,
+    );
+    audit(user, "SET_PAYMENT_CHANNEL", provider);
+    return getPaymentChannel();
+  }
   function pay(user, id, input) {
     requireUser(user);
+    assertSandboxPayAllowed();
     if (
       one("SELECT id FROM reservations WHERE id=? AND user_id=?", id, user.id)
     )
@@ -671,7 +797,30 @@ export function createCommerceCore({
             "preorder:" + id,
             "ชำระสินค้าสั่งจอง " + id.slice(0, 8),
           );
-        run("UPDATE reservations SET status='PREORDER' WHERE id=?", id);
+        const queueNumber = o.queue_number ?? nextQueueNumber();
+        run(
+          "UPDATE reservations SET status='PREORDER', queue_number=? WHERE id=?",
+          queueNumber,
+          id,
+        );
+        run(
+          `INSERT OR IGNORE INTO payments(
+            id, order_id, reservation_id, user_id, amount, currency, status,
+            provider, provider_ref, idempotency_key, created_at, finalized_at
+          ) VALUES(?,NULL,?,?,?,'THB','SUCCEEDED','sandbox',?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+          randomUUID(),
+          id,
+          user.id,
+          o.total,
+          "sandbox:preorder:" + id,
+          "pay:reservation:" + id,
+        );
+        notify(
+          user.id,
+          "preorder_queue",
+          "ได้รับเลขคิวพรีออเดอร์",
+          "คิวของคุณคือ #" + queueNumber,
+        );
         audit(user, "PREORDER_PAID", id);
         return orderDetail(user, id);
       });
@@ -734,6 +883,24 @@ export function createCommerceCore({
           item.id,
         );
       run("UPDATE orders SET status='DELIVERED' WHERE id=?", id);
+      run(
+        `INSERT OR IGNORE INTO payments(
+          id, order_id, reservation_id, user_id, amount, currency, status,
+          provider, provider_ref, idempotency_key, created_at, finalized_at
+        ) VALUES(?,?,NULL,?,?,'THB','SUCCEEDED','sandbox',?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+        randomUUID(),
+        id,
+        user.id,
+        order.total,
+        "sandbox:order:" + id,
+        "pay:order:" + id,
+      );
+      notify(
+        user.id,
+        "code_delivery",
+        "ส่งโค้ดสำเร็จ",
+        "คำสั่งซื้อ " + id.slice(0, 8) + " ได้รับโค้ดแล้ว",
+      );
       audit(user, "PAYMENT_AND_DELIVERY", id);
       return orderDetail(user, id);
     });
@@ -967,6 +1134,174 @@ export function createCommerceCore({
       return { ok: true };
     });
   }
+  function queueBoard(user) {
+    requireStaff(user);
+    return all(
+      `SELECT r.id,r.queue_number,r.status,r.total,r.quantity,r.created_at,
+              u.id AS customer_id,u.name AS customer,p.name AS product,v.label
+       FROM reservations r
+       JOIN users u ON u.id=r.user_id
+       JOIN variants v ON v.id=r.variant_id
+       JOIN products p ON p.id=v.product_id
+       WHERE r.queue_number IS NOT NULL
+       ORDER BY r.queue_number ASC`,
+    );
+  }
+  function myQueue(user) {
+    requireUser(user);
+    return all(
+      `SELECT id,queue_number,status,total,quantity,created_at
+       FROM reservations
+       WHERE user_id=? AND queue_number IS NOT NULL
+       ORDER BY queue_number ASC`,
+      user.id,
+    ).map((row) => ({
+      ...row,
+      queueNumber: row.queue_number,
+    }));
+  }
+  function chatThreads(user) {
+    requireUser(user);
+    if (isStaff(user))
+      return all(
+        `SELECT t.*,u.name AS customer,u.email AS customer_email,
+                (SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id=t.id) AS messages
+         FROM chat_threads t JOIN users u ON u.id=t.user_id
+         ORDER BY t.created_at DESC`,
+      );
+    return all(
+      `SELECT t.*,
+              (SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id=t.id) AS messages
+       FROM chat_threads t WHERE t.user_id=? ORDER BY t.created_at DESC`,
+      user.id,
+    );
+  }
+  function openChatThread(user, rawInput) {
+    requireUser(user);
+    const input = withoutClientPrivileges(rawInput);
+    const body = clean(input.body ?? "สวัสดี ต้องการความช่วยเหลือ", 1, 1000, "ข้อความ");
+    return tx(() => {
+      let thread = one(
+        "SELECT * FROM chat_threads WHERE user_id=? AND status='OPEN' ORDER BY created_at DESC LIMIT 1",
+        user.id,
+      );
+      if (!thread) {
+        const id = randomUUID();
+        run(
+          "INSERT INTO chat_threads(id,user_id,status) VALUES(?,?,'OPEN')",
+          id,
+          user.id,
+        );
+        thread = one("SELECT * FROM chat_threads WHERE id=?", id);
+      }
+      run(
+        "INSERT INTO chat_messages(id,thread_id,sender_type,body) VALUES(?,?,?,?)",
+        randomUUID(),
+        thread.id,
+        "USER",
+        body,
+      );
+      notify(
+        user.id,
+        "chat",
+        "เปิดแชทแล้ว",
+        "ทีมงานจะตอบกลับในเว็บนี้",
+      );
+      audit(user, "OPEN_CHAT", thread.id);
+      return { thread, messages: chatMessages(user, thread.id) };
+    });
+  }
+  function chatMessages(user, threadId) {
+    requireUser(user);
+    const id = clean(threadId, 1, 80, "แชท");
+    const thread = one("SELECT * FROM chat_threads WHERE id=?", id);
+    if (!thread) fail(404, "ไม่พบแชท");
+    if (thread.user_id !== user.id && !isStaff(user))
+      fail(403, "ไม่มีสิทธิ์ดูแชทนี้");
+    return all(
+      "SELECT id,thread_id,sender_type,body,created_at FROM chat_messages WHERE thread_id=? ORDER BY created_at ASC,rowid ASC",
+      id,
+    );
+  }
+  function postChatMessage(user, threadId, rawInput) {
+    requireUser(user);
+    const input = withoutClientPrivileges(rawInput);
+    const id = clean(threadId, 1, 80, "แชท");
+    const body = clean(input.body, 1, 1000, "ข้อความ");
+    const thread = one("SELECT * FROM chat_threads WHERE id=?", id);
+    if (!thread) fail(404, "ไม่พบแชท");
+    if (thread.status !== "OPEN") fail(409, "แชทนี้ปิดแล้ว");
+    const staffReply = isStaff(user) && thread.user_id !== user.id;
+    if (thread.user_id !== user.id && !staffReply)
+      fail(403, "ไม่มีสิทธิ์ส่งข้อความในแชทนี้");
+    const senderType = staffReply
+      ? user.role === ROLES.ADMIN
+        ? "ADMIN"
+        : "STAFF"
+      : "USER";
+    run(
+      "INSERT INTO chat_messages(id,thread_id,sender_type,body) VALUES(?,?,?,?)",
+      randomUUID(),
+      id,
+      senderType,
+      body,
+    );
+    if (staffReply)
+      notify(thread.user_id, "chat", "มีข้อความใหม่จากทีมงาน", body.slice(0, 120));
+    else if (isStaff(user) === false) {
+      const staffUsers = all(
+        "SELECT id FROM users WHERE role IN ('STAFF','ADMIN')",
+      );
+      for (const staff of staffUsers)
+        notify(staff.id, "chat", "ลูกค้าส่งข้อความใหม่", body.slice(0, 120));
+    }
+    audit(user, "CHAT_MESSAGE", id);
+    return chatMessages(user, id);
+  }
+  function notifications(user) {
+    requireUser(user);
+    return all(
+      "SELECT id,kind,title,body,read_at,created_at FROM notifications WHERE user_id=? ORDER BY created_at DESC,rowid DESC LIMIT 100",
+      user.id,
+    );
+  }
+  function markNotificationRead(user, notificationId) {
+    requireUser(user);
+    const id = clean(notificationId, 1, 80, "การแจ้งเตือน");
+    const row = one(
+      "SELECT id FROM notifications WHERE id=? AND user_id=?",
+      id,
+      user.id,
+    );
+    if (!row) fail(404, "ไม่พบการแจ้งเตือน");
+    run(
+      "UPDATE notifications SET read_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=? AND read_at IS NULL",
+      id,
+      user.id,
+    );
+    return { ok: true };
+  }
+  function buyerRanking(limit = 10) {
+    const n = Math.min(50, Math.max(1, Number(limit) || 10));
+    return all(
+      `SELECT u.id,u.name,
+              COUNT(o.id) AS orders,
+              COALESCE(SUM(o.total),0) AS spent_satang
+       FROM users u
+       JOIN orders o ON o.user_id=u.id AND o.status='DELIVERED'
+       WHERE u.role='CUSTOMER'
+       GROUP BY u.id
+       ORDER BY spent_satang DESC, orders DESC, u.created_at ASC
+       LIMIT ?`,
+      n,
+    ).map((row, index) => ({
+      rank: index + 1,
+      id: row.id,
+      name: row.name.slice(0, 2) + "***" + row.name.slice(-1),
+      orders: row.orders,
+      spentSatang: row.spent_satang,
+    }));
+  }
   return {
     db,
     reviews,
@@ -979,9 +1314,13 @@ export function createCommerceCore({
     demoMerchant,
     session,
     products,
+    productDetail,
     overview,
     createOrder,
     orderDetail,
+    staffOrders,
+    getPaymentChannel,
+    setPaymentChannel,
     pay,
     retry,
     topup,
@@ -990,6 +1329,15 @@ export function createCommerceCore({
     saveProduct,
     profile,
     publicUser,
+    queueBoard,
+    myQueue,
+    chatThreads,
+    openChatThread,
+    chatMessages,
+    postChatMessage,
+    notifications,
+    markNotificationRead,
+    buyerRanking,
     logout: (token) =>
       run("DELETE FROM sessions WHERE token_hash=?", hash(token ?? "")),
     orders: (user) => {
