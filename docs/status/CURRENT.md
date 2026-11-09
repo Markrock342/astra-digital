@@ -2,6 +2,13 @@
 
 อัปเดตล่าสุด: 2026-11-09
 
+## ผลตรวจงานเพื่อนล่าสุด
+
+- ตรวจ GitHub แล้ว remote main ยังเป็น 9eebc6f มี branch เดียวและไม่มี PR ไม่พบงานใหม่หลังแจกแผน
+- งาน NOTT ล่าสุดที่รวมแล้วคือ 7705b29 และเอกสาร 710a818 เวลา 16:02 น. วันที่ 9 พฤศจิกายน 2026
+- build และ tests 40/40 ผ่าน แต่ reproduction เพิ่มพบ 3 P2: payment active flag ไม่บังคับ, แชทแรกไม่ notify staff, fractional ranking limit ทำ 500
+- รายละเอียดและสิ่งที่ส่งกลับให้แก้: [peer review](../modules/peer-review-20261109.md) ยังไม่ได้แก้/merge/deploy findings เหล่านี้
+
 ## แผนแจกงานทีมที่ Owner ขอ
 
 - จัดชุด TEAM-P0 ถึง TEAM-P2 รวม 34 Tasks: มาร์ค 12 น็อต 12 แบงค์ 10 พร้อม dependency checklist เกณฑ์ผ่าน และหลักฐาน

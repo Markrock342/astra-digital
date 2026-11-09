@@ -1,0 +1,22 @@
+{
+  "baseline": "9eebc6f",
+  "isolatedMemoryDb": true,
+  "disabledPaymentChannel": {
+    "configuredActive": false,
+    "actualOrderStatus": "DELIVERED",
+    "codesDelivered": 1,
+    "debitSatang": 10000
+  },
+  "firstChatNotification": {
+    "staffNotificationsAfterFirstMessage": 0,
+    "staffNotificationsAfterSecondMessage": 1,
+    "staffThreadListCanSeeThread": true
+  },
+  "rankingQuery": {
+    "normalLimitStatus": 200,
+    "fractionalLimitStatus": 500,
+    "fractionalBody": {
+      "error": "ระบบไม่สามารถทำรายการได้ กรุณาลองอีกครั้ง"
+    }
+  }
+}

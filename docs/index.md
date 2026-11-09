@@ -35,6 +35,10 @@
 - [Checklist ตรวจรับ G0 G1 G2A G2B](team-phase2/04-ACCEPTANCE.md)
 - ชุดนี้เป็นแผนรวมทีมที่ Owner ขอ ไม่เปลี่ยนสถานะ implementation ของ NOTT Sprint 1 เดิม และไม่อนุมัติ cutover/provider โดยอัตโนมัติ
 
+## ผลตรวจงานเพื่อน
+
+- [ตรวจ commit และงานน็อตล่าสุด วันที่ 9 พฤศจิกายน 2026](modules/peer-review-20261109.md) — 40 tests ผ่าน และพบ 3 edge cases ที่ต้องแก้
+
 ## Recovery ล่าสุด
 
 - [Migration 004 / Cloudflare 503](modules/migration-004-recovery.md) — รักษาข้อมูลเดิมและทดสอบอัปเกรดบน workerd
