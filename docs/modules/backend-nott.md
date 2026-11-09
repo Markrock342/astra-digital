@@ -4,10 +4,10 @@
 
 ## สถานะปัจจุบันของฟีเจอร์นี้ (Current Status)
 
-- **Phase 0–C เสร็จ** ในรีโปนี้ (schema + APIs)
-- `.data/commerce.sqlite` ไมเกรชันถึง `004_commerce_ops.sql`
-- STAFF / payments / payment_channel / queue / chat / notifications / DEMO_CREDIT
-- เทส: `tests/nott-ops.test.mjs` + suite เดิม → **37 passed**
+- Ownership ล่าสุด: **NOTT = Database** · Mark = Architecture / API Contract
+- Review Pack DB-01…05: [../database/README.md](../database/README.md) (ยังไม่ deploy migration)
+- API Phase 0–C ก่อนหน้ายังอยู่; schema DO ถึง `004_commerce_ops.sql`
+- ข้อเสนอค้างล็อก: ฐานร้านเดียวบน DO · ไม่ย้าย D1
 
 ## งานที่เพิ่งทำเสร็จ (Recently Completed)
 
