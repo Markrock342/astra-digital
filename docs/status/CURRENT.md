@@ -2,6 +2,14 @@
 
 อัปเดตล่าสุด: 2026-11-09
 
+## แผนแจกงานทีมที่ Owner ขอ
+
+- จัดชุด TEAM-P0 ถึง TEAM-P2 รวม 34 Tasks: มาร์ค 12 น็อต 12 แบงค์ 10 พร้อม dependency checklist เกณฑ์ผ่าน และหลักฐาน
+- เป้าหมายร้านถาวรหนึ่งร้านข้ามเครื่อง → ฟังก์ชันตาม scope → UAT; แยก G2A sandbox-ready และ G2B production go-live
+- แผนรวมทีมนี้เพิ่มจาก roadmap NOTT เดิม ไม่ใช่การรัน implementation ใหม่หรือย้ายฐานแล้ว
+- อ่าน [แผนกลาง](../team-phase2/00-START.md) และ [ตรวจรับ](../team-phase2/04-ACCEPTANCE.md)
+- Deliverable ในเครื่อง: `/Users/code/Projects/nursejob/output/astra-team-phase2-20261109` และ ZIP ข้างโฟลเดอร์นี้; Markdown ต้นฉบับอยู่ `docs/team-phase2/`
+
 ## Hotfix ที่ Owner อนุมัติ: migration 004 / 503
 
 - โค้ด `9eebc6f` push แล้ว; build ผ่าน, business/runtime tests 40 ผ่าน, browser workflows 6 ผ่าน

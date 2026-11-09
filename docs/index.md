@@ -28,6 +28,13 @@
 | NOTT backend inventory (Task 0.1.1) | [modules/nott-backend-inventory.md](modules/nott-backend-inventory.md) |
 | NOTT Gap Map (Task 0.1.2) | [modules/nott-gap-map.md](modules/nott-gap-map.md) |
 
+## ชุดแจกงานทีมจนจบ Phase 2
+
+- [เริ่มอ่านแผนกลาง](team-phase2/00-START.md) — TEAM-P0 เตรียมโครง → TEAM-P1 ร้านถาวรข้ามเครื่อง → TEAM-P2 ฟังก์ชันและตรวจรับ
+- [มาร์ค 12 งาน](team-phase2/01-MARK.md) · [น็อต 12 งาน](team-phase2/02-NOTT.md) · [แบงค์ 10 งาน](team-phase2/03-BANK.md)
+- [Checklist ตรวจรับ G0 G1 G2A G2B](team-phase2/04-ACCEPTANCE.md)
+- ชุดนี้เป็นแผนรวมทีมที่ Owner ขอ ไม่เปลี่ยนสถานะ implementation ของ NOTT Sprint 1 เดิม และไม่อนุมัติ cutover/provider โดยอัตโนมัติ
+
 ## Recovery ล่าสุด
 
 - [Migration 004 / Cloudflare 503](modules/migration-004-recovery.md) — รักษาข้อมูลเดิมและทดสอบอัปเกรดบน workerd
