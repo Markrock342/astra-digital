@@ -17,7 +17,7 @@
 - [x] `docs/database/DATA_INTEGRITY.md`
 - [x] `docs/database/MIGRATION_PLAN.md`
 - [x] `docs/database/DB_TEST_PLAN.md`
-- [ ] PR → Mark Review
+- [x] PR → Mark Review: https://github.com/Markrock342/astra-digital/pull/1
 
 ## ยังไม่ทำ (ตามโจทย์)
 - Deploy migration / เปลี่ยน production DB
