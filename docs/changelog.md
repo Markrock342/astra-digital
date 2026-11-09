@@ -3,6 +3,7 @@
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
 ## 2026-11-09
+- NOTT W1: migrate `.data/commerce.sqlite` ถึง 003+004 (Staff/payments/queue/chat/notifications/DEMO_CREDIT); `npm test` 29 passed; Cloudflare/D1 dual-track ตามแผนรายสัปดาห์
 - Phase 5 ปิด Sprint 1 NOTT: [status/NOTT-SPRINT1-DELIVERY.md](status/NOTT-SPRINT1-DELIVERY.md) · Self-QC `npm test` 27 passed
 - Phase 4 เสร็จ: Sandbox PaymentAdapter + D1 fulfillment/allocations; SlipOK/Gateway ยังบล็อก; `npm test` 27 passed
 - Phase 3 เสร็จ: D1 catalog API (`/api/d1/products`) + `@astra/contracts` + [api-contract-catalog.md](modules/api-contract-catalog.md); `npm test` 22 passed; Phase 4 ยังล็อก

@@ -21,6 +21,8 @@
 | เอกสาร | ไฟล์ |
 |--------|------|
 | Prompt pack LCS×FIFA (Mark/Nott/Bank) | [requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md](requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md) |
+| แผนรายสัปดาห์ NOTT/Bank/Mark | [requirements/NOTT_BANK_MARK_WEEKLY_TH.md](requirements/NOTT_BANK_MARK_WEEKLY_TH.md) |
+| Roadmap NOTT Weekly | [roadmaps/NOTT-WEEKLY.md](roadmaps/NOTT-WEEKLY.md) |
 | Module: Backend NOTT (ขอบเขตทีมนี้) | [modules/backend-nott.md](modules/backend-nott.md) |
 | Catalog API contract (Phase 3) | [modules/api-contract-catalog.md](modules/api-contract-catalog.md) |
 | NOTT backend inventory (Task 0.1.1) | [modules/nott-backend-inventory.md](modules/nott-backend-inventory.md) |
