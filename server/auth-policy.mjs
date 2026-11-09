@@ -1,7 +1,8 @@
-/** Auth/RBAC policy aligned with docs/architecture/auth-rbac.md (Approved). */
+/** Auth/RBAC policy aligned with docs/architecture/auth-rbac.md (+ STAFF from W1 schema). */
 export const ROLES = Object.freeze({
   CUSTOMER: "CUSTOMER",
   ADMIN: "ADMIN",
+  STAFF: "STAFF",
 });
 
 /** Drop privilege-bearing fields so client JSON cannot become authorization truth. */
@@ -28,6 +29,18 @@ export function assertAdmin(user, fail) {
   return user;
 }
 
+/** Staff or Admin — for queue/chat ops in later weeks; never from client body. */
+export function assertStaff(user, fail) {
+  assertAuthenticated(user, fail);
+  if (user.role !== ROLES.ADMIN && user.role !== ROLES.STAFF)
+    fail(403, "เฉพาะพนักงานหรือผู้ดูแลร้านเท่านั้น");
+  return user;
+}
+
 export function isAdmin(user) {
   return !!user && user.role === ROLES.ADMIN;
+}
+
+export function isStaff(user) {
+  return !!user && (user.role === ROLES.STAFF || user.role === ROLES.ADMIN);
 }

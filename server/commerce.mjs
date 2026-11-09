@@ -6,10 +6,17 @@ import {
   existsSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { createCommerceCore } from "./domain.mjs";
 export { ApiError } from "./domain.mjs";
+
+const stripMigrationPragmas = (sql) =>
+  sql
+    .replace(/PRAGMA foreign_keys\s*=\s*OFF\s*;/gi, "")
+    .replace(/PRAGMA foreign_keys\s*=\s*ON\s*;/gi, "");
+
 export function createCommerce(options = {}) {
   const path = options.path ?? ":memory:";
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
@@ -26,32 +33,36 @@ export function createCommerce(options = {}) {
     if (
       !db.prepare("SELECT name FROM schema_migrations WHERE name=?").get(file)
     ) {
+      const sql = readFileSync(
+        new URL("./migrations/" + file, import.meta.url),
+        "utf8",
+      );
+      const needsFkOff = /PRAGMA foreign_keys\s*=\s*OFF/i.test(sql);
+      // SQLite ignores foreign_keys pragma changes inside an open transaction.
+      if (needsFkOff) db.exec("PRAGMA foreign_keys=OFF");
       db.exec("BEGIN IMMEDIATE");
       try {
-        db.exec(
-          readFileSync(
-            new URL("./migrations/" + file, import.meta.url),
-            "utf8",
-          ),
-        );
+        db.exec(stripMigrationPragmas(sql));
         db.prepare("INSERT INTO schema_migrations(name) VALUES(?)").run(file);
         db.exec("COMMIT");
       } catch (e) {
         db.exec("ROLLBACK");
         throw e;
+      } finally {
+        if (needsFkOff) db.exec("PRAGMA foreign_keys=ON");
       }
     }
   }
   return createCommerceCore({ ...options, db });
 }
 export function openLocalCommerce({ seed = true } = {}) {
-  const root = resolve(new URL("../.data", import.meta.url).pathname);
+  const root = join(dirname(fileURLToPath(import.meta.url)), "../.data");
   mkdirSync(root, { recursive: true, mode: 0o700 });
-  const keyPath = root + "/inventory.key";
+  const keyPath = join(root, "inventory.key");
   if (!existsSync(keyPath))
     writeFileSync(keyPath, randomBytes(32), { mode: 0o600, flag: "wx" });
   return createCommerce({
-    path: root + "/commerce.sqlite",
+    path: join(root, "commerce.sqlite"),
     key: readFileSync(keyPath),
     adminPassword: process.env.ASTRA_ADMIN_PASSWORD,
     seed,

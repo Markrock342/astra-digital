@@ -176,7 +176,7 @@ export function createCommerceCore({
           i === 0 ? "-9 hours" : "-2 days",
         );
         run(
-          "INSERT INTO ledger VALUES(?,?,?,?,?,datetime('now','-2 days'))",
+          "INSERT INTO ledger(id,user_id,amount,reference,label,kind,created_at) VALUES(?,?,?,?,?,'DEMO_CREDIT',datetime('now','-2 days'))",
           randomUUID(),
           id,
           50000,
@@ -202,7 +202,7 @@ export function createCommerceCore({
           stock.id,
         );
         run(
-          "INSERT INTO ledger VALUES(?,?,?,?,?,datetime('now','-1 day'))",
+          "INSERT INTO ledger(id,user_id,amount,reference,label,kind,created_at) VALUES(?,?,?,?,?,'DEMO_CREDIT',datetime('now','-1 day'))",
           randomUUID(),
           id,
           -10000,
@@ -356,7 +356,7 @@ export function createCommerceCore({
       );
       if (username) run("UPDATE users SET username=? WHERE id=?", username, id);
       run(
-        "INSERT INTO ledger(id,user_id,amount,reference,label) VALUES(?,?,?,?,?)",
+        "INSERT INTO ledger(id,user_id,amount,reference,label,kind) VALUES(?,?,?,?,?,'DEMO_CREDIT')",
         randomUUID(),
         id,
         50000,
@@ -664,7 +664,7 @@ export function createCommerceCore({
           fail(409, "เครดิตทดลองไม่เพียงพอ กรุณาเติมเครดิตก่อน");
         if (o.total)
           run(
-            "INSERT INTO ledger(id,user_id,amount,reference,label) VALUES(?,?,?,?,?)",
+            "INSERT INTO ledger(id,user_id,amount,reference,label,kind) VALUES(?,?,?,?,?,'DEMO_CREDIT')",
             randomUUID(),
             user.id,
             -o.total,
@@ -720,7 +720,7 @@ export function createCommerceCore({
       if (balance < order.total)
         fail(409, "เครดิตทดลองไม่เพียงพอ กรุณาเติมเครดิตก่อน");
       run(
-        "INSERT INTO ledger(id,user_id,amount,reference,label) VALUES(?,?,?,?,?)",
+        "INSERT INTO ledger(id,user_id,amount,reference,label,kind) VALUES(?,?,?,?,?,'DEMO_CREDIT')",
         randomUUID(),
         user.id,
         -order.total,
@@ -776,7 +776,7 @@ export function createCommerceCore({
         fail(409, "รหัสคำขอนี้ถูกใช้กับยอดเติมอื่นแล้ว");
       if (!prior) {
         run(
-          "INSERT INTO ledger(id,user_id,amount,reference,label) VALUES(?,?,?,?,?)",
+          "INSERT INTO ledger(id,user_id,amount,reference,label,kind) VALUES(?,?,?,?,?,'DEMO_CREDIT')",
           randomUUID(),
           user.id,
           input.amount * 100,

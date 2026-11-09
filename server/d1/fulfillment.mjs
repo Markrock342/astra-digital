@@ -209,8 +209,8 @@ export function createD1Fulfillment(db, { transaction } = {}) {
       const ledgerRef = "debit:" + orderId;
       if (!one("SELECT id FROM ledger WHERE reference=?", ledgerRef)) {
         run(
-          `INSERT INTO ledger(id,user_id,amount,reference,label,created_at)
-           VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)`,
+          `INSERT INTO ledger(id,user_id,amount,reference,label,kind,created_at)
+           VALUES(?,?,?,?,?,'DEMO_CREDIT',CURRENT_TIMESTAMP)`,
           randomUUID(),
           userId,
           -order.total,
@@ -248,8 +248,8 @@ export function createD1Fulfillment(db, { transaction } = {}) {
 
   function credit(userId, amount, reference) {
     run(
-      `INSERT INTO ledger(id,user_id,amount,reference,label,created_at)
-       VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)`,
+      `INSERT INTO ledger(id,user_id,amount,reference,label,kind,created_at)
+       VALUES(?,?,?,?,?,'DEMO_CREDIT',CURRENT_TIMESTAMP)`,
       randomUUID(),
       userId,
       amount,
