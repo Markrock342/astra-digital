@@ -1,6 +1,7 @@
 # Roadmap: NOTT Sprint 1 — Backend / DB / API / Payment·Delivery
 
-สถานะ: **รอ Owner Approve**  
+สถานะ: **Approved** โดย Owner (2026-11-09) — Approve โครงสร้าง Phase 0–5  
+หมายเหตุปลดล็อกโค้ด DB/API/Payment: ยังผ่านเกต **Task 0.3.3** หลังจบ Phase 0 design  
 ระบบ: ASTRA DIGITAL (`Markrock342/astra-digital`)  
 Ownership: **NOTT เท่านั้น** (ไม่รวม Admin UI ของ Mark / Storefront ของ Bank)  
 แหล่ง brief: [../requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md](../requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md) §2  
@@ -122,6 +123,6 @@ Phase 5: Sprint 1 Closeout - สรุปส่งมอบ NOTT
 ## เกณฑ์ Approve Roadmap นี้
 
 Owner ตอบอย่างน้อย:
-- [ ] ยอมรับลำดับ Phase 0 → 5
-- [ ] ยืนยันว่าหลัง Phase 0 แล้วให้เดิน Phase 1+ ได้ หรือยังล็อกเฉพาะข้อใด
-- [ ] ขอแก้ชื่อ Milestone/Task (ถ้ามี) ก่อนเริ่ม Task 0.1.1
+- [x] ยอมรับลำดับ Phase 0 → 5 (Approved 2026-11-09)
+- [ ] ยืนยันว่าหลัง Phase 0 แล้วให้เดิน Phase 1+ ได้ หรือยังล็อกเฉพาะข้อใด → **ตัดสินที่ Task 0.3.3**
+- [x] ไม่ขอแก้ชื่อ Milestone/Task ก่อนเริ่ม Task 0.1.1

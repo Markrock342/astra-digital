@@ -11,7 +11,7 @@
 | Task Spec / handoff | [process/handoff.md](process/handoff.md) |
 | Definition of Done | [process/definition-of-done.md](process/definition-of-done.md) |
 | Architecture ระดับกระบวนการ | [architecture/overview.md](architecture/overview.md) · [architecture/security.md](architecture/security.md) |
-| Roadmaps | [roadmaps/README.md](roadmaps/README.md) · [NOTT Sprint 1](roadmaps/NOTT-SPRINT1.md) (รอ Approve) |
+| Roadmaps | [roadmaps/README.md](roadmaps/README.md) · [NOTT Sprint 1](roadmaps/NOTT-SPRINT1.md) (Approved) |
 | Task Specs | [prompts/TASK-PROMPT-TEMPLATE.md](prompts/TASK-PROMPT-TEMPLATE.md) |
 | Changelog กระบวนการ | [changelog.md](changelog.md) |
 
@@ -21,6 +21,7 @@
 |--------|------|
 | Prompt pack LCS×FIFA (Mark/Nott/Bank) | [requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md](requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md) |
 | Module: Backend NOTT (ขอบเขตทีมนี้) | [modules/backend-nott.md](modules/backend-nott.md) |
+| NOTT backend inventory (Task 0.1.1) | [modules/nott-backend-inventory.md](modules/nott-backend-inventory.md) |
 
 ## เอกสารผลิตภัณฑ์เดิม (คงไว้)
 

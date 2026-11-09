@@ -1,19 +1,20 @@
 # Module: Backend / NOTT (Ownership)
 
 แหล่ง requirement: [../requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md](../requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md) — ส่วน **§2 NOTT**  
-Roadmap: [../roadmaps/NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md) (**รอ Owner Approve**)
+Roadmap: [../roadmaps/NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md) (**Approved**)  
+Inventory: [nott-backend-inventory.md](nott-backend-inventory.md) (Task 0.1.1 เสร็จ)
 
 ## สถานะปัจจุบันของฟีเจอร์นี้ (Current Status)
 
-- รีโปเดียว ASTRA; FIFA = ชื่อย่อผู้ว่าจ้าง
-- จัดลำดับงานทั้ง Sprint เป็น Phase 0–5 ตามความสำคัญ (security + dependency)
-- ยังไม่ลงมือโค้ดระบบหลักจนกว่า Owner Approve Roadmap
-- ของแทน SOW ในรีโป: `README.md`, `docs/architecture.md`, `feature-matrix`, `production-gap`, `demo-guide`, `server/migrations/*`, `server/domain.mjs`, Worker
+- Roadmap Phase 0–5 ถูก Approve แล้ว
+- Task 0.1.1 เสร็จ: มี inventory ของ runtime/schema/API/domain/tests จากของจริงในรีโป
+- ยังไม่มี D1 / Hono / `packages/contracts` / ตาราง payments·chat·notifications แยก
+- ปลดล็อกโค้ด DB/API/Payment ยังผ่านเกต Task 0.3.3
 
 ## งานที่เพิ่งทำเสร็จ (Recently Completed)
 
-- Intake prompt + ยืนยันทิศทาง
-- ร่าง Roadmap ลำดับความสำคัญครบ Sprint 1
+- Approve Roadmap + Task Spec 0.1.1
+- เขียน `docs/modules/nott-backend-inventory.md`
 
 ## บันทึกการแก้บัค (Bug & Troubleshooting Log)
 
@@ -22,11 +23,11 @@ Roadmap: [../roadmaps/NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md) (**รอ Ow
 ## สิ่งที่ยังค้างอยู่และปัญหาที่ทราบ (Pending & Known Issues)
 
 - Brief ชี้ D1 แต่ของปัจจุบันเป็น Durable Object SQLite
-- ยังไม่มี `packages/contracts`
-- ยังไม่มี Auth/RBAC design doc แยกตาม brief
+- Payment = sandbox บน order/reservation ยังไม่มี PaymentAdapter
+- Chat/notifications ยังไม่มีใน schema/API
 
 ## Checklist งานต่อไป (Next Steps)
 
-1. Owner Approve Roadmap (หรือขอแก้)
-2. Task Spec → เริ่ม Phase 0 Task 0.1.1
-3. หลัง Phase 0 จบ → Owner ปลดล็อก Phase 1+ ตามแผน
+1. Task 0.1.2 Gap Map (มี/ขาด/ความเสี่ยง/dependency Mark–Bank)
+2. Milestone 0.2 Auth/RBAC design
+3. Milestone 0.3 ERD + Payment/Fulfillment design → เกต 0.3.3

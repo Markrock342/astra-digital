@@ -6,3 +6,4 @@
 | โมดูล | ไฟล์ |
 |-------|------|
 | Backend / NOTT | [backend-nott.md](backend-nott.md) |
+| NOTT backend inventory | [nott-backend-inventory.md](nott-backend-inventory.md) |

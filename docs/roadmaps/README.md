@@ -4,4 +4,4 @@
 
 | Roadmap | สถานะ | ไฟล์ |
 |---------|--------|------|
-| NOTT Sprint 1 — Backend | รอ Owner Approve | [NOTT-SPRINT1.md](NOTT-SPRINT1.md) |
+| NOTT Sprint 1 — Backend | Approved (Phase 0–5) | [NOTT-SPRINT1.md](NOTT-SPRINT1.md) |

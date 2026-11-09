@@ -6,22 +6,20 @@
 | ระดับ | ค่า |
 |-------|-----|
 | โปรเจกต์ | ASTRA DIGITAL — ownership **NOTT** |
-| Roadmap | [NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md) |
-| Phase / Milestone / Task | **รอ Owner Approve Roadmap** — ยังไม่เริ่ม Task 0.1.1 |
+| Roadmap | [NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md) — **Approved** Phase 0–5 |
+| Phase / Milestone / Task | Phase 0 → M0.1 → **Task 0.1.1 เสร็จ** → ถัดไป **0.1.2 Gap Map** |
 
 ## สรุปรอบนี้
-จัดลำดับความสำคัญทั้ง Sprint 1 ของ NOTT เป็น Phase 0–5  
-Phase 0 = Foundation & Design (ทำก่อน ยังไม่โค้ด DB/API/Payment)  
-Phase 1–4 = D1 → Auth implement → Product API/Contracts → PaymentAdapter+idempotency  
-Phase 5 = สรุปส่งมอบ
+Owner Approve Roadmap → เขียน Task Spec 0.1.1 → สำรวจของจริงในรีโป → บันทึก [nott-backend-inventory.md](../modules/nott-backend-inventory.md)
 
 ## ที่เสร็จแล้ว
-- [x] Intake + ยืนยันทิศทางรีโป/เอกสาร
-- [x] ร่าง Roadmap ตามความสำคัญ
+- [x] Roadmap Approved
+- [x] Task Spec `docs/prompts/P0-M01-T011-backend-inventory.md`
+- [x] Task 0.1.1 Backend inventory
 
 ## กำลังทำ / รอ
-- [ ] Owner Approve / ขอแก้ Roadmap
-- [ ] หลัง Approve → Task Spec แล้วเริ่ม Task 0.1.1
+- [ ] Task 0.1.2 Gap Map NOTT Sprint 1
 
 ## Blockers
-- รอ Approve Roadmap
+- ไม่มีสำหรับ Task ถัดไป (0.1.2 เป็นเอกสาร)
+- การปลดล็อกโค้ด DB/API/Payment ยังรอเกต Task 0.3.3
