@@ -11,8 +11,8 @@ const mime = {
   ".woff2": "font/woff2",
   ".png": "image/png",
 };
-export function createApp(service, { production = false } = {}) {
-  const handle = createAPIHandler(service);
+export function createApp(service, { production = false, d1Catalog } = {}) {
+  const handle = createAPIHandler(service, { d1Catalog });
   return createServer(async (req, res) => {
     try {
       const url = new URL(req.url, "http://" + req.headers.host);

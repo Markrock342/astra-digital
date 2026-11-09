@@ -13,7 +13,7 @@ export const authenticationPaths = [
   "/api/demo",
   "/api/demo-merchant",
 ];
-export function createAPIHandler(service, { rateLimit } = {}) {
+export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
   const attempts = new Map();
   function localLimit(key) {
     const now = Date.now();
@@ -45,6 +45,20 @@ export function createAPIHandler(service, { rateLimit } = {}) {
           !request.headers.get("Content-Type")?.startsWith("application/json")
         )
           throw new ApiError(415, "ต้องส่งข้อมูลแบบ JSON");
+      }
+      if (request.method === "GET" && d1Catalog) {
+        if (path === "/api/d1/products")
+          return send(200, {
+            products: d1Catalog.listProducts(),
+            storage: d1Catalog.storageKind,
+          });
+        if (/^\/api\/d1\/products\/[^/]+$/.test(path))
+          return send(200, {
+            product: d1Catalog.getProduct(decodeURIComponent(path.split("/")[4])),
+            storage: d1Catalog.storageKind,
+          });
+        if (path === "/api/d1/inventory/secrets")
+          return send(403, { error: "ไม่อนุญาตให้อ่านรหัสสินค้า" });
       }
       const token = /(?:^|;\s*)astra_session=([a-f0-9]+)/.exec(
         request.headers.get("Cookie") ?? "",

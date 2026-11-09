@@ -10,7 +10,7 @@
     "dev": "node server/dev.mjs",
     "build": "tsc --noEmit && vite build",
     "start": "node server/local.mjs",
-    "test": "node --test tests/commerce.test.mjs",
+    "test": "node --test tests/commerce.test.mjs tests/d1-catalog.test.mjs",
     "test:e2e": "playwright test",
     "seed": "node server/seed.mjs",
     "migrate": "node server/migrate.mjs",
