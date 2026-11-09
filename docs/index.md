@@ -10,7 +10,7 @@
 | Workflow (Owner + Agent รวมแชท) | [process/workflow.md](process/workflow.md) |
 | Task Spec / handoff | [process/handoff.md](process/handoff.md) |
 | Definition of Done | [process/definition-of-done.md](process/definition-of-done.md) |
-| Architecture ระดับกระบวนการ | [architecture/overview.md](architecture/overview.md) · [architecture/security.md](architecture/security.md) |
+| Architecture ระดับกระบวนการ | [architecture/overview.md](architecture/overview.md) · [architecture/security.md](architecture/security.md) · [architecture/auth-rbac.md](architecture/auth-rbac.md) (รอ Owner Approve) |
 | Roadmaps | [roadmaps/README.md](roadmaps/README.md) · [NOTT Sprint 1](roadmaps/NOTT-SPRINT1.md) (Approved) |
 | Task Specs | [prompts/TASK-PROMPT-TEMPLATE.md](prompts/TASK-PROMPT-TEMPLATE.md) |
 | Changelog กระบวนการ | [changelog.md](changelog.md) |

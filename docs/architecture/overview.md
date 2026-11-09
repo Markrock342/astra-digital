@@ -15,3 +15,8 @@
 - UI ไม่ตัดสินสิทธิ์คนเดียว — server/domain เป็นแหล่งความจริง
 - ค่าที่จูนได้อยู่ที่ config/env
 - Secrets ไม่อยู่ในรีโป
+
+## เอกสารที่เกี่ยวข้อง
+- Auth/RBAC design: [auth-rbac.md](auth-rbac.md)
+- Security policy: [security.md](security.md)
+- ผลิตภัณฑ์: [../architecture.md](../architecture.md)
