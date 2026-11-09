@@ -11,7 +11,7 @@
 | Task Spec / handoff | [process/handoff.md](process/handoff.md) |
 | Definition of Done | [process/definition-of-done.md](process/definition-of-done.md) |
 | Architecture ระดับกระบวนการ | [architecture/overview.md](architecture/overview.md) · [architecture/security.md](architecture/security.md) |
-| Roadmaps | [roadmaps/README.md](roadmaps/README.md) |
+| Roadmaps | [roadmaps/README.md](roadmaps/README.md) · [NOTT Sprint 1](roadmaps/NOTT-SPRINT1.md) (รอ Approve) |
 | Task Specs | [prompts/TASK-PROMPT-TEMPLATE.md](prompts/TASK-PROMPT-TEMPLATE.md) |
 | Changelog กระบวนการ | [changelog.md](changelog.md) |
 
