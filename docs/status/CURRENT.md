@@ -7,23 +7,20 @@
 |-------|-----|
 | โปรเจกต์ | ASTRA DIGITAL — ownership **NOTT** |
 | Roadmap | [NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md) |
-| Phase / Milestone / Task | **Phase 0–4 เสร็จ** · ถัดไป Phase 5 Closeout (ถ้า Owner สั่ง) |
+| Phase / Milestone / Task | **Sprint 1 ปิด** — Phase 5 M5.1 เสร็จ |
 
 ## สรุปรอบนี้
-ปลดล็อก Phase 4 → Sandbox PaymentAdapter + D1 fulfillment/allocations  
-หลักฐาน: `npm test` → **27 passed**  
-Gateway จริงยัง BLOCKED ตาม brief
+Phase 5 closeout: แพ็กเกจส่งมอบ [NOTT-SPRINT1-DELIVERY.md](NOTT-SPRINT1-DELIVERY.md)  
+หลักฐาน Self-QC: `npm test` **27 passed** · `db:migrate:local` ซ้ำแล้วไม่มี migration ค้าง
 
 ## ที่เสร็จแล้ว
-- [x] Phase 0 Design
-- [x] Phase 1 D1 migration
-- [x] Phase 2 Auth
-- [x] Phase 3 Catalog API + contracts
-- [x] Phase 4 PaymentAdapter (sandbox) + idempotent fulfillment
+- [x] Phase 0–4
+- [x] Phase 5.1.1 Delivery package
+- [x] Phase 5.1.2 Self-QC + commit docs (ท้องถิ่น)
 
 ## กำลังทำ / รอ
-- [ ] Phase 5 Sprint closeout (เมื่อ Owner สั่ง)
-- [ ] Client เลือก payment provider (BLOCKED)
+- [ ] Owner สั่ง push **โค้ด** (ถ้าต้องการ) — **ห้าม push docs**
+- [ ] Mark/Bank agree contracts · Client เลือก provider
 
 ## Blockers
-- SlipOK/Gateway activation รอ Client
+- B1 Client provider · B2 Mark/Bank contracts · B3 remote D1/cutover

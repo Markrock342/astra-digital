@@ -1,29 +1,28 @@
 # Module: Backend / NOTT (Ownership)
 
-Payment: `server/payment/adapters.mjs` · Fulfillment D1: `server/d1/fulfillment.mjs`  
-Doc: [../architecture/payment-fulfillment.md](../architecture/payment-fulfillment.md)
+ส่งมอบ Sprint 1: [../status/NOTT-SPRINT1-DELIVERY.md](../status/NOTT-SPRINT1-DELIVERY.md)
 
 ## สถานะปัจจุบันของฟีเจอร์นี้ (Current Status)
 
-- **Phase 0–4 เสร็จ** ตาม Roadmap NOTT Sprint 1 (implementation)
-- Gateway จริงยังไม่เปิด (501 / BLOCKED)
-- `npm test` 27 passed
+- **NOTT Sprint 1 ปิด** (Phase 0–5)
+- ไม่ claim production-ready / ไม่เปิด gateway จริง
+- หลักฐานล่าสุด: `npm test` 27 passed
 
 ## งานที่เพิ่งทำเสร็จ (Recently Completed)
 
-- Phase 4: SandboxPaymentAdapter + blocked providers + D1 confirm/allocate tests
+- Phase 5 closeout package + Self-QC
 
 ## บันทึกการแก้บัค (Bug & Troubleshooting Log)
 
-- ไม่มีในรอบนี้
+- ดูประวัติ Phase 1–4 ใน changelog
 
 ## สิ่งที่ยังค้างอยู่และปัญหาที่ทราบ (Pending & Known Issues)
 
-- Client ยังไม่เลือก provider
-- Worker production demo ยังเป็น DO dual-track (ยังไม่ cutover D1 payment path)
-- Phase 5 closeout package ยังไม่รวม
+- BLOCKERS: Client provider · Mark/Bank contracts · remote D1 cutover
+- Dual-track DO ยังเป็น runtime เดโมออนไลน์
 
 ## Checklist งานต่อไป (Next Steps)
 
-1. Owner สั่ง Phase 5 closeout ได้เมื่อพร้อม
-2. หรือส่ง blockers ให้ Client เลือก provider
+1. Owner ตัดสินใจ push โค้ด
+2. ประสาน Mark/Bank + Client ตาม blockers
+3. Roadmap รอบถัดไปเมื่อมี Requirement ใหม่

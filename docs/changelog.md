@@ -3,6 +3,7 @@
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
 ## 2026-11-09
+- Phase 5 ปิด Sprint 1 NOTT: [status/NOTT-SPRINT1-DELIVERY.md](status/NOTT-SPRINT1-DELIVERY.md) · Self-QC `npm test` 27 passed
 - Phase 4 เสร็จ: Sandbox PaymentAdapter + D1 fulfillment/allocations; SlipOK/Gateway ยังบล็อก; `npm test` 27 passed
 - Phase 3 เสร็จ: D1 catalog API (`/api/d1/products`) + `@astra/contracts` + [api-contract-catalog.md](modules/api-contract-catalog.md); `npm test` 22 passed; Phase 4 ยังล็อก
 - Phase 2 M2.1 เสร็จ: `server/auth-policy.mjs` + domain guards; `npm test` 20 passed; Phase 3–4 ยังล็อก

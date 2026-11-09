@@ -7,6 +7,7 @@
 | รายการ | ไฟล์ |
 |--------|------|
 | สถานะล่าสุด | [status/CURRENT.md](status/CURRENT.md) |
+| NOTT Sprint 1 Delivery | [status/NOTT-SPRINT1-DELIVERY.md](status/NOTT-SPRINT1-DELIVERY.md) |
 | Workflow (Owner + Agent รวมแชท) | [process/workflow.md](process/workflow.md) |
 | Task Spec / handoff | [process/handoff.md](process/handoff.md) |
 | Definition of Done | [process/definition-of-done.md](process/definition-of-done.md) |
