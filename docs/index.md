@@ -28,6 +28,10 @@
 | NOTT backend inventory (Task 0.1.1) | [modules/nott-backend-inventory.md](modules/nott-backend-inventory.md) |
 | NOTT Gap Map (Task 0.1.2) | [modules/nott-gap-map.md](modules/nott-gap-map.md) |
 
+## Recovery ล่าสุด
+
+- [Migration 004 / Cloudflare 503](modules/migration-004-recovery.md) — รักษาข้อมูลเดิมและทดสอบอัปเกรดบน workerd
+
 ## เอกสารผลิตภัณฑ์เดิม (คงไว้)
 
 | เอกสาร | ไฟล์ |

@@ -3,6 +3,7 @@
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
 ## 2026-11-09
+- Hotfix `9eebc6f`: migration 004 อัปเกรด SQLite ที่มีข้อมูลได้โดยไม่ reset; native/workerd regression + rollback; tests 40 + browser 6 + cloud QA 37 ผ่าน; GitHub run 42615156072 deploy สำเร็จ — [recovery](modules/migration-004-recovery.md)
 - NOTT Phase A–C: product detail / staff orders / payment_channel sandbox / code delivery / queue / chat / notifications / buyer ranking; `npm test` 37 passed
 - NOTT W1: migrate `.data/commerce.sqlite` ถึง 003+004 (Staff/payments/queue/chat/notifications/DEMO_CREDIT); `npm test` 29 passed; Cloudflare/D1 dual-track ตามแผนรายสัปดาห์
 - Phase 5 ปิด Sprint 1 NOTT: [status/NOTT-SPRINT1-DELIVERY.md](status/NOTT-SPRINT1-DELIVERY.md) · Self-QC `npm test` 27 passed

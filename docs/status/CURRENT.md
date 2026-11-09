@@ -2,6 +2,14 @@
 
 อัปเดตล่าสุด: 2026-11-09
 
+## Hotfix ที่ Owner อนุมัติ: migration 004 / 503
+
+- โค้ด `9eebc6f` push แล้ว; build ผ่าน, business/runtime tests 40 ผ่าน, browser workflows 6 ผ่าน
+- ตรวจอัปเกรดฐานเดิมพร้อม session/ออเดอร์/ยอด/โค้ดเข้ารหัส และ rollback เมื่อ FK ผิด
+- GitHub run 42615156072 ผ่านทั้ง build/deploy; live stamp ตรง `9eebc6f`; API และหน้าร้าน/หลังบ้านกลับมาตอบปกติ
+- เว็บจริงผ่าน cloud QA 37/37: ซื้อ TEST/รับโค้ด/reload, stock concurrency, idempotency, workspace isolation และ motion/mobile
+- รายละเอียด: [migration-004-recovery.md](../modules/migration-004-recovery.md)
+
 ## ตำแหน่งงานปัจจุบัน
 | ระดับ | ค่า |
 |-------|-----|
