@@ -122,5 +122,6 @@ audit (append-only)
 
 ## 7. ขั้นถัดไป
 
-- Task **0.3.2**: PaymentAdapter + Fulfillment flow (proposed)  
-- Task **0.3.3**: Owner Approve ชุด design Phase 0 + ปลดล็อก Phase 1+
+- [x] Task **0.3.2** PaymentAdapter + Fulfillment flow  
+- [x] Task **0.3.3** Approve design (ERD + Payment) — 2026-11-09  
+- [ ] ปลดล็อก Phase 1+ (รอ Owner ข้อ 2) → แล้วจึงเขียน migration D1
