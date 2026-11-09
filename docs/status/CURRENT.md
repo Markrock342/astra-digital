@@ -5,24 +5,23 @@
 ## ตำแหน่งงานปัจจุบัน
 | ระดับ | ค่า |
 |-------|-----|
-| โปรเจกต์ | ASTRA DIGITAL (รีโปปัจจุบัน) + intake LCS×FIFA |
-| Ownership ที่รับ | **NOTT เท่านั้น** — Backend / D1·DB / API / Payment·Delivery |
-| Phase / Milestone / Task | รอ Owner ตอบทิศทางรีโป → ค่อยทำ Roadmap Sprint 1 |
+| โปรเจกต์ | ASTRA DIGITAL (`Markrock342/astra-digital`) — FIFA = ชื่อย่อผู้ว่าจ้าง |
+| Ownership | **NOTT** — Backend (ช่วงนี้ยังไม่ทำ DB/API/Payment) |
+| Phase / Milestone / Task | รอ Owner เลือกว่าจะทำ “ส่วนอื่น” ข้อไหน → ค่อยร่าง Roadmap |
 
 ## สรุปรอบนี้
-- อ่าน prompt pack ทั้งไฟล์ แยก MARK / **NOTT** / BANK
-- ย้ายต้นทางไป `docs/requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md`
-- สร้าง `docs/modules/backend-nott.md`
-- พบ gap: สเปกใน prompt อ้าง monorepo Hono+D1+contracts แต่รีโปนี้เป็น ASTRA demo (Worker + Durable Object SQLite)
+- Owner ยืนยัน: รีโปเดียว · หาเอกสารในรีโปนี้ · brief ยึด D1 แต่**พัก DB/API/Payment**
+- ไล่เอกสารในรีโปแล้ว: ไม่มี `SOW_CHECKLIST` / `SPRINT_01` / `0001_init.sql` ตามชื่อใน prompt — ใช้ `docs/*` + `server/migrations/*` + architecture แทน
+- อัปเดต [modules/backend-nott.md](../modules/backend-nott.md)
 
 ## ที่เสร็จแล้ว
-- [x] Bootstrap กระบวนการ Owner → Agent
-- [x] Intake + จัดเก็บ prompt pack + สรุปขอบเขต NOTT
+- [x] Bootstrap กระบวนการ
+- [x] Intake prompt pack + ขอบเขต NOTT
+- [x] ยืนยันทิศทางรีโป/เอกสาร + พัก DB/API/Payment
 
 ## กำลังทำ / รอ
-- [ ] Owner ยืนยันทิศทาง (evolve ASTRA vs รีโป monorepo ใหม่ / มีเอกสาร SOW อยู่ที่ไหน)
-- [ ] Agent ทำ Roadmap Sprint 1 เฉพาะ NOTT แล้วรอ Approve
+- [ ] Owner เลือกงานรอบถัดไปนอก DB/API/Payment (แนะนำ: Auth/RBAC design และ/หรือ Gap map)
+- [ ] Agent ร่าง Roadmap รอ Approve
 
 ## Blockers
-- เอกสารที่ prompt อ้างยังไม่มีในรีโป (`README_TH.md`, `SOW_CHECKLIST`, `MODULES_AND_API`, `SECURITY`, `SPRINT_01`, `db/migrations/0001_init.sql`)
-- Payment provider ยังไม่ยืนยันจากลูกค้า (ทำได้แค่ interface ตาม brief)
+- ยังไม่ชัดว่า “ส่วนอื่น” ที่ Owner อยากให้ทำก่อนคือข้อไหน (ดูตัวเลือกใน backend-nott Next Steps)
