@@ -1,0 +1,27 @@
+---
+description: สถาปัตยกรรมแยกชั้น Security-first และ Definition of Done ที่ต้องมีหลักฐานเทสจริง
+alwaysApply: true
+---
+
+# Architecture & Security
+
+## ชั้นระบบ (Separation of Concerns)
+แยกชัด: **UI** | **Application / Domain** | **Data** | **Infra**  
+เมื่อล็อกสแต็กหรือตัดสินใจสำคัญ บันทึกใน `docs/architecture/overview.md` (และอ้างอิง `docs/architecture.md` ของผลิตภัณฑ์ถ้ามี)  
+ห้ามยัดทั้งระบบในไฟล์เดียว; แยกโมดูลตามโดเมน
+
+## Security-first
+- Secrets / API keys / tokens / credential DB อยู่เฉพาะใน env หรือ secret store — ห้าม hardcode และห้าม commit
+- **Never trust the client**: state และสิทธิ์สำคัญตัดสินฝั่ง server; client ส่งแค่ intent
+- Validate / sanitize ทุก input จากภายนอกที่ขอบระบบ
+- Least privilege: สิทธิ์น้อยสุดที่ทำงานได้; ตรวจสิทธิ์หลายขั้นชัดเจน (authenticate → authorize → ขอบเขตข้อมูล)
+- ออกแบบให้ดึงหรือล้วงข้อมูลผู้ใช้โดยไม่ได้รับอนุญาตทำได้ยาก (เช่น RLS / ACL ตามแพลตฟอร์ม)
+- Error handling มีขอบเขต — ห้ามกลืน error เงียบๆ ในจุดที่กระทบความปลอดภัย; อย่ารั่วรายละเอียดภายในสู่ client
+- ห้ามอ่านหรือแปะค่า `.env` / secret ในแชทโดยไม่จำเป็น
+
+## Testing & Definition of Done
+- ฟีเจอร์ที่มี business logic หรือแก้บั๊กสำคัญ ต้องมี automated test คู่กันเมื่อเหมาะสม
+- เส้นทางความปลอดภัยต้องมีเคสเชิงลบ (unauthorized, invalid input, privilege edge)
+- เกณฑ์ที่ต้องให้คนเทส แยกจากเกณฑ์อัตโนมัติ — เขียนชัดใน Task Spec/รายงาน
+- **ไม่ถือว่าเสร็จ** ถ้าแค่บอกว่าทำแล้วแต่ไม่มีหลักฐานรันจริง
+- รายละเอียด: `docs/process/definition-of-done.md`

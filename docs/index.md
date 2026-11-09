@@ -1,0 +1,50 @@
+# ASTRA — สารบัญกลาง (Master Index)
+
+สารบัญนี้**เพิ่ม**โครงกระบวนการทำงาน — **ไม่แทนที่**เอกสารเดิมของผลิตภัณฑ์
+
+## สถานะ / กระบวนการ (ใหม่)
+
+| รายการ | ไฟล์ |
+|--------|------|
+| สถานะล่าสุด | [status/CURRENT.md](status/CURRENT.md) |
+| Workflow (Owner + Agent รวมแชท) | [process/workflow.md](process/workflow.md) |
+| Task Spec / handoff | [process/handoff.md](process/handoff.md) |
+| Definition of Done | [process/definition-of-done.md](process/definition-of-done.md) |
+| Architecture ระดับกระบวนการ | [architecture/overview.md](architecture/overview.md) · [architecture/security.md](architecture/security.md) |
+| Roadmaps | [roadmaps/README.md](roadmaps/README.md) |
+| Task Specs | [prompts/TASK-PROMPT-TEMPLATE.md](prompts/TASK-PROMPT-TEMPLATE.md) |
+| Changelog กระบวนการ | [changelog.md](changelog.md) |
+
+## Requirement / Ownership (intake)
+
+| เอกสาร | ไฟล์ |
+|--------|------|
+| Prompt pack LCS×FIFA (Mark/Nott/Bank) | [requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md](requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md) |
+| Module: Backend NOTT (ขอบเขตทีมนี้) | [modules/backend-nott.md](modules/backend-nott.md) |
+
+## เอกสารผลิตภัณฑ์เดิม (คงไว้)
+
+| เอกสาร | ไฟล์ |
+|--------|------|
+| Architecture (ผลิตภัณฑ์) | [architecture.md](architecture.md) |
+| Continuous deployment | [continuous-deployment.md](continuous-deployment.md) |
+| Demo guide | [demo-guide.md](demo-guide.md) |
+| Feature matrix | [feature-matrix.md](feature-matrix.md) |
+| Production gap | [production-gap.md](production-gap.md) |
+| Reference analysis | [reference-analysis.md](reference-analysis.md) |
+| Release | [RELEASE.md](RELEASE.md) |
+
+## แผนที่บทบาท
+
+```
+Owner
+  └─ Agent แชทเดียว (PM + Coder)
+       ├─ Sub-agents (วิจัย / สำรวจ)
+       └─ commit ท้องถิ่น → push โค้ดเมื่อ Owner สั่ง (ห้าม push docs/schema)
+```
+
+## Cursor Rules
+
+- `.cursor/rules/role-agent.mdc` — รวม PM+Coder
+- `.cursor/rules/project-docs.mdc` — โครง docs
+- `.cursor/rules/architecture-security.mdc` — ชั้นระบบ + security

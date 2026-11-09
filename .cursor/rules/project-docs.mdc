@@ -1,0 +1,37 @@
+---
+description: โครง docs/ เป็นคลังความรู้ — สารบัญกลาง Roadmap Prompt โมดูล โปรโตคอล Search→Execute→Update (เพิ่มของเดิม ไม่ลบ)
+alwaysApply: true
+---
+
+# Project Docs
+
+ใช้ `docs/` เป็นคลังความรู้และความคืบหน้าของโปรเจกต์  
+ภาษาเอกสาร: ไทย + ชื่อเทคนิคอังกฤษ — ห้ามยัด source code ยาวลง docs  
+**ห้ามลบหรือแทนที่เอกสารเดิมที่มีอยู่** — เพิ่มโครงกระบวนการและลิงก์จากสารบัญกลาง
+
+## โครงโฟลเดอร์ (มาตรฐานทีม — เพิ่มเข้าไป)
+- `docs/index.md` — สารบัญกลาง (ลิงก์ทั้งเอกสารเดิมและโฟลว์ใหม่)
+- `docs/status/CURRENT.md` — ความคืบหน้ารอบปัจจุบัน (Phase/Milestone/Task)
+- `docs/architecture/` — overview / security ระดับกระบวนการ (คู่กับ `docs/architecture.md` เดิมของผลิตภัณฑ์)
+- `docs/process/` — workflow, definition-of-done, handoff
+- `docs/roadmaps/` — Roadmap Phase → Milestone → Task
+- `docs/modules/` — เอกสารรายโมดูล/ฟีเจอร์ (เมื่อมีงานใหม่ตามโฟลว์)
+- `docs/prompts/` — Task Spec / Prompt (ตั้งชื่อมี Task ID)
+- `docs/changelog.md` — การเปลี่ยนแปลงสำคัญระดับกระบวนการ/โปรเจกต์
+
+## โปรโตคอลงานที่แตะระบบ
+1. **SEARCH & READ** — อ่าน `docs/index.md` แล้วอ่าน docs ที่เกี่ยวข้องก่อนเริ่ม
+2. **EXECUTE** — ทำงานตาม brief/มาตรฐาน
+3. **UPDATE** — อัปเดต docs ที่เกี่ยว + ลิงก์ใน `docs/index.md` ให้ตรงความจริงทันที
+
+## ไฟล์โมดูลใหม่
+ถ้ายังไม่มีไฟล์สำหรับฟีเจอร์/โมดูล → สร้างใน `docs/modules/` แล้วลิงก์จาก `docs/index.md`
+
+## รูปแบบไฟล์โมดูล (บังคับ เมื่อสร้างใหม่)
+```markdown
+## สถานะปัจจุบันของฟีเจอร์นี้ (Current Status)
+## งานที่เพิ่งทำเสร็จ (Recently Completed)
+## บันทึกการแก้บัค (Bug & Troubleshooting Log)
+## สิ่งที่ยังค้างอยู่และปัญหาที่ทราบ (Pending & Known Issues)
+## Checklist งานต่อไป (Next Steps)
+```
