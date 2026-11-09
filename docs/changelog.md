@@ -3,6 +3,7 @@
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
 ## 2026-11-09
+- Phase 2 M2.1 เสร็จ: `server/auth-policy.mjs` + domain guards; `npm test` 20 passed; Phase 3–4 ยังล็อก
 - Phase 1 M1.1 เสร็จ: dual-track D1 (`db/migrations/0001_init.sql`) + `npm run db:migrate:local` ผ่าน; ดู [architecture/erd-sprint1.md](architecture/erd-sprint1.md)
 - Owner ปลดล็อก Phase 1 (หลังเคยเลือก B); Phase 2–4 ยังล็อก
 - Owner เลือก **B**: ล็อกโค้ด DB/API/Payment ไว้ก่อนหลัง Approve design Phase 0 — รอคำสั่งปลดล็อก Phase 1 ในภายหลัง

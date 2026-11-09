@@ -1,8 +1,8 @@
 # Auth / RBAC Design — ASTRA (NOTT)
 
-สถานะ: **Approved** โดย Owner (2026-11-09) — Task 0.2.2  
-ใช้เป็นเกณฑ์ Phase 2 Auth implement (PR แยก)  
-อิงของจริง: `server/domain.mjs`, `server/api-handler.mjs`, `cloud/worker.mjs`, `tests/commerce.test.mjs`  
+สถานะ: **Approved** (0.2.2) · **Implemented Phase 2** (2026-11-09) — M2.1  
+เกณฑ์ + โค้ด: `server/auth-policy.mjs` + `server/domain.mjs` · เทสใน `tests/commerce.test.mjs`  
+อิง: `server/api-handler.mjs`, `cloud/worker.mjs`  
 คู่กับ: [../modules/nott-backend-inventory.md](../modules/nott-backend-inventory.md) · [security.md](security.md)
 
 ## 1. เป้าหมาย
@@ -120,7 +120,10 @@ Mutation เพิ่ม: ต้องมี `X-Astra-Request: 1` + JSON + same-
 | Token หมดอายุ / หลังเปลี่ยนรหัส | session ใช้ไม่ได้ |
 | Origin แปลก / ไม่มี X-Astra-Request ตอน POST | 403 |
 
-หลักฐานปัจจุบัน: `tests/commerce.test.mjs` (ownership, role injection, demo-merchant gate, password revoke, HTTP CSRF/owner)
+หลักฐานเทส (Phase 2): `npm test` — 20 passed รวม  
+- ownership / admin 403 / CSRF Origin / X-Astra-Request  
+- profile + register กัน role injection (`auth policy strips…`, `passwords are hashed…`)  
+- demo-merchant gate · password change revoke sessions · expired session / anonymous 401
 
 ## 9. สิ่งที่ออกแบบไว้แต่ยังไม่ทำใน Sprint 1 นี้
 
