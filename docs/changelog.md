@@ -3,6 +3,8 @@
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
 ## 2026-11-09
+- Owner Approve Roadmap DB · ส่ง Review Pack DB-01…05 ที่ [database/README.md](database/README.md) บน `feat/nott-database-audit` (ยังไม่ deploy migration)
+- ร่าง Roadmap Database Ownership (DB-01…05) — [roadmaps/NOTT-DB-ARCHITECTURE.md](roadmaps/NOTT-DB-ARCHITECTURE.md); sync main `9eebc6f`
 - NOTT Phase A–C: product detail / staff orders / payment_channel sandbox / code delivery / queue / chat / notifications / buyer ranking; `npm test` 37 passed
 - NOTT W1: migrate `.data/commerce.sqlite` ถึง 003+004 (Staff/payments/queue/chat/notifications/DEMO_CREDIT); `npm test` 29 passed; Cloudflare/D1 dual-track ตามแผนรายสัปดาห์
 - Phase 5 ปิด Sprint 1 NOTT: [status/NOTT-SPRINT1-DELIVERY.md](status/NOTT-SPRINT1-DELIVERY.md) · Self-QC `npm test` 27 passed

@@ -5,27 +5,27 @@
 ## ตำแหน่งงานปัจจุบัน
 | ระดับ | ค่า |
 |-------|-----|
-| โปรเจกต์ | ASTRA DIGITAL — ownership **NOTT** |
-| Roadmap | [NOTT-WEEKLY.md](../roadmaps/NOTT-WEEKLY.md) |
-| Phase / Milestone / Task | **Phase A–C เสร็จ** — คิวถัดไปรอ Owner (Bank/Mark นอก scope / เปิด gateway จริง) |
+| โปรเจกต์ | ASTRA DIGITAL — **NOTT = Database** |
+| Roadmap | [NOTT-DB-ARCHITECTURE.md](../roadmaps/NOTT-DB-ARCHITECTURE.md) (**Approved**) |
+| Phase | 0–5 Review Pack บน branch `feat/nott-database-audit` |
+| ฐานโค้ดต้นทาง | `main` @ `9eebc6f` |
 
-## สรุปรอบนี้ (น็อต — ทำต่อเนื่อง)
-- Phase 0 (W1 schema) คงเดิม: 001–004 + DEMO_CREDIT
-- Phase A: `productDetail`, `staffOrders`, STAFF อ่านออเดอร์ได้แต่ไม่เห็นโค้ด
-- Phase B: ช่องทางจ่ายเดียว (sandbox) · บล็อก SlipOK/Gateway · ส่งโค้ดหลังชำระ + แถว `payments`
-- Phase C: คิวพรีออเดอร์ · แชท · แจ้งเตือน · อันดับผู้ซื้อ
-- โฮสต์เป้า: Cloudflare (dual-track กับ local `.data`)
+## ส่งมอบรอบนี้ (docs only)
+- [x] `docs/database/DB_AUDIT.md`
+- [x] `docs/database/ERD.md`
+- [x] `docs/database/SCHEMA_PROPOSAL.md`
+- [x] `docs/database/DATA_INTEGRITY.md`
+- [x] `docs/database/MIGRATION_PLAN.md`
+- [x] `docs/database/DB_TEST_PLAN.md`
+- [ ] PR → Mark Review
 
-หลักฐาน: `npm test` **37 passed**
+## ยังไม่ทำ (ตามโจทย์)
+- Deploy migration / เปลี่ยน production DB
+- แก้ `004_commerce_ops.sql`
+- แก้ Worker ฐานร้านเดียว (รอ Mark ล็อก)
+- SlipOK / Gateway / Frontend
 
-## ที่เสร็จแล้ว
-- [x] NOTT Sprint 1 เดิม
-- [x] W1 local migrate + schema ops
-- [x] Phase A–C APIs ตามโจทย์น็อต
-
-## กำลังทำ / รอ
-- [ ] Mark ถามช่องทางจ่ายจริง / Bank โครงหน้าร้าน (นอก ownership โค้ด NOTT)
-- [ ] เชื่อม SlipOK/Gateway หลังลูกค้าเลือก
-
-## Blockers
-- เปิด gateway จริง รอ Client เลือกช่องทาง
+## Blockers ส่ง Mark
+1. ยืนยันฐานร้านเดียวบน DO  
+2. ล็อกตารางถัดไป (payment_events / order_items / categories / cart)  
+3. แช่แข็ง D1 จนกว่ามี cutover plan
