@@ -8,6 +8,13 @@ import {
   createDecipheriv,
 } from "node:crypto";
 import { catalog, categories } from "./catalog.mjs";
+import {
+  ROLES,
+  withoutClientPrivileges,
+  assertAuthenticated,
+  assertAdmin,
+} from "./auth-policy.mjs";
+export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
     super(message);
@@ -92,12 +99,8 @@ export function createCommerceCore({
       action,
       entity ?? null,
     );
-  const requireUser = (user) =>
-    user || fail(401, "กรุณาเข้าสู่ระบบก่อนดำเนินการ");
-  const requireAdmin = (user) => {
-    requireUser(user);
-    if (user.role !== "ADMIN") fail(403, "เฉพาะผู้ดูแลร้านเท่านั้น");
-  };
+  const requireUser = (user) => assertAuthenticated(user, fail);
+  const requireAdmin = (user) => assertAdmin(user, fail);
   const integer = (v, min, max, label) => {
     if (!Number.isSafeInteger(v) || v < min || v > max)
       fail(400, label + "ไม่ถูกต้อง");
@@ -292,20 +295,23 @@ export function createCommerceCore({
     const existing = one("SELECT id FROM users WHERE email=?", email);
     if (existing)
       run(
-        "UPDATE users SET password_hash=?,role='ADMIN' WHERE id=?",
+        "UPDATE users SET password_hash=?,role=? WHERE id=?",
         passwordHash(adminPassword),
+        ROLES.ADMIN,
         existing.id,
       );
     else
       run(
-        "INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,'ADMIN')",
+        "INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,?)",
         randomUUID(),
         email,
         "ผู้ดูแล ASTRA",
         passwordHash(adminPassword),
+        ROLES.ADMIN,
       );
   }
-  function register(input) {
+  function register(rawInput) {
+    const input = withoutClientPrivileges(rawInput);
     const name = clean(input.name ?? input.username, 2, 60, "ชื่อผู้ใช้");
     const username = input.username
       ? clean(input.username, 3, 32, "ชื่อผู้ใช้")
@@ -361,7 +367,8 @@ export function createCommerceCore({
     });
     return issueSession(one("SELECT * FROM users WHERE id=?", id));
   }
-  function login(input) {
+  function login(rawInput) {
+    const input = withoutClientPrivileges(rawInput);
     const email = clean(
       input.email ?? input.username,
       3,
@@ -402,7 +409,7 @@ export function createCommerceCore({
       email: suffix + "@merchant.astra.local",
       password: randomBytes(24).toString("hex"),
     });
-    run("UPDATE users SET role='ADMIN' WHERE id=?", registered.user.id);
+    run("UPDATE users SET role=? WHERE id=?", ROLES.ADMIN, registered.user.id);
     run("DELETE FROM sessions WHERE token_hash=?", hash(registered.token));
     audit({ id: registered.user.id }, "DEMO_MERCHANT", registered.user.id);
     return issueSession(
@@ -900,8 +907,9 @@ export function createCommerceCore({
       return { id };
     });
   }
-  function profile(user, input) {
+  function profile(user, rawInput) {
     requireUser(user);
+    const input = withoutClientPrivileges(rawInput);
     const name = clean(input.name, 2, 60, "ชื่อ");
     if (input.newPassword) {
       if (

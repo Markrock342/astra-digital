@@ -1,11 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createCommerce, ApiError } from "../server/commerce.mjs";
 import { createApp } from "../server/http.mjs";
+import { ROLES, withoutClientPrivileges } from "../server/auth-policy.mjs";
 function fixture(t) {
   const s = createCommerce();
   t.after(() => s.db.close());
@@ -595,4 +596,66 @@ test("review eligibility expires after seven days even for a delivered-order own
       }),
     (e) => e.status === 403,
   );
+});
+
+test("auth policy strips client privilege fields and register ignores role injection", (t) => {
+  const s = createCommerce();
+  t.after(() => s.db.close());
+  assert.deepEqual(
+    withoutClientPrivileges({
+      name: "Buyer",
+      role: "ADMIN",
+      roles: ["ADMIN"],
+      isAdmin: true,
+      permissions: ["*"],
+      password: "Test-Password-123",
+    }),
+    { name: "Buyer", password: "Test-Password-123" },
+  );
+  const auth = s.register({
+    name: "Role Inject",
+    email: "role-inject@example.invalid",
+    password: "Test-Password-123",
+    role: "ADMIN",
+    isAdmin: true,
+  });
+  assert.equal(auth.user.role, ROLES.CUSTOMER);
+  const row = s.db
+    .prepare("SELECT role FROM users WHERE id=?")
+    .get(auth.user.id);
+  assert.equal(row.role, ROLES.CUSTOMER);
+  assert.throws(
+    () => s.adminOverview(s.session(auth.token)),
+    (e) => e.status === 403,
+  );
+});
+
+test("expired session and anonymous callers cannot use protected commerce APIs", (t) => {
+  const { s, user, token } = fixture(t);
+  assert.throws(
+    () => s.orders(null),
+    (e) => e.status === 401,
+  );
+  assert.throws(
+    () => s.ledger(null),
+    (e) => e.status === 401,
+  );
+  assert.throws(
+    () => s.adminOverview(null),
+    (e) => e.status === 401,
+  );
+  s.db
+    .prepare("UPDATE sessions SET expires_at=? WHERE token_hash=?")
+    .run(Date.now() - 1000, createHash("sha256").update(token).digest("hex"));
+  assert.equal(s.session(token), null);
+  assert.throws(
+    () =>
+      s.createOrder(null, {
+        variantId: "stream-plus-30",
+        quantity: 1,
+        requestKey: "expired",
+      }),
+    (e) => e.status === 401,
+  );
+  void user;
 });
