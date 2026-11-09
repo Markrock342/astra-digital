@@ -3,6 +3,7 @@
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
 ## 2026-11-09
+- Task **0.1.2** เสร็จ / Milestone 0.1 ปิด: Gap Map — [modules/nott-gap-map.md](modules/nott-gap-map.md)
 - Task **0.1.1** เสร็จ: inventory backend ของจริง — [modules/nott-backend-inventory.md](modules/nott-backend-inventory.md); Roadmap Approved โดย Owner
 - ร่าง Roadmap NOTT Sprint 1 ตามลำดับความสำคัญ Phase 0–5 — [roadmaps/NOTT-SPRINT1.md](roadmaps/NOTT-SPRINT1.md)
 - Owner ยืนยัน: รีโปเดียว ASTRA (FIFA = ผู้ว่าจ้าง); เอกสารหาในรีโปนี้; ยึด brief D1; ลำดับเดินเริ่มจาก design ก่อนลง DB/API/Payment

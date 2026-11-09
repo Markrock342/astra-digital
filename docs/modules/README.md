@@ -7,3 +7,4 @@
 |-------|------|
 | Backend / NOTT | [backend-nott.md](backend-nott.md) |
 | NOTT backend inventory | [nott-backend-inventory.md](nott-backend-inventory.md) |
+| NOTT Gap Map | [nott-gap-map.md](nott-gap-map.md) |
