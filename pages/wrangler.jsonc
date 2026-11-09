@@ -1,0 +1,11 @@
+{
+  "name": "astra-demo",
+  "compatibility_date": "2026-10-01",
+  "pages_build_output_dir": "../dist-pages",
+  "services": [
+    {
+      "binding": "COMMERCE_API",
+      "service": "astra",
+    },
+  ],
+}

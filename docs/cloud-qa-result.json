@@ -1,0 +1,7 @@
+{
+  "base": "https://astra-demo-133.pages.dev",
+  "completedAt": "2026-11-08T03:41:05.689Z",
+  "checks": 37,
+  "passed": true,
+  "storage": "cloudflare-durable-sqlite"
+}

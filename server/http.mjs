@@ -1,0 +1,76 @@
+import { createServer } from "node:http";
+import { Readable } from "node:stream";
+import { readFile } from "node:fs/promises";
+import { resolve, extname } from "node:path";
+import { createAPIHandler, securityHeaders } from "./api-handler.mjs";
+const mime = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".woff2": "font/woff2",
+  ".png": "image/png",
+};
+export function createApp(service, { production = false } = {}) {
+  const handle = createAPIHandler(service);
+  return createServer(async (req, res) => {
+    try {
+      const url = new URL(req.url, "http://" + req.headers.host);
+      if (url.pathname.startsWith("/api/")) {
+        const headers = new Headers();
+        for (const [key, value] of Object.entries(req.headers))
+          if (value)
+            headers.set(key, Array.isArray(value) ? value.join(",") : value);
+        const request = new Request(url, {
+          method: req.method,
+          headers,
+          ...(req.method === "POST"
+            ? { body: Readable.toWeb(req), duplex: "half" }
+            : {}),
+        });
+        const response = await handle(request);
+        res.writeHead(response.status, Object.fromEntries(response.headers));
+        res.end(Buffer.from(await response.arrayBuffer()));
+        return;
+      }
+      const send = (status, error) => {
+        res.writeHead(status, {
+          ...securityHeaders,
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+        });
+        res.end(JSON.stringify({ error }));
+      };
+      if (!production)
+        return send(404, "Use the Vite server at http://127.0.0.1:4330");
+      if (!["GET", "HEAD"].includes(req.method))
+        return send(405, "Method not allowed");
+      const root = resolve(new URL("../dist", import.meta.url).pathname);
+      let file = resolve(root, "." + decodeURIComponent(url.pathname));
+      if (!file.startsWith(root + "/") && file !== root)
+        return send(403, "Forbidden");
+      if (!extname(file) || url.pathname === "/") file = root + "/index.html";
+      try {
+        const content = await readFile(file);
+        res.writeHead(200, {
+          ...securityHeaders,
+          "Content-Type": mime[extname(file)] ?? "application/octet-stream",
+          "Cache-Control": file.includes("/assets/")
+            ? "public,max-age=31536000,immutable"
+            : "no-cache",
+        });
+        res.end(req.method === "HEAD" ? undefined : content);
+      } catch {
+        return send(404, "ไม่พบหน้านี้");
+      }
+    } catch (error) {
+      console.error("HTTP request failed:", error.message);
+      if (!res.headersSent)
+        res.writeHead(500, {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+        });
+      res.end(JSON.stringify({ error: "ระบบไม่สามารถทำรายการได้" }));
+    }
+  });
+}
