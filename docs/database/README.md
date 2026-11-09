@@ -10,5 +10,6 @@
 | DB-03 Data Integrity | [DATA_INTEGRITY.md](DATA_INTEGRITY.md) |
 | DB-04 Migration Plan | [MIGRATION_PLAN.md](MIGRATION_PLAN.md) |
 | DB-05 Test Plan | [DB_TEST_PLAN.md](DB_TEST_PLAN.md) |
+| รายงานส่งมาร์ค | [MARK_HANDOFF_REPORT.md](MARK_HANDOFF_REPORT.md) |
 
 Roadmap: [../roadmaps/NOTT-DB-ARCHITECTURE.md](../roadmaps/NOTT-DB-ARCHITECTURE.md)

@@ -18,6 +18,7 @@
 - [x] `docs/database/MIGRATION_PLAN.md`
 - [x] `docs/database/DB_TEST_PLAN.md`
 - [x] PR → Mark Review: https://github.com/Markrock342/astra-digital/pull/1
+- [x] รายงานส่งมาร์ค: [../database/MARK_HANDOFF_REPORT.md](../database/MARK_HANDOFF_REPORT.md)
 
 ## ยังไม่ทำ (ตามโจทย์)
 - Deploy migration / เปลี่ยน production DB
