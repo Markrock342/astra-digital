@@ -3,6 +3,7 @@
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
 ## 2026-11-09
+- NOTT Phase A–C: product detail / staff orders / payment_channel sandbox / code delivery / queue / chat / notifications / buyer ranking; `npm test` 37 passed
 - NOTT W1: migrate `.data/commerce.sqlite` ถึง 003+004 (Staff/payments/queue/chat/notifications/DEMO_CREDIT); `npm test` 29 passed; Cloudflare/D1 dual-track ตามแผนรายสัปดาห์
 - Phase 5 ปิด Sprint 1 NOTT: [status/NOTT-SPRINT1-DELIVERY.md](status/NOTT-SPRINT1-DELIVERY.md) · Self-QC `npm test` 27 passed
 - Phase 4 เสร็จ: Sandbox PaymentAdapter + D1 fulfillment/allocations; SlipOK/Gateway ยังบล็อก; `npm test` 27 passed
