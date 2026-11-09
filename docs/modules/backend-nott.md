@@ -1,18 +1,17 @@
 # Module: Backend / NOTT (Ownership)
 
-Catalog D1: `server/d1/*` · routes `GET /api/d1/products` · contracts `@astra/contracts`  
-Contract doc: [api-contract-catalog.md](api-contract-catalog.md)
+Payment: `server/payment/adapters.mjs` · Fulfillment D1: `server/d1/fulfillment.mjs`  
+Doc: [../architecture/payment-fulfillment.md](../architecture/payment-fulfillment.md)
 
 ## สถานะปัจจุบันของฟีเจอร์นี้ (Current Status)
 
-- **Phase 3 เสร็จ** (list/detail + contracts draft)
-- Phase 4 ยังล็อก
-- `npm test` 22 passed
+- **Phase 0–4 เสร็จ** ตาม Roadmap NOTT Sprint 1 (implementation)
+- Gateway จริงยังไม่เปิด (501 / BLOCKED)
+- `npm test` 27 passed
 
 ## งานที่เพิ่งทำเสร็จ (Recently Completed)
 
-- ปลดล็อก Phase 3
-- D1 catalog module/API + packages/contracts + เทสไม่รั่ว key
+- Phase 4: SandboxPaymentAdapter + blocked providers + D1 confirm/allocate tests
 
 ## บันทึกการแก้บัค (Bug & Troubleshooting Log)
 
@@ -20,10 +19,11 @@ Contract doc: [api-contract-catalog.md](api-contract-catalog.md)
 
 ## สิ่งที่ยังค้างอยู่และปัญหาที่ทราบ (Pending & Known Issues)
 
-- Mark/Bank ยังไม่ agree contracts
-- Worker ยังไม่ cutover D1
-- Phase 4 PaymentAdapter ยังล็อก
+- Client ยังไม่เลือก provider
+- Worker production demo ยังเป็น DO dual-track (ยังไม่ cutover D1 payment path)
+- Phase 5 closeout package ยังไม่รวม
 
 ## Checklist งานต่อไป (Next Steps)
 
-1. รอปลดล็อก Phase 4 หรือส่ง contracts ให้ Mark/Bank รีวิว
+1. Owner สั่ง Phase 5 closeout ได้เมื่อพร้อม
+2. หรือส่ง blockers ให้ Client เลือก provider

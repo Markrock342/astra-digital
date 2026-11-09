@@ -125,5 +125,5 @@ Phase 5: Sprint 1 Closeout - สรุปส่งมอบ NOTT
 Owner ตอบอย่างน้อย:
 - [x] ยอมรับลำดับ Phase 0 → 5 (Approved 2026-11-09)
 - [x] Approve ชุด design Phase 0 (Auth/ERD/Payment) — 2026-11-09  
-- [x] ข้อ 2: ปลดล็อก Phase 1–3 แล้ว (2026-11-09); **Phase 4 ยังล็อก**
+- [x] ข้อ 2: ปลดล็อก Phase 1–4 แล้ว (2026-11-09); Phase 5 closeout รอ Owner
 - [x] ไม่ขอแก้ชื่อ Milestone/Task ก่อนเริ่ม Task 0.1.1

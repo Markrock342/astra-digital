@@ -16,8 +16,8 @@ Roadmap: [../roadmaps/NOTT-SPRINT1.md](../roadmaps/NOTT-SPRINT1.md)
 | 2 | Catalog list + product detail API บน local D1 ไม่รั่ว key | **มี** (local schema) | `GET /api/d1/products` + `/:id` บน schema จาก `db/migrations`; เทสไม่รั่ว secret · Worker ยังไม่ cutover D1 รีโมต | Phase 3 เสร็จ |
 | 3 | Publish I/O types → `packages/contracts` ตกลง Mark/Bank | **บางส่วน** | มี `packages/contracts` draft · **รอ Mark/Bank agree** | BLOCKED รีวิวภายนอก |
 | 4 | Auth/RBAC design ก่อน แล้ว implement คนละ PR; ไม่รับ role จาก client | **มี** | design Approved + Phase 2: `server/auth-policy.mjs` / domain · เทส register/profile strip role, expired session, anonymous 401 | M2.1 เสร็จ |
-| 5 | Design PaymentAdapter เดียว — ห้ามเปิด SlipOK/Gateway จนกว่าลูกค้ายืนยัน | **ขาด** (ออกแบบ) / **พัก** (โค้ด) | มีแค่ sandbox `pay` + TEST top-up · ไม่มี adapter interface | Phase 0.3.2 doc → Phase 4.1 · dependency **Client** เลือก provider |
-| 6 | Document + test idempotent payment / one-key-per-order-item; race/retry | **บางส่วน** | มี atomic allocate + unique fingerprint/ledger.reference + เทส race/retry ใน `tests/commerce.test.mjs` · ยังผูก sandbox ไม่ใช่ provider webhook replay | Phase 0.3.2 doc + Phase 4.2 ขยายเมื่อมี adapter |
+| 5 | Design PaymentAdapter เดียว — ห้ามเปิด SlipOK/Gateway จนกว่าลูกค้ายืนยัน | **มี** (sandbox) | `SandboxPaymentAdapter` + blocked SlipOK/Gateway (501) · รอ Client เลือก provider จริง | Phase 4 เสร็จ · BLOCKED gateway |
+| 6 | Document + test idempotent payment / one-key-per-order-item; race/retry | **มี** | D1 fulfillment เทส idempotent/race/fail + legacy commerce tests | Phase 4.2 เสร็จ |
 | 7 | Deliver: migration, ERD, tested Product APIs, API Contract, Payment+Fulfillment proposal, blockers | **บางส่วน** | มีของใกล้เคียงใน demo · ชุด deliverable ตาม brief ยังไม่ครบเป็นแพ็กเกจ Sprint 1 | Phase 5 closeout |
 
 ---
