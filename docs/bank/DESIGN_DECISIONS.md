@@ -1,10 +1,8 @@
 # Design Decisions — แบบร่างตามเฟรม Figma
 
 วันที่: 2026-11-10  
-สถานะ: ร่างให้ Mark/Nott ตัดสินใจ ยังไม่ลงใน `src/`  
+สถานะ: ถอนแบบร่างชุดนี้ออกเมื่อ 2026-11-11 ไฟล์ mockup ไม่มีแล้ว ยังไม่เริ่มแบบร่างใหม่ และยังไม่ลงใน `src/`  
 ไฟล์: [Figma «ASTRA DIGITAL · Storefront redesign»](https://www.figma.com/design/PjVqliWkak3LVy2dsKYdTp/Untitled?node-id=0-1)
-
-เปิดดูได้ที่ `docs/bank/mockup/index.html`
 
 ## สิ่งที่ยึดจากเฟรม
 
