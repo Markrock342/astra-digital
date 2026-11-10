@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ASTRA DIGITAL — Storefront redesign</title>
+  <title>FIFACORP — หน้าร้าน</title>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
@@ -208,7 +208,7 @@
 </head>
 <body>
   <div class="review">
-    <span>แบบร่างให้ตรงเฟรม Figma «ASTRA DIGITAL · Storefront redesign» ยังไม่ลงหน้าร้านจริง</span>
+    <span>แบบร่าง FIFACORP หน้าแรกเหลือรายการสินค้า ยังไม่ลงหน้าร้านจริง</span>
   </div>
   <div class="tabs">
     <button type="button" data-screen="home" aria-pressed="true">หน้าร้าน</button>
@@ -218,13 +218,13 @@
     <button type="button" data-screen="order" aria-pressed="false">ประวัติการซื้อ</button>
     <button type="button" data-screen="chat" aria-pressed="false">แชท</button>
     <button type="button" data-screen="admin" aria-pressed="false">แอดมิน</button>
-    <button type="button" data-screen="notes" aria-pressed="false">แจ้งเตือน</button>
+    <button type="button" data-screen="notes" aria-pressed="false">กล่องข้อความ</button>
     <button type="button" id="phone">ดูบนมือถือ</button>
   </div>
   <div class="frame">
     <div class="ticker">DIGITAL GOODS. REAL POSSIBILITIES. &nbsp;/&nbsp; เปิดประสบการณ์ดิจิทัลที่เป็นคุณ</div>
     <header class="nav">
-      <div class="logo">ASTRA <span>DIGITAL</span></div>
+      <div class="logo">FIFACORP</div>
       <nav class="links">
         <a class="on" href="#home" data-screen="home">หน้าแรก</a>
         <a href="#stock" data-screen="stock">สินค้า</a>
@@ -241,38 +241,6 @@
 
     <section class="screen on" id="home">
       <div class="pad">
-        <div class="hero">
-          <div>
-            <span class="live"><i class="dot"></i> เปิดให้บริการ</span>
-            <h1>อัปเกรดทุกวัน<em>ให้เป็นไปได้มากกว่า</em></h1>
-            <p class="lead">ได้ไลเซนส์ และประสบการณ์ดิจิทัลที่คุณเลือกได้ ค้นพบสิ่งที่ใช่ แล้วเริ่มใช้งานในแบบของคุณ</p>
-            <div class="actions">
-              <button class="buy" type="button" data-screen="home" data-jump="catalog">เลือกซื้อสินค้า</button>
-              <button class="ghost" type="button" data-screen="reviews">ดูรีวิวทั้งหมด</button>
-            </div>
-            <p class="cats">ความบันเทิง &nbsp;/&nbsp; ซอฟต์แวร์ &nbsp;/&nbsp; เกม &nbsp;/&nbsp; และอื่น ๆ อีกมาก</p>
-          </div>
-          <aside class="edit">
-            <div class="edit-top"><span>THE DIGITAL EDIT</span><span>01 / 03</span></div>
-            <h2>คัดสรรเพื่อทุกไลฟ์สไตล์</h2>
-            <div class="duo">
-              <div class="tile lime">
-                <small>ASTRA / SELECT</small>
-                <strong>PLAY<br>MORE.</strong>
-                <div class="foot"><span>ความบันเทิงที่เลือกได้</span><button class="arrow" type="button" data-screen="stock" data-product="stream" aria-label="เปิด Stream Plus">↗</button></div>
-              </div>
-              <div class="tile lilac">
-                <strong>SOUND<br>WITHOUT<br>LIMITS.</strong>
-                <div class="foot"><span>เพลงและเสียง</span></div>
-              </div>
-            </div>
-          </aside>
-        </div>
-        <div class="steps">
-          <article class="step"><b>01</b><div>รับสินค้าดิจิทัล</div><small>ดูสินค้าได้ในประวัติการซื้อ</small></article>
-          <article class="step"><b>02</b><div>เลือกได้ตามใจ</div><small>ตัวเลือกและราคาชัดเจนก่อนซื้อ</small></article>
-          <article class="step"><b>03</b><div>ช่องจ่ายมั่นใจ</div><small>ตรวจรายละเอียดให้ครบก่อนชำระ</small></article>
-        </div>
         <div class="find" id="catalog">
           <div>
             <h2>ค้นพบสิ่งที่ใช่สำหรับคุณ</h2>
@@ -293,36 +261,19 @@
         </div>
         <p class="empty" id="no-result" hidden>ไม่พบสินค้าที่ค้นหา</p>
         <div class="grid" id="grid">
-          <article class="product" data-cat="ความบันเทิง" data-price="99"><div class="swatch mint"><small>ASTRA / ความบันเทิง</small><strong>WATCH.<br>UNWIND.</strong><em>DIGITAL COLLECTION / 01</em></div><div class="info"><h3>Stream Plus</h3><p>แพ็กความบันเทิง · 1 เดือน</p><div class="price"><span><small>เริ่ม</small><b>฿99</b></span><button class="arrow" type="button" data-screen="stock" data-product="stream" aria-label="เปิด Stream Plus">↗</button></div></div></article>
-          <article class="product" data-cat="เพลงและเสียง" data-price="59"><div class="swatch lilac"><small>ASTRA / เพลงและเสียง</small><strong>YOUR<br>DAILY MIX.</strong><em>DIGITAL COLLECTION / 02</em></div><div class="info"><h3>Sound Premium</h3><p>เพลงและเสียง · 1 เดือน</p><div class="price"><span><small>เริ่ม</small><b>฿59</b></span><button class="arrow" type="button" data-screen="stock" data-product="sound" aria-label="เปิด Sound Premium">↗</button></div></div></article>
-          <article class="product" data-cat="ซอฟต์แวร์" data-price="129"><div class="swatch sand"><small>ASTRA / ซอฟต์แวร์</small><strong>MAKE<br>IT YOURS.</strong><em>DIGITAL COLLECTION / 03</em></div><div class="info"><h3>Creative Studio</h3><p>เครื่องมือสร้างสรรค์ · 1 เดือน</p><p class="flag sold">สินค้าหมด</p><div class="price"><span><small>เริ่ม</small><b>฿129</b></span><button class="arrow" type="button" data-screen="sold" data-product="studio" aria-label="เปิด Creative Studio">↗</button></div></div></article>
-          <article class="product" data-cat="เกม" data-price="199"><div class="swatch leaf"><small>ASTRA / เกม</small><strong>NEXT<br>LEVEL.</strong><em>DIGITAL COLLECTION / 04</em></div><div class="info"><h3>Game Pass</h3><p>เกมชุดรายเดือน · 1 เดือน</p><div class="price"><span><small>เริ่ม</small><b>฿199</b></span><button class="arrow" type="button" data-screen="stock" data-product="game" aria-label="เปิด Game Pass">↗</button></div></div></article>
-          <article class="product" data-cat="ซอฟต์แวร์" data-price="49"><div class="swatch sage"><small>ASTRA / ซอฟต์แวร์</small><strong>ROOM<br>FOR MORE.</strong><em>DIGITAL COLLECTION / 05</em></div><div class="info"><h3>Cloud Space</h3><p>พื้นที่คลาวด์ · 1 เดือน</p><div class="price"><span><small>เริ่ม</small><b>฿49</b></span><button class="arrow" type="button" data-screen="stock" data-product="cloud" aria-label="เปิด Cloud Space">↗</button></div></div></article>
-          <article class="product" data-cat="ซอฟต์แวร์" data-price="149"><div class="swatch mist"><small>ASTRA / ซอฟต์แวร์</small><strong>WORK<br>SMARTER.</strong><em>DIGITAL COLLECTION / 06</em></div><div class="info"><h3>Office Essentials</h3><p>ชุดทำงาน · 1 เดือน</p><div class="price"><span><small>เริ่ม</small><b>฿149</b></span><button class="arrow" type="button" data-screen="stock" data-product="office" aria-label="เปิด Office Essentials">↗</button></div></div></article>
-          <article class="product" data-cat="ความบันเทิง" data-price="300"><div class="swatch butter"><small>ASTRA / ความบันเทิง</small><strong>A LITTLE<br>SOMETHING.</strong><em>DIGITAL COLLECTION / 07</em></div><div class="info"><h3>Digital Gift Card</h3><p>มูลค่า ฿300</p><div class="price"><span><small>เริ่ม</small><b>฿300</b></span><button class="arrow" type="button" data-screen="stock" data-product="gift" aria-label="เปิด Digital Gift Card">↗</button></div></div></article>
-          <article class="product" data-cat="ความบันเทิง" data-price="89"><div class="swatch blush"><small>ASTRA / ความบันเทิง</small><strong>STORIES<br>AFTER DARK.</strong><em>DIGITAL COLLECTION / 08</em></div><div class="info"><h3>Cinema Max</h3><p>ดูหนังและซีรีส์ · 1 เดือน</p><p class="flag wait">สั่งจอง</p><div class="price"><span><small>เริ่ม</small><b>฿89</b></span><button class="arrow" type="button" data-screen="pre" data-product="cinema" aria-label="เปิด Cinema Max">↗</button></div></div></article>
+          <article class="product" data-cat="ความบันเทิง" data-price="99"><div class="swatch mint"><small>FIFACORP / ความบันเทิง</small><strong>WATCH.<br>UNWIND.</strong><em>DIGITAL COLLECTION / 01</em></div><div class="info"><h3>Stream Plus</h3><p>แพ็กความบันเทิง · 1 เดือน</p><div class="price"><span><small>เริ่ม</small><b>฿99</b></span><button class="arrow" type="button" data-screen="stock" data-product="stream" aria-label="เปิด Stream Plus">↗</button></div></div></article>
+          <article class="product" data-cat="เพลงและเสียง" data-price="59"><div class="swatch lilac"><small>FIFACORP / เพลงและเสียง</small><strong>YOUR<br>DAILY MIX.</strong><em>DIGITAL COLLECTION / 02</em></div><div class="info"><h3>Sound Premium</h3><p>เพลงและเสียง · 1 เดือน</p><div class="price"><span><small>เริ่ม</small><b>฿59</b></span><button class="arrow" type="button" data-screen="stock" data-product="sound" aria-label="เปิด Sound Premium">↗</button></div></div></article>
+          <article class="product" data-cat="ซอฟต์แวร์" data-price="129"><div class="swatch sand"><small>FIFACORP / ซอฟต์แวร์</small><strong>MAKE<br>IT YOURS.</strong><em>DIGITAL COLLECTION / 03</em></div><div class="info"><h3>Creative Studio</h3><p>เครื่องมือสร้างสรรค์ · 1 เดือน</p><p class="flag sold">สินค้าหมด</p><div class="price"><span><small>เริ่ม</small><b>฿129</b></span><button class="arrow" type="button" data-screen="sold" data-product="studio" aria-label="เปิด Creative Studio">↗</button></div></div></article>
+          <article class="product" data-cat="เกม" data-price="199"><div class="swatch leaf"><small>FIFACORP / เกม</small><strong>NEXT<br>LEVEL.</strong><em>DIGITAL COLLECTION / 04</em></div><div class="info"><h3>Game Pass</h3><p>เกมชุดรายเดือน · 1 เดือน</p><div class="price"><span><small>เริ่ม</small><b>฿199</b></span><button class="arrow" type="button" data-screen="stock" data-product="game" aria-label="เปิด Game Pass">↗</button></div></div></article>
+          <article class="product" data-cat="ซอฟต์แวร์" data-price="49"><div class="swatch sage"><small>FIFACORP / ซอฟต์แวร์</small><strong>ROOM<br>FOR MORE.</strong><em>DIGITAL COLLECTION / 05</em></div><div class="info"><h3>Cloud Space</h3><p>พื้นที่คลาวด์ · 1 เดือน</p><div class="price"><span><small>เริ่ม</small><b>฿49</b></span><button class="arrow" type="button" data-screen="stock" data-product="cloud" aria-label="เปิด Cloud Space">↗</button></div></div></article>
+          <article class="product" data-cat="ซอฟต์แวร์" data-price="149"><div class="swatch mist"><small>FIFACORP / ซอฟต์แวร์</small><strong>WORK<br>SMARTER.</strong><em>DIGITAL COLLECTION / 06</em></div><div class="info"><h3>Office Essentials</h3><p>ชุดทำงาน · 1 เดือน</p><div class="price"><span><small>เริ่ม</small><b>฿149</b></span><button class="arrow" type="button" data-screen="stock" data-product="office" aria-label="เปิด Office Essentials">↗</button></div></div></article>
+          <article class="product" data-cat="ความบันเทิง" data-price="300"><div class="swatch butter"><small>FIFACORP / ความบันเทิง</small><strong>A LITTLE<br>SOMETHING.</strong><em>DIGITAL COLLECTION / 07</em></div><div class="info"><h3>Digital Gift Card</h3><p>มูลค่า ฿300</p><div class="price"><span><small>เริ่ม</small><b>฿300</b></span><button class="arrow" type="button" data-screen="stock" data-product="gift" aria-label="เปิด Digital Gift Card">↗</button></div></div></article>
+          <article class="product" data-cat="ความบันเทิง" data-price="89"><div class="swatch blush"><small>FIFACORP / ความบันเทิง</small><strong>STORIES<br>AFTER DARK.</strong><em>DIGITAL COLLECTION / 08</em></div><div class="info"><h3>Cinema Max</h3><p>ดูหนังและซีรีส์ · 1 เดือน</p><p class="flag wait">สั่งจอง</p><div class="price"><span><small>เริ่ม</small><b>฿89</b></span><button class="arrow" type="button" data-screen="pre" data-product="cinema" aria-label="เปิด Cinema Max">↗</button></div></div></article>
         </div>
-        <section class="easy">
-          <div><strong>เริ่มต้นง่าย ๆ</strong><div>แค่ 3 ขั้นตอน</div></div>
-          <div><b>01</b>เลือกสิ่งที่ใช่<div>ค้นหาสินค้าและเลือกแพ็กเกจ</div></div>
-          <div><b>02</b>ยืนยันคำสั่งซื้อ<div>ตรวจสอบรายละเอียดก่อนชำระ</div></div>
-          <div><b>03</b>พร้อมใช้งาน<div>รับสินค้าได้ในประวัติการซื้อ</div></div>
-        </section>
-        <section class="faq">
-          <div>
-            <h2>มีคำถาม?<br>เริ่มจากตรงนี้</h2>
-            <p class="lead">มีลูกค้าช่วยดูแลตลอด</p>
-          </div>
-          <div>
-            <details open><summary>เริ่มส่งสินค้าได้ที่ไหน?</summary><p>ดูสินค้าที่ส่งแล้วได้ในประวัติการซื้อ</p></details>
-            <details><summary>เปลี่ยนแพ็กเกจหรือคืนอย่างไร?</summary><p>ตรวจออเดอร์ก่อนซื้อเพิ่ม และติดต่อร้านได้จากแชท</p></details>
-            <details><summary>ดูขั้นตอนการใช้งานได้ที่ไหน?</summary><p>วิธีใช้งานอยู่ในหน้าช่วยเหลือของร้าน</p></details>
-          </div>
-        </section>
         <footer class="foot">
-          <div><strong>ASTRA</strong> DIGITAL<p>Your next digital experience starts here.</p></div>
+          <div><strong>FIFACORP</strong><p>สินค้าดิจิทัล</p></div>
           <div>เมนู<br>หน้าแรก · สินค้า · รีวิว</div>
-          <div>ช่วยเหลือ<br>คำถาม · ติดต่อร้าน</div>
+          <div>ช่วยเหลือ<br>แชท · กล่องข้อความ</div>
         </footer>
       </div>
     </section>
@@ -331,7 +282,7 @@
       <div class="pad">
         <button class="back" type="button" data-screen="home">กลับไปสินค้า</button>
         <div class="detail">
-          <div class="swatch mint tall" id="stock-swatch"><small id="stock-kicker">ASTRA / ความบันเทิง</small><strong id="stock-slogan">WATCH.<br>UNWIND.</strong><em id="stock-code">DIGITAL COLLECTION / 01</em></div>
+          <div class="swatch mint tall" id="stock-swatch"><small id="stock-kicker">FIFACORP / ความบันเทิง</small><strong id="stock-slogan">WATCH.<br>UNWIND.</strong><em id="stock-code">DIGITAL COLLECTION / 01</em></div>
           <div>
             <span class="chip ok">พร้อมส่ง</span>
             <h1 class="page-title" id="stock-name">Stream Plus</h1>
@@ -352,7 +303,7 @@
       <div class="pad">
         <button class="back" type="button" data-screen="home">กลับไปสินค้า</button>
         <div class="detail">
-          <div class="swatch sand tall" id="sold-swatch"><small id="sold-kicker">ASTRA / ซอฟต์แวร์</small><strong id="sold-slogan">MAKE<br>IT YOURS.</strong><em id="sold-code">DIGITAL COLLECTION / 03</em></div>
+          <div class="swatch sand tall" id="sold-swatch"><small id="sold-kicker">FIFACORP / ซอฟต์แวร์</small><strong id="sold-slogan">MAKE<br>IT YOURS.</strong><em id="sold-code">DIGITAL COLLECTION / 03</em></div>
           <div>
             <span class="chip sold">สินค้าหมด</span>
             <h1 class="page-title" id="sold-name">Creative Studio</h1>
@@ -368,7 +319,7 @@
       <div class="pad">
         <button class="back" type="button" data-screen="home">กลับไปสินค้า</button>
         <div class="detail">
-          <div class="swatch blush tall"><small>ASTRA / ความบันเทิง</small><strong>STORIES<br>AFTER DARK.</strong><em>DIGITAL COLLECTION / 08</em></div>
+          <div class="swatch blush tall"><small>FIFACORP / ความบันเทิง</small><strong>STORIES<br>AFTER DARK.</strong><em>DIGITAL COLLECTION / 08</em></div>
           <div>
             <span class="chip wait">สั่งจอง</span>
             <h1 class="page-title">Cinema Max</h1>
@@ -484,8 +435,8 @@
 
     <section class="screen" id="notes">
       <div class="pad">
-        <h1 class="page-title">แจ้งเตือน</h1>
-        <p class="lead">เห็นเฉพาะของบัญชีนี้</p>
+        <h1 class="page-title">กล่องข้อความ</h1>
+        <p class="lead">ข้อความที่ทีมงานส่งถึงบัญชีนี้ คนอื่นเปิดไม่เห็น</p>
         <div class="notes">
           <article class="note-card"><div><span class="chip ok">ยังไม่อ่าน</span><h2>Stream Plus ส่งแล้ว</h2><p class="note">เปิดรหัสได้ในประวัติการซื้อ</p></div><time>10 พ.ย. 2569</time></article>
           <article class="note-card"><div><span class="chip wait">ยังไม่อ่าน</span><h2>Cinema Max ได้คิวที่ 12</h2><p class="note">สถานะรอจัดส่ง</p></div><time>10 พ.ย. 2569</time></article>
@@ -500,14 +451,14 @@
     const links = document.querySelectorAll(".links a");
     const navName = { home: "หน้าแรก", stock: "สินค้า", sold: "สินค้า", pre: "สินค้า", order: "ประวัติการซื้อ", reviews: "รีวิว" };
     const catalog = {
-      stream: { screen: "stock", name: "Stream Plus", price: 99, quarter: 249, swatch: "mint", kicker: "ASTRA / ความบันเทิง", lines: ["WATCH.", "UNWIND."], code: "01", lead: "แพ็กความบันเทิง 1 เดือน ดูได้หลังร้านส่งของเข้าประวัติการซื้อ" },
-      sound: { screen: "stock", name: "Sound Premium", price: 59, quarter: 149, swatch: "lilac", kicker: "ASTRA / เพลงและเสียง", lines: ["YOUR", "DAILY MIX."], code: "02", lead: "เพลงและเสียง 1 เดือน" },
-      studio: { screen: "sold", name: "Creative Studio", price: 129, swatch: "sand", kicker: "ASTRA / ซอฟต์แวร์", lines: ["MAKE", "IT YOURS."], code: "03" },
-      game: { screen: "stock", name: "Game Pass", price: 199, quarter: 499, swatch: "leaf", kicker: "ASTRA / เกม", lines: ["NEXT", "LEVEL."], code: "04", lead: "เกมชุดรายเดือน" },
-      cloud: { screen: "stock", name: "Cloud Space", price: 49, quarter: 129, swatch: "sage", kicker: "ASTRA / ซอฟต์แวร์", lines: ["ROOM", "FOR MORE."], code: "05", lead: "พื้นที่คลาวด์ 1 เดือน" },
-      office: { screen: "stock", name: "Office Essentials", price: 149, quarter: 349, swatch: "mist", kicker: "ASTRA / ซอฟต์แวร์", lines: ["WORK", "SMARTER."], code: "06", lead: "ชุดทำงาน 1 เดือน" },
-      gift: { screen: "stock", name: "Digital Gift Card", price: 300, quarter: null, swatch: "butter", kicker: "ASTRA / ความบันเทิง", lines: ["A LITTLE", "SOMETHING."], code: "07", lead: "บัตรมูลค่าคงที่ ใช้ในร้านนี้" },
-      cinema: { screen: "pre", name: "Cinema Max", price: 89, swatch: "blush", kicker: "ASTRA / ความบันเทิง", lines: ["STORIES", "AFTER DARK."], code: "08" }
+      stream: { screen: "stock", name: "Stream Plus", price: 99, quarter: 249, swatch: "mint", kicker: "FIFACORP / ความบันเทิง", lines: ["WATCH.", "UNWIND."], code: "01", lead: "แพ็กความบันเทิง 1 เดือน ดูได้หลังร้านส่งของเข้าประวัติการซื้อ" },
+      sound: { screen: "stock", name: "Sound Premium", price: 59, quarter: 149, swatch: "lilac", kicker: "FIFACORP / เพลงและเสียง", lines: ["YOUR", "DAILY MIX."], code: "02", lead: "เพลงและเสียง 1 เดือน" },
+      studio: { screen: "sold", name: "Creative Studio", price: 129, swatch: "sand", kicker: "FIFACORP / ซอฟต์แวร์", lines: ["MAKE", "IT YOURS."], code: "03" },
+      game: { screen: "stock", name: "Game Pass", price: 199, quarter: 499, swatch: "leaf", kicker: "FIFACORP / เกม", lines: ["NEXT", "LEVEL."], code: "04", lead: "เกมชุดรายเดือน" },
+      cloud: { screen: "stock", name: "Cloud Space", price: 49, quarter: 129, swatch: "sage", kicker: "FIFACORP / ซอฟต์แวร์", lines: ["ROOM", "FOR MORE."], code: "05", lead: "พื้นที่คลาวด์ 1 เดือน" },
+      office: { screen: "stock", name: "Office Essentials", price: 149, quarter: 349, swatch: "mist", kicker: "FIFACORP / ซอฟต์แวร์", lines: ["WORK", "SMARTER."], code: "06", lead: "ชุดทำงาน 1 เดือน" },
+      gift: { screen: "stock", name: "Digital Gift Card", price: 300, quarter: null, swatch: "butter", kicker: "FIFACORP / ความบันเทิง", lines: ["A LITTLE", "SOMETHING."], code: "07", lead: "บัตรมูลค่าคงที่ ใช้ในร้านนี้" },
+      cinema: { screen: "pre", name: "Cinema Max", price: 89, swatch: "blush", kicker: "FIFACORP / ความบันเทิง", lines: ["STORIES", "AFTER DARK."], code: "08" }
     };
     function setLines(id, lines) {
       const node = document.getElementById(id);
