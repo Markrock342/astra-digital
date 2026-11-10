@@ -2,6 +2,18 @@
 
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
+## 2026-11-11
+- ถอนแบบร่างหน้าร้านออก ทั้งไฟล์ `docs/bank/mockup/index.html` ยังไม่เริ่มแบบร่างใหม่
+- เพิ่มคำสั่งให้ Claude ออกแบบรายหน้า: [prompts/BANK-CLAUDE-PAGE-DESIGN.md](prompts/BANK-CLAUDE-PAGE-DESIGN.md)
+- ทำแบบร่างใหม่โทนเข้มปุ่มเขียว เป็น FIFACORP พร้อมสินค้าทดสอบ: [bank/mockup/index.html](bank/mockup/index.html)
+- ปรับแบบร่างให้รูปสินค้า ราคา และสถานะอ่านก่อนสโลแกน ขั้นตอนเป็นแถบเส้น ไม่ใช่การ์ดสามใบ
+- แชทลูกค้าในแบบร่างเป็นปุ่มมุมขวาล่าง กดแล้วเปิดกล่องคุย ทับหน้าร้านได้
+- แบบร่างพร้อมให้ Mark ตรวจ: หัวร้านบนมือถืออยู่แถวเดียว แชทปิดจุดเดียว กดปุ่มครบบนเดสก์ท็อปและจอ 390 ยังไม่ลง `src/`
+
+## 2026-11-10
+- ตรวจแบบร่างทั้งชุดแล้วแก้ปุ่มที่กดไม่ไปไหน ราคาแพ็กไม่เปลี่ยน และการ์ดสินค้าหมดที่ยังดูซื้อได้: [bank/mockup/index.html](bank/mockup/index.html) รอ Mark/Nott ยังไม่ลงหน้าร้าน
+- คืนไฟล์ที่หาย: [bank/UI_AUDIT.md](bank/UI_AUDIT.md) และ [bank/API_GAPS.md](bank/API_GAPS.md) สำหรับ Mark/Nott ไฟล์นี้ยังไม่เคยเข้า git
+
 ## 2026-11-09
 - Owner Approve Roadmap DB · ส่ง Review Pack DB-01…05 ที่ [database/README.md](database/README.md) บน `feat/nott-database-audit` (ยังไม่ deploy migration)
 - ร่าง Roadmap Database Ownership (DB-01…05) — [roadmaps/NOTT-DB-ARCHITECTURE.md](roadmaps/NOTT-DB-ARCHITECTURE.md); sync main `9eebc6f`

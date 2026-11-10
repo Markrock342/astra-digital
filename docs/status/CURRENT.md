@@ -1,6 +1,6 @@
 # สถานะปัจจุบัน (CURRENT)
 
-อัปเดตล่าสุด: 2026-11-09
+อัปเดตล่าสุด: 2026-11-11
 
 ## ตำแหน่งงานปัจจุบัน
 | ระดับ | ค่า |
@@ -26,7 +26,15 @@
 - แก้ Worker ฐานร้านเดียว (รอ Mark ล็อก)
 - SlipOK / Gateway / Frontend
 
-## Blockers ส่ง Mark
+## Bank — แบบร่างรอ Mark ตรวจ
+สถานะ: แบบร่างกดปุ่มครบบนเดสก์ท็อปและจอ 390 แล้ว ยังไม่ลง `src/` ยังไม่ commit และยังไม่ push
+- [bank/UI_AUDIT.md](../bank/UI_AUDIT.md)
+- [bank/API_GAPS.md](../bank/API_GAPS.md)
+- แบบร่าง: [bank/mockup/index.html](../bank/mockup/index.html) · [bank/DESIGN_DECISIONS.md](../bank/DESIGN_DECISIONS.md)
+- Blocker B1 อยู่ใน API gaps ข้อ 0 ล็อกอินและซื้อของจริงยังใช้ไม่ได้
+- ขั้นถัดไป: รอ Mark อนุมัติแบบ แล้วค่อยเขียน Task Spec ก่อนลงหน้าร้าน
+
+## Blockers ส่ง Mark (NOTT)
 1. ยืนยันฐานร้านเดียวบน DO  
 2. ล็อกตารางถัดไป (payment_events / order_items / categories / cart)  
 3. แช่แข็ง D1 จนกว่ามี cutover plan

@@ -15,6 +15,7 @@
 | Roadmaps | [roadmaps/README.md](roadmaps/README.md) · [NOTT Sprint 1](roadmaps/NOTT-SPRINT1.md) (Approved) · [NOTT DB Architecture](roadmaps/NOTT-DB-ARCHITECTURE.md) (Approved) |
 | Database Review Pack (NOTT → Mark) | [database/README.md](database/README.md) · Audit · ERD · Schema · Integrity · Migration Plan · Test Plan |
 | Task Specs | [prompts/TASK-PROMPT-TEMPLATE.md](prompts/TASK-PROMPT-TEMPLATE.md) |
+| คำสั่งให้ Claude ออกแบบรายหน้า | [prompts/BANK-CLAUDE-PAGE-DESIGN.md](prompts/BANK-CLAUDE-PAGE-DESIGN.md) |
 | Changelog กระบวนการ | [changelog.md](changelog.md) |
 
 ## Requirement / Ownership (intake)
@@ -28,6 +29,7 @@
 | Catalog API contract (Phase 3) | [modules/api-contract-catalog.md](modules/api-contract-catalog.md) |
 | NOTT backend inventory (Task 0.1.1) | [modules/nott-backend-inventory.md](modules/nott-backend-inventory.md) |
 | NOTT Gap Map (Task 0.1.2) | [modules/nott-gap-map.md](modules/nott-gap-map.md) |
+| Bank ส่ง Mark/Nott ตรวจ | [bank/UI_AUDIT.md](bank/UI_AUDIT.md) · [bank/API_GAPS.md](bank/API_GAPS.md) · [bank/DESIGN_DECISIONS.md](bank/DESIGN_DECISIONS.md) · [แบบร่าง](bank/mockup/index.html) |
 
 ## เอกสารผลิตภัณฑ์เดิม (คงไว้)
 

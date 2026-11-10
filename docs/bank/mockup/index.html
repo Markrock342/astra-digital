@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FIFACORP</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0b09;
+      --raised: #141412;
+      --card: #171714;
+      --line: #2e2e28;
+      --ink: #f4f3ee;
+      --muted: #a7a69e;
+      --lime: #c6fc58;
+      --lime-ink: #17210a;
+      --warn: #e4c98a;
+      --bad: #e7b4ae;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans Thai", Tahoma, sans-serif; line-height: 1.65; font-size: 15px; }
+    button, input, select { font: inherit; color: inherit; }
+    a { color: inherit; text-decoration: none; }
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+    .review { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 16px; background: #070706; color: #c8c8c2; font-size: 13px; border-bottom: 1px solid #242420; }
+    .review button { border: 1px solid #33332e; background: transparent; color: #fff; border-radius: 999px; padding: 5px 10px; cursor: pointer; }
+    .review button[aria-pressed="true"] { background: var(--lime); color: var(--lime-ink); border-color: var(--lime); }
+    .frame { max-width: 1080px; margin: 0 auto; padding: 0 32px 80px; }
+    .nav { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; gap: 22px; margin: 0 -32px; padding: 16px 32px; background: var(--bg); border-bottom: 1px solid var(--line); }
+    .logo { display: flex; align-items: center; gap: 10px; margin-right: auto; font-weight: 600; letter-spacing: .18em; font-size: 13px; }
+    .logo i { width: 9px; height: 9px; border-radius: 2px; background: var(--lime); display: block; }
+    .links { display: flex; gap: 22px; align-items: center; color: #cfcfc6; font-size: 14px; }
+    .links a { padding: 6px 0; border-bottom: 1px solid transparent; }
+    .links a.on { color: var(--ink); border-bottom-color: var(--lime); }
+    .ghost, .buy { border-radius: 999px; min-height: 38px; padding: 8px 16px; cursor: pointer; }
+    .ghost { background: transparent; color: var(--ink); border: 1px solid #3c3c36; }
+    .ghost:hover { border-color: #6a6a62; }
+    .buy { background: var(--lime); color: var(--lime-ink); border: 0; font-weight: 600; }
+    .buy:hover { background: #d4fd7a; }
+    .buy:disabled, .buy:disabled:hover { background: #2a2a26; color: #8d8d84; cursor: not-allowed; }
+    .nav .ghost { min-height: 36px; }
+    .cart-btn { display: inline-flex; align-items: center; gap: 7px; padding-inline: 14px; }
+    .cart-icon { display: block; }
+    .cart-btn #cart-count { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--lime); }
+    .menu { display: none; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 48px; align-items: end; padding: 64px 0 12px; }
+    .kicker { margin: 0; color: var(--muted); font-size: 13px; font-weight: 500; }
+    h1 { font-size: 48px; line-height: 1.32; font-weight: 600; margin: 12px 0 16px; letter-spacing: 0; max-width: 9em; }
+    .lead { color: var(--muted); max-width: 36em; margin: 0 0 22px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .receipt { background: var(--raised); border: 1px solid var(--line); border-radius: 20px; padding: 8px; }
+    .receipt-top { display: flex; justify-content: space-between; align-items: center; padding: 10px 10px 6px; color: var(--muted); font-size: 13px; }
+    .slip { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: center; padding: 10px; border-radius: 14px; }
+    .slip + .slip { margin-top: 4px; background: #10100e; }
+    .slip img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; display: block; }
+    .slip strong { display: block; font-size: 15px; line-height: 1.4; }
+    .slip p, .fine { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+    .mask { letter-spacing: .18em; color: var(--ink); }
+    .fine { padding: 4px 10px 10px; }
+    span.ok, span.wait, span.bad { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 600; line-height: 1.6; }
+    span.ok { color: var(--lime); background: #1c2612; }
+    span.wait { color: var(--warn); background: #2a2416; }
+    span.bad { color: var(--bad); background: #2c1c1a; }
+    .block { padding: 56px 0 0; }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .steps li { display: grid; grid-template-columns: auto 1fr; gap: 14px; padding: 22px 22px 22px 0; }
+    .steps li + li { padding-left: 22px; border-left: 1px solid var(--line); }
+    .steps b { color: var(--lime); font-size: 13px; font-weight: 600; }
+    .steps strong { display: block; margin-bottom: 4px; }
+    .steps p, .find p, .faq p, .note { color: var(--muted); margin: 0; }
+    .find { display: flex; justify-content: space-between; gap: 16px; align-items: end; padding-bottom: 8px; }
+    .find h2, .block h2 { margin: 0; font-size: 28px; font-weight: 600; line-height: 1.35; }
+    .tools { display: flex; gap: 8px; }
+    .tools input, .tools select, .account input, .composer input { background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+    .tools input { width: 220px; }
+    .tools select { width: 168px; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0 20px; }
+    .chips button { border: 1px solid var(--line); background: transparent; color: #dddcd4; border-radius: 999px; padding: 7px 12px; cursor: pointer; }
+    .chips .on { background: var(--lime); color: var(--lime-ink); border-color: var(--lime); font-weight: 600; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .product { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+    .shot { position: relative; display: block; width: 100%; aspect-ratio: 1; padding: 0; border: 0; background: #10140f; cursor: pointer; overflow: hidden; }
+    .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .product[data-state="sold"] .shot img { filter: saturate(.25) brightness(.72); }
+    @media (prefers-reduced-motion: no-preference) {
+      .shot img { transition: transform .45s ease; }
+      .product:hover .shot img { transform: scale(1.045); }
+    }
+    .tag { position: absolute; top: 12px; left: 12px; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; }
+    .tag.sold { background: #2c1c1a; color: var(--bad); }
+    .tag.pre { background: #2a2416; color: var(--warn); }
+    .info { padding: 14px 16px 16px; }
+    .info h3 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.4; }
+    .info p { margin: 2px 0 14px; color: var(--muted); font-size: 13px; }
+    .price-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .price-row b, .big { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .price-row b { font-size: 20px; }
+    .price-row .buy, .price-row .buy:disabled { min-height: 34px; padding: 6px 14px; font-size: 14px; }
+    .faq { display: grid; grid-template-columns: 280px 1fr; gap: 48px; margin-top: 72px; }
+    .faq h2 { margin: 0; font-size: 28px; line-height: 1.35; }
+    .faq article { padding: 16px 0; border-top: 1px solid var(--line); }
+    .faq article:last-child { border-bottom: 1px solid var(--line); }
+    .faq strong { display: block; margin-bottom: 4px; }
+    .foot { display: flex; justify-content: space-between; gap: 16px; margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    .foot strong { color: var(--ink); letter-spacing: .14em; font-weight: 600; }
+    .screen { display: none; }
+    .screen.on { display: block; }
+    .page { padding-top: 36px; max-width: 760px; }
+    .page.wide { max-width: none; }
+    .back { background: none; border: 0; color: var(--muted); padding: 0 0 18px; cursor: pointer; }
+    .detail { display: grid; grid-template-columns: minmax(240px, 360px) 1fr; gap: 36px; align-items: start; }
+    .shot.tall { border-radius: 16px; overflow: hidden; cursor: default; }
+    .page h1 { font-size: 40px; line-height: 1.3; margin: 12px 0; }
+    .big { font-size: 40px; margin: 4px 0 18px; }
+    .orders, .notes, .rooms { display: grid; gap: 10px; }
+    .order, .note-card, .room, .box { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; }
+    .order { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: start; }
+    .order h2, .note-card h2 { margin: 8px 0 0; font-size: 18px; line-height: 1.4; }
+    .code { margin: 8px 0 0; letter-spacing: .16em; }
+    .box { margin-top: 8px; }
+    .thread { display: flex; flex-direction: column; gap: 8px; min-height: 240px; }
+    .dock { position: fixed; right: 24px; bottom: 24px; z-index: 30; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+    body.staff .dock { display: none; }
+    .chat-panel { width: min(360px, calc(100vw - 32px)); max-height: min(520px, calc(100vh - 110px)); display: flex; flex-direction: column; background: var(--raised); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 18px 40px rgba(0, 0, 0, .45); overflow: hidden; }
+    .chat-panel[hidden] { display: none; }
+    .chat-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
+    .chat-head strong { display: block; font-size: 15px; }
+    .chat-head p { margin: 2px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .chat-x { width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: var(--ink); cursor: pointer; }
+    .chat-panel .thread { min-height: 220px; max-height: 300px; overflow: auto; padding: 12px 14px; }
+    .chat-panel .composer { margin: 0; padding: 12px; border-top: 1px solid var(--line); }
+    .chat-panel .composer .buy { border-radius: 12px; min-width: 64px; }
+    .launcher { position: relative; width: 56px; height: 56px; border: 0; border-radius: 50%; background: var(--lime); color: var(--lime-ink); cursor: pointer; display: grid; place-items: center; }
+    .launcher:hover { background: #d4fd7a; }
+    .dock:has(.chat-panel:not([hidden])) .launcher { display: none; }
+    .menu-login { display: none; background: none; border: 0; min-height: 0; padding: 6px 0; border-radius: 0; }
+    .launcher .ping { position: absolute; top: 2px; right: 2px; width: 12px; height: 12px; border-radius: 50%; background: #e7b4ae; border: 2px solid var(--bg); }
+    .bubble { max-width: min(72%, 420px); background: #242420; border-radius: 14px 14px 14px 4px; padding: 10px 12px; overflow-wrap: anywhere; }
+    .bubble.mine { margin-left: auto; background: #243116; border-radius: 14px 14px 4px 14px; }
+    .bubble.fail { outline: 1px solid #6e3030; }
+    .bubble small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .bubble .ghost { margin-top: 8px; }
+    .composer { display: flex; gap: 8px; margin-top: 12px; }
+    .composer input { flex: 1; }
+    .inbox { display: grid; grid-template-columns: 260px 1fr; gap: 12px; }
+    .room { text-align: left; cursor: pointer; width: 100%; }
+    .room[aria-pressed="true"] { border-color: #8d8d80; background: #1c1c18; }
+    .room b { display: block; }
+    .room span, .note { color: var(--muted); font-size: 13px; }
+    .unread { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--lime); margin-left: 6px; }
+    .note-card { display: flex; justify-content: space-between; gap: 12px; align-items: center; cursor: pointer; }
+    .note-card:hover, .room:hover { border-color: #4a4a42; }
+    .account { max-width: 420px; display: grid; gap: 8px; }
+    .account label { font-size: 13px; color: var(--muted); }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    .empty { color: var(--muted); }
+    .frame.phone { max-width: 390px; padding: 0 16px 48px; }
+    .frame.phone .nav { margin: 0 -16px; padding: 14px 16px; }
+    .frame.phone .links { display: none; }
+    .frame.phone .links.open { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; width: 100%; padding: 8px 0 4px; }
+    .frame.phone .menu { display: inline-flex; }
+    .frame.phone .nav { flex-wrap: nowrap; }
+    .frame.phone .login-btn { display: none; }
+    .frame.phone .links.open .menu-login { display: inline-flex; }
+    .frame.phone h1, .frame.phone .page h1 { font-size: 34px; }
+    .frame.phone .hero, .frame.phone .steps, .frame.phone .faq, .frame.phone .detail, .frame.phone .inbox, .frame.phone .order, .frame.phone .foot { grid-template-columns: 1fr; }
+    .frame.phone .grid { grid-template-columns: 1fr 1fr; }
+    .frame.phone .steps li + li { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
+    .frame.phone .find, .frame.phone .tools, .frame.phone .note-card, .frame.phone .foot { flex-direction: column; align-items: stretch; }
+    .frame.phone .tools input, .frame.phone .tools select { width: 100%; }
+    .frame.phone .dock { right: max(16px, calc(50vw - 183px)); bottom: 16px; }
+    @media (max-width: 900px) {
+      .frame { padding: 0 16px 56px; }
+      .nav { margin: 0 -16px; padding: 14px 16px; }
+      .hero, .steps, .faq, .detail, .inbox, .order, .foot { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr 1fr; }
+      h1 { font-size: 36px; }
+      .links { display: none; }
+      .links.open { display: flex; flex-direction: column; align-items: flex-start; width: 100%; }
+      .menu { display: inline-flex; }
+      .nav { flex-wrap: nowrap; }
+      .login-btn { display: none; }
+      .links.open .menu-login { display: inline-flex; }
+      .find, .tools, .note-card { flex-direction: column; align-items: stretch; }
+      .tools input, .tools select { width: 100%; }
+      .steps li + li { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
+      .hero { padding-top: 32px; gap: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="review">
+    <button type="button" data-screen="home" aria-pressed="true">หน้าแรก</button>
+    <button type="button" data-screen="stock" aria-pressed="false">พร้อมส่ง</button>
+    <button type="button" data-screen="sold" aria-pressed="false">สินค้าหมด</button>
+    <button type="button" data-screen="pre" aria-pressed="false">สั่งจอง</button>
+    <button type="button" data-screen="cart" aria-pressed="false">ตะกร้า</button>
+    <button type="button" data-screen="pay" aria-pressed="false">ชำระเงิน</button>
+    <button type="button" data-screen="orders" aria-pressed="false">ประวัติการซื้อ</button>
+    <button type="button" data-screen="chat" aria-pressed="false">แชท</button>
+    <button type="button" data-screen="notes" aria-pressed="false">กล่องข้อความ</button>
+    <button type="button" data-screen="admin" aria-pressed="false">แอดมิน</button>
+    <button type="button" id="phone">ดูบนมือถือ</button>
+  </div>
+  <div class="frame">
+    <header class="nav">
+      <div class="logo"><i></i>FIFACORP</div>
+      <nav class="links" id="links">
+        <a class="on" href="#catalog" data-screen="home" data-jump="catalog">สินค้า</a>
+        <a href="#orders" data-screen="orders">ประวัติการซื้อ</a>
+        <a href="#chat" data-screen="chat">แชทกับร้าน</a>
+        <a href="#account" data-screen="account">บัญชี</a>
+        <button class="menu-login" type="button" data-screen="login">เข้าสู่ระบบ</button>
+      </nav>
+      <button class="menu ghost" id="menu" type="button">เมนู</button>
+      <button class="ghost cart-btn" type="button" data-screen="cart"><svg class="cart-icon" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.2 5.2h2.1l1.7 9.4h11.2l1.6-6.6H7.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.2" cy="18.8" r="1.35" fill="currentColor"/><circle cx="17.2" cy="18.8" r="1.35" fill="currentColor"/></svg><span class="visually-hidden">ตะกร้า</span><span id="cart-count">0</span></button>
+      <button class="ghost login-btn" type="button" data-screen="login">เข้าสู่ระบบ</button>
+    </header>
+
+    <section class="screen on" id="home">
+      <div class="hero">
+        <div>
+          <p class="kicker">โหมดทดลอง ยังไม่มีการเรียกเก็บเงินจริง</p>
+          <h1>เห็นสถานะ<br>ก่อนกดซื้อ</h1>
+          <p class="lead">พร้อมส่งซื้อได้ ของหมดกดไม่ได้ สั่งจองแล้วได้เลขคิวในประวัติการซื้อ รหัสเปิดได้เฉพาะเจ้าของออเดอร์</p>
+          <div class="actions">
+            <button class="buy" type="button" data-screen="home" data-jump="catalog">เลือกซื้อสินค้า</button>
+            <button class="ghost" type="button" data-screen="orders">ดูประวัติการซื้อ</button>
+          </div>
+        </div>
+        <aside class="receipt">
+          <div class="receipt-top"><span>คำสั่งซื้อล่าสุด</span><span>#1042</span></div>
+          <div class="slip">
+            <img src="media/disney.webp" alt="">
+            <div>
+              <strong>DISNEY+</strong>
+              <span class="ok">ส่งแล้ว</span>
+              <p class="mask">•••• ••••</p>
+            </div>
+          </div>
+          <div class="slip">
+            <img src="media/monomax.webp" alt="">
+            <div>
+              <strong>MONOMAX</strong>
+              <span class="wait">คิวที่ 12</span>
+              <p>รอจัดส่ง</p>
+            </div>
+          </div>
+          <p class="fine">รหัสไม่โชว์บนหน้าแรก เปิดได้ในประวัติของบัญชีที่สั่ง</p>
+        </aside>
+      </div>
+      <section class="block">
+        <ol class="steps">
+          <li><b>01</b><div><strong>เลือกสินค้า</strong><p>ดูราคาและสถานะในหน้าเดียวกัน</p></div></li>
+          <li><b>02</b><div><strong>ยืนยันคำสั่งซื้อ</strong><p>แบบร่างนี้ยังไม่ตัดเงิน</p></div></li>
+          <li><b>03</b><div><strong>ติดตามในประวัติ</strong><p>ส่งแล้วได้รหัส สั่งจองได้เลขคิว</p></div></li>
+        </ol>
+      </section>
+      <section class="block" id="catalog">
+        <div class="find">
+          <div>
+            <h2>สินค้าดิจิทัล</h2>
+            <p id="count">3 รายการ</p>
+          </div>
+          <div class="tools">
+            <input id="search" aria-label="ค้นหาสินค้า" placeholder="ค้นหาสินค้า" />
+            <select id="sort" aria-label="เรียงตาม">
+              <option value="featured">แนะนำ</option>
+              <option value="low">ราคาต่ำไปสูง</option>
+              <option value="high">ราคาสูงไปต่ำ</option>
+            </select>
+          </div>
+        </div>
+        <div class="chips" id="chips">
+          <button type="button" class="on" data-state="all">ทั้งหมด</button>
+          <button type="button" data-state="stock">พร้อมส่ง</button>
+          <button type="button" data-state="sold">สินค้าหมด</button>
+          <button type="button" data-state="pre">สั่งจอง</button>
+        </div>
+        <p class="empty" id="no-result" hidden>ไม่พบสินค้าที่ค้นหา</p>
+        <div class="grid" id="grid">
+          <article class="product" data-state="stock" data-price="100">
+            <button class="shot" type="button" data-screen="stock" data-product="share" aria-label="เปิด DISNEY+"><img src="media/disney.webp" alt=""></button>
+            <div class="info">
+              <h3>DISNEY+</h3>
+              <p>30 DAYS หาร</p>
+              <div class="price-row"><b>฿100</b><button class="buy" type="button" data-screen="stock" data-product="share">ซื้อเลย</button></div>
+            </div>
+          </article>
+          <article class="product" data-state="sold" data-price="389">
+            <button class="shot" type="button" data-screen="sold" data-product="full" aria-label="เปิด DISNEY+ ยกแอค"><img src="media/disney.webp" alt=""><span class="tag sold">สินค้าหมด</span></button>
+            <div class="info">
+              <h3>DISNEY+ ยกแอค</h3>
+              <p>30 DAYS ยกแอค</p>
+              <div class="price-row"><b>฿389</b><button class="buy" type="button" disabled>สินค้าหมด</button></div>
+            </div>
+          </article>
+          <article class="product" data-state="pre" data-price="129">
+            <button class="shot" type="button" data-screen="pre" data-product="mono" aria-label="เปิด MONOMAX"><img src="media/monomax.webp" alt=""><span class="tag pre">สั่งจอง</span></button>
+            <div class="info">
+              <h3>MONOMAX</h3>
+              <p>สั่งจอง ได้เลขคิวหลังยืนยัน</p>
+              <div class="price-row"><b>฿129</b><button class="buy" type="button" data-screen="pre" data-product="mono">สั่งจอง</button></div>
+            </div>
+          </article>
+        </div>
+        <div class="faq">
+          <h2>คำถามที่พบบ่อย</h2>
+          <div>
+            <article><strong>ได้รับสินค้าเมื่อไหร่</strong><p>พร้อมส่งได้รหัสเมื่อสถานะเป็นส่งแล้ว สั่งจองได้เลขคิวก่อน แล้วรอจัดส่ง</p></article>
+            <article><strong>ตอนนี้ชำระเงินจริงไหม</strong><p>ยังไม่จริง ใช้ทดสอบขั้นตอนสั่งซื้อเท่านั้น</p></article>
+            <article><strong>สินค้าหมดซื้อได้ไหม</strong><p>ไม่ได้ และไม่แสดงจำนวนคงเหลือ</p></article>
+            <article><strong>คนอื่นเห็นรหัสไหม</strong><p>ไม่เห็น รหัสเปิดได้เฉพาะเจ้าของออเดอร์</p></article>
+          </div>
+        </div>
+        <footer class="foot">
+          <div><strong>FIFACORP</strong><p>โหมดทดลอง ไม่มีการเรียกเก็บเงินจริง</p></div>
+          <div>แชทกับร้าน · กล่องข้อความ</div>
+        </footer>
+      </section>
+    </section>
+
+    <section class="screen" id="stock">
+      <div class="page wide">
+        <button class="back" type="button" data-screen="home">กลับไปสินค้า</button>
+        <div class="detail">
+          <div class="shot tall"><img src="media/disney.webp" alt=""></div>
+          <div>
+            <span class="ok">พร้อมส่ง</span>
+            <h1>DISNEY+</h1>
+            <p class="lead">30 DAYS หาร ส่งรหัสในประวัติการซื้อเมื่อสถานะเป็นส่งแล้ว</p>
+            <p class="big" id="stock-price">฿100</p>
+            <button class="buy" id="buy-now" type="button">ซื้อเลย</button>
+            <p class="note" id="buy-note">กดซื้อแล้วรายการไปที่ประวัติการซื้อ สถานะรอยืนยัน ยังไม่ตัดเงิน</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="sold">
+      <div class="page wide">
+        <button class="back" type="button" data-screen="home">กลับไปสินค้า</button>
+        <div class="detail">
+          <div class="shot tall"><img src="media/disney.webp" alt=""><span class="tag sold">สินค้าหมด</span></div>
+          <div>
+            <span class="bad">สินค้าหมด</span>
+            <h1>DISNEY+ ยกแอค</h1>
+            <p class="lead">ตอนนี้ซื้อรายการนี้ไม่ได้ และไม่แสดงจำนวนคงเหลือ</p>
+            <p class="big">฿389</p>
+            <button class="buy" type="button" disabled>สินค้าหมด</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="pre">
+      <div class="page wide">
+        <button class="back" type="button" data-screen="home">กลับไปสินค้า</button>
+        <div class="detail">
+          <div class="shot tall"><img src="media/monomax.webp" alt=""><span class="tag pre">สั่งจอง</span></div>
+          <div>
+            <span class="wait">สั่งจอง</span>
+            <h1>MONOMAX</h1>
+            <p class="lead">จองไว้ก่อน เลขคิวจะขึ้นในประวัติการซื้อ ตัวอย่างนี้คือคิวที่ 12</p>
+            <p class="big">฿129</p>
+            <button class="buy" id="reserve" type="button">จองเลย</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="cart">
+      <div class="page">
+        <h1>ตะกร้า</h1>
+        <p class="lead" id="cart-copy">ยังไม่มีสินค้า กดซื้อจากหน้ารายสินค้า รายการจะไปที่ประวัติการซื้อเป็นสถานะรอยืนยัน</p>
+        <button class="buy" type="button" data-screen="home" data-jump="catalog">ไปเลือกสินค้า</button>
+      </div>
+    </section>
+
+    <section class="screen" id="pay">
+      <div class="page">
+        <h1>ชำระเงิน</h1>
+        <article class="order"><div><h2>DISNEY+</h2><p class="note">30 DAYS หาร</p></div><b>฿100</b></article>
+        <p class="big">฿100</p>
+        <button class="buy" id="confirm" type="button">ยืนยันคำสั่งซื้อ</button>
+        <p class="note" id="pay-note">แบบร่างยังไม่รับเงินจริง และไม่สร้าง QR</p>
+      </div>
+    </section>
+
+    <section class="screen" id="orders">
+      <div class="page">
+        <h1>ประวัติการซื้อ</h1>
+        <p class="lead">เห็นเฉพาะออเดอร์ของบัญชีนี้</p>
+        <div class="orders" id="orders">
+          <article class="order">
+            <div>
+              <span class="ok">ส่งแล้ว</span>
+              <h2>DISNEY+</h2>
+              <p class="note">10 พ.ย. 2569 · ฿100</p>
+              <p class="code" id="code">•••• ••••</p>
+            </div>
+            <button class="ghost" id="reveal" type="button">แสดงรหัส</button>
+          </article>
+          <article class="order">
+            <div>
+              <span class="wait">รอจัดส่ง</span>
+              <h2>MONOMAX</h2>
+              <p class="note">คิวที่ 12</p>
+              <p class="note">รหัสยังไม่แสดงจนกว่าสถานะจะเป็นส่งแล้ว</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="login">
+      <div class="page">
+        <h1>เข้าสู่ระบบ</h1>
+        <form class="account" id="login-form">
+          <label for="user">ชื่อผู้ใช้</label>
+          <input id="user" name="user" autocomplete="username" />
+          <label for="password">รหัสผ่าน</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" />
+          <button class="buy" type="submit">เข้าสู่ระบบ</button>
+          <p class="note" id="login-note"></p>
+        </form>
+      </div>
+    </section>
+
+    <section class="screen" id="account">
+      <div class="page">
+        <h1>บัญชีของฉัน</h1>
+        <p class="lead">บัญชีทดสอบในแบบร่าง</p>
+        <div class="actions">
+          <button class="ghost" type="button" data-screen="orders">ประวัติการซื้อ</button>
+          <button class="ghost" type="button" data-screen="notes">กล่องข้อความ</button>
+          <button class="ghost" type="button" data-screen="chat">แชทกับร้าน</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" id="notes">
+      <div class="page">
+        <h1>กล่องข้อความ</h1>
+        <p class="lead">ข้อความที่ทีมงานส่งถึงบัญชีนี้ คนอื่นเปิดไม่เห็น</p>
+        <div class="notes" id="notes">
+          <article class="note-card"><div><span class="ok">ยังไม่อ่าน</span><h2>DISNEY+ ส่งแล้ว</h2><p class="note">เปิดรหัสได้ในประวัติการซื้อ</p></div></article>
+          <article class="note-card"><div><span class="wait">ยังไม่อ่าน</span><h2>MONOMAX ได้คิวที่ 12</h2><p class="note">สถานะรอจัดส่ง</p></div></article>
+          <article class="note-card"><div><span class="note">อ่านแล้ว</span><h2>ประกาศร้าน</h2><p class="note">โหมดทดลอง ยังไม่ตัดเงิน</p></div></article>
+        </div>
+      </div>
+    </section>
+
+    <div class="dock" id="dock">
+      <section class="chat-panel" id="chat-panel" hidden>
+        <div class="chat-head">
+          <div>
+            <strong>คุยกับร้าน</strong>
+            <p>รีเฟรชแล้วข้อความในแบบร่างจะหาย</p>
+          </div>
+          <button class="chat-x" id="chat-close" type="button" aria-label="ปิดแชท">✕</button>
+        </div>
+        <div class="thread" id="thread">
+          <div class="bubble mine">ขอถามคิว MONOMAX<small>ส่งแล้ว</small></div>
+          <div class="bubble">คิวที่ 12 รอจัดส่ง<small>ร้าน</small></div>
+          <div class="bubble mine fail" id="fail">ขอเลขคิวอีกครั้ง<small>ส่งไม่สำเร็จ</small><button class="ghost" id="retry" type="button">ลองอีกครั้ง</button></div>
+        </div>
+        <form class="composer" id="composer">
+          <label class="visually-hidden" for="draft">ข้อความ</label>
+          <input id="draft" placeholder="พิมพ์ข้อความ" />
+          <button class="buy" type="submit">ส่ง</button>
+        </form>
+      </section>
+      <button class="launcher" id="launcher" type="button" aria-expanded="false" aria-controls="chat-panel">
+        <svg class="icon-chat" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 4.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9.2L5 20.2V6.5a2 2 0 0 1 2-2z"/></svg>
+        <span class="ping" id="chat-dot"></span>
+        <span class="visually-hidden">คุยกับร้าน</span>
+      </button>
+    </div>
+
+    <section class="screen" id="admin">
+      <div class="page wide">
+        <h1>กล่องแชทแอดมิน</h1>
+        <p class="lead">สองห้องแยกกัน จุดเขียวคือยังไม่อ่าน</p>
+        <div class="inbox">
+          <div class="rooms">
+            <button class="room" type="button" data-room="mint" aria-pressed="true"><b>มินต์ <i class="unread" id="dot"></i></b><span>ขอถามคิว MONOMAX</span></button>
+            <button class="room" type="button" data-room="poom" aria-pressed="false"><b>ภูมิ</b><span>ขอเลขคำสั่งซื้อ</span></button>
+          </div>
+          <div class="box">
+            <div class="thread" id="admin-thread"></div>
+            <form class="composer" id="admin-form">
+              <label class="visually-hidden" for="admin-draft">ตอบลูกค้า</label>
+              <input id="admin-draft" placeholder="ตอบลูกค้า" />
+              <button class="buy" type="submit">ส่ง</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+    const screens = document.querySelectorAll(".screen");
+    const tabs = document.querySelectorAll(".review [data-screen]");
+    const links = document.querySelectorAll(".links a");
+    const navName = { home: "สินค้า", stock: "สินค้า", sold: "สินค้า", pre: "สินค้า", orders: "ประวัติการซื้อ", chat: "แชทกับร้าน", account: "บัญชี" };
+    function show(id) {
+      screens.forEach((node) => node.classList.toggle("on", node.id === id));
+      tabs.forEach((button) => button.setAttribute("aria-pressed", button.dataset.screen === id ? "true" : "false"));
+      links.forEach((link) => link.classList.toggle("on", link.textContent.trim() === navName[id]));
+      document.getElementById("links").classList.remove("open");
+      document.body.classList.toggle("staff", id === "admin");
+      window.scrollTo(0, 0);
+    }
+    const chatPanel = document.getElementById("chat-panel");
+    const launcher = document.getElementById("launcher");
+    function setChat(open) {
+      chatPanel.hidden = !open;
+      launcher.setAttribute("aria-expanded", open ? "true" : "false");
+      if (!open) return;
+      document.getElementById("chat-dot")?.remove();
+      const thread = document.getElementById("thread");
+      thread.scrollTop = thread.scrollHeight;
+      document.getElementById("draft").focus();
+    }
+    document.querySelectorAll("[data-screen]").forEach((node) => {
+      node.addEventListener("click", (event) => {
+        if (node.disabled) return;
+        event.preventDefault();
+        if (node.dataset.screen === "chat") {
+          if (document.body.classList.contains("staff")) show("home");
+          setChat(true);
+          return;
+        }
+        show(node.dataset.screen);
+        if (node.dataset.jump) document.getElementById(node.dataset.jump).scrollIntoView({ block: "start" });
+      });
+    });
+    launcher.addEventListener("click", () => setChat(chatPanel.hidden));
+    document.getElementById("chat-close").addEventListener("click", () => setChat(false));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !chatPanel.hidden) setChat(false);
+    });
+    document.getElementById("buy-now").addEventListener("click", () => {
+      document.getElementById("buy-note").textContent = "รับ DISNEY+ ฿100 แล้ว ดูสถานะรอยืนยันในประวัติการซื้อ";
+      document.getElementById("cart-count").textContent = "1";
+      document.getElementById("cart-copy").textContent = "DISNEY+ 30 DAYS หาร · ฿100 อยู่ในระหว่างรอยืนยัน ยังไม่ตัดเงิน";
+      if (document.getElementById("pending")) return;
+      const article = document.createElement("article");
+      article.className = "order";
+      article.id = "pending";
+      const body = document.createElement("div");
+      const chip = document.createElement("span");
+      chip.className = "wait";
+      chip.textContent = "รอยืนยัน";
+      const heading = document.createElement("h2");
+      heading.textContent = "DISNEY+";
+      const line = document.createElement("p");
+      line.className = "note";
+      line.textContent = "฿100 · ยังไม่ตัดเงิน";
+      body.append(chip, heading, line);
+      article.append(body);
+      document.getElementById("orders").append(article);
+    });
+    document.getElementById("reserve").addEventListener("click", () => show("orders"));
+    document.getElementById("confirm").addEventListener("click", () => {
+      document.getElementById("pay-note").textContent = "รับคำสั่งซื้อแล้ว สถานะรอยืนยัน ยังไม่ได้รับเงินและยังไม่ได้รหัส";
+      document.getElementById("buy-now").click();
+      show("orders");
+    });
+    const cards = [...document.querySelectorAll("#grid .product")];
+    let state = "all";
+    function applyCatalog() {
+      const query = document.getElementById("search").value.trim().toLowerCase();
+      const sort = document.getElementById("sort").value;
+      const ranked = sort === "featured" ? cards : [...cards].sort((a, b) => sort === "low" ? Number(a.dataset.price) - Number(b.dataset.price) : Number(b.dataset.price) - Number(a.dataset.price));
+      ranked.forEach((card) => card.parentElement.append(card));
+      let visible = 0;
+      ranked.forEach((card) => {
+        const matched = (!query || card.textContent.toLowerCase().includes(query)) && (state === "all" || card.dataset.state === state);
+        card.hidden = !matched;
+        if (matched) visible += 1;
+      });
+      document.getElementById("no-result").hidden = visible > 0;
+      document.getElementById("count").textContent = visible + " รายการ";
+    }
+    document.getElementById("search").addEventListener("input", applyCatalog);
+    document.getElementById("sort").addEventListener("change", applyCatalog);
+    document.getElementById("chips").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-state]");
+      if (!button) return;
+      state = button.dataset.state;
+      document.querySelectorAll("#chips button").forEach((item) => item.classList.toggle("on", item === button));
+      applyCatalog();
+    });
+    document.getElementById("menu").addEventListener("click", () => document.getElementById("links").classList.toggle("open"));
+    document.getElementById("login-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const user = document.getElementById("user").value.trim();
+      const password = document.getElementById("password").value;
+      document.getElementById("login-note").textContent = user && password ? "แบบร่างยังต่อระบบล็อกอินไม่ได้" : "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน";
+    });
+    document.querySelectorAll("#notes .note-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const chip = card.querySelector("span");
+        chip.className = "note";
+        chip.textContent = "อ่านแล้ว";
+      });
+    });
+    document.getElementById("phone").addEventListener("click", () => {
+      const frame = document.querySelector(".frame");
+      const on = frame.classList.toggle("phone");
+      document.getElementById("phone").setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    const reveal = document.getElementById("reveal");
+    const code = document.getElementById("code");
+    reveal.addEventListener("click", () => {
+      const open = code.dataset.open === "1";
+      code.dataset.open = open ? "0" : "1";
+      code.textContent = open ? "•••• ••••" : "DEMO-ONLY";
+      reveal.textContent = open ? "แสดงรหัส" : "ซ่อนรหัส";
+    });
+    document.getElementById("composer").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const input = document.getElementById("draft");
+      const text = input.value.trim();
+      if (!text) return;
+      const bubble = document.createElement("div");
+      bubble.className = "bubble mine";
+      const small = document.createElement("small");
+      small.textContent = "ส่งแล้ว";
+      bubble.append(text, small);
+      const thread = document.getElementById("thread");
+      thread.append(bubble);
+      thread.scrollTop = thread.scrollHeight;
+      input.value = "";
+    });
+    document.getElementById("retry").addEventListener("click", () => {
+      const fail = document.getElementById("fail");
+      fail.className = "bubble mine";
+      const small = document.createElement("small");
+      small.textContent = "ส่งแล้ว";
+      fail.replaceChildren("ขอเลขคิวอีกครั้ง", small);
+    });
+    const rooms = {
+      mint: [{ text: "ขอถามคิว MONOMAX", who: "ลูกค้า" }, { text: "คิวที่ 12 รอจัดส่ง", who: "ร้าน" }],
+      poom: [{ text: "ขอเลขคำสั่งซื้อของ DISNEY+", who: "ลูกค้า" }, { text: "ดูได้ในประวัติการซื้อของบัญชีนี้", who: "ร้าน" }]
+    };
+    let currentRoom = "mint";
+    const adminThread = document.getElementById("admin-thread");
+    function paintRoom(id) {
+      currentRoom = id;
+      adminThread.replaceChildren();
+      rooms[id].forEach((line) => {
+        const bubble = document.createElement("div");
+        bubble.className = line.who === "ร้าน" ? "bubble mine" : "bubble";
+        const small = document.createElement("small");
+        small.textContent = line.who;
+        bubble.append(line.text, small);
+        adminThread.append(bubble);
+      });
+      document.querySelectorAll("[data-room]").forEach((button) => button.setAttribute("aria-pressed", button.dataset.room === id ? "true" : "false"));
+    }
+    paintRoom("mint");
+    document.querySelectorAll("[data-room]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (button.dataset.room === "mint") document.getElementById("dot")?.remove();
+        paintRoom(button.dataset.room);
+      });
+    });
+    document.getElementById("admin-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const input = document.getElementById("admin-draft");
+      const text = input.value.trim();
+      if (!text) return;
+      rooms[currentRoom].push({ text, who: "ร้าน" });
+      paintRoom(currentRoom);
+      input.value = "";
+    });
+  </script>
+</body>
+</html>
