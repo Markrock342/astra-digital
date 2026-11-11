@@ -53,11 +53,12 @@ test("reference catalog exposes two products and 25 available units; archived ke
   );
   assert.ok(
     !s.db
-      .prepare("SELECT secret FROM inventory LIMIT 1")
+      .prepare("SELECT login_id_enc FROM inventory LIMIT 1")
       .get()
-      .secret.includes("DEMO-"),
+      .login_id_enc.includes("DEMO-"),
   );
   assert.ok(!JSON.stringify(s.products()).includes("secret"));
+  assert.ok(!JSON.stringify(s.products()).includes("login_id_enc"));
   assert.ok(!JSON.stringify(s.products()).includes("DEMO-KEY"));
 });
 test("purchase delivers exactly one key per unit and deducts once", (t) => {

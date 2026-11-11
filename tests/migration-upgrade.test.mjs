@@ -29,6 +29,21 @@ const upgrade = readFileSync(
 );
 function assertPreserved(before, after) {
   for (const [table, rows] of Object.entries(before)) {
+    if (table === "inventory") {
+      assert.equal(after.inventory.length, rows.length, "inventory row count");
+      for (const row of rows) {
+        const found = after.inventory.find((r) => r.id === row.id);
+        assert.ok(found, "missing inventory " + row.id);
+        assert.equal(found.variant_id, row.variant_id);
+        assert.equal(found.order_id ?? null, row.order_id ?? null);
+        assert.equal(found.sold_at ?? null, row.sold_at ?? null);
+        assert.equal(found.legacy_single_secret, 1);
+        assert.equal("secret" in found, false);
+        assert.ok(found.login_id_enc);
+        assert.ok(found.password_enc);
+      }
+      continue;
+    }
     const originalColumns = rows.length ? Object.keys(rows[0]) : [];
     const actual = after[table]
       .slice(0, table === "schema_migrations" ? rows.length : undefined)
@@ -89,6 +104,18 @@ test("004 upgrades a populated persistent database without changing users, sessi
     )
     .get().n;
   assert.equal(applied, 1);
+  assert.equal(
+    s.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM schema_migrations WHERE name='005_credential_preorder_indexes.sql'",
+      )
+      .get().n,
+    1,
+  );
+  const detail = s.orderDetail(s.session(sessionToken), "order-old");
+  assert.deepEqual(detail.credentials, [
+    { loginId: deliveredCode, password: "" },
+  ]);
   const after = legacySnapshot(s.db);
   s.db.close();
   s = createCommerce({ path, key, seed: false });
@@ -98,6 +125,108 @@ test("004 upgrades a populated persistent database without changing users, sessi
   ]);
   s.db.close();
 });
+
+test("MU1/MU5: 005 remaps secret to dual credential on populated DB", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "astra-005-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, "commerce.sqlite");
+  const key = randomBytes(32);
+  const old = new DatabaseSync(path);
+  old.exec("PRAGMA foreign_keys=ON");
+  seedLegacy(old, migrations, key);
+  const legacyCount = old
+    .prepare("SELECT COUNT(*) AS n FROM inventory")
+    .get().n;
+  assert.ok(legacyCount > 0);
+  old.close();
+  const s = createCommerce({ path, key, seed: false });
+  assert.equal(
+    s.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM schema_migrations WHERE name='005_credential_preorder_indexes.sql'",
+      )
+      .get().n,
+    1,
+  );
+  const cols = s.db
+    .prepare("PRAGMA table_info(inventory)")
+    .all()
+    .map((c) => c.name);
+  assert.ok(cols.includes("login_id_enc"));
+  assert.ok(cols.includes("password_enc"));
+  assert.ok(cols.includes("reservation_id"));
+  assert.equal(cols.includes("secret"), false);
+  assert.equal(
+    s.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM inventory WHERE legacy_single_secret=1",
+      )
+      .get().n,
+    legacyCount,
+  );
+  const resCols = s.db
+    .prepare("PRAGMA table_info(reservations)")
+    .all()
+    .map((c) => c.name);
+  assert.ok(resCols.includes("delivered_at"));
+  assert.ok(resCols.includes("delivered_by"));
+  s.db
+    .prepare(
+      "UPDATE reservations SET status='DELIVERED', delivered_at=CURRENT_TIMESTAMP, delivered_by='admin-old' WHERE id='reservation-old'",
+    )
+    .run();
+  assert.equal(
+    s.db
+      .prepare("SELECT status FROM reservations WHERE id='reservation-old'")
+      .get().status,
+    "DELIVERED",
+  );
+  s.db
+    .prepare(
+      "UPDATE inventory SET reservation_id='reservation-old', order_id=NULL WHERE id='unit-available'",
+    )
+    .run();
+  assert.throws(() => {
+    s.db
+      .prepare(
+        "UPDATE inventory SET order_id='order-old', reservation_id='reservation-old' WHERE id='unit-available'",
+      )
+      .run();
+  });
+  const indexes = s.db
+    .prepare("SELECT name FROM sqlite_master WHERE type='index'")
+    .all()
+    .map((r) => r.name);
+  assert.ok(indexes.includes("orders_status_created"));
+  assert.ok(indexes.includes("reservations_status_created"));
+  s.db.close();
+});
+
+test("MU2: 005 apply is idempotent on reopen", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "astra-005-idem-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, "commerce.sqlite");
+  const key = randomBytes(32);
+  const old = new DatabaseSync(path);
+  old.exec("PRAGMA foreign_keys=ON");
+  seedLegacy(old, migrations, key);
+  old.close();
+  let s = createCommerce({ path, key, seed: false });
+  const snap = legacySnapshot(s.db);
+  s.db.close();
+  s = createCommerce({ path, key, seed: false });
+  assert.deepEqual(legacySnapshot(s.db), snap);
+  assert.equal(
+    s.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM schema_migrations WHERE name='005_credential_preorder_indexes.sql'",
+      )
+      .get().n,
+    1,
+  );
+  s.db.close();
+});
+
 test("a foreign-key violation aborts and rolls back the entire rebuild and migration marker", () => {
   const db = new DatabaseSync(":memory:");
   try {
