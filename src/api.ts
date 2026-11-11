@@ -1,3 +1,4 @@
+import { locale, t } from "./i18n";
 export async function api<T = unknown>(
   path: string,
   body?: unknown,
@@ -21,13 +22,14 @@ export async function api<T = unknown>(
   return data as T;
 }
 export const money = (value: number) =>
-  new Intl.NumberFormat("th-TH", {
+  new Intl.NumberFormat(locale(), {
     style: "currency",
     currency: "THB",
+    currencyDisplay: "narrowSymbol",
     minimumFractionDigits: 2,
   }).format(value / 100);
 export const dateTime = (value: string) =>
-  new Date(value.replace(" ", "T") + "Z").toLocaleString("th-TH", {
+  new Date(value.replace(" ", "T") + "Z").toLocaleString(locale(), {
     dateStyle: "medium",
     timeStyle: "short",
   });
@@ -37,10 +39,10 @@ export function relativeTime(value: string) {
     (Date.now() - new Date(value.replace(" ", "T") + "Z").getTime()) / 1000,
   );
   return seconds < 60
-    ? "เมื่อสักครู่"
+    ? t("เมื่อสักครู่")
     : seconds < 3600
-      ? `${Math.floor(seconds / 60)} นาทีที่ผ่านมา`
+      ? t("{n} นาทีที่ผ่านมา", { n: Math.floor(seconds / 60) })
       : seconds < 86400
-        ? `${Math.floor(seconds / 3600)} ชั่วโมงที่ผ่านมา`
-        : `${Math.floor(seconds / 86400)} วันที่ผ่านมา`;
+        ? t("{n} ชั่วโมงที่ผ่านมา", { n: Math.floor(seconds / 3600) })
+        : t("{n} วันที่ผ่านมา", { n: Math.floor(seconds / 86400) });
 }

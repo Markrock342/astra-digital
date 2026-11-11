@@ -1616,7 +1616,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
           <h2>โลโก้</h2>
           <p>แนะนำรูปสี่เหลี่ยมจัตุรัสอย่างน้อย 256×256 px</p>
           <img
-            src="/favicon.svg"
+            src="/brand/favicon-64.png"
             className="settings-logo"
             alt=""
           />

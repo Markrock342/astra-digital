@@ -4,6 +4,7 @@ import {
   useEffect,
   useState,
   type ReactNode,
+  type CSSProperties,
   type FormEvent,
   type MouseEvent,
   lazy,
@@ -22,22 +23,18 @@ import {
   EyeOff,
   History,
   Home as HomeIcon,
-  Languages,
   LogOut,
   Mail,
   Megaphone,
   Menu,
   MessageCircle,
   Minus,
-  Monitor,
-  Moon,
   Package,
   Plus,
   Search,
   ShieldCheck,
   ShoppingBag,
   Star,
-  Sun,
   Trash2,
   UserPlus,
   Users,
@@ -49,6 +46,17 @@ import {
   SlidersHorizontal,
   Clock,
 } from "lucide-react";
+import { t, getLang, setLang, setMerchantScope, type Lang } from "./i18n";
+import {
+  BrandLogo,
+  LanguageToggle,
+  Marquee,
+  ScrollProgress,
+  ThemePanel,
+  ThemeSwitch,
+  shopName,
+  useCardTilt,
+} from "./Theme";
 import { api, money, dateTime, relativeTime } from "./api";
 import type {
   Product,
@@ -81,6 +89,8 @@ type Store = {
   toast: (message: string) => void;
   path: string;
   loading: boolean;
+  lang: Lang;
+  changeLang: (lang: Lang) => void;
 };
 const Context = createContext<Store>(null!);
 export const useStore = () => useContext(Context);
@@ -186,12 +196,12 @@ export function Art({
 }
 export function Status({ status }: { status: string }) {
   const labels: Record<string, string> = {
-    DELIVERED: "จัดส่งสำเร็จ",
-    PENDING_PAYMENT: "รอชำระเงิน",
-    FAILED: "ชำระเงินไม่สำเร็จ",
-    CANCELLED: "ยกเลิกแล้ว",
-    OUT_OF_STOCK: "สินค้าหมด",
-    PREORDER: "รอส่งสินค้าสั่งจอง",
+    DELIVERED: t("จัดส่งสำเร็จ"),
+    PENDING_PAYMENT: t("รอชำระเงิน"),
+    FAILED: t("ชำระเงินไม่สำเร็จ"),
+    CANCELLED: t("ยกเลิกแล้ว"),
+    OUT_OF_STOCK: t("สินค้าหมด"),
+    PREORDER: t("รอส่งสินค้าสั่งจอง"),
   };
   return (
     <span className={`status status-${status.toLowerCase()}`}>
@@ -223,12 +233,13 @@ export function ErrorMessage({ message }: { message: string }) {
   return message ? (
     <div role="alert" className="error-message">
       <AlertCircle size={17} />
-      {message}
+      {t(message)}
     </div>
   ) : null;
 }
 function Header() {
-  const { path, user, basket, go, refresh, toast, overview } = useStore();
+  const { path, user, basket, go, refresh, toast, lang, changeLang } =
+    useStore();
   const [open, setOpen] = useState(false);
   const [account, setAccount] = useState(false);
   useEffect(() => {
@@ -236,21 +247,20 @@ function Header() {
     setAccount(false);
   }, [path]);
   const links = [
-    ["/", "หน้าแรก"],
-    ["/products", "สินค้า"],
-    ["/reviews", "รีวิว"],
-    ["/orders", "ประวัติการซื้อ"],
+    ["/", t("หน้าแรก")],
+    ["/products", t("สินค้า")],
+    ["/reviews", t("รีวิว")],
+    ["/orders", t("ประวัติการซื้อ")],
   ];
   return (
     <>
       <header className="site-header">
         <div className="container header-inner">
-          <Link to="/" className="brand">
-            <img src="/favicon.svg" alt="" />
-            <span>{overview?.shop?.shopName || "ร้านค้า"}</span>
+          <Link to="/" className="brand" aria-label={t("หน้าแรก")}>
+            <BrandLogo />
           </Link>
           <nav
-            aria-label="เมนูหลัก"
+            aria-label={t("เมนูหลัก")}
             className={open ? "main-nav nav-open" : "main-nav"}
           >
             {links.map(([to, label]) => (
@@ -273,14 +283,12 @@ function Header() {
             ))}
           </nav>
           <div className="header-actions">
-            <span className="language-label">
-              <Languages size={19} />
-              <span>ไทย</span>
-            </span>
+            <LanguageToggle lang={lang} onChange={changeLang} />
+            <ThemePanel />
             <Link
               to="/cart"
               className="icon-button cart-button"
-              aria-label="ตะกร้าสินค้า"
+              aria-label={t("ตะกร้าสินค้า")}
             >
               <ShoppingBag size={21} />
               {basket && <span className="cart-count">{basket.quantity}</span>}
@@ -298,22 +306,22 @@ function Header() {
                 </button>
                 {account && (
                   <div className="account-menu">
-                    <Link to="/account">บัญชีของฉัน</Link>
-                    <Link to="/orders">คำสั่งซื้อของฉัน</Link>
+                    <Link to="/account">{t("บัญชีของฉัน")}</Link>
+                    <Link to="/orders">{t("คำสั่งซื้อของฉัน")}</Link>
                     {user.role === "ADMIN" && (
-                      <Link to="/admin">จัดการร้านค้า</Link>
+                      <Link to="/admin">{t("จัดการร้านค้า")}</Link>
                     )}
                     <button
                       onClick={async () => {
                         await api("/logout", {});
                         await refresh();
                         setAccount(false);
-                        toast("ออกจากระบบแล้ว");
+                        toast(t("ออกจากระบบแล้ว"));
                         go("/");
                       }}
                     >
                       <LogOut size={15} />
-                      ออกจากระบบ
+                      {t("ออกจากระบบ")}
                     </button>
                   </div>
                 )}
@@ -321,16 +329,16 @@ function Header() {
             ) : (
               <>
                 <Link to="/login" className="login-link">
-                  เข้าสู่ระบบ
+                  {t("เข้าสู่ระบบ")}
                 </Link>
                 <Link to="/register" className="register-link">
-                  สมัครสมาชิก
+                  {t("สมัครสมาชิก")}
                 </Link>
               </>
             )}
             <button
               className="icon-button mobile-menu"
-              aria-label={open ? "ปิดเมนู" : "เปิดเมนู"}
+              aria-label={open ? t("ปิดเมนู") : t("เปิดเมนู")}
               aria-expanded={open}
               onClick={() => setOpen(!open)}
             >
@@ -339,70 +347,33 @@ function Header() {
           </div>
         </div>
       </header>
-      <nav className="mobile-bottom-nav" aria-label="เมนูมือถือ">
+      <nav className="mobile-bottom-nav" aria-label={t("เมนูมือถือ")}>
         <Link to="/" className={path === "/" ? "active" : ""}>
           <HomeIcon size={21} />
-          <span>หน้าร้าน</span>
+          <span>{t("หน้าร้าน")}</span>
         </Link>
         <Link to="/cart" className={path === "/cart" ? "active" : ""}>
           <ShoppingBag size={21} />
-          <span>ตะกร้า</span>
+          <span>{t("ตะกร้า")}</span>
         </Link>
         <Link
           to="/orders"
           className={path.startsWith("/orders") ? "active" : ""}
         >
           <History size={21} />
-          <span>ประวัติ</span>
+          <span>{t("ประวัติ")}</span>
         </Link>
         <button
           className={open ? "active" : ""}
-          aria-label="เมนูลัด"
+          aria-label={t("เมนูลัด")}
           aria-expanded={open}
           onClick={() => setOpen(!open)}
         >
           <Menu size={21} />
-          <span>เมนู</span>
+          <span>{t("เมนู")}</span>
         </button>
       </nav>
     </>
-  );
-}
-function ThemeSwitch() {
-  const [theme, setTheme] = useState(
-    () => localStorage.getItem("astra-theme") ?? "dark",
-  );
-  useEffect(() => {
-    const media = matchMedia("(prefers-color-scheme: light)");
-    const update = () =>
-      (document.documentElement.dataset.theme =
-        theme === "system" ? (media.matches ? "light" : "dark") : theme);
-    update();
-    media.addEventListener("change", update);
-    localStorage.setItem("astra-theme", theme);
-    return () => media.removeEventListener("change", update);
-  }, [theme]);
-  return (
-    <div className="theme-switch" aria-label="รูปแบบสี">
-      {[
-        ["system", Monitor, "ตามระบบ"],
-        ["light", Sun, "สว่าง"],
-        ["dark", Moon, "มืด"],
-      ].map(([value, Icon, label]) => {
-        const Comp = Icon as typeof Sun;
-        return (
-          <button
-            key={value as string}
-            className={theme === value ? "selected" : ""}
-            aria-label={`ธีม${label}`}
-            aria-pressed={theme === value}
-            onClick={() => setTheme(value as string)}
-          >
-            <Comp size={17} />
-          </button>
-        );
-      })}
-    </div>
   );
 }
 function Footer() {
@@ -411,23 +382,22 @@ function Footer() {
     <footer className="site-footer">
       <div className="container footer-main">
         <div className="footer-about">
-          <Link to="/" className="brand footer-brand">
-            <img src="/favicon.svg" alt="" />
-            <span>{overview?.shop?.shopName || "ร้านค้า"}</span>
+          <Link to="/" className="brand footer-brand" aria-label={t("หน้าแรก")}>
+            <BrandLogo />
           </Link>
           <p>
-            {overview?.shop?.description || "ร้านสินค้าดิจิทัล"}
+            {overview?.shop?.description || t("ร้านสินค้าดิจิทัล")}
           </p>
         </div>
         <div className="footer-contact">
-          <h3>ติดต่อร้าน</h3>
+          <h3>{t("ติดต่อร้าน")}</h3>
           <div className="contact-links">
             <Link to="/support" className="contact-card">
               <span className="line-icon">
                 <MessageCircle size={23} />
               </span>
               <span>
-                LINE<small>{overview?.shop?.line || "ยังไม่ได้ตั้งค่า"}</small>
+                LINE<small>{overview?.shop?.line || t("ยังไม่ได้ตั้งค่า")}</small>
               </span>
               <ArrowUpRight size={16} />
             </Link>
@@ -436,9 +406,9 @@ function Footer() {
                 <Mail size={23} />
               </span>
               <span>
-                อีเมล
+                {t("อีเมล")}
                 <small>
-                  {overview?.shop?.email || "ยังไม่ได้ตั้งค่า"}
+                  {overview?.shop?.email || t("ยังไม่ได้ตั้งค่า")}
                 </small>
               </span>
               <ArrowUpRight size={16} />
@@ -446,27 +416,27 @@ function Footer() {
           </div>
         </div>
         <div className="footer-menu">
-          <h3>เมนู</h3>
-          <Link to="/products">สินค้าทั้งหมด</Link>
-          <Link to="/reviews">เครดิตร้าน</Link>
-          <Link to="/orders">ประวัติการซื้อ</Link>
+          <h3>{t("เมนู")}</h3>
+          <Link to="/products">{t("สินค้าทั้งหมด")}</Link>
+          <Link to="/reviews">{t("เครดิตร้าน")}</Link>
+          <Link to="/orders">{t("ประวัติการซื้อ")}</Link>
         </div>
       </div>
       <div className="footer-bottom">
         <div className="container footer-bottom-inner">
           <span>
-            © {new Date().getFullYear() + 543}{" "}
-            {overview?.shop?.shopName || "ร้านค้า"}
+            © {new Date().getFullYear() + (getLang() === "th" ? 543 : 0)}{" "}
+            {shopName(overview?.shop?.shopName)}
           </span>
           <div className="footer-legal">
-            <Link to="/terms">ข้อกำหนดร้าน</Link>
-            <Link to="/privacy">ความเป็นส่วนตัว</Link>
-            <span className="built-label">
-              A<span>สร้างด้วย ASTRA</span>
-            </span>
+            <Link to="/terms">{t("ข้อกำหนดร้าน")}</Link>
+            <Link to="/privacy">{t("ความเป็นส่วนตัว")}</Link>
             <ThemeSwitch />
           </div>
         </div>
+      </div>
+      <div className="footer-wordmark" aria-hidden="true">
+        ASIA EXTRA
       </div>
     </footer>
   );
@@ -478,11 +448,11 @@ export function ProductCard({ product }: { product: Product }) {
       <div className="product-image">
         <Art type={product.art} name={product.name} />
         {!!product.preorder ? (
-          <span className="stock-tag">สั่งจอง</span>
+          <span className="stock-tag">{t("สั่งจอง")}</span>
         ) : stock === 0 ? (
-          <span className="stock-tag">สินค้าหมด</span>
+          <span className="stock-tag">{t("สินค้าหมด")}</span>
         ) : null}
-        <span className="card-hover-action">เลือกตัวเลือก</span>
+        <span className="card-hover-action">{t("เลือกตัวเลือก")}</span>
       </div>
       <div className="product-card-info">
         <div className="product-title">
@@ -490,7 +460,7 @@ export function ProductCard({ product }: { product: Product }) {
           <ArrowUpRight size={18} />
         </div>
         <p>
-          เริ่ม{" "}
+          {t("เริ่ม")}{" "}
           <strong>
             {money(Math.min(...product.variants.map((v) => v.price)))}
           </strong>
@@ -504,7 +474,7 @@ export function ProductCard({ product }: { product: Product }) {
                 <span> · </span>
               </>
             )}
-            ขายแล้ว {product.sold} <span>รายการ</span>
+            {t("ขายแล้ว")}{" "}{product.sold} <span>{t("รายการ")}</span>
           </div>
         )}
       </div>
@@ -541,20 +511,48 @@ function Home() {
           <span className="service-pill">
             <span className="service-dot" />
             {overview?.shop?.shopOpen === false
-              ? "ปิดให้บริการ"
-              : "เปิดให้บริการ"}
+              ? t("ปิดให้บริการ")
+              : t("เปิดให้บริการ")}
           </span>
-          <h1>{overview?.shop?.shopName || "ร้านค้า"}</h1>
-          <p>
+          <h1 className="hero-title">
+            <span className="sr-only">{shopName(overview?.shop?.shopName)}</span>
+            <span className="hero-logo" aria-hidden="true">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <img
+                  key={i}
+                  src={`/brand/l${i}.png`}
+                  alt=""
+                  draggable={false}
+                  className={i === 4 ? "hero-x" : ""}
+                  style={{ "--i": i } as CSSProperties}
+                />
+              ))}
+            </span>
+          </h1>
+          <p className="hero-tagline">
             {overview?.shop?.description ||
-              "เพิ่มสินค้าและข้อมูลร้านได้จากหลังบ้าน"}
+              t("ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที")}
           </p>
+          <div className="hero-actions">
+            <Link to="/products" className="button primary hero-cta">
+              {t("เลือกซื้อสินค้า")}
+              <ArrowRight size={18} />
+            </Link>
+            <Link to="/reviews" className="button hero-ghost">
+              {t("ดูรีวิวจากลูกค้า")}
+            </Link>
+          </div>
+          <div className="hero-orbs" aria-hidden="true">
+            <i className="orb orb-blue" />
+            <i className="orb orb-yellow" />
+          </div>
         </section>
-        <section className="stats-panel" aria-label="สถิติร้านค้า">
+        <Marquee />
+        <section className="stats-panel" aria-label={t("สถิติร้านค้า")}>
           {[
-            [Users, "ลูกค้า", overview?.customers, "คน"],
-            [Package, "สินค้า", overview?.products, "ชิ้น"],
-            [CreditCard, "คำสั่งซื้อ", overview?.orders, "รายการ"],
+            [Users, t("ลูกค้า"), overview?.customers, t("คน")],
+            [Package, t("สินค้า"), overview?.products, t("ชิ้น")],
+            [CreditCard, t("คำสั่งซื้อ"), overview?.orders, t("รายการ")],
           ].map(([Icon, label, value, unit]) => {
             const Comp = Icon as typeof Users;
             return (
@@ -580,7 +578,7 @@ function Home() {
             <div className="mobile-activity-ticker">
               <span className="live-pill">
                 <span className="service-dot" />
-                สด
+                {t("สด")}
               </span>
               <div key={activityIndex} className="ticker-event">
                 {latestActivity.kind === "register" ? (
@@ -600,10 +598,10 @@ function Home() {
                   <p>
                     <strong>{latestActivity.name}</strong>{" "}
                     {latestActivity.kind === "register" ? (
-                      "สมัครสมาชิก"
+                      t("สมัครสมาชิก")
                     ) : (
                       <>
-                        สั่งซื้อ <b>{latestActivity.product}</b>
+                        {t("สั่งซื้อ")}{" "}<b>{latestActivity.product}</b>
                       </>
                     )}
                   </p>
@@ -613,10 +611,10 @@ function Home() {
             </div>
           )}
           <div className="panel-heading">
-            <h2>กิจกรรมล่าสุด</h2>
+            <h2>{t("กิจกรรมล่าสุด")}</h2>
             <span className="live-pill">
               <span className="service-dot" />
-              สด
+              {t("สด")}
             </span>
           </div>
           {overview?.activity.slice(0, 3).map((activity, i) => (
@@ -634,10 +632,10 @@ function Home() {
                 <p>
                   <strong>{activity.name}</strong>{" "}
                   {activity.kind === "register" ? (
-                    "สมัครสมาชิก"
+                    t("สมัครสมาชิก")
                   ) : (
                     <>
-                      สั่งซื้อ <b>{activity.product}</b>
+                      {t("สั่งซื้อ")}{" "}<b>{activity.product}</b>
                     </>
                   )}
                 </p>
@@ -651,7 +649,7 @@ function Home() {
           {loading && (
             <div className="loading-row">
               <LoaderCircle className="spin" />
-              กำลังโหลดกิจกรรม
+              {t("กำลังโหลดกิจกรรม")}
             </div>
           )}
         </section>
@@ -661,7 +659,7 @@ function Home() {
               <Megaphone size={22} />
             </span>
             <div>
-              <h2>ประกาศจากร้าน</h2>
+              <h2>{t("ประกาศจากร้าน")}</h2>
               <p>{overview.shop.announcement}</p>
             </div>
           </aside>
@@ -697,15 +695,15 @@ function Catalog() {
     <main className="container page-main">
       <div className="page-heading">
         <span className="eyebrow">DIGITAL COLLECTION</span>
-        <h1>สินค้าทั้งหมด</h1>
-        <p>เลือกสินค้าดิจิทัลที่ใช่สำหรับคุณ</p>
+        <h1>{t("สินค้าทั้งหมด")}</h1>
+        <p>{t("เลือกสินค้าดิจิทัลที่ใช่สำหรับคุณ")}</p>
       </div>
       <div className="catalog-toolbar">
         <label className="search-field">
           <Search size={19} />
           <input
-            aria-label="ค้นหาสินค้า"
-            placeholder="ค้นหาชื่อสินค้า..."
+            aria-label={t("ค้นหาสินค้า")}
+            placeholder={t("ค้นหาชื่อสินค้า...")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -713,7 +711,7 @@ function Catalog() {
             <button
               className="icon-button"
               onClick={() => setQuery("")}
-              aria-label="ล้างการค้นหา"
+              aria-label={t("ล้างการค้นหา")}
             >
               <X size={16} />
             </button>
@@ -722,13 +720,13 @@ function Catalog() {
         <label className="sort-field">
           <SlidersHorizontal size={16} />
           <select
-            aria-label="เรียงสินค้า"
+            aria-label={t("เรียงสินค้า")}
             value={sort}
             onChange={(e) => setSort(e.target.value)}
           >
-            <option value="featured">สินค้าแนะนำ</option>
-            <option value="low">ราคา: ต่ำไปสูง</option>
-            <option value="high">ราคา: สูงไปต่ำ</option>
+            <option value="featured">{t("สินค้าแนะนำ")}</option>
+            <option value="low">{t("ราคา: ต่ำไปสูง")}</option>
+            <option value="high">{t("ราคา: สูงไปต่ำ")}</option>
           </select>
         </label>
       </div>
@@ -739,7 +737,7 @@ function Catalog() {
           }
           onClick={() => setCategory("all")}
         >
-          ทั้งหมด <span>{products.length}</span>
+          {t("ทั้งหมด")}{" "}<span>{products.length}</span>
         </button>
         {overview?.categories.map((c) => (
           <button
@@ -754,14 +752,14 @@ function Catalog() {
         ))}
       </div>
       <div className="catalog-meta">
-        <span>พบ {filtered.length} สินค้า</span>
+        <span>{t("พบ")}{" "}{filtered.length}{" "}{t("สินค้า")}</span>
         <label className="checkbox-label">
           <input
             type="checkbox"
             checked={available}
             onChange={(e) => setAvailable(e.target.checked)}
           />
-          เฉพาะสินค้าที่พร้อมขาย
+          {t("เฉพาะสินค้าที่พร้อมขาย")}
         </label>
       </div>
       {loading ? (
@@ -779,8 +777,8 @@ function Catalog() {
       ) : (
         <Empty
           icon={<Search />}
-          heading="ไม่พบสินค้าที่ค้นหา"
-          description="ลองใช้คำค้นอื่น หรือเลือกหมวดหมู่ทั้งหมด"
+          heading={t("ไม่พบสินค้าที่ค้นหา")}
+          description={t("ลองใช้คำค้นอื่น หรือเลือกหมวดหมู่ทั้งหมด")}
           action={
             <button
               className="button secondary"
@@ -790,7 +788,7 @@ function Catalog() {
                 setAvailable(false);
               }}
             >
-              ล้างตัวกรอง
+              {t("ล้างตัวกรอง")}
             </button>
           }
         />
@@ -810,7 +808,7 @@ export function Quantity({
   return (
     <div className="quantity-control">
       <button
-        aria-label="ลดจำนวน"
+        aria-label={t("ลดจำนวน")}
         disabled={value <= 1}
         onClick={() => onChange(value - 1)}
       >
@@ -818,7 +816,7 @@ export function Quantity({
       </button>
       <span aria-live="polite">{value}</span>
       <button
-        aria-label="เพิ่มจำนวน"
+        aria-label={t("เพิ่มจำนวน")}
         disabled={value >= max}
         onClick={() => onChange(value + 1)}
       >
@@ -844,16 +842,16 @@ function ProductDetail({ id }: { id: string }) {
     setBasket({ variantId: variant.id, quantity });
     if (checkout) go("/checkout");
     else {
-      toast("เพิ่มสินค้าในตะกร้าแล้ว");
+      toast(t("เพิ่มสินค้าในตะกร้าแล้ว"));
       go("/cart");
     }
   };
   return (
     <main className="container page-main">
       <div className="breadcrumbs">
-        <Link to="/">หน้าแรก</Link>
+        <Link to="/">{t("หน้าแรก")}</Link>
         <span>/</span>
-        <Link to="/products">สินค้า</Link>
+        <Link to="/products">{t("สินค้า")}</Link>
         <span>/</span>
         <span>{p.name}</span>
       </div>
@@ -862,17 +860,17 @@ function ProductDetail({ id }: { id: string }) {
           <Art type={p.art} name={p.name} />
         </div>
         <div className="detail-info">
-          <span className="eyebrow">สินค้า</span>
+          <span className="eyebrow">{t("สินค้า")}</span>
           <h1>{p.name}</h1>
           <div className="detail-stock">
             {variant.stock > 0 ? (
               <>
                 <span className="service-dot" />
-                พร้อมจัดส่ง
-                {variant.stockStatus === "low" ? " · เหลือน้อย" : ""}
+                {t("พร้อมจัดส่ง")}
+                {variant.stockStatus === "low" ? t(" · เหลือน้อย") : ""}
               </>
             ) : (
-              <span className="muted">สินค้าหมดชั่วคราว</span>
+              <span className="muted">{t("สินค้าหมดชั่วคราว")}</span>
             )}
           </div>
           <p className="detail-description">{p.description}</p>
@@ -881,7 +879,7 @@ function ProductDetail({ id }: { id: string }) {
             <span>/ {variant.label}</span>
           </div>
           <fieldset className="variant-fieldset">
-            <legend>เลือกแพ็กเกจ</legend>
+            <legend>{t("เลือกแพ็กเกจ")}</legend>
             <div className="variant-options">
               {p.variants.map((v) => (
                 <button
@@ -902,7 +900,7 @@ function ProductDetail({ id }: { id: string }) {
             </div>
           </fieldset>
           <div className="quantity-row">
-            <span>จำนวน</span>
+            <span>{t("จำนวน")}</span>
             <Quantity
               value={quantity}
               max={Math.min(10, variant.stock)}
@@ -915,7 +913,7 @@ function ProductDetail({ id }: { id: string }) {
             onClick={() => buy(true)}
           >
             <ShoppingBag size={18} />
-            {variant.stock ? "ซื้อสินค้าเลย" : "สินค้าหมดชั่วคราว"}
+            {variant.stock ? t("ซื้อสินค้าเลย") : t("สินค้าหมดชั่วคราว")}
             {variant.stock > 0 && (
               <span className="button-end">
                 {money(variant.price * quantity)}
@@ -927,25 +925,23 @@ function ProductDetail({ id }: { id: string }) {
             disabled={!variant.stock}
             onClick={() => buy(false)}
           >
-            เพิ่มลงตะกร้า
+            {t("เพิ่มลงตะกร้า")}
             <Plus size={17} />
           </button>
           <p className="detail-trust">
             <ShieldCheck size={17} />
-            รับโค้ดผ่านหน้าคำสั่งซื้อหลังยืนยันการชำระเงิน
+            {t("รับโค้ดผ่านหน้าคำสั่งซื้อหลังยืนยันการชำระเงิน")}
           </p>
         </div>
       </div>
       <section className="product-notes">
-        <h2>รายละเอียดสินค้าและการใช้งาน</h2>
+        <h2>{t("รายละเอียดสินค้าและการใช้งาน")}</h2>
         <p>
-          {p.description} เลือกแพ็กเกจที่ต้องการ ตรวจสอบคำสั่งซื้อ
-          แล้วบันทึกคำสั่งซื้อ โค้ดจะส่งหลังยืนยันการชำระเงิน
+          {p.description}{" "}{t("เลือกแพ็กเกจที่ต้องการ ตรวจสอบคำสั่งซื้อ แล้วบันทึกคำสั่งซื้อ โค้ดจะส่งหลังยืนยันการชำระเงิน")}
         </p>
-        <h3>รับสินค้าทางไหน?</h3>
+        <h3>{t("รับสินค้าทางไหน?")}</h3>
         <p>
-          เมื่อทำรายการสำเร็จ โค้ดจะปรากฏในหน้าคำสั่งซื้อ
-          และสามารถเปิดดูซ้ำได้ที่ “ประวัติการซื้อ” ของบัญชีคุณ
+          {t("เมื่อทำรายการสำเร็จ โค้ดจะปรากฏในหน้าคำสั่งซื้อ และสามารถเปิดดูซ้ำได้ที่ “ประวัติการซื้อ” ของบัญชีคุณ")}
         </p>
       </section>
     </main>
@@ -972,8 +968,8 @@ function Auth({ register = false }: { register?: boolean }) {
       await refresh();
       toast(
         register
-          ? "สมัครสมาชิกสำเร็จ"
-          : "เข้าสู่ระบบสำเร็จ",
+          ? t("สมัครสมาชิกสำเร็จ")
+          : t("เข้าสู่ระบบสำเร็จ"),
       );
       go(destination);
     } catch (e) {
@@ -986,25 +982,25 @@ function Auth({ register = false }: { register?: boolean }) {
     <main className="auth-main">
       <Link to="/" className="back-link">
         <ArrowLeft size={16} />
-        กลับหน้าร้าน
+        {t("กลับหน้าร้าน")}
       </Link>
       <div className="auth-panel">
-        <img src="/favicon.svg" className="auth-logo" alt="ASTRA" />
-        <h1>{register ? "สมัครสมาชิก" : "เข้าสู่ระบบ"}</h1>
+        <img src="/brand/favicon-64.png" className="auth-logo" alt="ASIA EXTRA" />
+        <h1>{register ? t("สมัครสมาชิก") : t("เข้าสู่ระบบ")}</h1>
         <p>
           {register
-            ? "สมัครสมาชิกเพื่อสั่งซื้อสินค้า"
-            : "เข้าสู่ระบบเพื่อดูคำสั่งซื้อ"}
+            ? t("สมัครสมาชิกเพื่อสั่งซื้อสินค้า")
+            : t("เข้าสู่ระบบเพื่อดูคำสั่งซื้อ")}
         </p>
         <form onSubmit={submit}>
           <ErrorMessage message={error} />
           {register && (
             <label className="field">
-              ชื่อที่แสดง
+              {t("ชื่อที่แสดง")}
               <input
                 name="name"
                 autoComplete="nickname"
-                placeholder="ชื่อของคุณ"
+                placeholder={t("ชื่อของคุณ")}
                 minLength={2}
                 maxLength={60}
                 required
@@ -1012,7 +1008,7 @@ function Auth({ register = false }: { register?: boolean }) {
             </label>
           )}
           <label className="field">
-            อีเมล
+            {t("อีเมล")}
             <input
               type="email"
               name="email"
@@ -1023,14 +1019,14 @@ function Auth({ register = false }: { register?: boolean }) {
             />
           </label>
           <label className="field">
-            รหัสผ่าน
+            {t("รหัสผ่าน")}
             <div className="password-field">
               <input
                 type={show ? "text" : "password"}
                 name="password"
                 autoComplete={register ? "new-password" : "current-password"}
                 placeholder={
-                  register ? "อย่างน้อย 10 ตัวอักษร" : "กรอกรหัสผ่าน"
+                  register ? t("อย่างน้อย 10 ตัวอักษร") : t("กรอกรหัสผ่าน")
                 }
                 minLength={register ? 10 : 1}
                 maxLength={128}
@@ -1039,7 +1035,7 @@ function Auth({ register = false }: { register?: boolean }) {
               <button
                 type="button"
                 className="icon-button"
-                aria-label={show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                aria-label={show ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
                 onClick={() => setShow(!show)}
               >
                 {show ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -1049,35 +1045,35 @@ function Auth({ register = false }: { register?: boolean }) {
           {register && (
             <label className="checkbox-label consent">
               <input type="checkbox" required />
-              ยอมรับ<Link to="/terms">ข้อกำหนด</Link>และ
-              <Link to="/privacy">ความเป็นส่วนตัว</Link>
+              {t("ยอมรับ")}<Link to="/terms">{t("ข้อกำหนด")}</Link>{t("และ")}
+              <Link to="/privacy">{t("ความเป็นส่วนตัว")}</Link>
             </label>
           )}
           <button className="button primary full" disabled={busy}>
             {busy ? (
               <LoaderCircle className="spin" size={18} />
             ) : register ? (
-              "สร้างบัญชี"
+              t("สร้างบัญชี")
             ) : (
-              "เข้าสู่ระบบ"
+              t("เข้าสู่ระบบ")
             )}
             <ArrowRight size={17} />
           </button>
         </form>
         <p className="auth-switch">
-          {register ? "มีบัญชีแล้ว?" : "ยังไม่มีบัญชี?"}{" "}
+          {register ? t("มีบัญชีแล้ว?") : t("ยังไม่มีบัญชี?")}{" "}
           <Link
             to={
               (register ? "/login" : "/register") +
               (next ? "?next=" + encodeURIComponent(destination) : "")
             }
           >
-            {register ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}
+            {register ? t("เข้าสู่ระบบ") : t("สมัครสมาชิก")}
           </Link>
         </p>
         <div className="auth-footnote">
           <ShieldCheck size={15} />
-          รหัสผ่านถูกเก็บแบบเข้ารหัส
+          {t("รหัสผ่านถูกเก็บแบบเข้ารหัส")}
         </div>
       </div>
     </main>
@@ -1087,14 +1083,14 @@ function RequireLogin() {
   return (
     <Empty
       icon={<KeyRound />}
-      heading="เข้าสู่ระบบเพื่อดูข้อมูลของคุณ"
-      description="จัดการเครดิต คำสั่งซื้อ และโค้ดสินค้าที่คุณได้รับ"
+      heading={t("เข้าสู่ระบบเพื่อดูข้อมูลของคุณ")}
+      description={t("จัดการเครดิต คำสั่งซื้อ และโค้ดสินค้าที่คุณได้รับ")}
       action={
         <Link
           className="button primary"
           to={"/login?next=" + encodeURIComponent(location.pathname)}
         >
-          เข้าสู่ระบบ
+          {t("เข้าสู่ระบบ")}
           <ArrowRight size={17} />
         </Link>
       }
@@ -1132,21 +1128,21 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
     <main className="container page-main">
       <div className="page-heading">
         <span className="eyebrow">{checkout ? "CHECKOUT" : "YOUR BAG"}</span>
-        <h1>{checkout ? "ตรวจสอบคำสั่งซื้อ" : "ตะกร้าสินค้า"}</h1>
+        <h1>{checkout ? t("ตรวจสอบคำสั่งซื้อ") : t("ตะกร้าสินค้า")}</h1>
         <p>
           {checkout
-            ? "ตรวจสอบข้อมูลให้ครบ ระบบจะบันทึกคำสั่งซื้อไว้ก่อน"
-            : "สินค้าที่คุณเลือกไว้ พร้อมเมื่อคุณพร้อม"}
+            ? t("ตรวจสอบข้อมูลให้ครบ ระบบจะบันทึกคำสั่งซื้อไว้ก่อน")
+            : t("สินค้าที่คุณเลือกไว้ พร้อมเมื่อคุณพร้อม")}
         </p>
       </div>
       {!basket || !p || !variant ? (
         <Empty
           icon={<ShoppingBag />}
-          heading="ตะกร้าของคุณยังว่าง"
-          description="เลือกสินค้าที่ชอบ แล้วกลับมาที่นี่เพื่อทำรายการ"
+          heading={t("ตะกร้าของคุณยังว่าง")}
+          description={t("เลือกสินค้าที่ชอบ แล้วกลับมาที่นี่เพื่อทำรายการ")}
           action={
             <Link to="/products" className="button primary">
-              เลือกดูสินค้า
+              {t("เลือกดูสินค้า")}
               <ArrowRight size={17} />
             </Link>
           }
@@ -1170,7 +1166,7 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
               </div>
               <button
                 className="icon-button"
-                aria-label="ลบสินค้า"
+                aria-label={t("ลบสินค้า")}
                 onClick={() => setBasket(null)}
               >
                 <Trash2 size={18} />
@@ -1178,21 +1174,21 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
             </div>
             <p className="small-note">
               <ShieldCheck size={16} />
-              โค้ดถูกส่งไปยังบัญชีที่ใช้สั่งซื้อเท่านั้น
+              {t("โค้ดถูกส่งไปยังบัญชีที่ใช้สั่งซื้อเท่านั้น")}
             </p>
           </section>
           <aside className="panel order-summary">
-            <h2>สรุปคำสั่งซื้อ</h2>
+            <h2>{t("สรุปคำสั่งซื้อ")}</h2>
             <div>
-              <span>สินค้า ({basket.quantity} ชิ้น)</span>
+              <span>{t("สินค้า (")}{basket.quantity}{" "}{t("ชิ้น)")}</span>
               <span>{money(variant.price * basket.quantity)}</span>
             </div>
             <div>
-              <span>ค่าจัดส่งดิจิทัล</span>
-              <span>ฟรี</span>
+              <span>{t("ค่าจัดส่งดิจิทัล")}</span>
+              <span>{t("ฟรี")}</span>
             </div>
             <div className="summary-total">
-              <strong>ยอดรวม</strong>
+              <strong>{t("ยอดรวม")}</strong>
               <strong>{money(variant.price * basket.quantity)}</strong>
             </div>
             <ErrorMessage message={error} />
@@ -1204,18 +1200,18 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
               {busy ? (
                 <LoaderCircle className="spin" size={17} />
               ) : checkout ? (
-                "บันทึกคำสั่งซื้อ"
+                t("บันทึกคำสั่งซื้อ")
               ) : (
-                "ไปบันทึกคำสั่งซื้อ"
+                t("ไปบันทึกคำสั่งซื้อ")
               )}
               <ArrowRight size={17} />
             </button>
             <p className="sandbox-note">
-              การชำระเงินจะเชื่อมต่อภายหลัง ตอนนี้ยังไม่ส่งโค้ด
+              {t("การชำระเงินจะเชื่อมต่อภายหลัง ตอนนี้ยังไม่ส่งโค้ด")}
             </p>
             {user && (
               <p className="balance-note">
-                คำสั่งซื้อจะถูกบันทึกไว้ก่อน โค้ดจะส่งหลังยืนยันการชำระเงิน
+                {t("คำสั่งซื้อจะถูกบันทึกไว้ก่อน โค้ดจะส่งหลังยืนยันการชำระเงิน")}
               </p>
             )}
           </aside>
@@ -1256,7 +1252,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
         sessionStorage.removeItem("astra-pay-" + id);
         setRevealed(true);
         await refresh();
-        toast("ทำรายการสำเร็จ ได้รับโค้ดแล้ว");
+        toast(t("ทำรายการสำเร็จ ได้รับโค้ดแล้ว"));
         go("/orders/" + id);
       }
     } catch (e) {
@@ -1268,9 +1264,9 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
   async function copy(code: string) {
     try {
       await navigator.clipboard.writeText(code);
-      toast("คัดลอกโค้ดแล้ว");
+      toast(t("คัดลอกโค้ดแล้ว"));
     } catch {
-      toast("คัดลอกอัตโนมัติไม่ได้ กรุณาเลือกโค้ดแล้วคัดลอก");
+      toast(t("คัดลอกอัตโนมัติไม่ได้ กรุณาเลือกโค้ดแล้วคัดลอก"));
     }
   }
   return (
@@ -1283,7 +1279,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
           {!error && (
             <div className="loading-row">
               <LoaderCircle className="spin" />
-              กำลังโหลดคำสั่งซื้อ
+              {t("กำลังโหลดคำสั่งซื้อ")}
             </div>
           )}
         </>
@@ -1291,7 +1287,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
         <>
           <Link to="/orders" className="back-link">
             <ArrowLeft size={16} />
-            ประวัติการซื้อ
+            {t("ประวัติการซื้อ")}
           </Link>
           <div className="order-result-heading">
             {order.status === "DELIVERED" ? (
@@ -1305,21 +1301,21 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
             )}
             <h1>
               {order.status === "DELIVERED"
-                ? "สั่งซื้อสำเร็จ พร้อมรับสินค้า"
+                ? t("สั่งซื้อสำเร็จ พร้อมรับสินค้า")
                 : order.status === "PREORDER"
-                  ? "บันทึกการสั่งจองแล้ว"
+                  ? t("บันทึกการสั่งจองแล้ว")
                   : order.status === "PENDING_PAYMENT"
-                    ? "บันทึกคำสั่งซื้อแล้ว"
+                    ? t("บันทึกคำสั่งซื้อแล้ว")
                     : order.status === "FAILED"
-                      ? "การชำระเงินไม่สำเร็จ"
-                      : "สินค้าหมดก่อนทำรายการ"}
+                      ? t("การชำระเงินไม่สำเร็จ")
+                      : t("สินค้าหมดก่อนทำรายการ")}
             </h1>
             <p>
               {order.status === "DELIVERED"
-                ? "โค้ดของคุณอยู่ด้านล่าง"
+                ? t("โค้ดของคุณอยู่ด้านล่าง")
                 : order.status === "PENDING_PAYMENT"
-                  ? "การชำระเงินจะเชื่อมต่อภายหลัง ระบบยังไม่ส่งโค้ด"
-                  : "รายการนี้ยังไม่ส่งโค้ด"}
+                  ? t("การชำระเงินจะเชื่อมต่อภายหลัง ระบบยังไม่ส่งโค้ด")
+                  : t("รายการนี้ยังไม่ส่งโค้ด")}
             </p>
           </div>
           <section className="panel delivery-panel">
@@ -1330,22 +1326,22 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               <div>
                 <h2>{order.name}</h2>
                 <p>
-                  {order.label} · จำนวน {order.quantity} ชิ้น
+                  {order.label}{" "}{t("· จำนวน")}{" "}{order.quantity}{" "}{t("ชิ้น")}
                 </p>
               </div>
               <Status status={order.status} />
             </div>
             <div className="order-meta">
-              <span>คำสั่งซื้อ #{order.id.slice(0, 8).toUpperCase()}</span>
+              <span>{t("คำสั่งซื้อ #")}{order.id.slice(0, 8).toUpperCase()}</span>
               <span>{dateTime(order.created_at)}</span>
             </div>
             {order.status === "PREORDER" ? (
               <div className="note-box">
                 <Clock size={20} />
                 <div>
-                  <strong>สินค้าสั่งจอง · รอส่งตามกำหนด</strong>
+                  <strong>{t("สินค้าสั่งจอง · รอส่งตามกำหนด")}</strong>
                   <p>
-                    บันทึกการสั่งจองแล้ว ยังไม่ส่งโค้ด
+                    {t("บันทึกการสั่งจองแล้ว ยังไม่ส่งโค้ด")}
                   </p>
                 </div>
               </div>
@@ -1354,21 +1350,21 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                 <div className="code-heading">
                   <strong>
                     <KeyRound size={17} />
-                    โค้ดสินค้าของคุณ
+                    {t("โค้ดสินค้าของคุณ")}
                   </strong>
                   <button
                     className="text-button"
                     onClick={() => setRevealed(!revealed)}
                   >
                     {revealed ? <EyeOff size={16} /> : <Eye size={16} />}{" "}
-                    {revealed ? "ซ่อนโค้ด" : "แสดงโค้ด"}
+                    {revealed ? t("ซ่อนโค้ด") : t("แสดงโค้ด")}
                   </button>
                 </div>
                 {order.credentials?.map((pair, i) => (
                   <div className="credential-pair" key={"pair-" + i}>
                     {[
-                      ["ไอดี", pair.loginId],
-                      ["รหัสผ่าน", pair.password],
+                      [t("ไอดี"), pair.loginId],
+                      [t("รหัสผ่าน"), pair.password],
                     ].map(([label, value]) => (
                       <div className="code-row" key={label}>
                         <small>{label}</small>
@@ -1376,7 +1372,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                         <button
                           className="icon-button"
                           onClick={() => copy(value)}
-                          aria-label={"คัดลอก" + label + " รายการที่ " + (i + 1)}
+                          aria-label={t("คัดลอก") + label + t(" รายการที่ ") + (i + 1)}
                         >
                           <Copy size={18} />
                         </button>
@@ -1390,21 +1386,21 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                     <button
                       className="icon-button"
                       onClick={() => copy(code)}
-                      aria-label={"คัดลอกโค้ด " + (i + 1)}
+                      aria-label={t("คัดลอกโค้ด ") + (i + 1)}
                     >
                       <Copy size={18} />
                     </button>
                   </div>
                 ))}
-                <p className="sandbox-note">เก็บโค้ดนี้ไว้ในที่ปลอดภัย</p>
+                <p className="sandbox-note">{t("เก็บโค้ดนี้ไว้ในที่ปลอดภัย")}</p>
               </div>
             ) : (
               order.status === "PENDING_PAYMENT" && (
                 <div className="note-box">
                   <Clock size={20} />
                   <div>
-                    <strong>ยอดคำสั่งซื้อ {money(order.total)}</strong>
-                    <p>รอเชื่อมช่องทางชำระเงิน โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น</p>
+                    <strong>{t("ยอดคำสั่งซื้อ")}{" "}{money(order.total)}</strong>
+                    <p>{t("รอเชื่อมช่องทางชำระเงิน โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น")}</p>
                   </div>
                 </div>
               )
@@ -1412,31 +1408,31 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
           </section>
           {["FAILED", "OUT_OF_STOCK"].includes(order.status) && (
             <div className="result-actions">
-              <p>ไม่มีการหักเครดิตหรือส่งมอบโค้ดสำหรับรายการนี้</p>
+              <p>{t("ไม่มีการหักเครดิตหรือส่งมอบโค้ดสำหรับรายการนี้")}</p>
               <Link to="/products" className="button secondary">
-                กลับไปเลือกสินค้า
+                {t("กลับไปเลือกสินค้า")}
               </Link>
             </div>
           )}
           {order.status === "DELIVERED" && (
             <div className="result-actions">
               <Link to="/products" className="button secondary">
-                เลือกซื้อสินค้าเพิ่มเติม
+                {t("เลือกซื้อสินค้าเพิ่มเติม")}
                 <ArrowRight size={17} />
               </Link>
               <p>
                 <ShieldCheck size={16} />
-                เปิดดูโค้ดซ้ำได้เสมอในประวัติการซื้อ
+                {t("เปิดดูโค้ดซ้ำได้เสมอในประวัติการซื้อ")}
               </p>
               <Link to={"/reviews?order=" + id} className="subtle-link">
                 <Star size={16} />
-                รีวิวคำสั่งซื้อนี้
+                {t("รีวิวคำสั่งซื้อนี้")}
               </Link>
             </div>
           )}
           {order.status === "PENDING_PAYMENT" && (
             <p className="sandbox-note">
-              คำสั่งซื้อนี้ถูกบันทึกแล้ว และยังไม่มีการส่งโค้ด
+              {t("คำสั่งซื้อนี้ถูกบันทึกแล้ว และยังไม่มีการส่งโค้ด")}
             </p>
           )}
         </>
@@ -1462,8 +1458,8 @@ function HistoryPage() {
     <main className="container page-main reference-history-page">
       <div className="page-heading">
         <span className="eyebrow">MY ORDERS</span>
-        <h1>ประวัติการซื้อ</h1>
-        <p>ติดตามคำสั่งซื้อและเปิดดูโค้ดสินค้าของคุณ</p>
+        <h1>{t("ประวัติการซื้อ")}</h1>
+        <p>{t("ติดตามคำสั่งซื้อและเปิดดูโค้ดสินค้าของคุณ")}</p>
       </div>
       {!user ? (
         <RequireLogin />
@@ -1471,10 +1467,10 @@ function HistoryPage() {
         <>
           <div className="category-bar">
             {[
-              ["all", "ทั้งหมด"],
-              ["DELIVERED", "จัดส่งสำเร็จ"],
-              ["PENDING_PAYMENT", "รอชำระเงิน"],
-              ["FAILED", "ไม่สำเร็จ"],
+              ["all", t("ทั้งหมด")],
+              ["DELIVERED", t("จัดส่งสำเร็จ")],
+              ["PENDING_PAYMENT", t("รอชำระเงิน")],
+              ["FAILED", t("ไม่สำเร็จ")],
             ].map(([value, label]) => (
               <button
                 key={value}
@@ -1491,7 +1487,7 @@ function HistoryPage() {
           {!orders && !error ? (
             <div className="loading-row">
               <LoaderCircle className="spin" />
-              กำลังโหลดคำสั่งซื้อ
+              {t("กำลังโหลดคำสั่งซื้อ")}
             </div>
           ) : filtered?.length ? (
             <div className="orders-list">
@@ -1515,7 +1511,7 @@ function HistoryPage() {
                     <div>
                       <h2>{o.name}</h2>
                       <p>
-                        {o.label} · {o.quantity} ชิ้น
+                        {o.label} · {o.quantity}{" "}{t("ชิ้น")}
                       </p>
                     </div>
                     <strong>{money(o.total)}</strong>
@@ -1525,12 +1521,12 @@ function HistoryPage() {
                     {o.status === "DELIVERED" ? (
                       <>
                         <KeyRound size={16} />
-                        ดูโค้ดสินค้า
+                        {t("ดูโค้ดสินค้า")}
                       </>
                     ) : o.status === "PENDING_PAYMENT" ? (
-                      "รอเชื่อมการชำระเงิน"
+                      t("รอเชื่อมการชำระเงิน")
                     ) : (
-                      "ดูรายละเอียด"
+                      t("ดูรายละเอียด")
                     )}
                     <ArrowRight size={15} />
                   </div>
@@ -1541,11 +1537,11 @@ function HistoryPage() {
             !error && (
               <Empty
                 icon={<History />}
-                heading="ยังไม่มีคำสั่งซื้อในรายการนี้"
-                description="เมื่อคุณเลือกซื้อสินค้า คำสั่งซื้อจะปรากฏที่นี่"
+                heading={t("ยังไม่มีคำสั่งซื้อในรายการนี้")}
+                description={t("เมื่อคุณเลือกซื้อสินค้า คำสั่งซื้อจะปรากฏที่นี่")}
                 action={
                   <Link to="/products" className="button primary">
-                    เลือกดูสินค้า
+                    {t("เลือกดูสินค้า")}
                     <ArrowRight size={16} />
                   </Link>
                 }
@@ -1572,8 +1568,8 @@ function WalletPage() {
     <main className="container page-main reference-wallet-page">
       <div className="page-heading">
         <span className="eyebrow">ORDERS</span>
-        <h1>บัญชีของร้าน</h1>
-        <p>ช่องทางจ่ายยังไม่เปิด โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น</p>
+        <h1>{t("บัญชีของร้าน")}</h1>
+        <p>{t("ช่องทางจ่ายยังไม่เปิด โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น")}</p>
       </div>
       {!user ? (
         <RequireLogin />
@@ -1583,20 +1579,20 @@ function WalletPage() {
             <section className="wallet-balance panel">
               <span>
                 <Wallet size={20} />
-                เครดิตคงเหลือ
+                {t("เครดิตคงเหลือ")}
               </span>
               <strong>{money(user.balance)}</strong>
-              <small>ช่องทางจ่ายยังไม่เปิด</small>
+              <small>{t("ช่องทางจ่ายยังไม่เปิด")}</small>
             </section>
             <section className="panel topup-panel">
-              <h2>ช่องทางชำระเงิน</h2>
-              <p>ยังไม่เปิดรับเงิน โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น</p>
+              <h2>{t("ช่องทางชำระเงิน")}</h2>
+              <p>{t("ยังไม่เปิดรับเงิน โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น")}</p>
               <ErrorMessage message={error} />
             </section>
           </div>
           <section className="panel wallet-history">
             <div className="panel-heading">
-              <h2>ประวัติเครดิต</h2>
+              <h2>{t("ประวัติเครดิต")}</h2>
               <History size={18} />
             </div>
             {entries.length ? (
@@ -1624,7 +1620,7 @@ function WalletPage() {
                 </div>
               ))
             ) : (
-              <p className="empty-inline">ยังไม่มีรายการเครดิต</p>
+              <p className="empty-inline">{t("ยังไม่มีรายการเครดิต")}</p>
             )}
           </section>
         </div>
@@ -1671,7 +1667,7 @@ function ReviewsPage() {
       await api("/reviews", { ...fields, rating: Number(fields.rating) });
       await load();
       await refresh();
-      toast("ขอบคุณสำหรับรีวิวของคุณ");
+      toast(t("ขอบคุณสำหรับรีวิวของคุณ"));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1683,18 +1679,18 @@ function ReviewsPage() {
       <div className="page-heading">
         <span className="eyebrow">CUSTOMER REVIEWS</span>
         <h1>
-          เครดิตร้าน
+          {t("เครดิตร้าน")}
           <br />
-          {overview?.shop?.shopName || "ร้านค้า"}
+          {shopName(overview?.shop?.shopName)}
         </h1>
-        <p>รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์</p>
+        <p>{t("รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์")}</p>
       </div>
       <div className="reviews-layout">
         <aside>
           <div className="panel review-summary">
             <Star size={24} />
             <strong>{reviews.length ? average.toFixed(1) : "—"}</strong>
-            <div className="review-stars" aria-label="คะแนนเฉลี่ย">
+            <div className="review-stars" aria-label={t("คะแนนเฉลี่ย")}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <Star
                   size={17}
@@ -1703,7 +1699,7 @@ function ReviewsPage() {
                 />
               ))}
             </div>
-            <span>{reviews.length} รีวิวจากผู้ซื้อ</span>
+            <span>{reviews.length}{" "}{t("รีวิวจากผู้ซื้อ")}</span>
             {[5, 4, 3, 2, 1].map((n) => (
               <div className="rating-bar" key={n}>
                 <span>{n}</span>
@@ -1726,8 +1722,7 @@ function ReviewsPage() {
           <div className="note-box">
             <ShieldCheck size={18} />
             <p>
-              เขียนรีวิวได้หลังได้รับสินค้าแล้วเท่านั้น
-              หนึ่งรีวิวต่อหนึ่งคำสั่งซื้อ
+              {t("เขียนรีวิวได้หลังได้รับสินค้าแล้วเท่านั้น หนึ่งรีวิวต่อหนึ่งคำสั่งซื้อ")}
             </p>
           </div>
         </aside>
@@ -1739,16 +1734,16 @@ function ReviewsPage() {
                 className={ratingFilter === n ? "active" : ""}
                 onClick={() => setRatingFilter(n)}
               >
-                {n ? n + " ดาว" : "ทั้งหมด"}
+                {n ? n + t(" ดาว") : t("ทั้งหมด")}
               </button>
             ))}
           </div>
           <ErrorMessage message={error} />
           {orders.length > 0 && (
             <form className="panel review-form" onSubmit={submit}>
-              <h2>แบ่งปันประสบการณ์ของคุณ</h2>
+              <h2>{t("แบ่งปันประสบการณ์ของคุณ")}</h2>
               <label className="field">
-                คำสั่งซื้อ
+                {t("คำสั่งซื้อ")}
                 <select
                   name="orderId"
                   defaultValue={
@@ -1764,20 +1759,20 @@ function ReviewsPage() {
                 </select>
               </label>
               <label className="field">
-                คะแนน
+                {t("คะแนน")}
                 <select name="rating" defaultValue="5">
                   {[5, 4, 3, 2, 1].map((n) => (
                     <option key={n} value={n}>
-                      {n} ดาว
+                      {n}{" "}{t("ดาว")}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="field">
-                ความคิดเห็น
+                {t("ความคิดเห็น")}
                 <textarea
                   name="comment"
-                  placeholder="บอกเล่าประสบการณ์การสั่งซื้อของคุณ"
+                  placeholder={t("บอกเล่าประสบการณ์การสั่งซื้อของคุณ")}
                   minLength={2}
                   maxLength={600}
                   required
@@ -1789,7 +1784,7 @@ function ReviewsPage() {
                 ) : (
                   <Star size={16} />
                 )}
-                ส่งรีวิว
+                {t("ส่งรีวิว")}
               </button>
             </form>
           )}
@@ -1805,7 +1800,7 @@ function ReviewsPage() {
                     </div>
                     <div
                       className="review-stars"
-                      aria-label={r.rating + " ดาว"}
+                      aria-label={r.rating + t(" ดาว")}
                     >
                       {[1, 2, 3, 4, 5].map((n) => (
                         <Star
@@ -1818,18 +1813,18 @@ function ReviewsPage() {
                     <p>{r.comment}</p>
                     <small>
                       <CheckCircle2 size={13} />
-                      ผู้ซื้อที่ได้รับสินค้าแล้ว · {r.product}
+                      {t("ผู้ซื้อที่ได้รับสินค้าแล้ว ·")}{" "}{r.product}
                     </small>
                   </article>
                 ))
             : loaded && (
                 <Empty
                   icon={<Star />}
-                  heading="ยังไม่มีรีวิว"
-                  description="เมื่อซื้อและได้รับสินค้าแล้ว คุณสามารถเป็นคนแรกที่แบ่งปันประสบการณ์ได้"
+                  heading={t("ยังไม่มีรีวิว")}
+                  description={t("เมื่อซื้อและได้รับสินค้าแล้ว คุณสามารถเป็นคนแรกที่แบ่งปันประสบการณ์ได้")}
                   action={
                     <Link to="/products" className="button secondary">
-                      เลือกดูสินค้า
+                      {t("เลือกดูสินค้า")}
                       <ArrowRight size={16} />
                     </Link>
                   }
@@ -1852,7 +1847,7 @@ function Account() {
     try {
       await api("/profile", data);
       await refresh();
-      toast("บันทึกข้อมูลแล้ว");
+      toast(t("บันทึกข้อมูลแล้ว"));
       if (data.newPassword) go("/login");
     } catch (error) {
       setError((error as Error).message);
@@ -1864,8 +1859,8 @@ function Account() {
     <main className="container page-main narrow-main">
       <div className="page-heading">
         <span className="eyebrow">MY ACCOUNT</span>
-        <h1>บัญชีของฉัน</h1>
-        <p>ข้อมูลและการตั้งค่าบัญชีของคุณ</p>
+        <h1>{t("บัญชีของฉัน")}</h1>
+        <p>{t("ข้อมูลและการตั้งค่าบัญชีของคุณ")}</p>
       </div>
       {!user ? (
         <RequireLogin />
@@ -1878,13 +1873,13 @@ function Account() {
               <p>{user.email}</p>
             </div>
             <span className="service-pill">
-              {user.role === "ADMIN" ? "ผู้ดูแลร้าน" : "สมาชิก"}
+              {user.role === "ADMIN" ? t("ผู้ดูแลร้าน") : t("สมาชิก")}
             </span>
           </div>
           <div className="account-shortcuts">
             <Link to="/orders" className="panel">
               <History size={21} />
-              <span>ประวัติการซื้อ</span>
+              <span>{t("ประวัติการซื้อ")}</span>
               <ArrowUpRight size={17} />
             </Link>
             <Link to="/wallet" className="panel">
@@ -1894,10 +1889,10 @@ function Account() {
             </Link>
           </div>
           <form className="panel profile-form" onSubmit={save}>
-            <h2>ข้อมูลส่วนตัว</h2>
+            <h2>{t("ข้อมูลส่วนตัว")}</h2>
             <ErrorMessage message={error} />
             <label className="field">
-              ชื่อที่แสดง
+              {t("ชื่อที่แสดง")}
               <input
                 name="name"
                 defaultValue={user.name}
@@ -1907,13 +1902,13 @@ function Account() {
               />
             </label>
             <label className="field">
-              อีเมล
+              {t("อีเมล")}
               <input value={user.email} disabled />
             </label>
-            <h3>เปลี่ยนรหัสผ่าน</h3>
-            <p className="muted">เว้นว่างหากไม่ต้องการเปลี่ยนรหัสผ่าน</p>
+            <h3>{t("เปลี่ยนรหัสผ่าน")}</h3>
+            <p className="muted">{t("เว้นว่างหากไม่ต้องการเปลี่ยนรหัสผ่าน")}</p>
             <label className="field">
-              รหัสผ่านปัจจุบัน
+              {t("รหัสผ่านปัจจุบัน")}
               <input
                 type="password"
                 name="currentPassword"
@@ -1921,7 +1916,7 @@ function Account() {
               />
             </label>
             <label className="field">
-              รหัสผ่านใหม่
+              {t("รหัสผ่านใหม่")}
               <input
                 type="password"
                 name="newPassword"
@@ -1936,7 +1931,7 @@ function Account() {
               ) : (
                 <Check size={17} />
               )}
-              บันทึกการเปลี่ยนแปลง
+              {t("บันทึกการเปลี่ยนแปลง")}
             </button>
           </form>
         </>
@@ -1946,24 +1941,24 @@ function Account() {
 }
 function InfoPage({ kind }: { kind: string }) {
   const { overview } = useStore();
-  const shopName = overview?.shop?.shopName || "ร้านค้า";
+  const name = shopName(overview?.shop?.shopName);
   const title =
     kind === "credits"
-      ? "เครดิตร้าน"
+      ? t("เครดิตร้าน")
       : kind === "support"
-        ? "ติดต่อร้าน"
+        ? t("ติดต่อร้าน")
         : kind === "privacy"
-          ? "ความเป็นส่วนตัว"
-          : "ข้อกำหนดร้าน";
+          ? t("ความเป็นส่วนตัว")
+          : t("ข้อกำหนดร้าน");
   return (
     <main className="container page-main narrow-main">
       <div className="page-heading">
-        <span className="eyebrow">{shopName}</span>
+        <span className="eyebrow">{name}</span>
         <h1>{title}</h1>
         <p>
           {kind === "credits"
-            ? "ข้อมูลร้านค้าและมาตรฐานการให้บริการ"
-            : "ข้อมูลสำหรับการใช้งานเว็บไซต์"}
+            ? t("ข้อมูลร้านค้าและมาตรฐานการให้บริการ")
+            : t("ข้อมูลสำหรับการใช้งานเว็บไซต์")}
         </p>
       </div>
       <div className="panel prose">
@@ -1971,84 +1966,75 @@ function InfoPage({ kind }: { kind: string }) {
           <>
             <h2>
               <ShieldCheck size={23} />
-              ซื้อสินค้าอย่างมั่นใจ
+              {t("ซื้อสินค้าอย่างมั่นใจ")}
             </h2>
             <p>
-              {shopName} บันทึกคำสั่งซื้อทุกครั้ง
-              โค้ดจะถูกส่งหลังยืนยันการชำระเงินเท่านั้น
+              {name}{" "}{t("บันทึกคำสั่งซื้อทุกครั้ง โค้ดจะถูกส่งหลังยืนยันการชำระเงินเท่านั้น")}
             </p>
             <div className="trust-list">
               <div>
                 <KeyRound />
-                <h3>โค้ดแยกเฉพาะคำสั่งซื้อ</h3>
+                <h3>{t("โค้ดแยกเฉพาะคำสั่งซื้อ")}</h3>
                 <p>
-                  หนึ่งโค้ดสำหรับหนึ่งหน่วยสินค้า
-                  ระบบจัดสรรจากคลังหลังยืนยันการชำระเท่านั้น
+                  {t("หนึ่งโค้ดสำหรับหนึ่งหน่วยสินค้า ระบบจัดสรรจากคลังหลังยืนยันการชำระเท่านั้น")}
                 </p>
               </div>
               <div>
                 <History />
-                <h3>ดูย้อนหลังได้</h3>
-                <p>เปิดดูโค้ดและคำสั่งซื้อผ่านบัญชีของคุณได้ตลอดเวลา</p>
+                <h3>{t("ดูย้อนหลังได้")}</h3>
+                <p>{t("เปิดดูโค้ดและคำสั่งซื้อผ่านบัญชีของคุณได้ตลอดเวลา")}</p>
               </div>
               <div>
                 <Wallet />
-                <h3>เครดิตตรวจสอบได้</h3>
-                <p>ทุกรายการเติมและใช้เครดิตมีประวัติที่ตรวจสอบได้</p>
+                <h3>{t("เครดิตตรวจสอบได้")}</h3>
+                <p>{t("ทุกรายการเติมและใช้เครดิตมีประวัติที่ตรวจสอบได้")}</p>
               </div>
             </div>
             <Link to="/products" className="button primary">
-              เลือกดูสินค้า
+              {t("เลือกดูสินค้า")}
               <ArrowRight size={17} />
             </Link>
           </>
         ) : kind === "support" ? (
           <>
-            <h2>เราพร้อมช่วยเหลือคุณ</h2>
+            <h2>{t("เราพร้อมช่วยเหลือคุณ")}</h2>
             <p>
-              หากมีปัญหาเกี่ยวกับการรับโค้ด ให้ตรวจสอบหน้าคำสั่งซื้อของคุณก่อน
-              โดยโค้ดจะปรากฏเมื่อสถานะเป็น “จัดส่งสำเร็จ”
+              {t("หากมีปัญหาเกี่ยวกับการรับโค้ด ให้ตรวจสอบหน้าคำสั่งซื้อของคุณก่อน โดยโค้ดจะปรากฏเมื่อสถานะเป็น “จัดส่งสำเร็จ”")}
             </p>
             <Link to="/orders" className="button secondary">
-              ตรวจสอบคำสั่งซื้อ
+              {t("ตรวจสอบคำสั่งซื้อ")}
               <ArrowRight size={16} />
             </Link>
-            <h3>การติดต่อในโหมดทดลอง</h3>
+            <h3>{t("การติดต่อในโหมดทดลอง")}</h3>
             <p>
-              ยังไม่ได้ตั้งค่า LINE และอีเมลจริงของร้าน
-              เจ้าของร้านต้องกำหนดช่องทางบริการลูกค้าก่อนเปิดใช้งานจริง
+              {t("ยังไม่ได้ตั้งค่า LINE และอีเมลจริงของร้าน เจ้าของร้านต้องกำหนดช่องทางบริการลูกค้าก่อนเปิดใช้งานจริง")}
             </p>
-            <h3 id="email">ข้อมูลที่ควรเตรียมเมื่อแจ้งปัญหา</h3>
+            <h3 id="email">{t("ข้อมูลที่ควรเตรียมเมื่อแจ้งปัญหา")}</h3>
             <p>
-              เลขคำสั่งซื้อ ชื่อสินค้า และรายละเอียดปัญหา
-              กรุณาอย่าส่งรหัสผ่านหรือข้อมูลส่วนตัวที่ไม่เกี่ยวข้อง
+              {t("เลขคำสั่งซื้อ ชื่อสินค้า และรายละเอียดปัญหา กรุณาอย่าส่งรหัสผ่านหรือข้อมูลส่วนตัวที่ไม่เกี่ยวข้อง")}
             </p>
           </>
         ) : kind === "privacy" ? (
           <>
-            <h2>ข้อมูลที่ระบบจัดเก็บ</h2>
+            <h2>{t("ข้อมูลที่ระบบจัดเก็บ")}</h2>
             <p>
-              ระบบจัดเก็บชื่อ อีเมล รหัสผ่านที่ผ่านการแฮช
-              และประวัติคำสั่งซื้อ เพื่อให้เปิดดูรายการของตนเองได้
+              {t("ระบบจัดเก็บชื่อ อีเมล รหัสผ่านที่ผ่านการแฮช และประวัติคำสั่งซื้อ เพื่อให้เปิดดูรายการของตนเองได้")}
             </p>
-            <h3>การเข้าถึงข้อมูล</h3>
+            <h3>{t("การเข้าถึงข้อมูล")}</h3>
             <p>
-              ลูกค้าเห็นเฉพาะคำสั่งซื้อของตนเอง
-              ผู้ดูแลเห็นข้อมูลการขายและคลังสินค้า
-              คุกกี้ใช้เพื่อรักษาการเข้าสู่ระบบ
+              {t("ลูกค้าเห็นเฉพาะคำสั่งซื้อของตนเอง ผู้ดูแลเห็นข้อมูลการขายและคลังสินค้า คุกกี้ใช้เพื่อรักษาการเข้าสู่ระบบ")}
             </p>
           </>
         ) : (
           <>
-            <h2>ข้อกำหนดร้าน</h2>
+            <h2>{t("ข้อกำหนดร้าน")}</h2>
             <p>
               {overview?.shop?.policy ||
-                "ผู้ดูแลสามารถกำหนดข้อกำหนดร้านได้จากหลังบ้าน"}
+                t("ผู้ดูแลสามารถกำหนดข้อกำหนดร้านได้จากหลังบ้าน")}
             </p>
-            <h3>คำสั่งซื้อและการส่งมอบ</h3>
+            <h3>{t("คำสั่งซื้อและการส่งมอบ")}</h3>
             <p>
-              ระบบตรวจสต็อกก่อนรับคำสั่งซื้อ
-              โค้ดจะถูกส่งหลังยืนยันการชำระเงินเท่านั้น
+              {t("ระบบตรวจสต็อกก่อนรับคำสั่งซื้อ โค้ดจะถูกส่งหลังยืนยันการชำระเงินเท่านั้น")}
             </p>
           </>
         )}
@@ -2061,11 +2047,11 @@ function NotFound() {
     <main className="container page-main">
       <Empty
         icon={<Search />}
-        heading="ไม่พบหน้านี้"
-        description="หน้านี้อาจถูกย้าย หรือที่อยู่ไม่ถูกต้อง"
+        heading={t("ไม่พบหน้านี้")}
+        description={t("หน้านี้อาจถูกย้าย หรือที่อยู่ไม่ถูกต้อง")}
         action={
           <Link className="button primary" to="/">
-            กลับหน้าร้าน
+            {t("กลับหน้าร้าน")}
             <ArrowRight size={16} />
           </Link>
         }
@@ -2075,24 +2061,24 @@ function NotFound() {
 }
 function Router() {
   const { path, overview } = useStore();
-  const shopName = overview?.shop?.shopName || "ร้านค้า";
+  const name = shopName(overview?.shop?.shopName);
   useEffect(() => {
     const titles: Record<string, string> = {
-      "/": "หน้าร้าน",
-      "/products": "สินค้าทั้งหมด",
-      "/login": "เข้าสู่ระบบ",
-      "/register": "สมัครสมาชิก",
-      "/orders": "ประวัติการซื้อ",
-      "/cart": "ตะกร้าสินค้า",
-      "/checkout": "ตรวจสอบคำสั่งซื้อ",
-      "/account": "บัญชีของฉัน",
-      "/admin": "แดชบอร์ด",
+      "/": t("หน้าร้าน"),
+      "/products": t("สินค้าทั้งหมด"),
+      "/login": t("เข้าสู่ระบบ"),
+      "/register": t("สมัครสมาชิก"),
+      "/orders": t("ประวัติการซื้อ"),
+      "/cart": t("ตะกร้าสินค้า"),
+      "/checkout": t("ตรวจสอบคำสั่งซื้อ"),
+      "/account": t("บัญชีของฉัน"),
+      "/admin": t("แดชบอร์ด"),
     };
     const page = path.startsWith("/admin")
-      ? "แดชบอร์ด"
-      : (titles[path] ?? shopName);
-    document.title = page + " — " + shopName;
-  }, [path, shopName]);
+      ? t("แดชบอร์ด")
+      : (titles[path] ?? name);
+    document.title = page + " — " + name;
+  }, [path, name, getLang()]);
   if (path === "/stores") return <Stores />;
   if (path === "/") return <Home />;
   if (path === "/products") return <ReferenceCatalogPage />;
@@ -2121,7 +2107,7 @@ function Router() {
       <Suspense
         fallback={
           <main className="container page-main">
-            กำลังโหลดระบบจัดการร้าน...
+            {t("กำลังโหลดระบบจัดการร้าน...")}
           </main>
         }
       >
@@ -2135,7 +2121,14 @@ function Router() {
 export default function App() {
   const [path, setPath] = useState(location.pathname);
   const merchant = path.startsWith("/admin") || path === "/stores";
+  const [lang, setLangState] = useState<Lang>(getLang);
+  setMerchantScope(merchant);
   useRouteMotion(path);
+  useCardTilt();
+  const changeLang = (value: Lang) => {
+    setLang(value);
+    setLangState(value);
+  };
   const [user, setUser] = useState<User | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -2206,19 +2199,22 @@ export default function App() {
         toast: setToast,
         path,
         loading,
+        lang,
+        changeLang,
       }}
     >
       <a className="skip-link" href="#content">
-        ข้ามไปเนื้อหา
+        {t("ข้ามไปเนื้อหา")}
       </a>
       <div className={merchant ? "merchant-shell" : "storefront-shell"}>
+        {!merchant && <ScrollProgress />}
         {merchant ? <MerchantHeader /> : <Header />}
         <div id="content" tabIndex={-1}>
           {error ? (
             <main className="container page-main">
               <Empty
                 icon={<AlertCircle />}
-                heading="เชื่อมต่อร้านค้าไม่ได้"
+                heading={t("เชื่อมต่อร้านค้าไม่ได้")}
                 description={error}
                 action={
                   <button
@@ -2228,13 +2224,15 @@ export default function App() {
                       void refresh();
                     }}
                   >
-                    ลองอีกครั้ง
+                    {t("ลองอีกครั้ง")}
                   </button>
                 }
               />
             </main>
           ) : (
-            <Router />
+            <div className="page-transition" key={path}>
+              <Router />
+            </div>
           )}
         </div>
         {!merchant && <Footer />}
@@ -2242,10 +2240,10 @@ export default function App() {
       {toast && (
         <div className="toast" role="status">
           <CheckCircle2 size={18} />
-          {toast}
+          {t(toast)}
           <button
             className="icon-button"
-            aria-label="ปิดแจ้งเตือน"
+            aria-label={t("ปิดแจ้งเตือน")}
             onClick={() => setToast("")}
           >
             <X size={16} />

@@ -27,6 +27,8 @@ import {
   Quantity,
   useStore,
 } from "./App";
+import { t } from "./i18n";
+import { shopName } from "./Theme";
 import { api, dateTime, money } from "./api";
 import type { Order, Product, Review } from "./types";
 export function ReferenceCatalog() {
@@ -51,22 +53,22 @@ export function ReferenceCatalog() {
   return (
     <section className="reference-catalog">
       <div className="reference-catalog-title">
-        <h2>สินค้าทั้งหมด</h2>
-        <p>{filtered.length} รายการ</p>
+        <h2>{t("สินค้าทั้งหมด")}</h2>
+        <p>{filtered.length}{" "}{t("รายการ")}</p>
       </div>
       <div className="reference-catalog-tools">
         <label className="search-field">
           <Search size={17} />
           <input
-            aria-label="ค้นหาสินค้า"
-            placeholder="ค้นหา"
+            aria-label={t("ค้นหาสินค้า")}
+            placeholder={t("ค้นหา")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           {query && (
             <button
               className="icon-button"
-              aria-label="ล้างการค้นหา"
+              aria-label={t("ล้างการค้นหา")}
               onClick={() => setQuery("")}
             >
               <X size={14} />
@@ -75,13 +77,13 @@ export function ReferenceCatalog() {
         </label>
         <label className="sort-field">
           <select
-            aria-label="เรียงสินค้า"
+            aria-label={t("เรียงสินค้า")}
             value={sort}
             onChange={(e) => setSort(e.target.value)}
           >
-            <option value="featured">แนะนำ</option>
-            <option value="low">ราคา: ต่ำไปสูง</option>
-            <option value="high">ราคา: สูงไปต่ำ</option>
+            <option value="featured">{t("แนะนำ")}</option>
+            <option value="low">{t("ราคา: ต่ำไปสูง")}</option>
+            <option value="high">{t("ราคา: สูงไปต่ำ")}</option>
           </select>
         </label>
       </div>
@@ -100,16 +102,16 @@ export function ReferenceCatalog() {
       ) : (
         <Empty
           icon={<Search />}
-          heading={query ? "ไม่พบสินค้าที่ค้นหา" : "ยังไม่มีสินค้า"}
+          heading={query ? t("ไม่พบสินค้าที่ค้นหา") : t("ยังไม่มีสินค้า")}
           description={
             query
-              ? "ลองค้นหาด้วยคำอื่น"
-              : "เพิ่มสินค้าได้จากหลังบ้าน เมื่อพร้อมขาย"
+              ? t("ลองค้นหาด้วยคำอื่น")
+              : t("เพิ่มสินค้าได้จากหลังบ้าน เมื่อพร้อมขาย")
           }
           action={
             query ? (
               <button className="button secondary" onClick={() => setQuery("")}>
-                ล้างตัวกรอง
+                {t("ล้างตัวกรอง")}
               </button>
             ) : undefined
           }
@@ -122,8 +124,8 @@ export function ReferenceCatalogPage() {
   return (
     <main className="container page-main reference-catalog-page">
       <div className="page-heading">
-        <h1>สินค้า</h1>
-        <p>สินค้าทั้งหมดของร้าน</p>
+        <h1>{t("สินค้า")}</h1>
+        <p>{t("สินค้าทั้งหมดของร้าน")}</p>
       </div>
       <ReferenceCatalog />
     </main>
@@ -151,7 +153,7 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
       );
       await refresh();
       go(target);
-      toast(register ? "สมัครสมาชิกสำเร็จ" : "เข้าสู่ระบบสำเร็จ");
+      toast(register ? t("สมัครสมาชิกสำเร็จ") : t("เข้าสู่ระบบสำเร็จ"));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -161,13 +163,13 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
   return (
     <main className="reference-auth-main">
       <div className="reference-auth-heading">
-        <h1>{register ? "สมัครสมาชิก" : "เข้าสู่ระบบ"}</h1>
-        <p>{overview?.shop?.shopName || "ร้านค้า"}</p>
+        <h1>{register ? t("สมัครสมาชิก") : t("เข้าสู่ระบบ")}</h1>
+        <p>{shopName(overview?.shop?.shopName)}</p>
       </div>
       <form onSubmit={submit} className="reference-auth-form">
         <ErrorMessage message={error} />
         <label className="field">
-          ชื่อผู้ใช้
+          {t("ชื่อผู้ใช้")}
           <input
             name="username"
             autoComplete="username"
@@ -175,11 +177,11 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
             maxLength={register ? 32 : 160}
             required
           />
-          {register && <small>ใช้สำหรับเข้าสู่ระบบ</small>}
+          {register && <small>{t("ใช้สำหรับเข้าสู่ระบบ")}</small>}
         </label>
         {register && (
           <label className="field">
-            อีเมล (ไม่บังคับ)
+            {t("อีเมล (ไม่บังคับ)")}
             <input
               name="email"
               type="email"
@@ -189,7 +191,7 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
           </label>
         )}
         <label className="field">
-          รหัสผ่าน
+          {t("รหัสผ่าน")}
           <div className="password-field">
             <input
               name="password"
@@ -202,7 +204,7 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
             <button
               type="button"
               className="icon-button"
-              aria-label={show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+              aria-label={show ? t("ซ่อนรหัสผ่าน") : t("แสดงรหัสผ่าน")}
               onClick={() => setShow(!show)}
             >
               {show ? <EyeOff size={17} /> : <Eye size={17} />}
@@ -211,7 +213,7 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
         </label>
         {register && (
           <label className="field">
-            ยืนยันรหัสผ่าน
+            {t("ยืนยันรหัสผ่าน")}
             <input
               name="confirmPassword"
               type={show ? "text" : "password"}
@@ -226,14 +228,14 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
           {busy ? (
             <LoaderCircle className="spin" size={17} />
           ) : register ? (
-            "สมัครสมาชิก"
+            t("สมัครสมาชิก")
           ) : (
-            "เข้าสู่ระบบ"
+            t("เข้าสู่ระบบ")
           )}
         </button>
       </form>
       <p className="reference-auth-switch">
-        {register ? "มีบัญชีแล้ว?" : "ยังไม่มีบัญชี?"}{" "}
+        {register ? t("มีบัญชีแล้ว?") : t("ยังไม่มีบัญชี?")}{" "}
         <Link
           to={
             (register ? "/login" : "/register") +
@@ -241,7 +243,7 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
             encodeURIComponent(target)
           }
         >
-          {register ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}
+          {register ? t("เข้าสู่ระบบ") : t("สมัครสมาชิก")}
         </Link>
       </p>
     </main>
@@ -285,8 +287,8 @@ export function ReferenceProduct({ id }: { id: string }) {
       <main className="container page-main">
         <Empty
           icon={<Package />}
-          heading="ไม่พบสินค้า"
-          description="สินค้านี้อาจปิดขายแล้ว"
+          heading={t("ไม่พบสินค้า")}
+          description={t("สินค้านี้อาจปิดขายแล้ว")}
         />
       </main>
     );
@@ -297,7 +299,7 @@ export function ReferenceProduct({ id }: { id: string }) {
     setBasket({ variantId: variant.id, quantity });
     if (checkout) go("/checkout");
     else {
-      toast("เพิ่มสินค้าในตะกร้าแล้ว");
+      toast(t("เพิ่มสินค้าในตะกร้าแล้ว"));
       go("/cart");
     }
   };
@@ -307,7 +309,7 @@ export function ReferenceProduct({ id }: { id: string }) {
     <main className="container page-main reference-product-page">
       <Link to="/products" className="back-link">
         <ArrowLeft size={16} />
-        สินค้าทั้งหมด
+        {t("สินค้าทั้งหมด")}
       </Link>
       <div className="reference-product-grid">
         <div className="reference-gallery">
@@ -333,7 +335,7 @@ export function ReferenceProduct({ id }: { id: string }) {
                   className={image === i ? "selected" : ""}
                   key={i}
                   onClick={() => setImage(i)}
-                  aria-label={"รูปสินค้า " + (i + 1)}
+                  aria-label={t("รูปสินค้า ") + (i + 1)}
                 >
                   <img
                     src={
@@ -350,7 +352,7 @@ export function ReferenceProduct({ id }: { id: string }) {
           )}
         </div>
         <div className="reference-product-info">
-          {!!product.preorder && <span className="preorder-pill">สั่งจอง</span>}
+          {!!product.preorder && <span className="preorder-pill">{t("สั่งจอง")}</span>}
           <h1>{product.name}</h1>
           {product.rating?.count > 0 && (
             <div className="reference-product-rating">
@@ -358,31 +360,31 @@ export function ReferenceProduct({ id }: { id: string }) {
                 <Star key={n} size={14} fill="currentColor" />
               ))}
               {product.rating.average?.toFixed(1)}{" "}
-              <span>· {product.rating.count} รีวิว</span>
-              <span>ขายแล้ว {product.sold}</span>
+              <span>· {product.rating.count}{" "}{t("รีวิว")}</span>
+              <span>{t("ขายแล้ว")}{" "}{product.sold}</span>
             </div>
           )}
           <div className="reference-price">{money(variant.price)}</div>
           <p className="reference-guarantee">
             <ShieldCheck size={16} />
-            เคลมได้ตลอดอายุการใช้งาน
+            {t("เคลมได้ตลอดอายุการใช้งาน")}
           </p>
           {!!product.preorder && (
             <div className="preorder-dates">
               <div>
-                <span>ปิดรับจอง</span>
+                <span>{t("ปิดรับจอง")}</span>
                 <strong>23:59</strong>
-                <small>15 พ.ย.</small>
+                <small>{t("15 พ.ย.")}</small>
               </div>
               <div>
-                <span>ได้รับของ</span>
+                <span>{t("ได้รับของ")}</span>
                 <strong>23:59</strong>
-                <small>16 ธ.ค.</small>
+                <small>{t("16 ธ.ค.")}</small>
               </div>
             </div>
           )}
           <fieldset className="reference-variants">
-            <legend>ตัวเลือก</legend>
+            <legend>{t("ตัวเลือก")}</legend>
             {product.variants.map((v) => (
               <button
                 key={v.id}
@@ -398,10 +400,10 @@ export function ReferenceProduct({ id }: { id: string }) {
                     {product.preorder
                       ? ""
                       : v.stockStatus === "low"
-                        ? "เหลือน้อย"
+                        ? t("เหลือน้อย")
                         : v.stock
-                          ? "มีสินค้า"
-                          : "สินค้าหมด"}
+                          ? t("มีสินค้า")
+                          : t("สินค้าหมด")}
                   </small>
                 </span>
                 <strong>{money(v.price)}</strong>
@@ -420,31 +422,31 @@ export function ReferenceProduct({ id }: { id: string }) {
               onClick={() => buy(false)}
             >
               <ShoppingBag size={17} />
-              ใส่ตะกร้า
+              {t("ใส่ตะกร้า")}
             </button>
             <button
               className="button primary"
               disabled={!available}
               onClick={() => buy(true)}
             >
-              {product.preorder ? "จองเลย" : "ซื้อเลย"}
+              {product.preorder ? t("จองเลย") : t("ซื้อเลย")}
             </button>
           </div>
           <p className="reference-delivery-note">
             <KeyRound size={15} />
             {product.preorder
-              ? "ชำระตอนจอง รับของในประวัติการซื้อ"
-              : "สินค้าดิจิทัล ได้รับทันทีหลังชำระเงินในหน้าประวัติการซื้อ"}
+              ? t("ชำระตอนจอง รับของในประวัติการซื้อ")
+              : t("สินค้าดิจิทัล ได้รับทันทีหลังชำระเงินในหน้าประวัติการซื้อ")}
           </p>
           <section className="reference-product-description">
-            <h2>รายละเอียด</h2>
+            <h2>{t("รายละเอียด")}</h2>
             <p>{product.description}</p>
           </section>
         </div>
       </div>
       <section className="reference-faq">
-        <h2>คำถามที่พบบ่อย</h2>
-        {(product.preorder ? ["fqewdfww", "fqwdfqwdf"] : ["ยกแอค ชนไหม"]).map(
+        <h2>{t("คำถามที่พบบ่อย")}</h2>
+        {(product.preorder ? ["fqewdfww", "fqwdfqwdf"] : [t("ยกแอค ชนไหม")]).map(
           (q, i) => (
             <details key={q}>
               <summary>
@@ -457,12 +459,12 @@ export function ReferenceProduct({ id }: { id: string }) {
         )}
       </section>
       <section className="reference-product-reviews">
-        <h2>รีวิวจากผู้ซื้อ</h2>
+        <h2>{t("รีวิวจากผู้ซื้อ")}</h2>
         {reviews.length ? (
           <div className="reference-rating-layout">
             <div className="reference-rating-summary">
               <strong>{product.rating.average?.toFixed(1)}</strong>
-              <span>จาก {reviews.length} รีวิว</span>
+              <span>{t("จาก")}{" "}{reviews.length}{" "}{t("รีวิว")}</span>
               {[5, 4, 3, 2, 1].map((n) => (
                 <div className="rating-bar" key={n}>
                   <span>{n}</span>
@@ -491,13 +493,13 @@ export function ReferenceProduct({ id }: { id: string }) {
                   </div>
                   <p>
                     {r.comment ||
-                      "ให้คะแนน " + r.rating + " ดาว โดยไม่ได้เขียนความเห็น"}
+                      t("ให้คะแนน ") + r.rating + t(" ดาว โดยไม่ได้เขียนความเห็น")}
                   </p>
                   <span className="review-owner">
                     {r.name}
                     <span>
                       <ShieldCheck size={12} />
-                      ผู้ซื้อจริง
+                      {t("ผู้ซื้อจริง")}
                     </span>
                   </span>
                 </div>
@@ -507,13 +509,13 @@ export function ReferenceProduct({ id }: { id: string }) {
         ) : (
           <Empty
             icon={<Star />}
-            heading="ยังไม่มีรีวิว"
-            description="รีวิวเขียนได้เฉพาะคนที่ซื้อสินค้านี้แล้วเท่านั้น"
+            heading={t("ยังไม่มีรีวิว")}
+            description={t("รีวิวเขียนได้เฉพาะคนที่ซื้อสินค้านี้แล้วเท่านั้น")}
           />
         )}
       </section>
       <section className="reference-related">
-        <h2>สินค้าที่คุณอาจชอบ</h2>
+        <h2>{t("สินค้าที่คุณอาจชอบ")}</h2>
         <div className="product-grid">
           {products
             .filter((p) => p.id !== product.id)
@@ -562,7 +564,7 @@ export function ReferenceReviews() {
       await api("/reviews", { ...values, rating: Number(values.rating) });
       await load();
       await refresh();
-      toast("ขอบคุณสำหรับรีวิวของคุณ");
+      toast(t("ขอบคุณสำหรับรีวิวของคุณ"));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -584,22 +586,21 @@ export function ReferenceReviews() {
           <div>
             <span className="verified-pill">
               <ShieldCheck size={14} />
-              รีวิวจากผู้ซื้อจริงเท่านั้น
+              {t("รีวิวจากผู้ซื้อจริงเท่านั้น")}
             </span>
-            <h1>เครดิตร้าน</h1>
-            <h2>{overview?.shop?.shopName || "ร้านค้า"}</h2>
+            <h1>{t("เครดิตร้าน")}</h1>
+            <h2>{shopName(overview?.shop?.shopName)}</h2>
             <p>
-              ทุกรีวิวมาจากลูกค้าที่ซื้อจริง และเขียนได้ภายใน 7
-              วันหลังซื้อเท่านั้น ร้านแก้ไขหรือซ่อนรีวิวไม่ได้
+              {t("ทุกรีวิวมาจากลูกค้าที่ซื้อจริง และเขียนได้ภายใน 7 วันหลังซื้อเท่านั้น ร้านแก้ไขหรือซ่อนรีวิวไม่ได้")}
             </p>
             <div className="credit-trust-badges">
               <span>
                 <ShieldCheck size={14} />
-                {reviews.length} รีวิวยืนยันแล้ว
+                {reviews.length}{" "}{t("รีวิวยืนยันแล้ว")}
               </span>
               <span>
                 <Star size={14} />
-                {good}% ให้ 4 ดาวขึ้นไป
+                {good}{t("% ให้ 4 ดาวขึ้นไป")}
               </span>
             </div>
           </div>
@@ -615,7 +616,7 @@ export function ReferenceReviews() {
                   />
                 ))}
               </div>
-              <small>{reviews.length} รีวิว</small>
+              <small>{reviews.length}{" "}{t("รีวิว")}</small>
             </div>
             <div className="credit-rating-bars">
               {[5, 4, 3, 2, 1].map((n) => (
@@ -657,7 +658,7 @@ export function ReferenceReviews() {
                 </>
               ) : (
                 <>
-                  ทั้งหมด <small>{reviews.length}</small>
+                  {t("ทั้งหมด")}{" "}<small>{reviews.length}</small>
                 </>
               )}
             </button>
@@ -666,9 +667,9 @@ export function ReferenceReviews() {
         <ErrorMessage message={error} />
         {orders.length > 0 && (
           <form className="panel review-form" onSubmit={submit}>
-            <h2>แบ่งปันประสบการณ์ของคุณ</h2>
+            <h2>{t("แบ่งปันประสบการณ์ของคุณ")}</h2>
             <label className="field">
-              คำสั่งซื้อ
+              {t("คำสั่งซื้อ")}
               <select
                 name="orderId"
                 defaultValue={
@@ -684,23 +685,23 @@ export function ReferenceReviews() {
               </select>
             </label>
             <label className="field">
-              คะแนน
+              {t("คะแนน")}
               <select name="rating" defaultValue="5">
                 {[5, 4, 3, 2, 1].map((n) => (
                   <option value={n} key={n}>
-                    {n} ดาว
+                    {n}{" "}{t("ดาว")}
                   </option>
                 ))}
               </select>
             </label>
             <label className="field">
-              ความคิดเห็น
+              {t("ความคิดเห็น")}
               <textarea
                 name="comment"
                 minLength={2}
                 maxLength={600}
                 required
-                placeholder="บอกเล่าประสบการณ์การสั่งซื้อของคุณ"
+                placeholder={t("บอกเล่าประสบการณ์การสั่งซื้อของคุณ")}
               />
             </label>
             <button className="button primary" disabled={busy}>
@@ -709,7 +710,7 @@ export function ReferenceReviews() {
               ) : (
                 <Star size={16} />
               )}
-              ส่งรีวิว
+              {t("ส่งรีวิว")}
             </button>
           </form>
         )}
@@ -730,7 +731,7 @@ export function ReferenceReviews() {
                 </div>
                 <p>
                   {r.comment ||
-                    "ให้คะแนน " + r.rating + " ดาว โดยไม่ได้เขียนความเห็น"}
+                    t("ให้คะแนน ") + r.rating + t(" ดาว โดยไม่ได้เขียนความเห็น")}
                 </p>
                 <div className="credit-review-owner">
                   <span className="avatar">{r.name.slice(0, 2)}</span>
@@ -738,7 +739,7 @@ export function ReferenceReviews() {
                     <strong>{r.name}</strong>
                     <small>
                       <ShieldCheck size={12} />
-                      ผู้ซื้อจริง
+                      {t("ผู้ซื้อจริง")}
                     </small>
                   </div>
                 </div>
@@ -758,8 +759,8 @@ export function ReferenceReviews() {
                     {r.product}
                     <small>
                       {r.product === "DISNEY+"
-                        ? "DISNEY+ 30 DAYS หาร"
-                        : "โค้ดดิจิทัล"}
+                        ? t("DISNEY+ 30 DAYS หาร")
+                        : t("โค้ดดิจิทัล")}
                     </small>
                   </div>
                 </div>
@@ -768,7 +769,7 @@ export function ReferenceReviews() {
         </div>
         {!!reviews.length &&
           !reviews.some((r) => !filter || r.rating === filter) && (
-            <p className="empty-inline">ยังไม่มีรีวิวในคะแนนนี้</p>
+            <p className="empty-inline">{t("ยังไม่มีรีวิวในคะแนนนี้")}</p>
           )}
       </div>
     </main>

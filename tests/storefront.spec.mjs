@@ -35,7 +35,7 @@ test("reference composition, catalog search, categories, theme and responsive la
   page.on("pageerror", (e) => errors.push(e.message));
   await ready(page);
   await expect(
-    page.getByRole("heading", { name: "ร้านค้า", exact: true }),
+    page.getByRole("heading", { name: "ASIA EXTRA", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".stat-value strong").nth(1)).toHaveText("25");
   await screenshot(page, "desktop-home");
@@ -70,7 +70,7 @@ test("reference composition, catalog search, categories, theme and responsive la
     if (width === 390) await screenshot(page, "mobile-home");
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: "เปิดเมนู" }).click();
+  await page.getByRole("button", { name: "เมนูลัด" }).click();
   await page
     .getByRole("navigation", { name: "เมนูหลัก" })
     .getByRole("link", { name: "สินค้า", exact: true })
@@ -133,4 +133,38 @@ test("direct routes, errors, fonts and unknown pages work", async ({
   expect(
     (await page.request.get(base + "/.data/commerce.sqlite")).status(),
   ).toBe(404);
+});
+
+test("language switch, theme panel and brand assets", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await ready(page);
+  await expect(page.locator("header .brand-logo img")).toHaveAttribute("alt", "ASIA EXTRA");
+  await page.getByRole("button", { name: "EN", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("link", { name: "Products", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "All products" })).toBeVisible();
+  await page.reload();
+  await page.locator(".loading-row").waitFor({ state: "hidden" });
+  await expect(page.getByRole("heading", { name: "All products" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("สินค้าทั้งหมด");
+
+  await page.getByRole("button", { name: "Customize theme" }).click();
+  await page.getByRole("button", { name: /EXTRA yellow/ }).click();
+  await page.getByRole("button", { name: /Sharp/ }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-accent", "yellow");
+  await expect(page.locator("html")).toHaveAttribute("data-shape", "sharp");
+  await page.getByRole("switch").uncheck();
+  await expect(page.locator("html")).toHaveAttribute("data-motion", "calm");
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-accent", "yellow");
+
+  // The back office stays Thai whatever the storefront language is.
+  await page.goto(page.url().replace(/\/[^/]*$/, "/admin"));
+  await expect(page.locator("html")).toHaveAttribute("lang", "th");
+  await page.goBack();
+  await page.getByRole("button", { name: "TH", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "สินค้าทั้งหมด" })).toBeVisible();
+  expect(errors).toEqual([]);
 });
