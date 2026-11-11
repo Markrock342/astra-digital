@@ -217,7 +217,7 @@ inventory (
 
 #### 4.5.3 Transaction ส่งของ (idempotent)
 
-API สมมติ (เสนอ รอมาร์คล็อกชื่อ path): `POST /api/admin/reservations/:id/deliver`
+API (มาร์คล็อก 11 พ.ย.): `POST /api/admin/reservations/:id/deliver` — ADMIN เท่านั้น
 
 ใน `tx` เดียว:
 
