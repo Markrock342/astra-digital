@@ -359,3 +359,14 @@ test("API-FIX-02: chat rate limit, staff notify throttle, and close thread", (t)
     (e) => e.status === 409,
   );
 });
+
+test("API-FIX-03: malformed product URI returns 400 not 500", async (t) => {
+  const { s } = fixture(t);
+  const handle = createAPIHandler(s);
+  const res = await handle(
+    new Request("http://local.test/api/products/%E0%A4"),
+  );
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.ok(body.error);
+});
