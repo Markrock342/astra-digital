@@ -51,7 +51,7 @@
 |----|-----------|---------|
 | C1 | สต็อก 1 หน่วย สองผู้ซื้อ pay พร้อมกัน | คนหนึ่ง DELIVERED คนหนึ่ง OUT_OF_STOCK |
 | C2 | pay สำเร็จแล้ว pay ซ้ำ | โค้ดชุดเดิม; ledger/inventory ไม่เพิ่ม |
-| C3 | สองพรีออเดอร์ได้ queue_number คนละเลข | UNIQUE ไม่ชน หรือ retry สำเร็จ — **สถานะเทสต์: ยังขาด** (ยังไม่มี automated case ชัดในรีโป) |
+| C3 | สองพรีออเดอร์ได้ queue_number คนละเลข (คิวรวมร้าน) | UNIQUE ไม่ชน — **after_payment มีเทสต์แล้ว** (`tests/use-cases.test.mjs` UC2: เลขตามลำดับคนจ่าย, ยังไม่จ่ายไม่ขึ้นกระดาน, จ่ายซ้ำได้เลขเดิม); on_create ไม่ทำ (ไม่ได้เลือก) |
 
 ## 5. เคส Authorization / Data Isolation
 

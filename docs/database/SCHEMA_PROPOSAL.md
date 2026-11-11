@@ -42,7 +42,7 @@
 | Cart | ไม่มีฝั่ง DB | รอบแรก: client/Bank · หรือ `cart_items(user_id, variant_id, qty)` หลังล็อก |
 | Payments | มี | คง |
 | Payment Events | ไม่มี | เสนอ `payment_events` append-only ก่อนเปิด webhook จริง |
-| Preorder / Queue | reservations + queue_number; สถานะสุดท้าย = PREORDER | **เป้า DB-DOC-02:** Admin fulfill → สถานะส่งแล้ว + delivered_* + ผูกของ · ดู §4.5 |
+| Preorder / Queue | reservations + queue_number (ออกหลังจ่าย); สถานะสุดท้ายปัจจุบัน = PREORDER | **เป้า DB-DOC-02:** Admin fulfill → สถานะส่งแล้ว + delivered_* + ผูกของ · ดู §4.5 · **DB-DOC-05:** **มาร์คล็อก 11 พ.ย.:** `after_payment` + คิวรวมทั้งร้าน · ดู §4.7 |
 | Chat / Notifications / Audit | มี | คง |
 | Payment channel | มี | คง |
 
@@ -305,6 +305,48 @@ CREATE INDEX IF NOT EXISTS reservations_status_created
 ```
 
 (โจทย์บังคับอย่างน้อย `orders(status, created_at)`; แนะนำคู่บน reservations ด้วยเพราะนับพรีออเดอร์)
+
+### 4.7 นโยบายเลขคิวพรีออเดอร์ (Task DB-DOC-05)
+
+SOW ยัง**ไม่ล็อก**ว่าออกคิวก่อนหรือหลังจ่าย → schema/แอปต้อง**รองรับทั้งสองโหมด** โดยเลือกโหมดผ่าน runtime flag (ไม่ต้องมีสองรูปตาราง)  
+**มาร์คล็อก 11 พ.ย.:** `after_payment` + คิวรวมทั้งร้าน — ไม่ต้องทำโหมด `on_create` รอบนี้ เก็บไว้เป็นทางเลือกถ้าลูกค้าขอภายหลัง (เหตุผล: ไม่มีคิวผีจากคนจองไม่จ่าย ไม่ต้องมี expiry เลขคิวสะท้อนลำดับคนจ่ายจริง)
+
+#### 4.7.1 คอลัมน์ / ความจริงที่มี
+
+- `reservations.queue_number INTEGER NULL` + partial UNIQUE เมื่อ NOT NULL  
+- `reservations` มี **`variant_id`** (FK → variants) — **ไม่มี `product_id`** บนตารางนี้  
+- ของปัจจุบันในโค้ด: ออกคิวตอน **pay สำเร็จ** เข้า `PREORDER`
+
+#### 4.7.2 สองโหมดที่รองรับ
+
+| โหมด | ตอนออกคิว | พฤติกรรม |
+|------|-----------|----------|
+| `after_payment` (ปัจจุบัน) | เมื่อสถานะเข้า `PREORDER` หลังจ่ายสำเร็จ | คิว = คนที่จ่ายแล้วรอของ |
+| `on_create` | เมื่อสร้าง reservation สถานะ `PENDING_PAYMENT` | คิวจองตั้งแต่ยังไม่จ่าย |
+
+กฎเพิ่มถ้าวันหนึ่งเปิด `on_create`:
+
+- **หมดอายุ:** ถ้ายัง `PENDING_PAYMENT` เกิน **30 นาที** หลัง `created_at` → เคลียร์ `queue_number=NULL` (คืนเลข) และยกเลิก/ล้มตามนโยบายสถานะ  
+- FAILED/CANCELLED → คืนเลขทันที (`queue_number=NULL`)  
+- **`queueBoard` ต้องกรองรายการที่ยังไม่จ่ายออก** — แสดงเฉพาะคิวที่จ่ายแล้ว (`PREORDER` / `DELIVERED`) ไม่โชว์ `PENDING_PAYMENT` แม้มีเลขคิว
+
+สวิตช์เสนอ: `runtime_flags` คีย์ `preorder_queue_mode` = `after_payment` | `on_create`  
+ค่าที่ใช้ = **`after_payment`** (ยังไม่ต้องสร้าง flag จนกว่าจะเปิด on_create)
+
+#### 4.7.3 ขอบเขตคิว: รวมทั้งร้าน vs ต่อสินค้า
+
+| แบบ | ความหมาย | Unique |
+|-----|----------|--------|
+| **shop-wide (ล็อกแล้ว)** | เลขคิววิ่งเดียวทั้งร้าน | คง `UNIQUE(queue_number)` partial ทั้งตาราง |
+| per-variant (ไม่ทำรอบนี้) | เลขคิวแยกตาม `variant_id` | ต้องเป็น `UNIQUE(variant_id, queue_number)` — **ห้าม** อ้าง `product_id` บน reservations เพราะไม่มีคอลัมน์นี้ |
+
+ตัวนับ shop-wide: `MAX(queue_number)+1` ใน tx + จัดการ UNIQUE collision ด้วย retry (เทส C3 ยังขาด)
+
+#### 4.7.4 สิ่งที่ยังไม่เปลี่ยนในรอบเอกสารนี้
+
+- ไม่แก้โค้ดออกคิว / `queueBoard` ใน PR นี้  
+- ไม่สร้างตารางคิวแยก  
+- ไม่เปิดโหมด `on_create`  
 
 ## 5. Constraints / Indexes ที่ควรมีในเป้า (สรุป)
 

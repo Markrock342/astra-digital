@@ -40,19 +40,22 @@
 | **ป้องกัน** | pay ตรวจสถานะก่อนทำงาน; DELIVERED/PREORDER แล้วเรียก pay ซ้ำ = no-op; **deliver ซ้ำเมื่อ DELIVERED แล้ว = metadata เดิม ไม่ allocate เพิ่ม ไม่คืน credential** |
 | **ช่องว่างปัจจุบัน** | ยังไม่มี Admin deliver path / `delivered_at` / ผูก inventory↔reservation / owner codes จาก `reservation_id` — ออกแบบใน SCHEMA §4.5 แล้วยังไม่ implement; ต้อง rebuild reservations+inventory |
 
-### 1.5 Preorder Queue หมายเลขซ้ำ
+### 1.5 Preorder Queue หมายเลขซ้ำ / นโยบายคิว (DB-DOC-05)
 
 | | |
 |--|--|
 | **ป้องกัน** | `UNIQUE` partial บน `queue_number`; assign ใน tx ด้วย `MAX+1` (`nextQueueNumber`) |
-| **ช่องว่าง** | `MAX+1` ภายใต้ concurrency สูงอาจชนแล้ว retry — ควรจับ UNIQUE constraint แล้วคำนวณใหม่ (ระบุใน Test Plan) |
+| **ขอบเขต** | **คิวรวมทั้งร้าน** (เสนอ รอมาร์คล็อก) — ไม่แยกต่อสินค้า; อ้าง `variant_id` ไม่ใช่ `product_id` |
+| **จังหวะออกคิว** | รองรับ `after_payment` (ปัจจุบัน) และ `on_create` ผ่าน flag; default = after_payment |
+| **on_create** | ต้องมีกฎหมดอายุ (เสนอ 30 นาที) + `queueBoard` กรอง unpaid ออก |
+| **ช่องว่าง** | เทสต์คิวไม่ซ้ำภายใต้แข่งกัน (C3) **ยังขาด**; โหมด `on_create` / filter unpaid บน board ยังไม่มีในโค้ด |
 
 ### 1.6 เข้าถึงข้อมูลข้ามบัญชี
 
 | พื้นที่ | กฎ |
 |---------|-----|
 | ออเดอร์/โค้ด | owner เท่านั้นที่เห็น codes; STAFF ดูเมตาได้แต่ codes ว่าง |
-| คิว | `queueBoard` = STAFF/ADMIN; `myQueue` = ของตัวเอง |
+| คิว | `queueBoard` = STAFF/ADMIN และต้องไม่โชว์ unpaid เมื่อใช้ `on_create`; `myQueue` = ของตัวเอง |
 | แชท | เจ้าของ thread หรือ staff; ห้ามอ่าน thread คนอื่น |
 | แจ้งเตือน | filter `user_id` |
 | อันดับผู้ซื้อ | เฉพาะ ADMIN; กรอง day/week/month/all เขต Asia/Bangkok; นับ orders DELIVERED + reservations `IN ('PREORDER','DELIVERED')`; กรองด้วย `created_at` (ไม่ใช่เวลาจ่าย); **ไม่ส่ง user id**; **ส่ง name+email เต็ม**; ไม่เปิดรหัสสินค้า; limit/period ผิด → 400; default limit=10 |
