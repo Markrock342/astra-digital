@@ -80,7 +80,7 @@
 
 ### สัญญา DB-005 ที่หน้าหลังบ้านรอใช้ (issue #18)
 
-หน้าหลังบ้านทำเสร็จแล้ว ซ่อนหลัง flag ใน `GET /api/health` → `features: { credentialPair, preorderDelivery }` ตอนนี้ทั้งคู่เป็น `false` น็อตเปิด flag ใน `server/domain.mjs` เมื่อ API ส่วนนั้นพร้อม
+หน้าหลังบ้านใช้ flag ใน `GET /api/health` และ `GET /api/me` → `features` · หลังงาน ISSUE-18 + Admin FR งาน 1 ทั้ง `credentialPair` และ `preorderDelivery` เป็น `true` (พร้อม flags งาน 1 ตามหมวด Features ด้านบน)
 
 **นำเข้า ID + รหัสผ่าน** — `POST /api/admin/inventory` (ADMIN)
 
