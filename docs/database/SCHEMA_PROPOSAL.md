@@ -97,11 +97,13 @@ cart_items(
 
 ### 4.7 นโยบายเลขคิวพรีออเดอร์ (Task DB-DOC-05)
 
-SOW ยัง**ไม่ล็อก**ว่าออกคิวก่อนหรือหลังจ่าย → schema/แอปต้อง**รองรับทั้งสองโหมด** โดยเลือกโหมดผ่าน runtime flag (ไม่ต้องมีสองรูปตาราง)
+SOW ยัง**ไม่ล็อก**ว่าออกคิวก่อนหรือหลังจ่าย → schema/แอปต้อง**รองรับทั้งสองโหมด** โดยเลือกโหมดผ่าน runtime flag (ไม่ต้องมีสองรูปตาราง)  
+ค่าด้านล่างเป็น **เสนอ รอมาร์คล็อก** (ไม่ใช่ Approved)
 
 #### 4.7.1 คอลัมน์ / ความจริงที่มี
 
 - `reservations.queue_number INTEGER NULL` + partial UNIQUE เมื่อ NOT NULL  
+- `reservations` มี **`variant_id`** (FK → variants) — **ไม่มี `product_id`** บนตารางนี้  
 - ของปัจจุบันในโค้ด: ออกคิวตอน **pay สำเร็จ** เข้า `PREORDER`
 
 #### 4.7.2 สองโหมดที่รองรับ
@@ -109,25 +111,31 @@ SOW ยัง**ไม่ล็อก**ว่าออกคิวก่อนห
 | โหมด | ตอนออกคิว | พฤติกรรม |
 |------|-----------|----------|
 | `after_payment` (ปัจจุบัน) | เมื่อสถานะเข้า `PREORDER` หลังจ่ายสำเร็จ | คิว = คนที่จ่ายแล้วรอของ |
-| `on_create` | เมื่อสร้าง reservation สถานะ `PENDING_PAYMENT` | คิวจองตั้งแต่ยังไม่จ่าย; ถ้า FAILED/CANCELLED ควร **คืนเลข** (ตั้ง `queue_number=NULL`) หรือทำเลขให้ reusable ตามนโยบาย Mark |
+| `on_create` | เมื่อสร้าง reservation สถานะ `PENDING_PAYMENT` | คิวจองตั้งแต่ยังไม่จ่าย |
 
-สวิตช์เสนอ: `runtime_flags` คีย์เช่น `preorder_queue_mode` = `after_payment` | `on_create`  
-ค่าเริ่มต้นเอกสาร = **`after_payment`** (ตรงของเดิม; เปลี่ยนได้เมื่อ SOW ล็อก)
+กฎเพิ่มเมื่อ `on_create` (เสนอ รอมาร์คล็อก):
+
+- **หมดอายุ:** ถ้ายัง `PENDING_PAYMENT` เกิน **30 นาที** หลัง `created_at` → เคลียร์ `queue_number=NULL` (คืนเลข) และยกเลิก/ล้มตามนโยบายสถานะ  
+- FAILED/CANCELLED → คืนเลขทันที (`queue_number=NULL`)  
+- **`queueBoard` ต้องกรองรายการที่ยังไม่จ่ายออก** — แสดงเฉพาะคิวที่จ่ายแล้ว (`PREORDER` / `DELIVERED`) ไม่โชว์ `PENDING_PAYMENT` แม้มีเลขคิว
+
+สวิตช์เสนอ: `runtime_flags` คีย์ `preorder_queue_mode` = `after_payment` | `on_create`  
+ค่าเริ่มต้นเสนอ = **`after_payment`**
 
 #### 4.7.3 ขอบเขตคิว: รวมทั้งร้าน vs ต่อสินค้า
 
 | แบบ | ความหมาย | Unique |
 |-----|----------|--------|
-| **shop-wide (ล็อกเป็นค่าเริ่มต้น Owner 2026-11-11)** | เลขคิววิ่งเดียวทั้งร้าน | คง `UNIQUE(queue_number)` partial ทั้งตาราง |
-| per-product | เลขคิวแยกตาม `variant_id` หรือ `product_id` | ต้องเปลี่ยนเป็น `UNIQUE(product_id, queue_number)` — **ยังไม่ทำ** จนกว่า Mark/SOW เปลี่ยนจาก shop-wide |
+| **shop-wide (เสนอเป็นค่าเริ่มต้น)** | เลขคิววิ่งเดียวทั้งร้าน | คง `UNIQUE(queue_number)` partial ทั้งตาราง |
+| per-variant (ไม่ทำรอบนี้) | เลขคิวแยกตาม `variant_id` | ต้องเป็น `UNIQUE(variant_id, queue_number)` — **ห้าม** อ้าง `product_id` บน reservations เพราะไม่มีคอลัมน์นี้ |
 
 ตัวนับ shop-wide: `MAX(queue_number)+1` ใน tx + จัดการ UNIQUE collision ด้วย retry (เทส C3 ยังขาด)
 
 #### 4.7.4 สิ่งที่ยังไม่เปลี่ยนในรอบเอกสารนี้
 
-- ไม่แก้โค้ดออกคิว  
+- ไม่แก้โค้ดออกคิว / `queueBoard` ใน PR นี้  
 - ไม่สร้างตารางคิวแยก  
-- ไม่บังคับโหมด `on_create` จนกว่า SOW ล็อก
+- ไม่บังคับโหมด `on_create` จนกว่ามาร์คล็อก  
 
 ## 5. Constraints / Indexes ที่ควรมีในเป้า (สรุป)
 

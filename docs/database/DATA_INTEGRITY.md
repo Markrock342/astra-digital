@@ -43,16 +43,17 @@
 | | |
 |--|--|
 | **ป้องกัน** | `UNIQUE` partial บน `queue_number`; assign ใน tx ด้วย `MAX+1` (`nextQueueNumber`) |
-| **ขอบเขต** | **คิวรวมทั้งร้าน** (Owner lock) — ไม่แยกต่อสินค้าในรอบนี้ |
-| **จังหวะออกคิว** | รองรับ `after_payment` (ปัจจุบัน) และ `on_create` ผ่าน flag; default = after_payment จน SOW ล็อก |
-| **ช่องว่าง** | เทสต์คิวไม่ซ้ำภายใต้แข่งกัน (C3) **ยังขาด**; โหมด `on_create` ยังไม่มีในโค้ด |
+| **ขอบเขต** | **คิวรวมทั้งร้าน** (เสนอ รอมาร์คล็อก) — ไม่แยกต่อสินค้า; อ้าง `variant_id` ไม่ใช่ `product_id` |
+| **จังหวะออกคิว** | รองรับ `after_payment` (ปัจจุบัน) และ `on_create` ผ่าน flag; default = after_payment |
+| **on_create** | ต้องมีกฎหมดอายุ (เสนอ 30 นาที) + `queueBoard` กรอง unpaid ออก |
+| **ช่องว่าง** | เทสต์คิวไม่ซ้ำภายใต้แข่งกัน (C3) **ยังขาด**; โหมด `on_create` / filter unpaid บน board ยังไม่มีในโค้ด |
 
 ### 1.6 เข้าถึงข้อมูลข้ามบัญชี
 
 | พื้นที่ | กฎ |
 |---------|-----|
 | ออเดอร์/โค้ด | owner เท่านั้นที่เห็น codes; STAFF ดูเมตาได้แต่ codes ว่าง |
-| คิว | `queueBoard` = STAFF/ADMIN; `myQueue` = ของตัวเอง |
+| คิว | `queueBoard` = STAFF/ADMIN และต้องไม่โชว์ unpaid เมื่อใช้ `on_create`; `myQueue` = ของตัวเอง |
 | แชท | เจ้าของ thread หรือ staff; ห้ามอ่าน thread คนอื่น |
 | แจ้งเตือน | filter `user_id` |
 | อันดับผู้ซื้อ | aggregate + ปิดบังชื่อ; ไม่เปิดรหัสสินค้า |

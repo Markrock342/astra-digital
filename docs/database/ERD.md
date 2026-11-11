@@ -78,7 +78,7 @@ runtime_flags
 | Entity | ตาราง |
 |--------|--------|
 | Preorder | `reservations` |
-| Queue number | `reservations.queue_number` + UNIQUE partial **ทั้งร้าน** (DOC-05); โหมดออกคิวก่อน/หลังจ่ายสลับได้ทาง flag |
+| Queue number | `reservations.queue_number` + UNIQUE partial **ทั้งร้าน** (เสนอ รอมาร์คล็อก); โหมด `after_payment`/`on_create`; `on_create` ต้องมี expiry + `queueBoard` กรอง unpaid; อ้าง `variant_id` ไม่มี `product_id` |
 
 ### 3.7 Chat / Notifications / Audit
 
