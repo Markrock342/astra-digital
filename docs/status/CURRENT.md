@@ -15,6 +15,7 @@
 - SOW ที่ล็อกแล้ว: [SOW-FIFACORP-FINAL-20261110.md](../prompts/SOW-FIFACORP-FINAL-20261110.md)
 - งานมาร์คกับน็อต: [TASKS-MARK-NOTT-20261110.md](../prompts/TASKS-MARK-NOTT-20261110.md)
 - `GET /api/rankings/buyers` ต้องเป็นผู้ดูแล คนไม่ล็อกอินได้ 401 ลูกค้าได้ 403
+- 11 พ.ย. (local ยังไม่ deploy): อันดับผู้ซื้อรับ `period=day|week|month|all` และ `limit` 1–50 ค่าไม่ถูกต้องตอบ 400
 - กฎอันดับนี้ขึ้นกับ Worker ชุด `55439134-5d32-404c-9a1f-9f267935306a` แล้ว ยังไม่ได้ตรวจกรณีลูกค้าล็อกอินได้ 403 บนเซิร์ฟเวอร์
 
 ## ร้านโครงสำเร็จรูป

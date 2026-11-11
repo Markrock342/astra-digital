@@ -172,7 +172,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           });
         if (path === "/api/rankings/buyers")
           return send(200, {
-            buyers: service.buyerRanking(user, url.searchParams.get("limit")),
+            buyers: service.buyerRanking(user, {
+              limit: url.searchParams.get("limit"),
+              period: url.searchParams.get("period") ?? undefined,
+            }),
           });
         if (path === "/api/admin")
           return send(200, service.adminOverview(user));

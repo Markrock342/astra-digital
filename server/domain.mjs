@@ -1068,7 +1068,7 @@ export function createCommerceCore({
         })),
       })),
       orders: all(
-        "SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product FROM orders o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id UNION ALL SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product FROM reservations o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id ORDER BY 6 DESC",
+        "SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product FROM orders o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id UNION ALL SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product FROM reservations o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id ORDER BY 5 DESC",
       ),
       customers: all("SELECT id,email,name,role,created_at FROM users"),
       ledger: all(
@@ -1368,24 +1368,48 @@ export function createCommerceCore({
     );
     return { ok: true };
   }
-  function buyerRanking(user, limit = 10) {
+  const RANKING_PERIODS = ["day", "week", "month", "all"];
+  // Shop time is Asia/Bangkok (UTC+7, no DST); stored timestamps are UTC "YYYY-MM-DD HH:MM:SS".
+  function rankingSince(period, now = new Date()) {
+    if (period === "all") return null;
+    const offset = 7 * 3600000;
+    const local = new Date(now.getTime() + offset);
+    let start = Date.UTC(
+      local.getUTCFullYear(),
+      local.getUTCMonth(),
+      period === "month" ? 1 : local.getUTCDate(),
+    );
+    if (period === "week") start -= ((local.getUTCDay() + 6) % 7) * 86400000;
+    return new Date(start - offset).toISOString().slice(0, 19).replace("T", " ");
+  }
+  function buyerRanking(user, query = {}) {
     requireAdmin(user);
-    const n = Math.min(50, Math.max(1, Number(limit) || 10));
+    const rawLimit = query.limit ?? null;
+    const n = rawLimit === null || rawLimit === "" ? 10 : Number(rawLimit);
+    integer(n, 1, 50, "จำนวนอันดับ");
+    const period = query.period ?? "all";
+    if (!RANKING_PERIODS.includes(period)) fail(400, "ช่วงเวลาไม่ถูกต้อง");
+    const since = rankingSince(period);
+    // Paid spend: delivered orders plus paid preorders (status PREORDER after pay).
     return all(
-      `SELECT u.id,u.name,
-              COUNT(o.id) AS orders,
-              COALESCE(SUM(o.total),0) AS spent_satang
-       FROM users u
-       JOIN orders o ON o.user_id=u.id AND o.status='DELIVERED'
-       WHERE u.role='CUSTOMER'
+      `SELECT u.name,u.email,COUNT(*) AS orders,SUM(x.total) AS spent_satang
+       FROM (
+         SELECT user_id,total,created_at FROM orders WHERE status='DELIVERED'
+         UNION ALL
+         SELECT user_id,total,created_at FROM reservations WHERE status='PREORDER'
+       ) x
+       JOIN users u ON u.id=x.user_id
+       WHERE u.role='CUSTOMER' AND (? IS NULL OR x.created_at >= ?)
        GROUP BY u.id
        ORDER BY spent_satang DESC, orders DESC, u.created_at ASC
        LIMIT ?`,
+      since,
+      since,
       n,
     ).map((row, index) => ({
       rank: index + 1,
-      id: row.id,
-      name: row.name.slice(0, 2) + "***" + row.name.slice(-1),
+      name: row.name,
+      email: row.email,
       orders: row.orders,
       spentSatang: row.spent_satang,
     }));

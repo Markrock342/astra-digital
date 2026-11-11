@@ -197,8 +197,8 @@ test("in-web chat and notifications stay scoped", (t) => {
   );
 });
 
-test("buyer ranking uses delivered spend only and masks names", (t) => {
-  const { s, user, merchant } = fixture(t);
+test("buyer ranking is admin-only, filters by Bangkok period and validates limit", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
   s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
   const order = s.createOrder(user, {
     variantId: "stream-plus-30",
@@ -209,12 +209,35 @@ test("buyer ranking uses delivered spend only and masks names", (t) => {
     paymentToken: order.paymentToken,
     outcome: "success",
   });
-  assert.throws(() => s.buyerRanking(user, 5), (e) => e.status === 403);
-  const buyers = s.buyerRanking(merchant, 5);
-  assert.ok(buyers.length >= 1);
-  assert.equal(buyers[0].rank, 1);
-  assert.match(buyers[0].name, /\*\*\*/);
-  assert.ok(buyers[0].spentSatang > 0);
+  assert.throws(() => s.buyerRanking(user, {}), (e) => e.status === 403);
+  assert.throws(() => s.buyerRanking(staff, {}), (e) => e.status === 403);
+  assert.throws(() => s.buyerRanking(null, {}), (e) => e.status === 401);
+  const all = s.buyerRanking(merchant, { limit: "5" });
+  const mine = all.find((b) => b.email === "buyer@example.invalid");
+  assert.ok(mine, "delivered buyer is ranked");
+  assert.equal(mine.name, "QA Buyer");
+  assert.equal(mine.spentSatang, order.total);
+  assert.ok(all.every((b) => !("id" in b)), "user ids are not exposed");
+  assert.ok(s.buyerRanking(merchant, { period: "day" }).some((b) => b.email === mine.email));
+  s.db
+    .prepare("UPDATE orders SET created_at='2020-01-01 00:00:00' WHERE id=?")
+    .run(order.id);
+  for (const period of ["day", "week", "month"])
+    assert.ok(
+      !s.buyerRanking(merchant, { period }).some((b) => b.email === mine.email),
+      period + " excludes old spend",
+    );
+  assert.ok(s.buyerRanking(merchant, { period: "all" }).some((b) => b.email === mine.email));
+  for (const limit of ["1.5", "0", "51", "abc"])
+    assert.throws(
+      () => s.buyerRanking(merchant, { limit }),
+      (e) => e.status === 400,
+      "limit " + limit,
+    );
+  assert.throws(
+    () => s.buyerRanking(merchant, { period: "year" }),
+    (e) => e.status === 400,
+  );
 });
 
 test("HTTP routes expose product detail, channel, queue, chat, rankings", async (t) => {
@@ -255,6 +278,14 @@ test("HTTP routes expose product detail, channel, queue, chat, rankings", async 
   assert.equal(customerRankings.status, 403);
   const adminRankings = await get("/api/rankings/buyers", merchantToken);
   assert.equal(adminRankings.status, 200);
+  assert.equal(
+    (await get("/api/rankings/buyers?period=week&limit=5", merchantToken)).status,
+    200,
+  );
+  assert.equal(
+    (await get("/api/rankings/buyers?limit=1.5", merchantToken)).status,
+    400,
+  );
   assert.ok(Array.isArray(adminRankings.body.buyers));
   const chat = await post("/api/chat/threads", token, {
     body: "สวัสดีจาก HTTP",
