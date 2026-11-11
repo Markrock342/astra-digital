@@ -63,12 +63,23 @@
 | A4 | notifications ของ user อื่น | ไม่ปนใน list — **สถานะเทสต์: ยังขาด** (ยังไม่มีเคสข้ามบัญชีโดยตรง) |
 | A5 | rankings | เงื่อนไขขั้นต่ำเดิม: ไม่มีรหัสสินค้า / mask ชื่อ — มีบางส่วนใน nott-ops · **ยังขาด:** 401/403 เมื่อไม่ใช่แอดมิน + ตัวกรองช่วงวัน/สัปดาห์/เดือน/ทั้งหมด |
 
-## 6. เกณฑ์ผ่านรอบ Review (เอกสาร)
+## 6. เคส Admin fulfill พรีออเดอร์ (DB-DOC-02 — ออกแบบแล้ว · implement **ยังขาด**)
+
+| ID | สถานการณ์ | คาดหวัง |
+|----|-----------|---------|
+| P1 | Admin deliver reservation สถานะ PREORDER สต็อกพอ | status=DELIVERED; มี delivered_at/by; inventory.reservation_id ถูกผูกตาม quantity; response เป็น metadata ไม่มี credential |
+| P2 | เรียก deliver ซ้ำหลังสำเร็จ | ไม่ allocate เพิ่ม; คืน metadata เดิมเท่านั้น (ไม่มี credential); inventory นับเท่าเดิม |
+| P3 | Customer/Staff เรียก deliver | 401/403 (STAFF ไม่ได้ — ADMIN เท่านั้น) |
+| P4 | สต็อกไม่พอตอน deliver | 409; reservation ยัง PREORDER; inventory ไม่ถูกผูก |
+| P5 | Owner อ่าน orderDetail reservation หลัง DELIVERED | ได้ login+password ของตน; คนอื่น 404 |
+| P6 | ฐานมีข้อมูล → rebuild reservations CHECK + inventory XOR | แถวเดิมครบ; DELIVERED/XOR ใช้ได้ |
+
+## 7. เกณฑ์ผ่านรอบ Review (เอกสาร)
 
 งาน Review ผ่านเมื่อ Mark ยอมรับแผนนี้และชุด docs อื่น — **ยังไม่ต้องมีเทสใหม่ครบทุกแถว**  
 หลังล็อก schema: เปิด Task implement เทสตามช่องว่างคอลัมน์ “ช่องว่าง” โดยอ้าง ID ในตารางนี้
 
-## 7. นอกขอบเขต
+## 8. นอกขอบเขต
 
 - E2E Frontend (Bank)  
 - Penetration test เต็มรูปแบบ  
