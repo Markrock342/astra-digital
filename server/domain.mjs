@@ -138,6 +138,26 @@ export function createCommerceCore({
     );
     return row.n;
   };
+  const chatRate = new Map();
+  const staffChatCooldown = new Map();
+  const assertChatRateLimit = (userId) => {
+    const now = Date.now();
+    let hit = chatRate.get(userId);
+    if (!hit || hit.expires < now) hit = { n: 0, expires: now + 60000 };
+    hit.n += 1;
+    chatRate.set(userId, hit);
+    if (hit.n > 30) fail(429, "ส่งข้อความเร็วเกินไป กรุณาลองใหม่ในหนึ่งนาที");
+  };
+  const notifyStaffChatThrottled = (threadId, title, body) => {
+    const now = Date.now();
+    const last = staffChatCooldown.get(threadId) ?? 0;
+    if (now - last < 60000) return;
+    staffChatCooldown.set(threadId, now);
+    for (const staff of all(
+      "SELECT id FROM users WHERE role IN ('STAFF','ADMIN')",
+    ))
+      notify(staff.id, "chat", title, body);
+  };
   const integer = (v, min, max, label) => {
     if (!Number.isSafeInteger(v) || v < min || v > max)
       fail(400, label + "ไม่ถูกต้อง");
@@ -1321,29 +1341,53 @@ export function createCommerceCore({
     const staffReply = isStaff(user) && thread.user_id !== user.id;
     if (thread.user_id !== user.id && !staffReply)
       fail(403, "ไม่มีสิทธิ์ส่งข้อความในแชทนี้");
-    const senderType = staffReply
-      ? user.role === ROLES.ADMIN
-        ? "ADMIN"
-        : "STAFF"
-      : "USER";
-    run(
-      "INSERT INTO chat_messages(id,thread_id,sender_type,body) VALUES(?,?,?,?)",
-      randomUUID(),
-      id,
-      senderType,
-      body,
-    );
-    if (staffReply)
-      notify(thread.user_id, "chat", "มีข้อความใหม่จากทีมงาน", body.slice(0, 120));
-    else if (isStaff(user) === false) {
-      const staffUsers = all(
-        "SELECT id FROM users WHERE role IN ('STAFF','ADMIN')",
+    assertChatRateLimit(user.id);
+    return tx(() => {
+      const live = one("SELECT * FROM chat_threads WHERE id=?", id);
+      if (!live || live.status !== "OPEN") fail(409, "แชทนี้ปิดแล้ว");
+      const senderType = staffReply
+        ? user.role === ROLES.ADMIN
+          ? "ADMIN"
+          : "STAFF"
+        : "USER";
+      run(
+        "INSERT INTO chat_messages(id,thread_id,sender_type,body) VALUES(?,?,?,?)",
+        randomUUID(),
+        id,
+        senderType,
+        body,
       );
-      for (const staff of staffUsers)
-        notify(staff.id, "chat", "ลูกค้าส่งข้อความใหม่", body.slice(0, 120));
-    }
-    audit(user, "CHAT_MESSAGE", id);
-    return chatMessages(user, id);
+      if (staffReply)
+        notify(
+          live.user_id,
+          "chat",
+          "มีข้อความใหม่จากทีมงาน",
+          body.slice(0, 120),
+        );
+      else if (!isStaff(user))
+        notifyStaffChatThrottled(
+          id,
+          "ลูกค้าส่งข้อความใหม่",
+          body.slice(0, 120),
+        );
+      audit(user, "CHAT_MESSAGE", id);
+      return chatMessages(user, id);
+    });
+  }
+  function closeChatThread(user, threadId) {
+    requireUser(user);
+    const id = clean(threadId, 1, 80, "แชท");
+    return tx(() => {
+      const thread = one("SELECT * FROM chat_threads WHERE id=?", id);
+      if (!thread) fail(404, "ไม่พบแชท");
+      if (thread.user_id !== user.id && !isStaff(user))
+        fail(403, "ไม่มีสิทธิ์ปิดแชทนี้");
+      if (thread.status === "CLOSED")
+        return one("SELECT * FROM chat_threads WHERE id=?", id);
+      run("UPDATE chat_threads SET status='CLOSED' WHERE id=?", id);
+      audit(user, "CLOSE_CHAT", id);
+      return one("SELECT * FROM chat_threads WHERE id=?", id);
+    });
   }
   function notifications(user) {
     requireUser(user);
@@ -1447,6 +1491,7 @@ export function createCommerceCore({
     openChatThread,
     chatMessages,
     postChatMessage,
+    closeChatThread,
     notifications,
     markNotificationRead,
     buyerRanking,

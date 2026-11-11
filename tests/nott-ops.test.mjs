@@ -325,3 +325,37 @@ test("HTTP routes expose product detail, channel, queue, chat, rankings", async 
   const queue = await get("/api/queue", staffToken);
   assert.equal(queue.status, 200);
 });
+
+test("API-FIX-02: chat rate limit, staff notify throttle, and close thread", (t) => {
+  const { s, user, staff } = fixture(t);
+  const opened = s.openChatThread(user, { body: "เปิดเคสทดสอบแชท" });
+  const before = s.notifications(staff).filter((n) => n.kind === "chat").length;
+  s.postChatMessage(user, opened.thread.id, { body: "ข้อความที่ 1" });
+  const afterFirst = s.notifications(staff).filter((n) => n.kind === "chat")
+    .length;
+  assert.ok(afterFirst >= before);
+  s.postChatMessage(user, opened.thread.id, { body: "ข้อความที่ 2 ทันที" });
+  const afterSecond = s.notifications(staff).filter((n) => n.kind === "chat")
+    .length;
+  assert.equal(
+    afterSecond,
+    afterFirst,
+    "second message within throttle window should not fan-out again",
+  );
+  let limited = null;
+  for (let i = 0; i < 40; i++) {
+    try {
+      s.postChatMessage(user, opened.thread.id, { body: "flood-" + i });
+    } catch (e) {
+      limited = e;
+      break;
+    }
+  }
+  assert.equal(limited?.status, 429);
+  const closed = s.closeChatThread(user, opened.thread.id);
+  assert.equal(closed.status, "CLOSED");
+  assert.throws(
+    () => s.postChatMessage(user, opened.thread.id, { body: "หลังปิด" }),
+    (e) => e.status === 409,
+  );
+});
