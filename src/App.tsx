@@ -379,6 +379,8 @@ function Header() {
 }
 function Footer() {
   const { overview } = useStore();
+  const line = overview?.shop?.line ?? "";
+  const email = overview?.shop?.email ?? "";
   return (
     <footer className="site-footer">
       <div className="container footer-main">
@@ -390,32 +392,36 @@ function Footer() {
             {overview?.shop?.description || t("ร้านสินค้าดิจิทัล")}
           </p>
         </div>
-        <div className="footer-contact">
-          <h3>{t("ติดต่อร้าน")}</h3>
-          <div className="contact-links">
-            <Link to="/support" className="contact-card">
-              <span className="line-icon">
-                <MessageCircle size={23} />
-              </span>
-              <span>
-                LINE<small>{overview?.shop?.line || t("ยังไม่ได้ตั้งค่า")}</small>
-              </span>
-              <ArrowUpRight size={16} />
-            </Link>
-            <Link to="/support#email" className="contact-card">
-              <span className="mail-icon">
-                <Mail size={23} />
-              </span>
-              <span>
-                {t("อีเมล")}
-                <small>
-                  {overview?.shop?.email || t("ยังไม่ได้ตั้งค่า")}
-                </small>
-              </span>
-              <ArrowUpRight size={16} />
-            </Link>
+        {(line || email) && (
+          <div className="footer-contact">
+            <h3>{t("ติดต่อร้าน")}</h3>
+            <div className="contact-links">
+              {line && (
+                <Link to="/support" className="contact-card">
+                  <span className="line-icon">
+                    <MessageCircle size={23} />
+                  </span>
+                  <span>
+                    LINE<small>{line}</small>
+                  </span>
+                  <ArrowUpRight size={16} />
+                </Link>
+              )}
+              {email && (
+                <Link to="/support#email" className="contact-card">
+                  <span className="mail-icon">
+                    <Mail size={23} />
+                  </span>
+                  <span>
+                    {t("อีเมล")}
+                    <small>{email}</small>
+                  </span>
+                  <ArrowUpRight size={16} />
+                </Link>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         <div className="footer-menu">
           <h3>{t("เมนู")}</h3>
           <Link to="/products">{t("สินค้าทั้งหมด")}</Link>
@@ -495,6 +501,12 @@ function Home() {
   }, [overview?.activity.length]);
   const latestActivity =
     overview?.activity[activityIndex % (overview?.activity.length ?? 1)];
+  const showStats =
+    !loading &&
+    [overview?.customers, overview?.products, overview?.orders].some(
+      (value) => (value ?? 0) > 0,
+    );
+  const showActivity = loading || (overview?.activity.length ?? 0) > 0;
   return (
     <>
       <main className="container home-main">
@@ -546,6 +558,7 @@ function Home() {
           </div>
         </section>
         <Marquee />
+        {showStats && (
         <section className="stats-panel" aria-label={t("สถิติร้านค้า")}>
           {[
             [Users, t("ลูกค้า"), overview?.customers, t("คน")],
@@ -571,6 +584,8 @@ function Home() {
             );
           })}
         </section>
+        )}
+        {showActivity && (
         <section className="activity-panel">
           {latestActivity && (
             <div className="mobile-activity-ticker">
@@ -651,6 +666,7 @@ function Home() {
             </div>
           )}
         </section>
+        )}
         {overview?.shop?.announcement ? (
           <aside className="announcement">
             <span className="announcement-icon">
@@ -2003,10 +2019,20 @@ function InfoPage({ kind }: { kind: string }) {
               {t("ตรวจสอบคำสั่งซื้อ")}
               <ArrowRight size={16} />
             </Link>
-            <h3>{t("การติดต่อในโหมดทดลอง")}</h3>
-            <p>
-              {t("ยังไม่ได้ตั้งค่า LINE และอีเมลจริงของร้าน เจ้าของร้านต้องกำหนดช่องทางบริการลูกค้าก่อนเปิดใช้งานจริง")}
-            </p>
+            {(overview?.shop?.line || overview?.shop?.email) && (
+              <>
+                <h3>{t("ช่องทางติดต่อ")}</h3>
+                <p>
+                  {overview?.shop?.line ? <>LINE {overview?.shop?.line}</> : null}
+                  {overview?.shop?.line && overview?.shop?.email ? <br /> : null}
+                  {overview?.shop?.email ? (
+                    <>
+                      {t("อีเมล")} {overview?.shop?.email}
+                    </>
+                  ) : null}
+                </p>
+              </>
+            )}
             <h3 id="email">{t("ข้อมูลที่ควรเตรียมเมื่อแจ้งปัญหา")}</h3>
             <p>
               {t("เลขคำสั่งซื้อ ชื่อสินค้า และรายละเอียดปัญหา กรุณาอย่าส่งรหัสผ่านหรือข้อมูลส่วนตัวที่ไม่เกี่ยวข้อง")}
@@ -2028,7 +2054,7 @@ function InfoPage({ kind }: { kind: string }) {
             <h2>{t("ข้อกำหนดร้าน")}</h2>
             <p>
               {overview?.shop?.policy ||
-                t("ผู้ดูแลสามารถกำหนดข้อกำหนดร้านได้จากหลังบ้าน")}
+                t("สินค้าในร้านนี้เป็นสินค้าดิจิทัล การสั่งซื้อถือว่าคุณยอมรับข้อกำหนดของร้าน")}
             </p>
             <h3>{t("คำสั่งซื้อและการส่งมอบ")}</h3>
             <p>

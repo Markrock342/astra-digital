@@ -755,6 +755,11 @@ html.theme-fade *::after {
 .storefront-shell .footer-brand .brand-logo img {
   height: 38px;
 }
+@media (min-width: 861px) {
+  .storefront-shell .footer-main:not(:has(.footer-contact)) {
+    grid-template-columns: 1.08fr 0.55fr;
+  }
+}
 :root[data-theme="dark"] .storefront-shell select {
   color-scheme: dark;
 }
@@ -1083,11 +1088,17 @@ html.lang-swap .storefront-shell .main-nav {
 }
 .storefront-shell .credit-summary,
 .storefront-shell .credit-review-card,
-.storefront-shell .reference-credit-page .review-form {
+.storefront-shell .reference-credit-page .review-form,
+.storefront-shell .reference-credit-page .empty-state {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+}
+.storefront-shell .reference-credit-page .empty-icon {
+  color: var(--accent-text);
+  border-color: var(--border);
+  background: var(--raised);
 }
 .storefront-shell .credit-score-ring {
   border-color: var(--accent);
