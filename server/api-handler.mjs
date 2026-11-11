@@ -242,6 +242,11 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           });
         if (path === "/api/admin/inventory")
           return send(200, service.importCodes(user, input));
+        if (/^\/api\/admin\/reservations\/[^/]+\/deliver$/.test(path))
+          return send(
+            200,
+            service.deliverReservation(user, path.split("/")[4]),
+          );
         if (path === "/api/admin/settings")
           return send(200, service.saveSettings(user, input));
         if (path === "/api/admin/products")

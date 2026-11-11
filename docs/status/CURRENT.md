@@ -2,8 +2,13 @@
 
 อัปเดตล่าสุด: 2026-11-11
 
+## ISSUE-18 DB-005 APIs — PR #20 merge แล้ว (ยังไม่ deploy)
+- น็อตเปิด PR: import `items[{loginId,password}]`, `POST /api/admin/reservations/:id/deliver`, owner อ่าน credentials หลัง DELIVERED, คิวซ่อน DELIVERED, `features` ทั้งคู่ `true`, ขยาย `inventory_available` ให้มี `reservation_id`, MU3 เข้ม
+- **ห้าม deploy** — มาร์ครีวิว/merge แล้วค่อยขึ้นพร้อมกันกับ schema 005
+- คงการแยก codes/credentials ของ `035349d` และประวัติ deploy ด้านล่าง
+
 ## หน้าร้าน ASIA EXTRA ขึ้นแล้ว (11 พ.ย.)
-- Pages `d5f6c0a4` จาก commit ล่าสุดบน main: โลโก้ ASIA EXTRA, สองภาษา TH/EN (มี animation ตอนสลับ), แผงปรับธีม, animation หน้าร้าน
+- Pages `2ac9bcde` จาก commit ล่าสุดบน main: โลโก้ ASIA EXTRA, สองภาษา TH/EN (มี animation ตอนสลับ), แผงเลือกสีธีม (โหมดสว่าง/มืดตามเครื่อง), animation หน้าร้าน
 - deploy เฉพาะ Pages — Worker ยังเป็น `184cd5a1` จึงยังไม่รัน migration 005 · โดเมนของ Worker ยังเสิร์ฟหน้าเก่าจนกว่าจะ deploy Worker
 - โดเมน asiaextra.xyz ยังไม่ต่อ · PR #2 ของแบงค์จะชนกับงานนี้
 

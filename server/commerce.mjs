@@ -13,6 +13,7 @@ import { createCommerceCore } from "./domain.mjs";
 import { executeSqliteMigration } from "./sqlite-migrations.mjs";
 import {
   applyMigration005,
+  ensureInventoryAvailableIndex,
   MIGRATION_005_NAME,
 } from "./migrate-005.mjs";
 export { ApiError } from "./domain.mjs";
@@ -53,6 +54,7 @@ export function createCommerce(options = {}) {
       }
     }
   }
+  ensureInventoryAvailableIndex(db);
   return createCommerceCore({ ...options, db, key });
 }
 export function openLocalCommerce({

@@ -490,3 +490,175 @@ test("API-FIX-05: staffOrders pages in SQL without repeating rows", (t) => {
     assert.equal(page2.orders.some((o) => o.id === row.id), false);
   }
 });
+
+test("ISSUE-18 DB-005: import pairs, deliver, owner credentials, queue, index", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+
+  // K1 — product API has no secrets
+  const product = s.productDetail("cinema-max");
+  const blob = JSON.stringify(product);
+  assert.ok(!blob.includes("_enc"));
+  assert.ok(!/"password"/.test(blob));
+  assert.ok(!/"loginId"/.test(blob));
+  assert.ok(!/"login_id"/.test(blob));
+
+  // Drop seed DEMO keys so deliver binds the imported pairs.
+  s.db
+    .prepare(
+      "DELETE FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL",
+    )
+    .run("cinema-max-90");
+
+  const imported = s.importCodes(merchant, {
+    variantId: "cinema-max-90",
+    items: [
+      { loginId: "  pair-a@example.invalid  ", password: " pass with spaces " },
+      { loginId: "pair-b@example.invalid", password: "plain" },
+    ],
+  });
+  assert.equal(imported.imported, 2);
+  const freePairs = s.db
+    .prepare(
+      "SELECT legacy_single_secret FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL",
+    )
+    .all("cinema-max-90");
+  assert.equal(freePairs.length, 2);
+  assert.ok(freePairs.every((r) => r.legacy_single_secret === 0));
+  assert.throws(
+    () =>
+      s.importCodes(merchant, {
+        variantId: "cinema-max-90",
+        items: [
+          {
+            loginId: "pair-a@example.invalid",
+            password: " pass with spaces ",
+          },
+        ],
+      }),
+    (e) => e.status === 409,
+  );
+  assert.throws(
+    () =>
+      s.importCodes(merchant, {
+        variantId: "cinema-max-90",
+        codes: "LEGACY1",
+        items: [{ loginId: "x", password: "y" }],
+      }),
+    (e) => e.status === 400,
+  );
+
+  const reservation = s.createOrder(user, {
+    variantId: "cinema-max-90",
+    quantity: 1,
+    requestKey: "issue18-deliver-1",
+  });
+  const paid = s.pay(user, reservation.id, {
+    paymentToken: reservation.paymentToken,
+    outcome: "success",
+  });
+  assert.equal(paid.status, "PREORDER");
+  assert.ok(s.queueBoard(staff).some((q) => q.id === reservation.id));
+
+  // P3 — CUSTOMER/STAFF cannot deliver
+  assert.throws(
+    () => s.deliverReservation(user, reservation.id),
+    (e) => e.status === 403,
+  );
+  assert.throws(
+    () => s.deliverReservation(staff, reservation.id),
+    (e) => e.status === 403,
+  );
+
+  // P1 — ADMIN deliver binds reservation_id
+  const delivered = s.deliverReservation(merchant, reservation.id);
+  assert.equal(delivered.status, "DELIVERED");
+  assert.equal(delivered.delivered, true);
+  assert.ok(delivered.delivered_at);
+  assert.equal(delivered.delivered_by, merchant.id);
+  assert.equal(delivered.loginId, undefined);
+  assert.equal(delivered.password, undefined);
+  assert.equal(delivered.codes, undefined);
+  assert.equal(delivered.credentials, undefined);
+  assert.equal(
+    s.db
+      .prepare("SELECT COUNT(*) AS n FROM inventory WHERE reservation_id=?")
+      .get(reservation.id).n,
+    1,
+  );
+  assert.ok(!s.queueBoard(staff).some((q) => q.id === reservation.id));
+
+  // K3/P2 — idempotent; no extra allocate
+  const again = s.deliverReservation(merchant, reservation.id);
+  assert.equal(again.status, "DELIVERED");
+  assert.equal(again.delivered_at, delivered.delivered_at);
+  assert.equal(
+    s.db
+      .prepare("SELECT COUNT(*) AS n FROM inventory WHERE reservation_id=?")
+      .get(reservation.id).n,
+    1,
+  );
+
+  // K2/K4/P5 — owner credentials; staff empty; stranger 404
+  const ownerView = s.orderDetail(user, reservation.id);
+  assert.equal(ownerView.status, "DELIVERED");
+  assert.deepEqual(ownerView.codes, []);
+  assert.equal(ownerView.credentials.length, 1);
+  assert.equal(ownerView.credentials[0].loginId, "pair-a@example.invalid");
+  assert.equal(ownerView.credentials[0].password, " pass with spaces ");
+  const staffView = s.orderDetail(staff, reservation.id);
+  assert.deepEqual(staffView.codes, []);
+  assert.deepEqual(staffView.credentials, []);
+  const other = s.register({
+    name: "Other",
+    email: "other-issue18@example.invalid",
+    password: "Other-only-Password-123",
+  });
+  assert.throws(
+    () => s.orderDetail(s.session(other.token), reservation.id),
+    (e) => e.status === 404,
+  );
+
+  assert.deepEqual(s.features, {
+    credentialPair: true,
+    preorderDelivery: true,
+  });
+  const cols = s.db
+    .prepare("PRAGMA index_info(inventory_available)")
+    .all()
+    .map((r) => r.name);
+  assert.ok(cols.includes("reservation_id"));
+});
+
+test("ISSUE-18 DB-005: deliver refuses when stock is short (P4)", (t) => {
+  const { s, user, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const reservation = s.createOrder(user, {
+    variantId: "cinema-max-90",
+    quantity: 2,
+    requestKey: "issue18-short-stock",
+  });
+  s.pay(user, reservation.id, {
+    paymentToken: reservation.paymentToken,
+    outcome: "success",
+  });
+  s.db
+    .prepare(
+      "DELETE FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL",
+    )
+    .run("cinema-max-90");
+  s.importCodes(merchant, {
+    variantId: "cinema-max-90",
+    items: [{ loginId: "only-one@example.invalid", password: "x" }],
+  });
+  assert.throws(
+    () => s.deliverReservation(merchant, reservation.id),
+    (e) => e.status === 409,
+  );
+  assert.equal(
+    s.db
+      .prepare("SELECT status FROM reservations WHERE id=?")
+      .get(reservation.id).status,
+    "PREORDER",
+  );
+});

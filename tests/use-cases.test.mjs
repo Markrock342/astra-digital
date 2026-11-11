@@ -284,8 +284,8 @@ test("UC7 live shop refuses demo accounts, demo credit and sandbox payment", asy
   assert.equal(health.body.mode, "live");
   assert.deepEqual(
     health.body.features,
-    { credentialPair: false, preorderDelivery: false },
-    "admin UI keeps DB-005 screens off until the API ships",
+    { credentialPair: true, preorderDelivery: true },
+    "DB-005 APIs ship with both feature flags on",
   );
   assert.equal((await api.get("/api/products")).body.products.length, 0, "starts empty");
   assert.equal((await api.post("/api/demo", null, {})).status, 403);

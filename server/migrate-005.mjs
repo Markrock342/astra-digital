@@ -18,6 +18,14 @@ export const TRACK_A_MIGRATION_FILES = [
   MIGRATION_005_NAME,
 ];
 
+/** Widen inventory_available so freeness checks can use reservation_id (idempotent). */
+export function ensureInventoryAvailableIndex(db) {
+  db.exec("DROP INDEX IF EXISTS inventory_available");
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS inventory_available ON inventory(variant_id, order_id, reservation_id)",
+  );
+}
+
 export function credentialFingerprint(serverKey, loginId, password) {
   const canonical = JSON.stringify({
     v: 1,
@@ -124,9 +132,7 @@ export function applyMigration005(db, key, sqlSource) {
 
   db.exec("DROP TABLE inventory");
   db.exec("ALTER TABLE inventory_new RENAME TO inventory");
-  db.exec(
-    "CREATE INDEX IF NOT EXISTS inventory_available ON inventory(variant_id, order_id)",
-  );
+  ensureInventoryAvailableIndex(db);
 
   const violations = db.prepare("PRAGMA foreign_key_check").all();
   if (violations.length)
