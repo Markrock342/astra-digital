@@ -2,6 +2,11 @@
 
 อัปเดตล่าสุด: 2026-11-11
 
+## ISSUE-18 DB-005 APIs — PR รอ Mark (ยังไม่ deploy)
+- น็อตเปิด PR: import `items[{loginId,password}]`, `POST /api/admin/reservations/:id/deliver`, owner อ่าน credentials หลัง DELIVERED, คิวซ่อน DELIVERED, `features` ทั้งคู่ `true`, ขยาย `inventory_available` ให้มี `reservation_id`, MU3 เข้ม
+- **ห้าม deploy** — มาร์ครีวิว/merge แล้วค่อยขึ้นพร้อมกันกับ schema 005
+- คงการแยก codes/credentials ของ `035349d` และประวัติ deploy ด้านล่าง
+
 ## MIG-005 merge แล้ว (ยังไม่ deploy)
 - PR #19 ของน็อต merge เข้า main แล้ว: rebuild `inventory` (ไอดี/รหัสผ่านเข้ารหัส, ธง legacy, `reservation_id`) และ `reservations` (DELIVERED, `delivered_at`/`delivered_by`), index `orders/reservations(status, created_at)`
 - มาร์คแก้หลัง merge: โค้ดแบบเก่ายังอยู่ใน `codes` เท่านั้น คู่ไอดี/รหัสผ่านอยู่ใน `credentials` (เดิมของชิ้นเดียวโผล่ทั้งสองที่)
