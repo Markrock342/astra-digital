@@ -3,6 +3,7 @@
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
 ## 2026-11-11
+- Merge PR น็อตรอบ 2: เอกสาร #4 #6 #7 #9 #8 #10 #5 และโค้ด #11 (เปิดแชทมี rate limit + แจ้ง staff แบบ throttle) #16 (staff orders แบ่งหน้าใน SQL) · แก้ conflict เอกสารโดยเก็บทั้งสองฝั่ง · ล็อกคิว after_payment รวมทั้งร้าน และ path ส่งของ `POST /api/admin/reservations/:id/deliver` (ADMIN) · `npm test` 55 + Playwright 6 ผ่าน · น็อตเริ่ม migration 005 ได้
 - อันดับผู้ซื้อกรองได้ วัน/สัปดาห์/เดือน/ทั้งหมด ตามเวลาไทย นับพรีออเดอร์ที่จ่ายแล้ว ไม่ส่ง user id และ limit ผิดตอบ 400 แทน 500 — [api-contract-shop.md](architecture/api-contract-shop.md)
 - หลังบ้านเรียงคำสั่งซื้อตามเวลาสร้างล่าสุด (เดิมเรียงตาม customer_id)
 - Merge PR ของน็อต #12 (แชท rate limit/throttle/ปิดห้อง) #13 (URI ผิดตอบ 400) #14 (staff orders แบ่งหน้า) และ #3 (origin ตอน dev) · อันดับผู้ซื้อนับพรีออเดอร์ DELIVERED ด้วย · `npm test` 45 ผ่าน · ยังไม่ deploy
