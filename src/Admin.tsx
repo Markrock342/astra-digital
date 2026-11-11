@@ -19,6 +19,8 @@ import {
   Image,
   LayoutGrid,
   LoaderCircle,
+  Megaphone,
+  Moon,
   MoreHorizontal,
   Package,
   Plus,
@@ -29,6 +31,7 @@ import {
   ShoppingBag,
   Star,
   Store,
+  Sun,
   Users,
   Wallet,
   X,
@@ -1532,11 +1535,29 @@ function ShopConfigCard() {
   const shop = overview?.shop;
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const initial = {
+    shopName: shop?.shopName ?? "",
+    line: shop?.line ?? "",
+    email: shop?.email ?? "",
+    description: shop?.description ?? "",
+    announcement: shop?.announcement ?? "",
+  };
+  const [form, setForm] = useState(initial);
+  const signature = Object.values(initial).join("|");
+  // Reload the fields when the saved settings change (after save / refresh).
+  useEffect(() => setForm(initial), [signature]);
+  const dirty = Object.values(form).join("|") !== signature;
+  const field =
+    (name: keyof typeof form) =>
+    (e: { target: { value: string } }) => {
+      setSaved(false);
+      setForm({ ...form, [name]: e.target.value });
+    };
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     try {
-      await api("/admin/settings", Object.fromEntries(new FormData(e.currentTarget)));
+      await api("/admin/settings", form);
       setSaved(true);
       toast("บันทึกข้อมูลร้านแล้ว");
       await refresh();
@@ -1546,47 +1567,132 @@ function ShopConfigCard() {
     }
   }
   return (
-    <form
-      className="reference-admin-card editor-panel"
-      key={[shop?.shopName, shop?.line, shop?.email, shop?.description, shop?.announcement].join("|")}
-      onSubmit={save}
-    >
+    <section className="reference-admin-card editor-panel shop-config">
       <div className="reference-card-heading">
         <div>
           <h2>ข้อมูลร้าน</h2>
-          <p>ชื่อ ไลน์ อีเมล และข้อความบนเว็บ เปลี่ยนแล้วเห็นบนหน้าร้านทันที</p>
+          <p>พิมพ์ด้านขวา ดูผลบนหน้าร้านจำลองด้านซ้ายทันที กดบันทึกเพื่อใช้จริง</p>
         </div>
         <Link to="/admin/settings">
           ตั้งค่าเพิ่มเติม
           <ArrowRight size={15} />
         </Link>
       </div>
-      <ErrorMessage message={error} />
-      <label className="field">
-        ชื่อร้าน
-        <input name="shopName" defaultValue={shop?.shopName ?? ""} required minLength={2} maxLength={80} />
-      </label>
-      <label className="field">
-        ไอดี LINE
-        <input name="line" defaultValue={shop?.line ?? ""} maxLength={200} placeholder="@lineid" />
-      </label>
-      <label className="field">
-        อีเมลร้าน
-        <input name="email" type="email" defaultValue={shop?.email ?? ""} maxLength={200} />
-      </label>
-      <label className="field">
-        คำโปรยท้ายเว็บ
-        <textarea name="description" defaultValue={shop?.description ?? ""} maxLength={1000} />
-      </label>
-      <label className="field">
-        ประกาศหน้าแรก
-        <textarea name="announcement" defaultValue={shop?.announcement ?? ""} maxLength={1000} />
-      </label>
-      <div className="form-actions">
-        <span>{saved ? "บันทึกแล้ว" : "แก้แล้วกดบันทึก"}</span>
-        <button className="button primary">บันทึกข้อมูลร้าน</button>
+      <div className="shop-config-grid">
+        <ShopPreview {...form} />
+        <form onSubmit={save} className="shop-config-form">
+          <ErrorMessage message={error} />
+          <label className="field">
+            ชื่อร้าน
+            <input name="shopName" value={form.shopName} onChange={field("shopName")} required minLength={2} maxLength={80} />
+          </label>
+          <label className="field">
+            ไอดี LINE
+            <input name="line" value={form.line} onChange={field("line")} maxLength={200} placeholder="@lineid" />
+          </label>
+          <label className="field">
+            อีเมลร้าน
+            <input name="email" type="email" value={form.email} onChange={field("email")} maxLength={200} />
+          </label>
+          <label className="field">
+            คำโปรยหน้าแรกและท้ายเว็บ
+            <textarea name="description" value={form.description} onChange={field("description")} maxLength={1000} />
+          </label>
+          <label className="field">
+            ประกาศหน้าแรก
+            <textarea name="announcement" value={form.announcement} onChange={field("announcement")} maxLength={1000} />
+          </label>
+          <div className="form-actions">
+            <span className={dirty ? "unsaved-dot" : ""}>
+              {dirty ? "ยังไม่ได้บันทึก" : saved ? "บันทึกแล้ว" : "ตรงกับหน้าร้าน"}
+            </span>
+            {dirty && (
+              <button type="button" className="button secondary" onClick={() => setForm(initial)}>
+                ย้อนกลับ
+              </button>
+            )}
+            <button className="button primary" disabled={!dirty}>
+              บันทึกข้อมูลร้าน
+            </button>
+          </div>
+        </form>
       </div>
-    </form>
+    </section>
+  );
+}
+/** Miniature storefront that mirrors the shop fields while they are typed. */
+function ShopPreview({
+  shopName,
+  line,
+  email,
+  description,
+  announcement,
+}: {
+  shopName: string;
+  line: string;
+  email: string;
+  description: string;
+  announcement: string;
+}) {
+  const [dark, setDark] = useState(false);
+  const name = shopName.trim() && shopName.trim() !== "ร้านค้า" ? shopName.trim() : "ASIA EXTRA";
+  const tagline = description.trim() || "ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที";
+  return (
+    <div className={dark ? "shop-preview dark" : "shop-preview"} aria-label="ตัวอย่างหน้าร้าน">
+      <div className="shop-preview-bar">
+        <i />
+        <i />
+        <i />
+        <span className="shop-preview-tab">หน้าร้าน — {name}</span>
+        <button type="button" onClick={() => setDark(!dark)} aria-label={dark ? "ดูแบบสว่าง" : "ดูแบบมืด"}>
+          {dark ? <Sun size={14} /> : <Moon size={14} />}
+        </button>
+      </div>
+      <div className="shop-preview-page">
+        <div className="shop-preview-header">
+          <img src="/brand/asiax-logo.png" alt="" />
+          <span />
+          <span />
+          <span />
+          <b>สมัครสมาชิก</b>
+        </div>
+        <div className="shop-preview-hero">
+          <small>● เปิดให้บริการ</small>
+          <img src="/brand/asiax-logo.png" alt="" />
+          <p key={tagline} className="shop-preview-flash">{tagline}</p>
+          <div>
+            <b>เลือกซื้อสินค้า</b>
+            <em>ดูรีวิวจากลูกค้า</em>
+          </div>
+        </div>
+        {announcement.trim() && (
+          <div className="shop-preview-announce shop-preview-flash" key={announcement}>
+            <Megaphone size={14} />
+            <div>
+              <strong>ประกาศจากร้าน</strong>
+              <p>{announcement}</p>
+            </div>
+          </div>
+        )}
+        <div className="shop-preview-footer">
+          <div>
+            <img src="/brand/asiax-logo.png" alt="" />
+            <p>{description.trim() || "ร้านสินค้าดิจิทัล"}</p>
+          </div>
+          <div>
+            <span>
+              LINE <b className={line ? "" : "empty"}>{line || "ยังไม่ได้ตั้งค่า"}</b>
+            </span>
+            <span>
+              อีเมล <b className={email ? "" : "empty"}>{email || "ยังไม่ได้ตั้งค่า"}</b>
+            </span>
+          </div>
+          <small>
+            © {new Date().getFullYear() + 543} {name}
+          </small>
+        </div>
+      </div>
+    </div>
   );
 }
 function ReferenceSettings({ sub }: { sub: string }) {
