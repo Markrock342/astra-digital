@@ -989,3 +989,77 @@ html.theme-fade *::after {
 .storefront-shell button.selected > img {
   outline-color: var(--accent);
 }
+
+/* ---------- Language switch ----------
+   View Transitions: the page text slides and blurs between languages while
+   the header (logo + toggle) stays still. Fallback class for other browsers. */
+.storefront-shell #content {
+  view-transition-name: page-content;
+}
+.storefront-shell .site-footer {
+  view-transition-name: page-footer;
+}
+.lang-toggle {
+  view-transition-name: lang-toggle;
+}
+::view-transition-old(page-content),
+::view-transition-old(page-footer) {
+  animation: lang-out 0.32s cubic-bezier(0.4, 0, 1, 1) both;
+}
+::view-transition-new(page-content),
+::view-transition-new(page-footer) {
+  animation: lang-in 0.55s var(--ease-out-expo) 0.08s both;
+}
+:root[data-lang-dir="prev"]::view-transition-old(page-content),
+:root[data-lang-dir="prev"]::view-transition-old(page-footer) {
+  animation-name: lang-out-prev;
+}
+:root[data-lang-dir="prev"]::view-transition-new(page-content),
+:root[data-lang-dir="prev"]::view-transition-new(page-footer) {
+  animation-name: lang-in-prev;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.3s;
+}
+::view-transition-group(lang-toggle) {
+  animation-duration: 0s;
+}
+html.lang-swap .storefront-shell #content,
+html.lang-swap .storefront-shell .site-footer,
+html.lang-swap .storefront-shell .main-nav {
+  animation: lang-in 0.55s var(--ease-out-expo) both;
+}
+html.lang-swap[data-lang-dir="prev"] .storefront-shell #content,
+html.lang-swap[data-lang-dir="prev"] .storefront-shell .site-footer,
+html.lang-swap[data-lang-dir="prev"] .storefront-shell .main-nav {
+  animation-name: lang-in-prev;
+}
+@keyframes lang-out {
+  to {
+    opacity: 0;
+    transform: translateX(-28px);
+    filter: blur(6px);
+  }
+}
+@keyframes lang-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+    filter: blur(6px);
+  }
+}
+@keyframes lang-out-prev {
+  to {
+    opacity: 0;
+    transform: translateX(28px);
+    filter: blur(6px);
+  }
+}
+@keyframes lang-in-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+    filter: blur(6px);
+  }
+}

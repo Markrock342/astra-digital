@@ -57,6 +57,7 @@ import {
   shopName,
   useCardTilt,
 } from "./Theme";
+import { flushSync } from "react-dom";
 import { api, money, dateTime, relativeTime } from "./api";
 import type {
   Product,
@@ -2126,8 +2127,35 @@ export default function App() {
   useRouteMotion(path);
   useCardTilt();
   const changeLang = (value: Lang) => {
-    setLang(value);
-    setLangState(value);
+    if (value === lang) return;
+    const swap = () => {
+      setLang(value);
+      flushSync(() => setLangState(value));
+    };
+    const root = document.documentElement;
+    const calm =
+      root.dataset.motion === "calm" ||
+      matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (calm) return swap();
+    root.dataset.langDir = value === "en" ? "next" : "prev";
+    const doc = document as Document & {
+      startViewTransition?: (cb: () => void) => { finished: Promise<void> };
+    };
+    if (doc.startViewTransition) {
+      doc.startViewTransition(swap).finished.finally(() => {
+        delete root.dataset.langDir;
+      });
+      return;
+    }
+    // Fallback: animate the new text in.
+    swap();
+    root.classList.remove("lang-swap");
+    void root.offsetWidth;
+    root.classList.add("lang-swap");
+    setTimeout(() => {
+      root.classList.remove("lang-swap");
+      delete root.dataset.langDir;
+    }, 600);
   };
   const [user, setUser] = useState<User | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
