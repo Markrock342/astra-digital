@@ -198,6 +198,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
               input,
             ),
           });
+        if (/^\/api\/chat\/threads\/[^/]+\/close$/.test(path))
+          return send(200, {
+            thread: service.closeChatThread(user, path.split("/")[4]),
+          });
         if (/^\/api\/notifications\/[^/]+\/read$/.test(path))
           return send(200, service.markNotificationRead(user, path.split("/")[3]));
         if (path === "/api/admin/payment-channel")
