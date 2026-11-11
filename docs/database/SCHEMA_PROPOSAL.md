@@ -42,7 +42,7 @@
 | Cart | ไม่มีฝั่ง DB | รอบแรก: client/Bank · หรือ `cart_items(user_id, variant_id, qty)` หลังล็อก |
 | Payments | มี | คง |
 | Payment Events | ไม่มี | เสนอ `payment_events` append-only ก่อนเปิด webhook จริง |
-| Preorder / Queue | reservations + queue_number | คง |
+| Preorder / Queue | reservations + queue_number (หลังจ่ายในโค้ดปัจจุบัน) | **เป้า DB-DOC-05:** รองรับออกคิวก่อนหรือหลังจ่าย · คิว**รวมทั้งร้าน** (ค่าล็อก Owner) · ดู §4.7 |
 | Chat / Notifications / Audit | มี | คง |
 | Payment channel | มี | คง |
 
@@ -94,6 +94,40 @@ cart_items(
   PRIMARY KEY (user_id, variant_id)
 )
 ```
+
+### 4.7 นโยบายเลขคิวพรีออเดอร์ (Task DB-DOC-05)
+
+SOW ยัง**ไม่ล็อก**ว่าออกคิวก่อนหรือหลังจ่าย → schema/แอปต้อง**รองรับทั้งสองโหมด** โดยเลือกโหมดผ่าน runtime flag (ไม่ต้องมีสองรูปตาราง)
+
+#### 4.7.1 คอลัมน์ / ความจริงที่มี
+
+- `reservations.queue_number INTEGER NULL` + partial UNIQUE เมื่อ NOT NULL  
+- ของปัจจุบันในโค้ด: ออกคิวตอน **pay สำเร็จ** เข้า `PREORDER`
+
+#### 4.7.2 สองโหมดที่รองรับ
+
+| โหมด | ตอนออกคิว | พฤติกรรม |
+|------|-----------|----------|
+| `after_payment` (ปัจจุบัน) | เมื่อสถานะเข้า `PREORDER` หลังจ่ายสำเร็จ | คิว = คนที่จ่ายแล้วรอของ |
+| `on_create` | เมื่อสร้าง reservation สถานะ `PENDING_PAYMENT` | คิวจองตั้งแต่ยังไม่จ่าย; ถ้า FAILED/CANCELLED ควร **คืนเลข** (ตั้ง `queue_number=NULL`) หรือทำเลขให้ reusable ตามนโยบาย Mark |
+
+สวิตช์เสนอ: `runtime_flags` คีย์เช่น `preorder_queue_mode` = `after_payment` | `on_create`  
+ค่าเริ่มต้นเอกสาร = **`after_payment`** (ตรงของเดิม; เปลี่ยนได้เมื่อ SOW ล็อก)
+
+#### 4.7.3 ขอบเขตคิว: รวมทั้งร้าน vs ต่อสินค้า
+
+| แบบ | ความหมาย | Unique |
+|-----|----------|--------|
+| **shop-wide (ล็อกเป็นค่าเริ่มต้น Owner 2026-11-11)** | เลขคิววิ่งเดียวทั้งร้าน | คง `UNIQUE(queue_number)` partial ทั้งตาราง |
+| per-product | เลขคิวแยกตาม `variant_id` หรือ `product_id` | ต้องเปลี่ยนเป็น `UNIQUE(product_id, queue_number)` — **ยังไม่ทำ** จนกว่า Mark/SOW เปลี่ยนจาก shop-wide |
+
+ตัวนับ shop-wide: `MAX(queue_number)+1` ใน tx + จัดการ UNIQUE collision ด้วย retry (เทส C3 ยังขาด)
+
+#### 4.7.4 สิ่งที่ยังไม่เปลี่ยนในรอบเอกสารนี้
+
+- ไม่แก้โค้ดออกคิว  
+- ไม่สร้างตารางคิวแยก  
+- ไม่บังคับโหมด `on_create` จนกว่า SOW ล็อก
 
 ## 5. Constraints / Indexes ที่ควรมีในเป้า (สรุป)
 

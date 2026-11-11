@@ -40,7 +40,7 @@
 |----|-----------|---------|
 | C1 | สต็อก 1 หน่วย สองผู้ซื้อ pay พร้อมกัน | คนหนึ่ง DELIVERED คนหนึ่ง OUT_OF_STOCK |
 | C2 | pay สำเร็จแล้ว pay ซ้ำ | โค้ดชุดเดิม; ledger/inventory ไม่เพิ่ม |
-| C3 | สองพรีออเดอร์ได้ queue_number คนละเลข | UNIQUE ไม่ชน หรือ retry สำเร็จ |
+| C3 | สองพรีออเดอร์ได้ queue_number คนละเลข (คิวรวมร้าน) | UNIQUE ไม่ชน หรือ retry สำเร็จ — **สถานะเทสต์: ยังขาด**; ต้องครอบทั้งโหมด after_payment และ (เมื่อเปิด) on_create |
 
 ## 5. เคส Authorization / Data Isolation
 
