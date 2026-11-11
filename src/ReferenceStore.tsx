@@ -9,7 +9,6 @@ import {
   Clock,
   Eye,
   EyeOff,
-  Gift,
   KeyRound,
   LoaderCircle,
   Package,
@@ -101,12 +100,18 @@ export function ReferenceCatalog() {
       ) : (
         <Empty
           icon={<Search />}
-          heading="ไม่พบสินค้าที่ค้นหา"
-          description="ลองค้นหาด้วยคำอื่น"
+          heading={query ? "ไม่พบสินค้าที่ค้นหา" : "ยังไม่มีสินค้า"}
+          description={
+            query
+              ? "ลองค้นหาด้วยคำอื่น"
+              : "เพิ่มสินค้าได้จากหลังบ้าน เมื่อพร้อมขาย"
+          }
           action={
-            <button className="button secondary" onClick={() => setQuery("")}>
-              ล้างตัวกรอง
-            </button>
+            query ? (
+              <button className="button secondary" onClick={() => setQuery("")}>
+                ล้างตัวกรอง
+              </button>
+            ) : undefined
           }
         />
       )}
@@ -125,7 +130,7 @@ export function ReferenceCatalogPage() {
   );
 }
 export function ReferenceAuth({ register = false }: { register?: boolean }) {
-  const { user, go, refresh, toast } = useStore();
+  const { user, go, refresh, toast, overview } = useStore();
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -153,24 +158,11 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
       setBusy(false);
     }
   }
-  async function demo() {
-    setBusy(true);
-    setError("");
-    try {
-      await api("/demo", {});
-      await refresh();
-      go(target);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
   return (
     <main className="reference-auth-main">
       <div className="reference-auth-heading">
         <h1>{register ? "สมัครสมาชิก" : "เข้าสู่ระบบ"}</h1>
-        <p>ASTRA DIGITAL</p>
+        <p>{overview?.shop?.shopName || "ร้านค้า"}</p>
       </div>
       <form onSubmit={submit} className="reference-auth-form">
         <ErrorMessage message={error} />
@@ -252,14 +244,6 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
           {register ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}
         </Link>
       </p>
-      <button className="reference-demo-entry" onClick={demo} disabled={busy}>
-        <Gift size={14} />
-        เข้าชมด้วยบัญชีทดลอง
-        <ArrowRight size={14} />
-      </button>
-      <small className="reference-demo-note">
-        เครดิตทดลองเท่านั้น ไม่มีการรับเงินจริง
-      </small>
     </main>
   );
 }
@@ -601,7 +585,7 @@ export function ReferenceReviews() {
               รีวิวจากผู้ซื้อจริงเท่านั้น
             </span>
             <h1>เครดิตร้าน</h1>
-            <h2>{overview?.shop?.shopName ?? "ASTRA DIGITAL"}</h2>
+            <h2>{overview?.shop?.shopName || "ร้านค้า"}</h2>
             <p>
               ทุกรีวิวมาจากลูกค้าที่ซื้อจริง และเขียนได้ภายใน 7
               วันหลังซื้อเท่านั้น ร้านแก้ไขหรือซ่อนรีวิวไม่ได้

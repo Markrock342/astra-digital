@@ -39,7 +39,7 @@ export function MerchantHeader() {
   const tab = path.split("/")[2] ?? "";
   const admin = path.startsWith("/admin") && user?.role === "ADMIN";
   useDialog(search, ".merchant-command-dialog", () => setSearch(false));
-  const shop = overview?.shop?.shopName ?? "ASTRA DIGITAL";
+  const shop = overview?.shop?.shopName || "ร้านค้า";
   useEffect(() => {
     setMenu(false);
     setSearch(false);
@@ -261,7 +261,7 @@ export function DemoMerchantButton({
 export default function Stores() {
   const { user, overview } = useStore();
   const active = user?.role === "ADMIN";
-  const shop = overview?.shop?.shopName ?? "ASTRA DIGITAL";
+  const shop = overview?.shop?.shopName || "ร้านค้า";
   return (
     <main className="container stores-main reference-stores">
       <div className="stores-heading">
@@ -278,7 +278,9 @@ export default function Stores() {
             จัดการร้าน
           </Link>
         ) : (
-          <DemoMerchantButton to="/stores" label="สร้างร้าน" />
+          <Link to="/login?next=%2Fadmin" className="button primary">
+            เข้าสู่ระบบผู้ดูแล
+          </Link>
         )}
       </div>
       <section className="stores-grid">
@@ -298,7 +300,7 @@ export default function Stores() {
             <Link
               to="/"
               className="icon-button"
-              aria-label="เปิดหน้าร้าน ASTRA DIGITAL"
+              aria-label="เปิดหน้าร้าน"
             >
               <ArrowUpRight size={17} />
             </Link>
@@ -308,22 +310,14 @@ export default function Stores() {
               <span className="service-dot" />
               ใช้งาน
             </span>
-            <span>{active ? "เจ้าของ" : "ร้านค้าทดลอง"}</span>
+            <span>{active ? "เจ้าของ" : "ร้านเดียว"}</span>
             <span>สร้างเมื่อ วันนี้</span>
           </div>
-          {!active && (
-            <div className="reference-store-demo">
-              <DemoMerchantButton
-                label="เริ่มทดลองเป็นเจ้าของร้าน"
-                to="/stores"
-              />
-            </div>
-          )}
         </article>
       </section>
       {!active && (
         <p className="reference-store-note">
-          เริ่มทดลองจัดการร้านได้ทันที ใช้เครดิตและโค้ดตัวอย่างเท่านั้น
+          เข้าสู่ระบบด้วยบัญชีผู้ดูแลเพื่อจัดการสินค้า รหัสสินค้า และคำสั่งซื้อ
         </p>
       )}
     </main>

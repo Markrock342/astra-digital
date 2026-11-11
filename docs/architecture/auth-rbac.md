@@ -1,6 +1,8 @@
 # Auth / RBAC Design — ASTRA (NOTT)
 
-สถานะ: **Approved** (0.2.2) · **Implemented Phase 2** (2026-11-09) — M2.1  
+สถานะ: **Approved** (0.2.2) · **Implemented Phase 2** (2026-11-09) — M2.1
+
+อัปเดต 10 พ.ย. 2026: ร้านที่เปิดใช้แล้วไม่แยกฐานตามคุกกี้ผู้เข้าชม ทุกคำขอใช้ฐานชุดเดียว สัญญาปัจจุบันอยู่ที่ [api-contract-shop.md](api-contract-shop.md) ข้อความด้านล่างเป็นแบบที่อนุมัติตอนออกแบบ Phase 2  
 เกณฑ์ + โค้ด: `server/auth-policy.mjs` + `server/domain.mjs` · เทสใน `tests/commerce.test.mjs`  
 อิง: `server/api-handler.mjs`, `cloud/worker.mjs`  
 คู่กับ: [../modules/nott-backend-inventory.md](../modules/nott-backend-inventory.md) · [security.md](security.md)

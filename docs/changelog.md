@@ -2,6 +2,10 @@
 
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
+## 2026-11-10
+- ล็อก SOW จากสายลูกค้าเทียบใบเสนอราคา REV.06 — [SOW](prompts/SOW-FIFACORP-FINAL-20261110.md) และ [งานมาร์ค/น็อต](prompts/TASKS-MARK-NOTT-20261110.md)
+- ล็อกสัญญา API ร้านฐานเดียว และปิดอันดับผู้ซื้อให้เฉพาะผู้ดูแล — [api-contract-shop.md](architecture/api-contract-shop.md)
+
 ## 2026-11-09
 - ตรวจงานเพื่อน: GitHub ยังไม่มีงานใหม่หลังแผน; build/tests 40 ผ่าน ตรวจซ้ำพบ 3 P2 ใน NOTT API — [ผล review](modules/peer-review-20261109.md); เก็บหลักฐาน memory DB แยก ไม่แก้ production
 - Owner ขอชุดแจกงานแยกคนจนจบ Phase 2: [TEAM แผนกลาง](team-phase2/00-START.md) + MARK/NOTT/BANK รวม 34 Tasks + gate ตรวจรับ พร้อม HTML/Markdown/CSV และ ZIP ส่งเพื่อน; ไม่เปลี่ยน production หรือเปิด provider

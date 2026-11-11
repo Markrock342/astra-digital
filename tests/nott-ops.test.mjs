@@ -31,6 +31,7 @@ function fixture(t) {
     staff,
     token: auth.token,
     staffToken: staffAuth.token,
+    merchantToken: merchantAuth.token,
   };
 }
 
@@ -208,7 +209,8 @@ test("buyer ranking uses delivered spend only and masks names", (t) => {
     paymentToken: order.paymentToken,
     outcome: "success",
   });
-  const buyers = s.buyerRanking(5);
+  assert.throws(() => s.buyerRanking(user, 5), (e) => e.status === 403);
+  const buyers = s.buyerRanking(merchant, 5);
   assert.ok(buyers.length >= 1);
   assert.equal(buyers[0].rank, 1);
   assert.match(buyers[0].name, /\*\*\*/);
@@ -216,7 +218,7 @@ test("buyer ranking uses delivered spend only and masks names", (t) => {
 });
 
 test("HTTP routes expose product detail, channel, queue, chat, rankings", async (t) => {
-  const { s, token, staffToken } = fixture(t);
+  const { s, token, staffToken, merchantToken } = fixture(t);
   const handle = createAPIHandler(s);
   const get = async (path, cookie) => {
     const res = await handle(
@@ -248,8 +250,12 @@ test("HTTP routes expose product detail, channel, queue, chat, rankings", async 
   assert.equal(channel.status, 200);
   assert.equal(channel.body.channel.provider, "unset");
   const rankings = await get("/api/rankings/buyers");
-  assert.equal(rankings.status, 200);
-  assert.ok(Array.isArray(rankings.body.buyers));
+  assert.equal(rankings.status, 401);
+  const customerRankings = await get("/api/rankings/buyers", token);
+  assert.equal(customerRankings.status, 403);
+  const adminRankings = await get("/api/rankings/buyers", merchantToken);
+  assert.equal(adminRankings.status, 200);
+  assert.ok(Array.isArray(adminRankings.body.buyers));
   const chat = await post("/api/chat/threads", token, {
     body: "สวัสดีจาก HTTP",
   });

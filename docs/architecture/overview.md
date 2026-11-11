@@ -16,6 +16,10 @@
 - ค่าที่จูนได้อยู่ที่ config/env
 - Secrets ไม่อยู่ในรีโป
 
+## ร้านที่ใช้อยู่ตอนนี้
+
+สัญญา API ของร้านฐานเดียวอยู่ที่ [api-contract-shop.md](api-contract-shop.md) ใช้ Durable Object ชื่อ `shop` และยังไม่ย้ายไป D1 หรือ Neon
+
 ## เอกสารที่เกี่ยวข้อง
 - Auth/RBAC design: [auth-rbac.md](auth-rbac.md) (Approved)
 - ERD เป้าหมาย: [erd-target.md](erd-target.md) · applied: [erd-sprint1.md](erd-sprint1.md)

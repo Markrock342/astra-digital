@@ -20,7 +20,6 @@ import {
   CreditCard,
   Eye,
   EyeOff,
-  Gift,
   History,
   Home as HomeIcon,
   Languages,
@@ -179,7 +178,7 @@ export function Art({
                     : "✳"}
           </span>
           <strong>{name}</strong>
-          <span className="art-caption">ASTRA DIGITAL COLLECTION</span>
+          <span className="art-caption">DIGITAL GOODS</span>
         </div>
       )}
     </div>
@@ -239,8 +238,7 @@ function Header() {
   const links = [
     ["/", "หน้าแรก"],
     ["/products", "สินค้า"],
-    ["/reviews", "เครดิต"],
-    ["/wallet", "เติมเงิน"],
+    ["/reviews", "รีวิว"],
     ["/orders", "ประวัติการซื้อ"],
   ];
   return (
@@ -249,7 +247,7 @@ function Header() {
         <div className="container header-inner">
           <Link to="/" className="brand">
             <img src="/favicon.svg" alt="" />
-            <span>{overview?.shop?.shopName ?? "ASTRA DIGITAL"}</span>
+            <span>{overview?.shop?.shopName || "ร้านค้า"}</span>
           </Link>
           <nav
             aria-label="เมนูหลัก"
@@ -300,9 +298,6 @@ function Header() {
                 </button>
                 {account && (
                   <div className="account-menu">
-                    <span className="menu-balance">
-                      เครดิตทดลอง <strong>{money(user.balance)}</strong>
-                    </span>
                     <Link to="/account">บัญชีของฉัน</Link>
                     <Link to="/orders">คำสั่งซื้อของฉัน</Link>
                     {user.role === "ADMIN" && (
@@ -418,12 +413,10 @@ function Footer() {
         <div className="footer-about">
           <Link to="/" className="brand footer-brand">
             <img src="/favicon.svg" alt="" />
-            <span>{overview?.shop?.shopName ?? "ASTRA DIGITAL"}</span>
+            <span>{overview?.shop?.shopName || "ร้านค้า"}</span>
           </Link>
           <p>
-            เรามีสินค้าให้คุณเลือกมากมาย และยังมีสินค้าใหม่ๆ
-            <br className="desktop-only" /> ที่จะมาให้คุณได้เลือกซื้ออีกในอนาคต
-            โปรดรอติดตาม
+            {overview?.shop?.description || "ร้านสินค้าดิจิทัล"}
           </p>
         </div>
         <div className="footer-contact">
@@ -434,7 +427,7 @@ function Footer() {
                 <MessageCircle size={23} />
               </span>
               <span>
-                LINE<small>{overview?.shop?.line ?? "@832wjrpn"}</small>
+                LINE<small>{overview?.shop?.line || "ยังไม่ได้ตั้งค่า"}</small>
               </span>
               <ArrowUpRight size={16} />
             </Link>
@@ -445,7 +438,7 @@ function Footer() {
               <span>
                 อีเมล
                 <small>
-                  {overview?.shop?.email ?? "ceo.natthanan@shipx.sbs"}
+                  {overview?.shop?.email || "ยังไม่ได้ตั้งค่า"}
                 </small>
               </span>
               <ArrowUpRight size={16} />
@@ -456,13 +449,15 @@ function Footer() {
           <h3>เมนู</h3>
           <Link to="/products">สินค้าทั้งหมด</Link>
           <Link to="/reviews">เครดิตร้าน</Link>
-          <Link to="/wallet">เติมเงิน</Link>
           <Link to="/orders">ประวัติการซื้อ</Link>
         </div>
       </div>
       <div className="footer-bottom">
         <div className="container footer-bottom-inner">
-          <span>© {new Date().getFullYear() + 543} ASTRA DIGITAL</span>
+          <span>
+            © {new Date().getFullYear() + 543}{" "}
+            {overview?.shop?.shopName || "ร้านค้า"}
+          </span>
           <div className="footer-legal">
             <Link to="/terms">ข้อกำหนดร้าน</Link>
             <Link to="/privacy">ความเป็นส่วนตัว</Link>
@@ -549,26 +544,10 @@ function Home() {
               ? "ปิดให้บริการ"
               : "เปิดให้บริการ"}
           </span>
-          <h1 aria-label="WELCOME TO ASTRA">
-            {["WELCOME", "TO", "ASTRA"].map((word, index) => (
-              <span
-                key={word}
-                className={"hero-word " + (index === 2 ? "hero-brand" : "")}
-                style={
-                  {
-                    "--word-delay": `${120 + index * 90}ms`,
-                  } as React.CSSProperties
-                }
-              >
-                {word}
-                {index < 2 ? " " : ""}
-              </span>
-            ))}
-            <span className="hero-cursor" aria-hidden="true" />
-          </h1>
+          <h1>{overview?.shop?.shopName || "ร้านค้า"}</h1>
           <p>
-            เรามีสินค้าให้คุณเลือกมากมาย และยังมีสินค้าใหม่ๆ
-            ที่จะมาให้คุณได้เลือกซื้ออีกใน อนาคต โปรดรอติดตาม
+            {overview?.shop?.description ||
+              "เพิ่มสินค้าและข้อมูลร้านได้จากหลังบ้าน"}
           </p>
         </section>
         <section className="stats-panel" aria-label="สถิติร้านค้า">
@@ -676,18 +655,17 @@ function Home() {
             </div>
           )}
         </section>
-        <aside className="announcement">
-          <span className="announcement-icon">
-            <Megaphone size={22} />
-          </span>
-          <div>
-            <h2>ประกาศจากร้าน</h2>
-            <p>
-              {overview?.shop?.announcement ??
-                "เวลาทำการ 10:00 - 22:00 น. ทุกวัน"}
-            </p>
-          </div>
-        </aside>
+        {overview?.shop?.announcement ? (
+          <aside className="announcement">
+            <span className="announcement-icon">
+              <Megaphone size={22} />
+            </span>
+            <div>
+              <h2>ประกาศจากร้าน</h2>
+              <p>{overview.shop.announcement}</p>
+            </div>
+          </aside>
+        ) : null}
         <ReferenceCatalog />
       </main>
     </>
@@ -884,7 +862,7 @@ function ProductDetail({ id }: { id: string }) {
           <Art type={p.art} name={p.name} />
         </div>
         <div className="detail-info">
-          <span className="eyebrow">ASTRA DIGITAL COLLECTION</span>
+          <span className="eyebrow">สินค้า</span>
           <h1>{p.name}</h1>
           <div className="detail-stock">
             {variant.stock > 0 ? (
@@ -953,7 +931,7 @@ function ProductDetail({ id }: { id: string }) {
           </button>
           <p className="detail-trust">
             <ShieldCheck size={17} />
-            รับโค้ดผ่านหน้าคำสั่งซื้อหลังชำระเครดิตทดลอง
+            รับโค้ดผ่านหน้าคำสั่งซื้อหลังยืนยันการชำระเงิน
           </p>
         </div>
       </div>
@@ -961,18 +939,8 @@ function ProductDetail({ id }: { id: string }) {
         <h2>รายละเอียดสินค้าและการใช้งาน</h2>
         <p>
           {p.description} เลือกแพ็กเกจที่ต้องการ ตรวจสอบคำสั่งซื้อ
-          แล้วใช้เครดิตทดลองเพื่อรับโค้ดดิจิทัล
+          แล้วบันทึกคำสั่งซื้อ โค้ดจะส่งหลังยืนยันการชำระเงิน
         </p>
-        <div className="note-box">
-          <Gift size={20} />
-          <div>
-            <strong>สินค้านี้เป็นตัวอย่างสำหรับสาธิตระบบ</strong>
-            <p>
-              โค้ดทุกชิ้นขึ้นต้นด้วย DEMO-
-              และไม่สามารถนำไปแลกใช้กับบริการจริงได้ ไม่มีการเรียกเก็บเงินจริง
-            </p>
-          </div>
-        </div>
         <h3>รับสินค้าทางไหน?</h3>
         <p>
           เมื่อทำรายการสำเร็จ โค้ดจะปรากฏในหน้าคำสั่งซื้อ
@@ -1003,22 +971,9 @@ function Auth({ register = false }: { register?: boolean }) {
       await refresh();
       toast(
         register
-          ? "สมัครสมาชิกสำเร็จ รับเครดิตทดลอง 500 บาทแล้ว"
+          ? "สมัครสมาชิกสำเร็จ"
           : "เข้าสู่ระบบสำเร็จ",
       );
-      go(destination);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function demo() {
-    setBusy(true);
-    try {
-      await api("/demo", {});
-      await refresh();
-      toast("พร้อมทดลองซื้อสินค้าแล้ว");
       go(destination);
     } catch (e) {
       setError((e as Error).message);
@@ -1037,8 +992,8 @@ function Auth({ register = false }: { register?: boolean }) {
         <h1>{register ? "สมัครสมาชิก" : "เข้าสู่ระบบ"}</h1>
         <p>
           {register
-            ? "เริ่มต้นเลือกซื้อสินค้ากับ ASTRA DIGITAL"
-            : "ยินดีต้อนรับกลับสู่ ASTRA DIGITAL"}
+            ? "สมัครสมาชิกเพื่อสั่งซื้อสินค้า"
+            : "เข้าสู่ระบบเพื่อดูคำสั่งซื้อ"}
         </p>
         <form onSubmit={submit}>
           <ErrorMessage message={error} />
@@ -1108,17 +1063,6 @@ function Auth({ register = false }: { register?: boolean }) {
             <ArrowRight size={17} />
           </button>
         </form>
-        <div className="auth-divider">
-          <span>หรือทดลองใช้งานก่อน</span>
-        </div>
-        <button
-          className="button secondary full"
-          disabled={busy}
-          onClick={demo}
-        >
-          เข้าชมด้วยบัญชีทดลอง
-          <ArrowUpRight size={16} />
-        </button>
         <p className="auth-switch">
           {register ? "มีบัญชีแล้ว?" : "ยังไม่มีบัญชี?"}{" "}
           <Link
@@ -1132,7 +1076,7 @@ function Auth({ register = false }: { register?: boolean }) {
         </p>
         <div className="auth-footnote">
           <ShieldCheck size={15} />
-          ใช้เครดิตและโค้ดตัวอย่าง ไม่มีการเรียกเก็บเงินจริง
+          รหัสผ่านถูกเก็บแบบเข้ารหัส
         </div>
       </div>
     </main>
@@ -1190,7 +1134,7 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
         <h1>{checkout ? "ตรวจสอบคำสั่งซื้อ" : "ตะกร้าสินค้า"}</h1>
         <p>
           {checkout
-            ? "ตรวจสอบข้อมูลให้ครบก่อนชำระเครดิตทดลอง"
+            ? "ตรวจสอบข้อมูลให้ครบ ระบบจะบันทึกคำสั่งซื้อไว้ก่อน"
             : "สินค้าที่คุณเลือกไว้ พร้อมเมื่อคุณพร้อม"}
         </p>
       </div>
@@ -1259,18 +1203,18 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
               {busy ? (
                 <LoaderCircle className="spin" size={17} />
               ) : checkout ? (
-                "ดำเนินการชำระเครดิต"
+                "บันทึกคำสั่งซื้อ"
               ) : (
-                "ไปชำระเครดิต"
+                "ไปบันทึกคำสั่งซื้อ"
               )}
               <ArrowRight size={17} />
             </button>
             <p className="sandbox-note">
-              โหมดทดลอง · ไม่มีการเรียกเก็บเงินจริง
+              การชำระเงินจะเชื่อมต่อภายหลัง ตอนนี้ยังไม่ส่งโค้ด
             </p>
             {user && (
               <p className="balance-note">
-                เครดิตของคุณ <strong>{money(user.balance)}</strong>
+                คำสั่งซื้อจะถูกบันทึกไว้ก่อน โค้ดจะส่งหลังยืนยันการชำระเงิน
               </p>
             )}
           </aside>
@@ -1364,15 +1308,17 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                 : order.status === "PREORDER"
                   ? "บันทึกการสั่งจองแล้ว"
                   : order.status === "PENDING_PAYMENT"
-                    ? "ชำระเครดิตทดลอง"
+                    ? "บันทึกคำสั่งซื้อแล้ว"
                     : order.status === "FAILED"
-                      ? "การชำระเครดิตไม่สำเร็จ"
+                      ? "การชำระเงินไม่สำเร็จ"
                       : "สินค้าหมดก่อนทำรายการ"}
             </h1>
             <p>
               {order.status === "DELIVERED"
-                ? "ขอบคุณที่เลือก ASTRA DIGITAL · โค้ดของคุณอยู่ด้านล่าง"
-                : "ไม่มีการเรียกเก็บเงินจริงในการทดลองนี้"}
+                ? "โค้ดของคุณอยู่ด้านล่าง"
+                : order.status === "PENDING_PAYMENT"
+                  ? "การชำระเงินจะเชื่อมต่อภายหลัง ระบบยังไม่ส่งโค้ด"
+                  : "รายการนี้ยังไม่ส่งโค้ด"}
             </p>
           </div>
           <section className="panel delivery-panel">
@@ -1398,8 +1344,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                 <div>
                   <strong>สินค้าสั่งจอง · รอส่งตามกำหนด</strong>
                   <p>
-                    บันทึกการจองและเครดิตทดลองแล้ว
-                    ยังไม่มีการส่งโค้ดก่อนวันส่งสินค้า
+                    บันทึกการสั่งจองแล้ว ยังไม่ส่งโค้ด
                   </p>
                 </div>
               </div>
@@ -1430,51 +1375,16 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                     </button>
                   </div>
                 ))}
-                <p className="sandbox-note">
-                  โค้ด DEMO สำหรับสาธิตเท่านั้น ไม่สามารถใช้กับบริการจริง
-                </p>
+                <p className="sandbox-note">เก็บโค้ดนี้ไว้ในที่ปลอดภัย</p>
               </div>
             ) : (
               order.status === "PENDING_PAYMENT" && (
-                <div className="payment-form">
-                  <div className="payment-method">
-                    <Wallet size={22} />
-                    <div>
-                      <strong>ชำระด้วยเครดิตทดลอง</strong>
-                      <p>ยอดคงเหลือ {money(user.balance)}</p>
-                    </div>
-                    <CheckCircle2 size={20} />
+                <div className="note-box">
+                  <Clock size={20} />
+                  <div>
+                    <strong>ยอดคำสั่งซื้อ {money(order.total)}</strong>
+                    <p>รอเชื่อมช่องทางชำระเงิน โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น</p>
                   </div>
-                  <div className="summary-total">
-                    <span>ยอดชำระ</span>
-                    <strong>{money(order.total)}</strong>
-                  </div>
-                  <ErrorMessage message={error} />
-                  {user.balance < order.total ? (
-                    <Link to="/wallet" className="button primary full">
-                      เครดิตไม่เพียงพอ · เติมเครดิต
-                    </Link>
-                  ) : (
-                    <button
-                      className="button primary full"
-                      disabled={busy}
-                      onClick={() => pay("success")}
-                    >
-                      {busy ? (
-                        <LoaderCircle className="spin" size={18} />
-                      ) : (
-                        <ShieldCheck size={18} />
-                      )}
-                      ยืนยันชำระ {money(order.total)}
-                    </button>
-                  )}
-                  <button
-                    className="text-button failure-demo"
-                    disabled={busy}
-                    onClick={() => pay("failure")}
-                  >
-                    ทดลองกรณีชำระเงินไม่สำเร็จ
-                  </button>
                 </div>
               )
             )}
@@ -1503,9 +1413,9 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               </Link>
             </div>
           )}
-          {!payment && order.status === "PENDING_PAYMENT" && (
+          {order.status === "PENDING_PAYMENT" && (
             <p className="sandbox-note">
-              ตรวจสอบยอดและยืนยันการชำระด้านบนเพื่อรับโค้ด
+              คำสั่งซื้อนี้ถูกบันทึกแล้ว และยังไม่มีการส่งโค้ด
             </p>
           )}
         </>
@@ -1597,7 +1507,7 @@ function HistoryPage() {
                         ดูโค้ดสินค้า
                       </>
                     ) : o.status === "PENDING_PAYMENT" ? (
-                      "ดำเนินการชำระเครดิต"
+                      "รอเชื่อมการชำระเงิน"
                     ) : (
                       "ดูรายละเอียด"
                     )}
@@ -1627,12 +1537,9 @@ function HistoryPage() {
   );
 }
 function WalletPage() {
-  const { user, refresh, toast } = useStore();
-  const [amount, setAmount] = useState(100);
+  const { user } = useStore();
   const [entries, setEntries] = useState<Ledger[]>([]);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
   const load = () =>
     api<{ entries: Ledger[] }>("/ledger")
       .then((r) => setEntries(r.entries))
@@ -1640,38 +1547,17 @@ function WalletPage() {
   useEffect(() => {
     if (user) void load();
   }, [user?.id]);
-  async function topup() {
-    setBusy(true);
-    setError("");
-    try {
-      await api("/topup", { amount, requestKey: crypto.randomUUID() });
-      await refresh();
-      await load();
-      setConfirmed(false);
-      toast(`เติมเครดิตทดลอง ${money(amount * 100)} สำเร็จ`);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
   return (
     <main className="container page-main reference-wallet-page">
       <div className="page-heading">
-        <span className="eyebrow">YOUR WALLET</span>
-        <h1>เติมเงิน</h1>
-        <p>จัดการเครดิตและติดตามทุกรายการในบัญชีของคุณ</p>
+        <span className="eyebrow">ORDERS</span>
+        <h1>บัญชีของร้าน</h1>
+        <p>ช่องทางจ่ายยังไม่เปิด โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น</p>
       </div>
       {!user ? (
         <RequireLogin />
       ) : (
         <div className="wallet-layout">
-          <div className="reference-payment-tabs">
-            <span className="active">โอนธนาคาร</span>
-            <span>พร้อมเพย์</span>
-            <span>ทรูวอเลท</span>
-            <span>ธนาคารลาว</span>
-          </div>
           <div>
             <section className="wallet-balance panel">
               <span>
@@ -1679,57 +1565,12 @@ function WalletPage() {
                 เครดิตคงเหลือ
               </span>
               <strong>{money(user.balance)}</strong>
-              <small>เครดิตทดลอง · ไม่ใช่เงินจริง</small>
+              <small>ช่องทางจ่ายยังไม่เปิด</small>
             </section>
             <section className="panel topup-panel">
-              <h2>เติมเครดิตทดลอง</h2>
-              <p>เลือกจำนวนเครดิตที่ต้องการ</p>
-              <div className="topup-options">
-                {[100, 300, 500, 1000].map((n) => (
-                  <button
-                    key={n}
-                    className={amount === n ? "selected" : ""}
-                    onClick={() => {
-                      setAmount(n);
-                      setConfirmed(false);
-                    }}
-                  >
-                    {money(n * 100)}
-                    {amount === n && <Check size={15} />}
-                  </button>
-                ))}
-              </div>
-              <div className="note-box">
-                <ShieldCheck size={19} />
-                <div>
-                  <strong>ระบบสาธิตการเติมเครดิต</strong>
-                  <p>
-                    ไม่มี QR ธนาคารและไม่มีการรับเงินจริง
-                    เครดิตนี้ใช้ทดลองซื้อสินค้าในเว็บไซต์เท่านั้น
-                  </p>
-                </div>
-              </div>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={confirmed}
-                  onChange={(e) => setConfirmed(e.target.checked)}
-                />
-                ฉันเข้าใจว่าเป็นเครดิตสำหรับทดลอง
-              </label>
+              <h2>ช่องทางชำระเงิน</h2>
+              <p>ยังไม่เปิดรับเงิน โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น</p>
               <ErrorMessage message={error} />
-              <button
-                className="button primary full"
-                disabled={!confirmed || busy}
-                onClick={topup}
-              >
-                {busy ? (
-                  <LoaderCircle className="spin" size={17} />
-                ) : (
-                  <Plus size={17} />
-                )}
-                ยืนยันเติมเครดิต {money(amount * 100)}
-              </button>
             </section>
           </div>
           <section className="panel wallet-history">
@@ -1823,7 +1664,7 @@ function ReviewsPage() {
         <h1>
           เครดิตร้าน
           <br />
-          {overview?.shop?.shopName ?? "ASTRA DIGITAL"}
+          {overview?.shop?.shopName || "ร้านค้า"}
         </h1>
         <p>รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์</p>
       </div>
@@ -2083,6 +1924,8 @@ function Account() {
   );
 }
 function InfoPage({ kind }: { kind: string }) {
+  const { overview } = useStore();
+  const shopName = overview?.shop?.shopName || "ร้านค้า";
   const title =
     kind === "credits"
       ? "เครดิตร้าน"
@@ -2094,7 +1937,7 @@ function InfoPage({ kind }: { kind: string }) {
   return (
     <main className="container page-main narrow-main">
       <div className="page-heading">
-        <span className="eyebrow">ASTRA DIGITAL</span>
+        <span className="eyebrow">{shopName}</span>
         <h1>{title}</h1>
         <p>
           {kind === "credits"
@@ -2110,10 +1953,8 @@ function InfoPage({ kind }: { kind: string }) {
               ซื้อสินค้าอย่างมั่นใจ
             </h2>
             <p>
-              ASTRA DIGITAL
-              เป็นร้านสาธิตสำหรับการเลือกซื้อและส่งมอบสินค้าดิจิทัล
-              มีการบันทึกคำสั่งซื้อและเครดิตทุกครั้ง
-              เพื่อให้คุณย้อนดูรายการของตัวเองได้
+              {shopName} บันทึกคำสั่งซื้อทุกครั้ง
+              โค้ดจะถูกส่งหลังยืนยันการชำระเงินเท่านั้น
             </p>
             <div className="trust-list">
               <div>
@@ -2166,39 +2007,27 @@ function InfoPage({ kind }: { kind: string }) {
           <>
             <h2>ข้อมูลที่ระบบจัดเก็บ</h2>
             <p>
-              ระบบสาธิตนี้จัดเก็บชื่อ อีเมล รหัสผ่านที่ผ่านการแฮช
-              ประวัติคำสั่งซื้อ และรายการเครดิตในฐานข้อมูลของเดโม
-              เพื่อให้คุณกลับมาดูสินค้าและประวัติได้
+              ระบบจัดเก็บชื่อ อีเมล รหัสผ่านที่ผ่านการแฮช
+              และประวัติคำสั่งซื้อ เพื่อให้เปิดดูรายการของตนเองได้
             </p>
             <h3>การเข้าถึงข้อมูล</h3>
             <p>
-              ลูกค้าสามารถดูคำสั่งซื้อของตนเองเท่านั้น
-              ผู้ดูแลร้านเข้าถึงข้อมูลการขายและคลังสินค้าเพื่อบริหารร้าน
+              ลูกค้าเห็นเฉพาะคำสั่งซื้อของตนเอง
+              ผู้ดูแลเห็นข้อมูลการขายและคลังสินค้า
               คุกกี้ใช้เพื่อรักษาการเข้าสู่ระบบ
-            </p>
-            <h3>การใช้งานเดโม</h3>
-            <p>
-              ใช้ข้อมูลสมมติสำหรับทดลองเท่านั้น
-              นโยบายนี้เป็นข้อความสำหรับเดโมและต้องตรวจทานก่อนเปิดให้บริการจริง
             </p>
           </>
         ) : (
           <>
-            <h2>เงื่อนไขการใช้บริการทดลอง</h2>
+            <h2>ข้อกำหนดร้าน</h2>
             <p>
-              เว็บไซต์นี้เป็นระบบสาธิต ASTRA DIGITAL ทุกยอดเป็นเครดิตทดลอง
-              และโค้ดทุกชิ้นเป็นตัวอย่างที่ไม่สามารถใช้แลกบริการจริงได้
+              {overview?.shop?.policy ||
+                "ผู้ดูแลสามารถกำหนดข้อกำหนดร้านได้จากหลังบ้าน"}
             </p>
             <h3>คำสั่งซื้อและการส่งมอบ</h3>
             <p>
-              ระบบตรวจสอบจำนวนสินค้าคงเหลือและเครดิตที่มี
-              ก่อนหักเครดิตและส่งมอบโค้ด
-              หากทำรายการไม่สำเร็จจะไม่มีการส่งโค้ดหรือหักเครดิต
-            </p>
-            <h3>ขอบเขตการทดลอง</h3>
-            <p>
-              ไม่รับชำระเงินจริง ไม่มีการเชื่อมต่อธนาคาร
-              ไม่ควรนำข้อมูลหรือบัญชีบริการจริงมาใส่ในระบบสาธิตนี้
+              ระบบตรวจสต็อกก่อนรับคำสั่งซื้อ
+              โค้ดจะถูกส่งหลังยืนยันการชำระเงินเท่านั้น
             </p>
           </>
         )}
@@ -2224,21 +2053,25 @@ function NotFound() {
   );
 }
 function Router() {
-  const { path } = useStore();
+  const { path, overview } = useStore();
+  const shopName = overview?.shop?.shopName || "ร้านค้า";
   useEffect(() => {
     const titles: Record<string, string> = {
       "/": "หน้าร้าน",
       "/products": "สินค้าทั้งหมด",
       "/login": "เข้าสู่ระบบ",
       "/register": "สมัครสมาชิก",
-      "/wallet": "เติมเงิน",
       "/orders": "ประวัติการซื้อ",
       "/cart": "ตะกร้าสินค้า",
       "/checkout": "ตรวจสอบคำสั่งซื้อ",
       "/account": "บัญชีของฉัน",
+      "/admin": "แดชบอร์ด",
     };
-    document.title = (titles[path] ?? "ASTRA DIGITAL") + " — ASTRA DIGITAL";
-  }, [path]);
+    const page = path.startsWith("/admin")
+      ? "แดชบอร์ด"
+      : (titles[path] ?? shopName);
+    document.title = page + " — " + shopName;
+  }, [path, shopName]);
   if (path === "/stores") return <Stores />;
   if (path === "/") return <Home />;
   if (path === "/products") return <ReferenceCatalogPage />;

@@ -102,6 +102,8 @@ export function seedLegacy(db, migrations, key) {
   db.prepare(
     "INSERT INTO runtime_flags VALUES('reference-catalog-v1','1')",
   ).run();
+  // A live shop that already passed first-boot demo cleanup; upgrades must keep its data.
+  db.prepare("INSERT INTO runtime_flags VALUES('template-ready','1')").run();
   db.prepare("INSERT INTO runtime_flags VALUES(?,?)").run(
     "shop-settings",
     JSON.stringify({

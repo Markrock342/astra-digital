@@ -253,11 +253,19 @@ test("admin import rejects duplicate codes atomically", (t) => {
     before + 1,
   );
   assert.ok(!JSON.stringify(s.adminOverview(admin)).includes("DEMO-QA-IMPORT"));
+  s.importCodes(admin, {
+    variantId: "stream-plus-30",
+    codes: "REAL-KEY-123",
+  });
+  assert.equal(
+    s.db.prepare("SELECT COUNT(*) AS n FROM inventory").get().n,
+    before + 2,
+  );
   assert.throws(
     () =>
       s.importCodes(admin, {
         variantId: "stream-plus-30",
-        codes: "REAL-KEY-123",
+        codes: "bad key",
       }),
     (e) => e.status === 400,
   );

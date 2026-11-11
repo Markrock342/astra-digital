@@ -1,6 +1,10 @@
 import { openLocalCommerce } from "./commerce.mjs";
 import { createApp } from "./http.mjs";
-const commerce = openLocalCommerce();
+const commerce = openLocalCommerce({
+  seed: false,
+  allowSandbox: false,
+  allowDemoAdmin: false,
+});
 const port = Number(process.env.PORT ?? 4331);
 const server = createApp(commerce, {
   production: process.env.NODE_ENV === "production",

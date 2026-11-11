@@ -46,7 +46,11 @@ export function createCommerce(options = {}) {
   }
   return createCommerceCore({ ...options, db });
 }
-export function openLocalCommerce({ seed = true } = {}) {
+export function openLocalCommerce({
+  seed = true,
+  allowSandbox = true,
+  allowDemoAdmin = false,
+} = {}) {
   const root = join(dirname(fileURLToPath(import.meta.url)), "../.data");
   mkdirSync(root, { recursive: true, mode: 0o700 });
   const keyPath = join(root, "inventory.key");
@@ -57,5 +61,7 @@ export function openLocalCommerce({ seed = true } = {}) {
     key: readFileSync(keyPath),
     adminPassword: process.env.ASTRA_ADMIN_PASSWORD,
     seed,
+    allowSandbox,
+    allowDemoAdmin,
   });
 }

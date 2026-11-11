@@ -13,6 +13,17 @@ export const authenticationPaths = [
   "/api/demo",
   "/api/demo-merchant",
 ];
+function sameLocalOrigin(origin, pageOrigin) {
+  if (origin === pageOrigin) return true;
+  try {
+    const left = new URL(origin);
+    const right = new URL(pageOrigin);
+    const local = new Set(["127.0.0.1", "localhost"]);
+    return local.has(left.hostname) && local.has(right.hostname);
+  } catch {
+    return false;
+  }
+}
 export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
   const attempts = new Map();
   function localLimit(key) {
@@ -39,7 +50,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (request.headers.get("X-Astra-Request") !== "1")
           throw new ApiError(403, "ข้อมูลคำขอไม่ถูกต้อง");
         const origin = request.headers.get("Origin");
-        if (origin && new URL(origin).origin !== url.origin)
+        if (origin && !sameLocalOrigin(origin, url.origin))
           throw new ApiError(403, "ไม่อนุญาตคำขอจากเว็บไซต์อื่น");
         if (
           !request.headers.get("Content-Type")?.startsWith("application/json")
@@ -119,7 +130,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (path === "/api/health")
           return send(200, {
             ok: true,
-            mode: "sandbox",
+            mode: service.mode ?? "sandbox",
             storage: service.storageKind ?? "local-sqlite",
           });
         if (path === "/api/me")
@@ -161,7 +172,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           });
         if (path === "/api/rankings/buyers")
           return send(200, {
-            buyers: service.buyerRanking(url.searchParams.get("limit")),
+            buyers: service.buyerRanking(user, url.searchParams.get("limit")),
           });
         if (path === "/api/admin")
           return send(200, service.adminOverview(user));

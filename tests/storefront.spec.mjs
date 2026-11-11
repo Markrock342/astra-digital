@@ -40,7 +40,7 @@ test("reference composition, catalog search, categories, theme and responsive la
   page.on("pageerror", (e) => errors.push(e.message));
   await ready(page);
   await expect(
-    page.getByRole("heading", { name: "WELCOME TO ASTRA" }),
+    page.getByRole("heading", { name: "ร้านค้า", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".stat-value strong").nth(1)).toHaveText("25");
   await screenshot(page, "desktop-home");
@@ -207,7 +207,7 @@ test("admin can create a product, import inventory, reject duplicates and export
   await page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }).click();
   await expect(page).toHaveURL(base + "/admin");
   await expect(
-    page.getByRole("heading", { name: "ASTRA DIGITAL", exact: true }),
+    page.getByRole("heading", { name: "ร้านค้า", exact: true }),
   ).toBeVisible();
   await screenshot(page, "admin-dashboard");
   await page

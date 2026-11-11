@@ -42,6 +42,7 @@ export function createCommerceCore({
   db,
   transaction,
   allowDemoAdmin = false,
+  allowSandbox = true,
   key = randomBytes(32),
   seed = true,
   adminPassword,
@@ -112,6 +113,8 @@ export function createCommerceCore({
       note: "ช่องทางเดียว — ห้ามเปิด SlipOK/Gateway จนกว่าลูกค้าเลือก",
     };
   const assertSandboxPayAllowed = () => {
+    if (!allowSandbox)
+      fail(501, "การชำระเงินยังไม่เปิด ระบบจะเชื่อมช่องทางจ่ายภายหลัง");
     const channel = paymentChannel();
     if (channel.provider !== "unset" && channel.provider !== "sandbox")
       fail(
@@ -322,6 +325,89 @@ export function createCommerceCore({
         );
       run("INSERT INTO runtime_flags VALUES('reference-catalog-v1','applied')");
     });
+  if (
+    !allowSandbox &&
+    !one("SELECT key FROM runtime_flags WHERE key='template-ready'")
+  ) {
+    const demoIds = catalog.map((p) => p.id);
+    const marks = demoIds.map(() => "?").join(",");
+    tx(() => {
+      const demoUsers = all(
+        "SELECT id FROM users WHERE email LIKE '%@example.invalid' OR email LIKE '%@demo.astra.local' OR email LIKE '%@merchant.astra.local'",
+      ).map((row) => row.id);
+      run(
+        `DELETE FROM inventory WHERE variant_id IN (SELECT id FROM variants WHERE product_id IN (${marks}))`,
+        ...demoIds,
+      );
+      run(
+        `DELETE FROM reviews WHERE order_id IN (SELECT o.id FROM orders o JOIN variants v ON v.id=o.variant_id WHERE v.product_id IN (${marks}))`,
+        ...demoIds,
+      );
+      run(
+        `DELETE FROM payments WHERE order_id IN (SELECT o.id FROM orders o JOIN variants v ON v.id=o.variant_id WHERE v.product_id IN (${marks}))`,
+        ...demoIds,
+      );
+      run(
+        `DELETE FROM reservations WHERE variant_id IN (SELECT id FROM variants WHERE product_id IN (${marks}))`,
+        ...demoIds,
+      );
+      run(
+        `DELETE FROM orders WHERE variant_id IN (SELECT id FROM variants WHERE product_id IN (${marks}))`,
+        ...demoIds,
+      );
+      run(
+        `DELETE FROM variants WHERE product_id IN (${marks})`,
+        ...demoIds,
+      );
+      run(`DELETE FROM products WHERE id IN (${marks})`, ...demoIds);
+      if (demoUsers.length) {
+        const users = demoUsers.map(() => "?").join(",");
+        run(
+          `DELETE FROM sessions WHERE user_id IN (${users})`,
+          ...demoUsers,
+        );
+        run(
+          `DELETE FROM chat_messages WHERE thread_id IN (SELECT id FROM chat_threads WHERE user_id IN (${users}))`,
+          ...demoUsers,
+        );
+        run(
+          `DELETE FROM chat_threads WHERE user_id IN (${users})`,
+          ...demoUsers,
+        );
+        run(
+          `DELETE FROM notifications WHERE user_id IN (${users})`,
+          ...demoUsers,
+        );
+        run(`DELETE FROM payments WHERE user_id IN (${users})`, ...demoUsers);
+        run(`DELETE FROM ledger WHERE user_id IN (${users})`, ...demoUsers);
+        run(`DELETE FROM reviews WHERE user_id IN (${users})`, ...demoUsers);
+        run(
+          `DELETE FROM reservations WHERE user_id IN (${users})`,
+          ...demoUsers,
+        );
+        run(`DELETE FROM orders WHERE user_id IN (${users})`, ...demoUsers);
+        run(
+          `DELETE FROM users WHERE id IN (${users}) AND role<>'ADMIN'`,
+          ...demoUsers,
+        );
+      }
+      const saved = one(
+        "SELECT value FROM runtime_flags WHERE key='shop-settings'",
+      );
+      if (saved) {
+        const current = JSON.parse(saved.value);
+        if (
+          current.line === "@832wjrpn" ||
+          current.email === "ceo.natthanan@shipx.sbs" ||
+          String(current.policy || "").includes("ตัวอย่างสาธิต")
+        )
+          run("DELETE FROM runtime_flags WHERE key='shop-settings'");
+      }
+      run(
+        "INSERT INTO runtime_flags(key,value) VALUES('template-ready','1')",
+      );
+    });
+  }
   if (adminPassword) {
     if (adminPassword.length < 12)
       throw new Error("ASTRA_ADMIN_PASSWORD must have at least 12 characters");
@@ -389,14 +475,15 @@ export function createCommerceCore({
         passwordHash(password),
       );
       if (username) run("UPDATE users SET username=? WHERE id=?", username, id);
-      run(
-        "INSERT INTO ledger(id,user_id,amount,reference,label,kind) VALUES(?,?,?,?,?,'DEMO_CREDIT')",
-        randomUUID(),
-        id,
-        50000,
-        "welcome-" + id,
-        "เครดิตต้อนรับ (ทดลอง)",
-      );
+      if (allowSandbox)
+        run(
+          "INSERT INTO ledger(id,user_id,amount,reference,label,kind) VALUES(?,?,?,?,?,'DEMO_CREDIT')",
+          randomUUID(),
+          id,
+          50000,
+          "welcome-" + id,
+          "เครดิตต้อนรับ (ทดลอง)",
+        );
       audit({ id }, "REGISTER", id);
     });
     return issueSession(one("SELECT * FROM users WHERE id=?", id));
@@ -427,6 +514,7 @@ export function createCommerceCore({
     return issueSession(user);
   }
   function demo() {
+    if (!allowSandbox) fail(403, "ร้านนี้ไม่เปิดบัญชีทดลอง");
     const suffix = randomBytes(8).toString("hex");
     return register({
       name: "ผู้เยี่ยมชม " + suffix.slice(0, 4),
@@ -499,17 +587,15 @@ export function createCommerceCore({
       "SELECT value FROM runtime_flags WHERE key='shop-settings'",
     );
     return {
-      shopName: "ASTRA DIGITAL",
-      description:
-        "เรามีสินค้าให้คุณเลือกมากมาย และยังมีสินค้าใหม่ๆ ที่จะมาให้คุณได้เลือกซื้ออีกในอนาคต โปรดรอติดตาม",
-      announcement: "เวลาทำการ 10:00 - 22:00 น. ทุกวัน",
-      line: "@832wjrpn",
-      email: "ceo.natthanan@shipx.sbs",
+      shopName: "ร้านค้า",
+      description: "",
+      announcement: "",
+      line: "",
+      email: "",
       phone: "",
       facebook: "",
       discord: "",
-      policy:
-        "สินค้าทุกชิ้นเป็นตัวอย่างสาธิต ใช้เครดิตทดลองเท่านั้น ไม่มีการเรียกเก็บเงินจริง",
+      policy: "",
       requireTerms: true,
       stockOrder: "oldest",
       shopOpen: true,
@@ -933,6 +1019,7 @@ export function createCommerceCore({
   }
   function topup(user, input) {
     requireUser(user);
+    if (!allowSandbox) fail(501, "การเติมเครดิตทดลองปิดอยู่");
     if (![100, 300, 500, 1000].includes(input.amount))
       fail(400, "กรุณาเลือกยอดเครดิตที่กำหนด");
     const ref =
@@ -1002,11 +1089,11 @@ export function createCommerceCore({
       .filter(Boolean);
     if (
       codes.length > 100 ||
-      codes.some((c) => !/^DEMO-[A-Z0-9-]{4,120}$/.test(c))
+      codes.some((c) => !/^[A-Za-z0-9][A-Za-z0-9._:@+/=-]{3,159}$/.test(c))
     )
       fail(
         400,
-        "ใช้เฉพาะโค้ด DEMO- ตามด้วยอักษรใหญ่ ตัวเลข หรือขีด ไม่เกิน 100 โค้ดต่อครั้ง",
+        "รหัสสินค้าใช้ตัวอักษร ตัวเลข และเครื่องหมายที่กำหนดได้ ไม่เกิน 100 รายการต่อครั้ง",
       );
     if (new Set(codes).size !== codes.length) fail(409, "มีโค้ดซ้ำในรายการ");
     return tx(() => {
@@ -1281,7 +1368,8 @@ export function createCommerceCore({
     );
     return { ok: true };
   }
-  function buyerRanking(limit = 10) {
+  function buyerRanking(user, limit = 10) {
+    requireAdmin(user);
     const n = Math.min(50, Math.max(1, Number(limit) || 10));
     return all(
       `SELECT u.id,u.name,
@@ -1338,6 +1426,7 @@ export function createCommerceCore({
     notifications,
     markNotificationRead,
     buyerRanking,
+    mode: allowSandbox ? "sandbox" : "live",
     logout: (token) =>
       run("DELETE FROM sessions WHERE token_hash=?", hash(token ?? "")),
     orders: (user) => {

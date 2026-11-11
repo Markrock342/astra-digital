@@ -34,7 +34,6 @@ import {
   X,
 } from "lucide-react";
 import { Art, Empty, ErrorMessage, Link, Status, useStore } from "./App";
-import { DemoMerchantButton } from "./Stores";
 import { useDialog } from "./dialog";
 import { api, dateTime, money } from "./api";
 import type { AdminData, Product } from "./types";
@@ -223,11 +222,6 @@ export default function Admin() {
         <Link to="/login?next=%2Fadmin" className="button primary full">
           เข้าสู่ระบบ
         </Link>
-        <div className="auth-divider">
-          <span>ระบบสาธิตสำหรับลูกค้า</span>
-        </div>
-        <DemoMerchantButton label="เริ่มทดลองเป็นเจ้าของร้าน" />
-        <small>เครดิตทดลอง · ไม่มีการรับเงินจริง</small>
       </main>
     );
   if (!data)
@@ -332,14 +326,6 @@ export default function Admin() {
     (o) => o.status === "DELIVERED" || o.status === "PREORDER",
   );
   const revenue = paid.reduce((n, o) => n + o.total, 0);
-  const topups = data.ledger
-    .filter(
-      (l) =>
-        l.amount > 0 &&
-        l.label.includes("เติม") &&
-        (range !== "today" || l.created_at.startsWith(todayKey)),
-    )
-    .reduce((n, l) => n + l.amount, 0);
   const tasks = data.orders.filter(
     (o) => o.status === "PENDING_PAYMENT",
   ).length;
@@ -367,7 +353,7 @@ export default function Admin() {
           <>
             <div className="reference-overview-title">
               <div>
-                <h1>{overview?.shop?.shopName ?? "ASTRA DIGITAL"}</h1>
+                <h1>{overview?.shop?.shopName || "ร้านค้า"}</h1>
                 <p>{location.host}</p>
               </div>
               <div>
@@ -392,13 +378,13 @@ export default function Admin() {
                     : "ร้านเปิดอยู่"}
                   <span className="store-switch" />
                 </button>
-                <Link to="/admin/settings/billing" className="trial-pill">
-                  <i />
-                  ทดลองใช้ <span>เครดิตทดลอง</span>
-                  <ArrowRight size={15} />
+                <Link to="/" className="button secondary">
+                  ดูหน้าร้าน
+                  <ArrowUpRight size={15} />
                 </Link>
               </div>
             </div>
+            <ShopConfigCard />
             <section className="reference-admin-card setup-card">
               <div className="reference-card-heading">
                 <button onClick={() => setExpanded(!expanded)}>
@@ -471,7 +457,7 @@ export default function Admin() {
                   String(paid.length),
                   "ยังไม่มีทั้งสองช่วง",
                 ],
-                ["เงินเติมเข้า", money(topups), "สลิปที่อนุมัติและเครดิตทดลอง"],
+                ["รหัสสินค้าคงเหลือ", String(data.stock), "ชิ้นที่ยังไม่ถูกส่ง"],
                 [
                   "ลูกค้าใหม่",
                   String(
@@ -539,7 +525,7 @@ export default function Admin() {
                     </span>
                     <div>
                       <strong>ออเดอร์รอชำระ</strong>
-                      <p>ตรวจสอบสถานะรายการในระบบทดลอง</p>
+                      <p>คำสั่งซื้อที่บันทึกแล้วและยังรอการชำระเงิน</p>
                     </div>
                     <b>{tasks}</b>
                     <ChevronRight size={17} />
@@ -553,9 +539,11 @@ export default function Admin() {
                   <h2>ลูกค้าจ่ายด้วยอะไร</h2>
                 </div>
                 <p className="reference-empty-text">
-                  {paid.length
-                    ? "เครดิตทดลอง · " + paid.length + " ออเดอร์"
-                    : "ยังไม่มีออเดอร์ที่ชำระแล้วในช่วงนี้"}
+                  {tasks
+                    ? tasks + " รายการรอเชื่อมช่องทางชำระเงิน"
+                    : paid.length
+                      ? paid.length + " รายการที่จัดส่งแล้ว"
+                      : "ยังไม่มีออเดอร์ในช่วงนี้"}
                 </p>
               </section>
               <section className="reference-admin-card">
@@ -810,7 +798,7 @@ export default function Admin() {
                   <section className="reference-admin-card editor-panel">
                     <h2>ตัวเลือกราคาและสต็อก</h2>
                     <label className="field">
-                      ราคาเริ่มต้น (เครดิตทดลอง)
+                      ราคา (บาท)
                       <input
                         name="price"
                         type="number"
@@ -1080,12 +1068,12 @@ export default function Admin() {
               <div>
                 <h1>{tab === "ledger" ? "ประวัติเงินเข้าออก" : "รับเงิน"}</h1>
                 <p>
-                  เงินที่ลูกค้าเติมเครดิตในระบบทดลอง ทุกรายการตรวจสอบย้อนหลังได้
+                  รายการรับเงินในระบบ ช่องทางจ่ายภายนอกยังไม่เชื่อม
                 </p>
               </div>
             </div>
             <div className="reference-status-tabs">
-              <button className="active">เครดิตทดลอง</button>
+              <button className="active">รายการ</button>
               <Link to="/admin/ledger">ประวัติเงินเข้าออก</Link>
             </div>
             {toolbar}
@@ -1232,12 +1220,12 @@ export default function Admin() {
                   <textarea
                     name="codes"
                     rows={7}
-                    placeholder="DEMO-EXAMPLE-0001&#10;DEMO-EXAMPLE-0002"
+                    placeholder="รหัสสินค้าหนึ่งรายการต่อบรรทัด"
                     required
                   />
                 </label>
                 <p className="field-help">
-                  ใช้เฉพาะโค้ด DEMO- สำหรับทดลอง ระบบตรวจโค้ดซ้ำก่อนบันทึก
+                  ใส่รหัสสินค้าจริงได้ ระบบตรวจรหัสซ้ำก่อนบันทึก และยังไม่ส่งให้ลูกค้าก่อนยืนยันการชำระเงิน
                 </p>
                 <div className="form-actions">
                   <button
@@ -1262,6 +1250,68 @@ export default function Admin() {
         )}
       </main>
     </>
+  );
+}
+function ShopConfigCard() {
+  const { overview, refresh, toast } = useStore();
+  const shop = overview?.shop;
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  async function save(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    try {
+      await api("/admin/settings", Object.fromEntries(new FormData(e.currentTarget)));
+      setSaved(true);
+      toast("บันทึกข้อมูลร้านแล้ว");
+      await refresh();
+    } catch (err) {
+      setSaved(false);
+      setError((err as Error).message);
+    }
+  }
+  return (
+    <form
+      className="reference-admin-card editor-panel"
+      key={[shop?.shopName, shop?.line, shop?.email, shop?.description, shop?.announcement].join("|")}
+      onSubmit={save}
+    >
+      <div className="reference-card-heading">
+        <div>
+          <h2>ข้อมูลร้าน</h2>
+          <p>ชื่อ ไลน์ อีเมล และข้อความบนเว็บ เปลี่ยนแล้วเห็นบนหน้าร้านทันที</p>
+        </div>
+        <Link to="/admin/settings">
+          ตั้งค่าเพิ่มเติม
+          <ArrowRight size={15} />
+        </Link>
+      </div>
+      <ErrorMessage message={error} />
+      <label className="field">
+        ชื่อร้าน
+        <input name="shopName" defaultValue={shop?.shopName ?? ""} required minLength={2} maxLength={80} />
+      </label>
+      <label className="field">
+        ไอดี LINE
+        <input name="line" defaultValue={shop?.line ?? ""} maxLength={200} placeholder="@lineid" />
+      </label>
+      <label className="field">
+        อีเมลร้าน
+        <input name="email" type="email" defaultValue={shop?.email ?? ""} maxLength={200} />
+      </label>
+      <label className="field">
+        คำโปรยท้ายเว็บ
+        <textarea name="description" defaultValue={shop?.description ?? ""} maxLength={1000} />
+      </label>
+      <label className="field">
+        ประกาศหน้าแรก
+        <textarea name="announcement" defaultValue={shop?.announcement ?? ""} maxLength={1000} />
+      </label>
+      <div className="form-actions">
+        <span>{saved ? "บันทึกแล้ว" : "แก้แล้วกดบันทึก"}</span>
+        <button className="button primary">บันทึกข้อมูลร้าน</button>
+      </div>
+    </form>
   );
 }
 function ReferenceSettings({ sub }: { sub: string }) {
@@ -1301,7 +1351,11 @@ function ReferenceSettings({ sub }: { sub: string }) {
           </p>
         </div>
       </div>
-      <form className="reference-settings-form" onSubmit={save}>
+      <form
+        className="reference-settings-form"
+        key={shop?.shopName + "|" + shop?.line + "|" + shop?.email}
+        onSubmit={save}
+      >
         <ErrorMessage message={error} />
         <section className="reference-admin-card editor-panel">
           <h2>ข้อมูลร้าน</h2>
@@ -1310,7 +1364,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
             ชื่อร้าน
             <input
               name="shopName"
-              defaultValue={shop?.shopName ?? "ASTRA DIGITAL"}
+              defaultValue={shop?.shopName ?? ""}
               required
               minLength={2}
               maxLength={80}
@@ -1321,10 +1375,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
             <textarea
               aria-label="รายละเอียด"
               name="description"
-              defaultValue={
-                shop?.description ??
-                "เรามีสินค้าให้คุณเลือกมากมาย และยังมีสินค้าใหม่ๆ ที่จะมาให้คุณได้เลือกซื้ออีกในอนาคต โปรดรอติดตาม"
-              }
+              defaultValue={shop?.description ?? ""}
               maxLength={1000}
             />
           </label>
@@ -1335,7 +1386,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
           <img
             src="/favicon.svg"
             className="settings-logo"
-            alt="ASTRA DIGITAL"
+            alt=""
           />
         </section>
         <section className="reference-admin-card editor-panel">
@@ -1366,9 +1417,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
           <label className="field">
             <textarea
               name="announcement"
-              defaultValue={
-                shop?.announcement ?? "เวลาทำการ 10:00 - 22:00 น. ทุกวัน"
-              }
+              defaultValue={shop?.announcement ?? ""}
               maxLength={1000}
             />
           </label>
@@ -1381,10 +1430,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
             <textarea
               name="policy"
               maxLength={10000}
-              defaultValue={
-                shop?.policy ??
-                "สินค้าทุกชิ้นเป็นตัวอย่างสาธิต ใช้เครดิตทดลองเท่านั้น ไม่มีการเรียกเก็บเงินจริง"
-              }
+              defaultValue={shop?.policy ?? ""}
             />
           </label>
           <label className="checkbox-label">
@@ -1414,14 +1460,6 @@ function ReferenceSettings({ sub }: { sub: string }) {
             </select>
           </label>
         </section>
-        {section && (
-          <section className="reference-admin-card editor-panel">
-            <h2>{settingTabs.find(([key]) => key === sub)?.[1]}</h2>
-            <p>
-              โหมดทดลอง ใช้เครดิตและโค้ดตัวอย่าง ไม่มีการเชื่อมต่อบัญชีเงินจริง
-            </p>
-          </section>
-        )}
         <div className="editor-save-bar">
           <span>
             {saved ? "บันทึกการเปลี่ยนแปลงแล้ว" : "มีการแก้ไขที่ยังไม่บันทึก"}
