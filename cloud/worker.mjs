@@ -78,7 +78,7 @@ export class Commerce extends DurableObject {
       allowSandbox: false,
       seed: false,
       adminPassword:
-        typeof adminPassword === "string" && adminPassword.length >= 12
+        typeof adminPassword === "string" && adminPassword.length >= 8
           ? adminPassword
           : undefined,
     });
