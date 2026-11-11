@@ -38,6 +38,9 @@ export type Order = {
   status: string;
   created_at: string;
   codes: string[];
+  /** ID + password pairs, only for the owner once delivered (DB-005). */
+  credentials?: Credential[];
+  queueNumber?: number | null;
   reviewed: boolean;
   preorder?:boolean;
   paymentToken?: string | null;
@@ -98,4 +101,18 @@ export type Review = {
   created_at: string;
   name: string;
   product: string;
+};
+export type Credential = { loginId: string; password: string };
+export type Features = { credentialPair?: boolean; preorderDelivery?: boolean };
+export type QueueItem = {
+  id: string;
+  queue_number: number;
+  status: string;
+  total: number;
+  quantity: number;
+  created_at: string;
+  customer_id: string;
+  customer: string;
+  product: string;
+  label: string;
 };

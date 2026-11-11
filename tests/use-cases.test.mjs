@@ -282,6 +282,11 @@ test("UC7 live shop refuses demo accounts, demo credit and sandbox payment", asy
   const api = shop(t, { allowDemoAdmin: false, allowSandbox: false, seed: false });
   const health = await api.get("/api/health");
   assert.equal(health.body.mode, "live");
+  assert.deepEqual(
+    health.body.features,
+    { credentialPair: false, preorderDelivery: false },
+    "admin UI keeps DB-005 screens off until the API ships",
+  );
   assert.equal((await api.get("/api/products")).body.products.length, 0, "starts empty");
   assert.equal((await api.post("/api/demo", null, {})).status, 403);
   assert.equal((await api.post("/api/demo-merchant", null, {})).status, 403);

@@ -139,6 +139,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             ok: true,
             mode: service.mode ?? "sandbox",
             storage: service.storageKind ?? "local-sqlite",
+            features: service.features ?? {},
           });
         if (path === "/api/me")
           return send(200, { user: service.publicUser(user) });

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type ClipboardEvent, type FormEvent } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -36,7 +36,7 @@ import {
 import { Art, Empty, ErrorMessage, Link, Status, useStore } from "./App";
 import { useDialog } from "./dialog";
 import { api, dateTime, money } from "./api";
-import type { AdminData, Product } from "./types";
+import type { AdminData, Credential, Features, Product, QueueItem } from "./types";
 const productTabs = [
   ["products", "สินค้าทั้งหมด"],
   ["inventory", "บัญชีสต็อก"],
@@ -47,6 +47,7 @@ const productTabs = [
 ];
 const orderTabs = [
   ["orders", "ออเดอร์ทั้งหมด"],
+  ["preorders", "คิวพรีออเดอร์"],
   ["rentals", "เช่าไอดี"],
   ["issues", "แจ้งปัญหา"],
   ["otp", "รับ OTP"],
@@ -92,6 +93,10 @@ export default function Admin() {
   const [range, setRange] = useState("today");
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
+  const [features, setFeatures] = useState<Features>({});
+  const [queue, setQueue] = useState<QueueItem[] | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [pairs, setPairs] = useState<Credential[]>([{ loginId: "", password: "" }]);
   const tab = path.split("/")[2] ?? "";
   const sub = path.split("/").slice(2).join("/");
   const productGroup = productTabs.some(([key]) => key === tab);
@@ -106,6 +111,8 @@ export default function Admin() {
   async function load() {
     try {
       setData(await api<AdminData>("/admin"));
+      const health = await api<{ features?: Features }>("/health");
+      setFeatures(health.features ?? {});
       setError("");
     } catch (e) {
       setError((e as Error).message);
@@ -114,10 +121,56 @@ export default function Admin() {
   useEffect(() => {
     if (user?.role === "ADMIN") void load();
   }, [user?.id]);
+  async function loadQueue() {
+    try {
+      setQueue((await api<{ queue: QueueItem[] }>("/queue")).queue);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  useEffect(() => {
+    if (user?.role === "ADMIN" && tab === "preorders") void loadQueue();
+  }, [user?.id, tab]);
+  useEffect(() => {
+    if (importing) setPairs([{ loginId: "", password: "" }]);
+  }, [importing]);
+  async function deliver(item: QueueItem) {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/admin/reservations/" + item.id + "/deliver", {});
+      setConfirming(null);
+      await loadQueue();
+      await load();
+      toast("ส่งของคิว #" + item.queue_number + " แล้ว");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  function pastePairs(e: ClipboardEvent<HTMLInputElement>, index: number) {
+    const text = e.clipboardData.getData("text");
+    if (!text.includes("\t") && !text.includes("\n")) return;
+    e.preventDefault();
+    const rows = text
+      .split(/\r?\n/)
+      .filter((line) => line.trim())
+      .map((line) => {
+        const [loginId = "", ...rest] = line.split("\t");
+        return { loginId: loginId.trim(), password: rest.join("\t") };
+      });
+    setPairs((current) => [
+      ...current.slice(0, index),
+      ...rows,
+      ...current.slice(index + 1),
+    ]);
+  }
   useEffect(() => {
     setQuery("");
     setStatus("all");
     setImporting(false);
+    setConfirming(null);
     setEditing(null);
   }, [path]);
   async function save(e: FormEvent<HTMLFormElement>) {
@@ -150,14 +203,33 @@ export default function Admin() {
     setBusy(true);
     setError("");
     try {
+      const form = Object.fromEntries(new FormData(e.currentTarget));
+      const items = pairs.filter((p) => p.loginId.trim() || p.password);
+      if (features.credentialPair) {
+        if (!items.length) throw new Error("กรุณาใส่ไอดีและรหัสผ่านอย่างน้อยหนึ่งรายการ");
+        if (items.some((p) => !p.loginId.trim() || !p.password))
+          throw new Error("ทุกแถวต้องมีทั้งไอดีและรหัสผ่าน");
+      }
       const result = await api<{ imported: number }>(
         "/admin/inventory",
-        Object.fromEntries(new FormData(e.currentTarget)),
+        features.credentialPair
+          ? {
+              variantId: form.variantId,
+              items: items.map((p) => ({
+                loginId: p.loginId.trim(),
+                password: p.password,
+              })),
+            }
+          : form,
       );
       await load();
       await refresh();
       setImporting(false);
-      toast(`นำเข้า ${result.imported} โค้ดสำเร็จ`);
+      toast(
+        features.credentialPair
+          ? `นำเข้า ${result.imported} บัญชีสำเร็จ`
+          : `นำเข้า ${result.imported} โค้ดสำเร็จ`,
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -998,6 +1070,107 @@ export default function Admin() {
             </div>
           </>
         )}
+        {tab === "preorders" && (
+          <>
+            <div className="reference-admin-heading">
+              <div>
+                <h1>คิวพรีออเดอร์</h1>
+                <p>
+                  เลขคิวออกเมื่อลูกค้าชำระเงินสำเร็จ เรียงตามลำดับการจ่าย
+                  ส่งของตามคิวจากบนลงล่าง
+                </p>
+              </div>
+              <button className="button secondary" onClick={() => void loadQueue()}>
+                <History size={15} />
+                โหลดใหม่
+              </button>
+            </div>
+            {!features.preorderDelivery && (
+              <p className="note-box queue-pending-note" role="note">
+                ปุ่มส่งของจะใช้ได้หลังอัปเดตฐานข้อมูลรอบถัดไป ตอนนี้ดูลำดับคิวได้อย่างเดียว
+              </p>
+            )}
+            <div className="table-scroll reference-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>คิว</th>
+                    <th>ลูกค้า</th>
+                    <th>สินค้า</th>
+                    <th>ยอดรวม</th>
+                    <th>ชำระเมื่อ</th>
+                    <th>สถานะ</th>
+                    <th>ส่งของ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(queue ?? []).map((q) => (
+                    <tr key={q.id}>
+                      <td>
+                        <strong className="order-number">#{q.queue_number}</strong>
+                      </td>
+                      <td>{q.customer}</td>
+                      <td>
+                        {q.product}
+                        <small>
+                          {q.label} · {q.quantity} ชิ้น
+                        </small>
+                      </td>
+                      <td>{money(q.total)}</td>
+                      <td>{dateTime(q.created_at)}</td>
+                      <td>
+                        <Status status={q.status} />
+                      </td>
+                      <td>
+                        {q.status === "DELIVERED" ? (
+                          <span className="muted">ส่งแล้ว</span>
+                        ) : q.status !== "PREORDER" ? (
+                          <span className="muted">—</span>
+                        ) : confirming === q.id ? (
+                          <span className="queue-confirm">
+                            <button
+                              className="button primary"
+                              disabled={busy}
+                              onClick={() => void deliver(q)}
+                            >
+                              {busy ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}
+                              ยืนยันส่งคิว #{q.queue_number}
+                            </button>
+                            <button
+                              className="button secondary"
+                              disabled={busy}
+                              onClick={() => setConfirming(null)}
+                            >
+                              ยกเลิก
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            className="button secondary"
+                            disabled={!features.preorderDelivery}
+                            title={
+                              features.preorderDelivery
+                                ? undefined
+                                : "รออัปเดตฐานข้อมูล (DB-005)"
+                            }
+                            onClick={() => setConfirming(q.id)}
+                          >
+                            <Package size={15} />
+                            ส่งของ
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {queue && !queue.length && (
+                <p className="reference-empty-text">ยังไม่มีคิวพรีออเดอร์ที่ชำระแล้ว</p>
+              )}
+              {!queue && <p className="reference-empty-text">กำลังโหลดคิว…</p>}
+            </div>
+          </>
+        )}
         {tab === "customers" && (
           <>
             <div className="reference-admin-heading">
@@ -1141,6 +1314,7 @@ export default function Admin() {
           "products",
           "inventory",
           "orders",
+          "preorders",
           "customers",
           "payments",
           "top-ups",
@@ -1215,18 +1389,76 @@ export default function Admin() {
                     )}
                   </select>
                 </label>
-                <label className="field">
-                  โค้ด (หนึ่งโค้ดต่อบรรทัด)
-                  <textarea
-                    name="codes"
-                    rows={7}
-                    placeholder="รหัสสินค้าหนึ่งรายการต่อบรรทัด"
-                    required
-                  />
-                </label>
-                <p className="field-help">
-                  ใส่รหัสสินค้าจริงได้ ระบบตรวจรหัสซ้ำก่อนบันทึก และยังไม่ส่งให้ลูกค้าก่อนยืนยันการชำระเงิน
-                </p>
+                {features.credentialPair ? (
+                  <fieldset className="credential-rows">
+                    <legend>ไอดีและรหัสผ่าน</legend>
+                    {pairs.map((pair, i) => (
+                      <div className="credential-row" key={i}>
+                        <label className="field">
+                          ไอดี {i + 1}
+                          <input
+                            value={pair.loginId}
+                            autoComplete="off"
+                            maxLength={200}
+                            onPaste={(e) => pastePairs(e, i)}
+                            onChange={(e) =>
+                              setPairs(pairs.map((p, j) => (j === i ? { ...p, loginId: e.target.value } : p)))
+                            }
+                          />
+                        </label>
+                        <label className="field">
+                          รหัสผ่าน {i + 1}
+                          <input
+                            value={pair.password}
+                            autoComplete="off"
+                            maxLength={200}
+                            onChange={(e) =>
+                              setPairs(pairs.map((p, j) => (j === i ? { ...p, password: e.target.value } : p)))
+                            }
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          aria-label={"ลบแถว " + (i + 1)}
+                          disabled={pairs.length === 1}
+                          onClick={() => setPairs(pairs.filter((_, j) => j !== i))}
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="button secondary"
+                      disabled={pairs.length >= 100}
+                      onClick={() => setPairs([...pairs, { loginId: "", password: "" }])}
+                    >
+                      <Plus size={15} />
+                      เพิ่มแถว
+                    </button>
+                    <p className="field-help">
+                      คัดลอกสองคอลัมน์ (ไอดี, รหัสผ่าน) จาก Google Sheets หรือ Excel
+                      แล้ววางในช่องไอดีแรกได้ทีเดียว · สูงสุด 100 รายการต่อครั้ง ·
+                      รหัสผ่านเก็บแบบเข้ารหัส และส่งให้ลูกค้าหลังยืนยันการชำระเงินเท่านั้น
+                    </p>
+                  </fieldset>
+                ) : (
+                  <>
+                    <label className="field">
+                      โค้ด (หนึ่งโค้ดต่อบรรทัด)
+                      <textarea
+                        name="codes"
+                        rows={7}
+                        placeholder="รหัสสินค้าหนึ่งรายการต่อบรรทัด"
+                        required
+                      />
+                    </label>
+                    <p className="field-help">
+                      ใส่รหัสสินค้าจริงได้ ระบบตรวจรหัสซ้ำก่อนบันทึก และยังไม่ส่งให้ลูกค้าก่อนยืนยันการชำระเงิน
+                    </p>
+                  </>
+                )}
                 <div className="form-actions">
                   <button
                     type="button"

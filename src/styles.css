@@ -7625,3 +7625,42 @@ td small {
     display: none;
   }
 }
+
+/* DB-005 admin: credential pair import + preorder queue board */
+.credential-rows {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.credential-rows legend {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.credential-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.credential-row input {
+  min-width: 0;
+}
+.credential-pair {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.credential-pair .code-row small {
+  min-width: 64px;
+}
+.queue-confirm {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.queue-pending-note {
+  margin-bottom: 12px;
+}

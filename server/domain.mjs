@@ -1549,6 +1549,8 @@ export function createCommerceCore({
     markNotificationRead,
     buyerRanking,
     mode: allowSandbox ? "sandbox" : "live",
+    // Flip each flag when its API ships (DB-005): the admin UI switches on these.
+    features: Object.freeze({ credentialPair: false, preorderDelivery: false }),
     logout: (token) =>
       run("DELETE FROM sessions WHERE token_hash=?", hash(token ?? "")),
     orders: (user) => {

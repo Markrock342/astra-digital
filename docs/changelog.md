@@ -3,6 +3,7 @@
 บันทึกการเปลี่ยนแปลงระดับโฟลว์/กฎ — ไม่แทนที่ประวัติผลิตภัณฑ์ในเอกสารอื่น
 
 ## 2026-11-11
+- หน้าหลังบ้าน DB-005 ทำล่วงหน้า ซ่อนหลัง `features` ใน `/api/health`: กระดานคิวพรีออเดอร์ (`/admin/preorders` ใช้ได้แล้ว) + ปุ่มส่งของ (ปิดรอ API), ฟอร์มนำเข้า ID + รหัสผ่าน วางจาก Sheets ได้, หน้าลูกค้าแสดงไอดี/รหัสผ่านแบบซ่อนก่อนกดดู · สัญญาใน [api-contract-shop.md](architecture/api-contract-shop.md) · e2e `admin-preorder.spec.mjs` 4 ตัว (mock endpoint ที่ยังไม่มี) · Playwright 10 + unit 55 ผ่าน
 - Merge PR น็อตรอบ 2: เอกสาร #4 #6 #7 #9 #8 #10 #5 และโค้ด #11 (เปิดแชทมี rate limit + แจ้ง staff แบบ throttle) #16 (staff orders แบ่งหน้าใน SQL) · แก้ conflict เอกสารโดยเก็บทั้งสองฝั่ง · ล็อกคิว after_payment รวมทั้งร้าน และ path ส่งของ `POST /api/admin/reservations/:id/deliver` (ADMIN) · `npm test` 55 + Playwright 6 ผ่าน · น็อตเริ่ม migration 005 ได้
 - อันดับผู้ซื้อกรองได้ วัน/สัปดาห์/เดือน/ทั้งหมด ตามเวลาไทย นับพรีออเดอร์ที่จ่ายแล้ว ไม่ส่ง user id และ limit ผิดตอบ 400 แทน 500 — [api-contract-shop.md](architecture/api-contract-shop.md)
 - หลังบ้านเรียงคำสั่งซื้อตามเวลาสร้างล่าสุด (เดิมเรียงตาม customer_id)

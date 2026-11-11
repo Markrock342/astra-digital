@@ -1364,6 +1364,26 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                     {revealed ? "ซ่อนโค้ด" : "แสดงโค้ด"}
                   </button>
                 </div>
+                {order.credentials?.map((pair, i) => (
+                  <div className="credential-pair" key={"pair-" + i}>
+                    {[
+                      ["ไอดี", pair.loginId],
+                      ["รหัสผ่าน", pair.password],
+                    ].map(([label, value]) => (
+                      <div className="code-row" key={label}>
+                        <small>{label}</small>
+                        <code>{revealed ? value : "••••••••"}</code>
+                        <button
+                          className="icon-button"
+                          onClick={() => copy(value)}
+                          aria-label={"คัดลอก" + label + " รายการที่ " + (i + 1)}
+                        >
+                          <Copy size={18} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ))}
                 {order.codes.map((code, i) => (
                   <div className="code-row" key={i}>
                     <code>{revealed ? code : "••••-••••-••••-••••"}</code>

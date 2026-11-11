@@ -36,6 +36,31 @@
 - ยกเลิกหรือคืนเงินแล้วเลขเดิมว่างไว้ ไม่เลื่อนคิวคนอื่น
 - ผู้ดูแลส่งของตามลำดับคิว (รอ migration 005)
 
+### สัญญา DB-005 ที่หน้าหลังบ้านรอใช้ (issue #18)
+
+หน้าหลังบ้านทำเสร็จแล้ว ซ่อนหลัง flag ใน `GET /api/health` → `features: { credentialPair, preorderDelivery }` ตอนนี้ทั้งคู่เป็น `false` น็อตเปิด flag ใน `server/domain.mjs` เมื่อ API ส่วนนั้นพร้อม
+
+**นำเข้า ID + รหัสผ่าน** — `POST /api/admin/inventory` (ADMIN)
+
+```json
+{ "variantId": "…", "items": [{ "loginId": "…", "password": "…" }] }
+```
+
+- 1–100 รายการต่อครั้ง · `loginId` ถูก trim · `password` **ไม่ trim** ส่งมาตามที่กรอก (อาจมีช่องว่าง `:` `|` หรือแท็บ)
+- ตอบ `{ "imported": n }` · ซ้ำ (fingerprint ชน) ตอบ 409 ทั้งชุด ไม่บันทึกบางส่วน
+- ยังรับ `codes` แบบเดิมได้ระหว่างเปลี่ยนผ่าน
+
+**ส่งของพรีออเดอร์** — `POST /api/admin/reservations/:id/deliver` (ADMIN, body `{}`)
+
+- ตอบ metadata เท่านั้น เช่น `{ "id", "status": "DELIVERED", "delivered_at", "delivered_by", "delivered": n }` ไม่มีรหัส
+- เรียกซ้ำหลังส่งแล้วตอบ metadata เดิม 200 · ไม่ใช่ PREORDER ตอบ 409 · ของไม่พอตอบ 409
+- กระดานคิวใช้ `GET /api/queue` เดิม
+
+**เจ้าของอ่านของที่ได้รับ** — `GET /api/orders/:id` (ทั้งออเดอร์ปกติและพรีออเดอร์)
+
+- เพิ่ม `credentials: [{ "loginId", "password" }]` เฉพาะเจ้าของ และสถานะ `DELIVERED`
+- `codes` ยังอยู่สำหรับของเก่าแบบช่องเดียว · staff/admin ได้ทั้งสองค่าเป็น array ว่าง
+
 ### อันดับผู้ซื้อ
 
 `GET /api/rankings/buyers?period=day|week|month|all&limit=1-50`
