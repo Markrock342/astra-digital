@@ -1,4 +1,4 @@
-import { useEffect, useState, type ClipboardEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -19,8 +19,7 @@ import {
   Image,
   LayoutGrid,
   LoaderCircle,
-  Megaphone,
-  Moon,
+  Monitor,
   MoreHorizontal,
   Package,
   Plus,
@@ -30,8 +29,8 @@ import {
   ShieldCheck,
   ShoppingBag,
   Star,
+  Smartphone,
   Store,
-  Sun,
   Users,
   Wallet,
   X,
@@ -1571,7 +1570,7 @@ function ShopConfigCard() {
       <div className="reference-card-heading">
         <div>
           <h2>ข้อมูลร้าน</h2>
-          <p>พิมพ์ด้านขวา ดูผลบนหน้าร้านจำลองด้านซ้ายทันที กดบันทึกเพื่อใช้จริง</p>
+          <p>พิมพ์ด้านขวา ดูผลบนหน้าร้านจริงด้านซ้ายทันที กดบันทึกเพื่อให้ลูกค้าเห็น</p>
         </div>
         <Link to="/admin/settings">
           ตั้งค่าเพิ่มเติม
@@ -1620,78 +1619,107 @@ function ShopConfigCard() {
     </section>
   );
 }
-/** Miniature storefront that mirrors the shop fields while they are typed. */
-function ShopPreview({
-  shopName,
-  line,
-  email,
-  description,
-  announcement,
-}: {
+/** The real storefront in a frame; unsaved fields are posted in as you type. */
+function ShopPreview(draft: {
   shopName: string;
   line: string;
   email: string;
   description: string;
   announcement: string;
 }) {
-  const [dark, setDark] = useState(false);
-  const name = shopName.trim() && shopName.trim() !== "ร้านค้า" ? shopName.trim() : "ASIA EXTRA";
-  const tagline = description.trim() || "ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที";
+  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const [ready, setReady] = useState(false);
+  const [box, setBox] = useState(0);
+  const frame = useRef<HTMLIFrameElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const name =
+    draft.shopName.trim() && draft.shopName.trim() !== "ร้านค้า"
+      ? draft.shopName.trim()
+      : "ASIA EXTRA";
+  const send = () =>
+    frame.current?.contentWindow?.postMessage(
+      { type: "shop-preview", shop: draft },
+      location.origin,
+    );
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (
+        e.origin === location.origin &&
+        e.source === frame.current?.contentWindow &&
+        e.data?.type === "shop-preview-ready"
+      ) {
+        setReady(true);
+        send();
+      }
+    };
+    addEventListener("message", onMessage);
+    return () => removeEventListener("message", onMessage);
+  });
+  useEffect(send, [draft.shopName, draft.line, draft.email, draft.description, draft.announcement]);
+  useEffect(() => {
+    if (!stage.current) return;
+    const observer = new ResizeObserver(([entry]) => setBox(entry.contentRect.width));
+    observer.observe(stage.current);
+    return () => observer.disconnect();
+  }, []);
+  const height = 560;
+  const width = device === "desktop" ? 1280 : 390;
+  const scale =
+    device === "desktop" ? (box || 600) / width : Math.min(1, height / 800);
   return (
-    <div className={dark ? "shop-preview dark" : "shop-preview"} aria-label="ตัวอย่างหน้าร้าน">
+    <div className="shop-preview" aria-label="ตัวอย่างหน้าร้าน">
       <div className="shop-preview-bar">
         <i />
         <i />
         <i />
         <span className="shop-preview-tab">หน้าร้าน — {name}</span>
-        <button type="button" onClick={() => setDark(!dark)} aria-label={dark ? "ดูแบบสว่าง" : "ดูแบบมืด"}>
-          {dark ? <Sun size={14} /> : <Moon size={14} />}
-        </button>
+        <div className="shop-preview-devices" role="group" aria-label="ขนาดจอ">
+          <button
+            type="button"
+            aria-pressed={device === "desktop"}
+            aria-label="ดูแบบคอมพิวเตอร์"
+            onClick={() => setDevice("desktop")}
+          >
+            <Monitor size={14} />
+          </button>
+          <button
+            type="button"
+            aria-pressed={device === "mobile"}
+            aria-label="ดูแบบมือถือ"
+            onClick={() => setDevice("mobile")}
+          >
+            <Smartphone size={14} />
+          </button>
+        </div>
+        <a href="/" target="_blank" rel="noreferrer" aria-label="เปิดหน้าร้านในแท็บใหม่">
+          <ExternalLink size={14} />
+        </a>
       </div>
-      <div className="shop-preview-page">
-        <div className="shop-preview-header">
-          <img src="/brand/asiax-logo.png" alt="" />
-          <span />
-          <span />
-          <span />
-          <b>สมัครสมาชิก</b>
-        </div>
-        <div className="shop-preview-hero">
-          <small>● เปิดให้บริการ</small>
-          <img src="/brand/asiax-logo.png" alt="" />
-          <p key={tagline} className="shop-preview-flash">{tagline}</p>
-          <div>
-            <b>เลือกซื้อสินค้า</b>
-            <em>ดูรีวิวจากลูกค้า</em>
-          </div>
-        </div>
-        {announcement.trim() && (
-          <div className="shop-preview-announce shop-preview-flash" key={announcement}>
-            <Megaphone size={14} />
-            <div>
-              <strong>ประกาศจากร้าน</strong>
-              <p>{announcement}</p>
-            </div>
+      <div
+        ref={stage}
+        className={"shop-preview-stage " + device}
+        style={{ height }}
+      >
+        {!ready && (
+          <div className="shop-preview-loading">
+            <LoaderCircle className="spin" size={18} />
+            กำลังโหลดหน้าร้าน
           </div>
         )}
-        <div className="shop-preview-footer">
-          <div>
-            <img src="/brand/asiax-logo.png" alt="" />
-            <p>{description.trim() || "ร้านสินค้าดิจิทัล"}</p>
-          </div>
-          <div>
-            <span>
-              LINE <b className={line ? "" : "empty"}>{line || "ยังไม่ได้ตั้งค่า"}</b>
-            </span>
-            <span>
-              อีเมล <b className={email ? "" : "empty"}>{email || "ยังไม่ได้ตั้งค่า"}</b>
-            </span>
-          </div>
-          <small>
-            © {new Date().getFullYear() + 543} {name}
-          </small>
-        </div>
+        <iframe
+          ref={frame}
+          title="หน้าร้านจริง"
+          src="/?shop-preview=1"
+          style={{
+            width,
+            height: height / scale,
+            transform: `scale(${scale})`,
+          }}
+        />
       </div>
+      <p className="shop-preview-note">
+        หน้าร้านจริง กดเล่นได้ · ข้อความที่ยังไม่บันทึกเห็นเฉพาะในกรอบนี้
+      </p>
     </div>
   );
 }

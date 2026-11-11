@@ -2170,6 +2170,24 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [overview, setOverview] = useState<Overview | null>(null);
+  // Admin's live preview embeds the storefront with ?shop-preview and posts
+  // unsaved shop fields here; they only change this framed page.
+  const [previewShop, setPreviewShop] = useState<Record<string, string> | null>(null);
+  useEffect(() => {
+    if (window.parent === window || !new URLSearchParams(location.search).has("shop-preview"))
+      return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== location.origin || e.data?.type !== "shop-preview") return;
+      setPreviewShop(e.data.shop ?? null);
+    };
+    addEventListener("message", onMessage);
+    window.parent.postMessage({ type: "shop-preview-ready" }, location.origin);
+    return () => removeEventListener("message", onMessage);
+  }, []);
+  const shownOverview =
+    overview && previewShop
+      ? ({ ...overview, shop: { ...overview.shop, ...previewShop } } as Overview)
+      : overview;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
@@ -2229,7 +2247,7 @@ export default function App() {
       value={{
         user,
         products,
-        overview,
+        overview: shownOverview,
         basket,
         setBasket,
         refresh,
