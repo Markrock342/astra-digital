@@ -19,11 +19,20 @@
 
 ## 2. เคสเชิงลบที่ต้องผ่านเสมอ
 
-1. Import โค้ดซ้ำ (fingerprint) → 409 ทั้งชุด ไม่ค้างครึ่งทาง  
+1. Import โค้ด/คู่ credential ซ้ำ (fingerprint) → 409 ทั้งชุด ไม่ค้างครึ่งทาง  
 2. Forged paymentToken → 403 ไม่ส่งโค้ด ไม่หักเครดิต  
 3. Customer เรียก staff queue / admin → 403  
-4. Product list/detail JSON ไม่มี `secret` / `DEMO-KEY`  
+4. Product list/detail JSON ไม่มี `secret` / `DEMO-KEY` / login / password / `*_enc`  
 5. ตั้ง payment_channel เป็น slipok/gateway โดยไม่มีสิทธิ์ตามนโยบาย → บล็อก; pay ไม่เดินบน provider จริง  
+
+### 2.1 เคส credential คู่ (DB-DOC-01 — สถานะ: ออกแบบแล้ว · implement **ยังขาด**)
+
+| ID | สถานการณ์ | คาดหวัง |
+|----|-----------|---------|
+| K1 | `GET /api/products` และ `GET /api/products/:id` หลังมีคอลัมน์สองช่อง | JSON ไม่มี `secret`, `login_id`, `password`, `login_id_enc`, `password_enc`, plaintext |
+| K2 | Staff เรียก `GET /api/staff/orders` และดู orderDetail ของลูกค้า | ไม่มี credential คู่ / codes |
+| K3 | Admin overview / inventory admin path (ถ้ามี) | ไม่ส่ง plaintext หรือ enc fields ออก client |
+| K4 | Owner อ่านออเดอร์ตัวเองหลัง DELIVERED | ได้ login+password ของตนเท่านั้น; user อื่น 404 |
 
 ## 3. เคส Migration (local เท่านั้นจนกว่าจะได้รับอนุญาต)
 
