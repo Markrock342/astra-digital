@@ -113,9 +113,9 @@ test("004 upgrades a populated persistent database without changing users, sessi
     1,
   );
   const detail = s.orderDetail(s.session(sessionToken), "order-old");
-  assert.deepEqual(detail.credentials, [
-    { loginId: deliveredCode, password: "" },
-  ]);
+  // A legacy single code stays a code; it must not also appear as an ID pair.
+  assert.deepEqual(detail.codes, [deliveredCode]);
+  assert.deepEqual(detail.credentials, []);
   const after = legacySnapshot(s.db);
   s.db.close();
   s = createCommerce({ path, key, seed: false });

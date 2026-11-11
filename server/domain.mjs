@@ -107,14 +107,21 @@ export function createCommerceCore({
     "order_id IS NULL AND reservation_id IS NULL";
   const inventoryAvailableAliased =
     "i.order_id IS NULL AND i.reservation_id IS NULL";
-  const readDeliveredCredentials = (orderId) =>
-    all(
-      "SELECT login_id_enc, password_enc FROM inventory WHERE order_id=?",
+  // Legacy single-secret rows stay in `codes`; real ID + password pairs go to
+  // `credentials`, so the customer never sees one item listed twice.
+  const readDeliveredItems = (orderId) => {
+    const codes = [];
+    const credentials = [];
+    for (const row of all(
+      "SELECT login_id_enc, password_enc, legacy_single_secret FROM inventory WHERE order_id=? ORDER BY rowid",
       orderId,
-    ).map((row) => ({
-      loginId: decrypt(row.login_id_enc),
-      password: decrypt(row.password_enc),
-    }));
+    )) {
+      const loginId = decrypt(row.login_id_enc);
+      if (row.legacy_single_secret) codes.push(loginId);
+      else credentials.push({ loginId, password: decrypt(row.password_enc) });
+    }
+    return { codes, credentials };
+  };
   const publicUser = (user) =>
     user
       ? {
@@ -825,15 +832,14 @@ export function createCommerceCore({
       };
     }
     const { payment_hash, request_key, ...safe } = order;
-    const credentials =
+    const delivered =
       ownerView && order.status === "DELIVERED"
-        ? readDeliveredCredentials(orderId)
-        : [];
+        ? readDeliveredItems(orderId)
+        : { codes: [], credentials: [] };
     return {
       ...safe,
       reviewed: !!one("SELECT id FROM reviews WHERE order_id=?", orderId),
-      codes: credentials.map((c) => c.loginId),
-      credentials,
+      ...delivered,
     };
   }
   function staffOrders(user, { limit = 50, cursor } = {}) {
