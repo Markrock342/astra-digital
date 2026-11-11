@@ -278,13 +278,13 @@ export function ReferenceProduct({ id }: { id: string }) {
   }, [product?.id]);
   if (loading)
     return (
-      <main className="container page-main">
+      <main className="container page-main reference-product-page">
         <div className="product-skeleton" />
       </main>
     );
   if (!product || !variant)
     return (
-      <main className="container page-main">
+      <main className="container page-main reference-product-page">
         <Empty
           icon={<Package />}
           heading={t("ไม่พบสินค้า")}
