@@ -52,12 +52,21 @@
 | A4 | notifications ของ user อื่น | ไม่ปนใน list |
 | A5 | rankings | ไม่มีรหัสสินค้า / ไม่เปิด PII เกิน mask |
 
-## 6. เกณฑ์ผ่านรอบ Review (เอกสาร)
+## 6. เคส Admin fulfill พรีออเดอร์ (DB-DOC-02 — ออกแบบแล้ว · implement **ยังขาด**)
+
+| ID | สถานการณ์ | คาดหวัง |
+|----|-----------|---------|
+| P1 | Admin deliver reservation สถานะ PREORDER สต็อกพอ | status=DELIVERED; มี delivered_at/by; inventory.reservation_id ถูกผูกตาม quantity |
+| P2 | เรียก deliver ซ้ำหลังสำเร็จ | ไม่ allocate เพิ่ม; ผลลัพธ์เดิม; inventory นับเท่าเดิม |
+| P3 | Customer/Staff (ถ้าไม่ได้รับอนุญาต) เรียก deliver | 401/403 |
+| P4 | สต็อกไม่พอตอน deliver | 409; reservation ยัง PREORDER; inventory ไม่ถูกผูก |
+
+## 7. เกณฑ์ผ่านรอบ Review (เอกสาร)
 
 งาน Review ผ่านเมื่อ Mark ยอมรับแผนนี้และชุด docs อื่น — **ยังไม่ต้องมีเทสใหม่ครบทุกแถว**  
 หลังล็อก schema: เปิด Task implement เทสตามช่องว่างคอลัมน์ “ช่องว่าง” โดยอ้าง ID ในตารางนี้
 
-## 7. นอกขอบเขต
+## 8. นอกขอบเขต
 
 - E2E Frontend (Bank)  
 - Penetration test เต็มรูปแบบ  

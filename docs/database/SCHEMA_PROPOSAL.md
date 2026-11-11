@@ -42,7 +42,7 @@
 | Cart | ไม่มีฝั่ง DB | รอบแรก: client/Bank · หรือ `cart_items(user_id, variant_id, qty)` หลังล็อก |
 | Payments | มี | คง |
 | Payment Events | ไม่มี | เสนอ `payment_events` append-only ก่อนเปิด webhook จริง |
-| Preorder / Queue | reservations + queue_number | คง |
+| Preorder / Queue | reservations + queue_number; สถานะสุดท้าย = PREORDER | **เป้า DB-DOC-02:** Admin fulfill → สถานะส่งแล้ว + delivered_* + ผูกของ · ดู §4.5 |
 | Chat / Notifications / Audit | มี | คง |
 | Payment channel | มี | คง |
 
@@ -94,6 +94,71 @@ cart_items(
   PRIMARY KEY (user_id, variant_id)
 )
 ```
+
+### 4.5 Admin fulfill พรีออเดอร์ (Task DB-DOC-02)
+
+แหล่ง REQ: พรีออเดอร์จ่ายแล้วรอของ · **Admin ส่งของทีหลัง** · เรียกซ้ำต้องไม่ส่งของซ้ำ
+
+#### 4.5.1 สถานะ reservations (เป้า)
+
+```text
+PENDING_PAYMENT → PREORDER → DELIVERED
+                 ↘ FAILED | CANCELLED
+```
+
+- เพิ่มสถานะ **`DELIVERED`** (= ส่งของแล้ว) ใน CHECK ของ `reservations.status`  
+- คง `PREORDER` = จ่ายแล้ว รอ Admin ส่ง  
+- คอลัมน์ใหม่บน `reservations`:
+
+```text
+delivered_at  TEXT NULL,           -- เมื่อเข้า DELIVERED
+delivered_by  TEXT NULL REFERENCES users(id)  -- ADMIN (หรือ STAFF ถ้า Mark อนุญาต)
+```
+
+#### 4.5.2 ผูกของกับ reservation — ข้อเสนอหลัก
+
+**แนะนำรอบนี้: ขยาย `inventory` ให้ผูก order หรือ reservation อย่างใดอย่างหนึ่ง (XOR)**
+
+```text
+inventory (
+  ...
+  order_id TEXT NULL REFERENCES orders(id),
+  reservation_id TEXT NULL REFERENCES reservations(id),
+  CHECK (
+    (order_id IS NOT NULL AND reservation_id IS NULL)
+    OR (order_id IS NULL AND reservation_id IS NOT NULL)
+    OR (order_id IS NULL AND reservation_id IS NULL)  -- ยังว่างในคลัง
+  )
+)
+-- ว่างพร้อมขาย: order_id IS NULL AND reservation_id IS NULL
+CREATE UNIQUE INDEX ... optional partial unique ถ้าต้องการกัน double-bind
+```
+
+**ทางเลือกรอง:** ตาราง `allocations` แยก (แบบ D1) — ใช้เมื่อ Mark อยากให้ DO กับ D1 ชื่อตารางตรงกัน; รอบแรกไม่จำเป็นถ้า XOR บน inventory พอ
+
+#### 4.5.3 Transaction ส่งของ (idempotent)
+
+API สมมติ (ให้ Mark ล็อกชื่อ path ทีหลัง): `POST /api/admin/reservations/:id/deliver`
+
+ใน `tx` เดียว:
+
+1. โหลด reservation ด้วย `id` + ล็อกแถว (SQLite: อ่านใน tx เดียวกัน)  
+2. ถ้า `status === 'DELIVERED'` แล้ว → **คืนผลเดิม** (credential ที่ผูก reservation นี้) · ไม่ allocate เพิ่ม · ไม่เขียน delivered_* ซ้ำ  
+3. ถ้า `status !== 'PREORDER'` → 409  
+4. เลือก inventory ว่างตาม `variant_id` จำนวน `quantity` (`order_id IS NULL AND reservation_id IS NULL`)  
+5. ถ้าไม่พอ → 409 สต็อกไม่พอ (ไม่เปลี่ยนสถานะ)  
+6. `UPDATE inventory SET reservation_id=?, sold_at=CURRENT_TIMESTAMP WHERE id=? AND order_id IS NULL AND reservation_id IS NULL` ทีละชิ้น · ถ้าแถวไม่ถูกอัปเดต → abort ทั้ง tx  
+7. `UPDATE reservations SET status='DELIVERED', delivered_at=..., delivered_by=adminId WHERE id=? AND status='PREORDER'` · ถ้า changes=0 → abort (แข่งกับ deliver อื่น)  
+8. `notify` เจ้าของออเดอร์ · `audit`  
+9. commit → คืนเมตา (staff/admin ไม่ต้องได้ plaintext ถ้า정책 ห้าม; owner อ่านผ่าน orderDetail ของตน)
+
+Idempotency key เสริม (optional): header/`requestKey` ของ deliver เก็บใน `audit` หรือตารางเล็ก — แต่สถานะ `DELIVERED` + inventory ที่ผูก reservation แล้วถือเป็นความจริงหลัก
+
+#### 4.5.4 สิทธิ์
+
+- เรียก deliver ได้เฉพาะ **ADMIN** (ค่าเริ่มต้นเอกสารนี้)  
+- ถ้าต้องการให้ STAFF deliver ได้ → Mark ล็อกเพิ่ม  
+- Staff/Admin list ยังไม่คืน credential plaintext
 
 ## 5. Constraints / Indexes ที่ควรมีในเป้า (สรุป)
 
