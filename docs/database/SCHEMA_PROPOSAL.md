@@ -251,14 +251,70 @@ Idempotency: สถานะ `DELIVERED` + แถว inventory ที่ `reserv
 
 เทสต์: K4 + P2 (deliver ซ้ำไม่มี credential ใน response admin)
 
+### 4.6 รายงานอันดับผู้ซื้อ (Task DB-DOC-03)
+
+จัดให้ตรงโค้ดบน main (`22657a2` + นับพรีออเดอร์) — เอกสารนี้เป็นสัญญา/เทสต์แผน ไม่ใช่ mask อีกต่อไป
+
+#### 4.6.1 สิทธิ์และสัญญา API
+
+- **เฉพาะ ADMIN** (401 ถ้าไม่ล็อกอิน · 403 ถ้า CUSTOMER/STAFF)  
+- Query: `period=day|week|month|all` (default `all`) · `limit` จำนวนเต็ม 1–50 · **default `limit=10`** เมื่อไม่ส่ง  
+- `limit` / `period` ผิดรูป → **400**  
+- Response ต่อแถว: `{ rank, name, email, orders, spentSatang }` — **ชื่อและอีเมลเต็ม** (ไม่ mask) · **ห้ามส่ง `user id`**  
+- ไม่ส่งรหัสสินค้า / credential
+
+#### 4.6.2 เวลาและเขตเวลา
+
+| period | ความหมาย (Asia/Bangkok, UTC+7) |
+|--------|----------------------------------|
+| `day` | ตั้งแต่ 00:00 ของวันปฏิทินปัจจุบันที่ Bangkok จนถึงตอนนี้ |
+| `week` | ตั้งแต่ 00:00 วันจันทร์ของสัปดาห์ปฏิทิน Bangkok (ISO week แบบ Monday-start) จนถึงตอนนี้ |
+| `month` | ตั้งแต่ 00:00 วันที่ 1 ของเดือนปฏิทิน Bangkok จนถึงตอนนี้ |
+| `all` | ไม่กรองเวลา |
+
+**คอลัมน์เวลาที่ใช้กรอง**
+
+| แหล่งยอด | คอลัมน์ | เหตุผล |
+|----------|---------|--------|
+| ออเดอร์สำเร็จ | `orders.created_at` เมื่อ `status='DELIVERED'` | ของเดิม; index ตามด้านล่าง |
+| พรีออเดอร์ที่จ่ายแล้ว / ส่งแล้ว | `reservations.created_at` เมื่อ `status IN ('PREORDER','DELIVERED')` | หลัง DOC-02 มี `DELIVERED` บน reservations |
+
+**หมายเหตุสำคัญ:** กรองด้วย **`created_at` ของแถว** — **ไม่ใช่เวลาจ่าย / finalized_at** (ยังไม่มีคอลัมน์เวลาจ่ายแยก)
+
+ค่า `created_at` ใน SQLite เป็น TEXT UTC แบบ `CURRENT_TIMESTAMP` — ขอบเขต Bangkok คำนวณที่ชั้นแอปแล้วเปรียบเทียบ
+
+#### 4.6.3 การรวมยอด
+
+```text
+spent = SUM(orders.total WHERE DELIVERED และอยู่ในช่วง)
+      + SUM(reservations.total WHERE status IN (PREORDER, DELIVERED) และอยู่ในช่วง)
+orders_count = COUNT(orders…) + COUNT(reservations…)
+จัดอันดับตาม spent DESC แล้ว orders_count DESC
+```
+
+Response = `name` + `email` เต็ม · ไม่มี `id`
+
+#### 4.6.4 Index ที่ต้องเพิ่ม (ใน 005 หลัง #6/#7/#9 merge)
+
+```sql
+CREATE INDEX IF NOT EXISTS orders_status_created
+  ON orders (status, created_at);
+
+CREATE INDEX IF NOT EXISTS reservations_status_created
+  ON reservations (status, created_at);
+```
+
+(โจทย์บังคับอย่างน้อย `orders(status, created_at)`; แนะนำคู่บน reservations ด้วยเพราะนับพรีออเดอร์)
+
 ## 5. Constraints / Indexes ที่ควรมีในเป้า (สรุป)
 
 | พื้นที่ | ต้องมี |
 |---------|--------|
 | Identity | users.email UNIQUE; sessions → users; role CHECK |
-| Catalog | variants → products; price >= 0 (อนุญาต 0 สำหรับพรีออเดอร์ฟรีตามของเดิม) |
+| Catalog | variants → products; price CHECK ตามของเดิม (`> 0` บน DO 001 — ข้อเสนอ `>= 0` ตัดทิ้งรอบนี้) |
 | Inventory | fingerprint = HMAC-SHA256(serverKey, JSON canonical ของคู่ login+password); `login_id_enc`+`password_enc`+`legacy_single_secret` ผ่าน rebuild (ไม่ ALTER NOT NULL); รวม `reservation_id` XOR; index (variant_id, order_id) |
-| Orders | UNIQUE(user_id, request_key); index (user_id, created_at) |
+| Orders | UNIQUE(user_id, request_key); index (user_id, created_at); **index (status, created_at)** |
+| Reservations | UNIQUE(user_id, request_key); **index (status, created_at)** แนะนำ |
 | Payments | idempotency_key UNIQUE; partial unique (provider, provider_ref); XOR order/reservation |
 | Queue | partial unique queue_number |
 | Chat/Notify | index ตาม thread / user |

@@ -61,7 +61,7 @@
 | A2 | Staff อ่าน order ของ A | 200 แต่ codes=[] |
 | A3 | User อ่าน chat ของคนอื่น | 403 |
 | A4 | notifications ของ user อื่น | ไม่ปนใน list — **สถานะเทสต์: ยังขาด** (ยังไม่มีเคสข้ามบัญชีโดยตรง) |
-| A5 | rankings | เงื่อนไขขั้นต่ำเดิม: ไม่มีรหัสสินค้า / mask ชื่อ — มีบางส่วนใน nott-ops · **ยังขาด:** 401/403 เมื่อไม่ใช่แอดมิน + ตัวกรองช่วงวัน/สัปดาห์/เดือน/ทั้งหมด |
+| A5 | rankings | **สถานะเทสต์: ยังขาด (ต้องขยาย)** — ดู R1–R5 ด้านล่าง |
 
 ## 6. เคส Admin fulfill พรีออเดอร์ (DB-DOC-02 — ออกแบบแล้ว · implement **ยังขาด**)
 
@@ -74,12 +74,24 @@
 | P5 | Owner อ่าน orderDetail reservation หลัง DELIVERED | ได้ login+password ของตน; คนอื่น 404 |
 | P6 | ฐานมีข้อมูล → rebuild reservations CHECK + inventory XOR | แถวเดิมครบ; DELIVERED/XOR ใช้ได้ |
 
-## 7. เกณฑ์ผ่านรอบ Review (เอกสาร)
+
+## 7. เคสอันดับผู้ซื้อ (DB-DOC-03 — ออกแบบแล้ว · implement **ยังขาด**)
+
+| ID | สถานการณ์ | คาดหวัง |
+|----|-----------|---------|
+| R1 | ไม่มี session เรียก rankings | **401** |
+| R2 | CUSTOMER / STAFF เรียก rankings | **403** |
+| R3 | ADMIN เรียก `period=day\|week\|month\|all` | 200; แต่ละ period กรองถูกตาม Asia/Bangkok ด้วย `created_at` |
+| R3b | `limit` ทศนิยม / นอกช่วง หรือ `period` ผิด | **400**; ไม่ส่ง limit → default 10 |
+| R4 | มีพรีออเดอร์ `PREORDER` หรือ `DELIVERED` ในช่วง | ถูกนับใน spent/orders |
+| R5 | ตัว response | ไม่มี `id` ผู้ใช้; มี **name + email เต็ม**; ไม่มีรหัสสินค้า/credential |
+
+## 8. เกณฑ์ผ่านรอบ Review (เอกสาร)
 
 งาน Review ผ่านเมื่อ Mark ยอมรับแผนนี้และชุด docs อื่น — **ยังไม่ต้องมีเทสใหม่ครบทุกแถว**  
 หลังล็อก schema: เปิด Task implement เทสตามช่องว่างคอลัมน์ “ช่องว่าง” โดยอ้าง ID ในตารางนี้
 
-## 8. นอกขอบเขต
+## 9. นอกขอบเขต
 
 - E2E Frontend (Bank)  
 - Penetration test เต็มรูปแบบ  

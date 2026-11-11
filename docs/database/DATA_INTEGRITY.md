@@ -55,7 +55,7 @@
 | คิว | `queueBoard` = STAFF/ADMIN; `myQueue` = ของตัวเอง |
 | แชท | เจ้าของ thread หรือ staff; ห้ามอ่าน thread คนอื่น |
 | แจ้งเตือน | filter `user_id` |
-| อันดับผู้ซื้อ | aggregate + ปิดบังชื่อ; ไม่เปิดรหัสสินค้า |
+| อันดับผู้ซื้อ | เฉพาะ ADMIN; กรอง day/week/month/all เขต Asia/Bangkok; นับ orders DELIVERED + reservations `IN ('PREORDER','DELIVERED')`; กรองด้วย `created_at` (ไม่ใช่เวลาจ่าย); **ไม่ส่ง user id**; **ส่ง name+email เต็ม**; ไม่เปิดรหัสสินค้า; limit/period ผิด → 400; default limit=10 |
 | สินค้า API | ไม่มี `secret` / `login_id` / `password` / `*_enc` / DEMO plaintext |
 | Staff / Admin list | ไม่เห็น credential คู่; เห็นได้เฉพาะเมตาออเดอร์/สต็อกนับ |
 | Owner หลังส่งของ | decrypt แล้วส่งเฉพาะเจ้าของออเดอร์ |
