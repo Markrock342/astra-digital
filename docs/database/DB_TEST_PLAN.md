@@ -50,14 +50,24 @@
 | A2 | Staff อ่าน order ของ A | 200 แต่ codes=[] |
 | A3 | User อ่าน chat ของคนอื่น | 403 |
 | A4 | notifications ของ user อื่น | ไม่ปนใน list |
-| A5 | rankings | ไม่มีรหัสสินค้า / ไม่เปิด PII เกิน mask |
+| A5 | rankings | **สถานะเทสต์: ยังขาด (ต้องขยาย)** — ดู R1–R5 ด้านล่าง |
 
-## 6. เกณฑ์ผ่านรอบ Review (เอกสาร)
+## 6. เคสอันดับผู้ซื้อ (DB-DOC-03 — ออกแบบแล้ว · implement **ยังขาด**)
+
+| ID | สถานการณ์ | คาดหวัง |
+|----|-----------|---------|
+| R1 | ไม่มี session เรียก rankings | **401** |
+| R2 | CUSTOMER / STAFF เรียก rankings | **403** |
+| R3 | ADMIN เรียก `period=day\|week\|month\|all` | 200; แต่ละ period กรองถูกตาม Asia/Bangkok |
+| R4 | มีพรีออเดอร์ที่จ่ายแล้ว (PREORDER) ในช่วง | ถูกนับใน spent/orders |
+| R5 | ตัว response | ไม่มี `id` ผู้ใช้; มีชื่อ mask; ไม่มีรหัสสินค้า/credential |
+
+## 7. เกณฑ์ผ่านรอบ Review (เอกสาร)
 
 งาน Review ผ่านเมื่อ Mark ยอมรับแผนนี้และชุด docs อื่น — **ยังไม่ต้องมีเทสใหม่ครบทุกแถว**  
 หลังล็อก schema: เปิด Task implement เทสตามช่องว่างคอลัมน์ “ช่องว่าง” โดยอ้าง ID ในตารางนี้
 
-## 7. นอกขอบเขต
+## 8. นอกขอบเขต
 
 - E2E Frontend (Bank)  
 - Penetration test เต็มรูปแบบ  

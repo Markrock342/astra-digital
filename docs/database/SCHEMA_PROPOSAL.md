@@ -95,14 +95,67 @@ cart_items(
 )
 ```
 
+### 4.6 รายงานอันดับผู้ซื้อ (Task DB-DOC-03)
+
+ของปัจจุบัน: `GET /api/rankings/buyers` สาธารณะ · นับแค่ `orders.status='DELIVERED'` · ส่ง `id` ผู้ใช้ · ไม่มีตัวกรองช่วงเวลา
+
+#### 4.6.1 สิทธิ์และสัญญา API (เป้า)
+
+- **เฉพาะ ADMIN** (401 ถ้าไม่ล็อกอิน · 403 ถ้าไม่ใช่แอดมิน)  
+- Query: `period=day|week|month|all` (default `all`) · `limit` จำนวนเต็ม 1–50  
+- Response ต่อแถว: `{ rank, nameMasked, orders, spentSatang }` — **ห้ามส่ง `user id`**  
+- ไม่ส่งรหัสสินค้า / credential
+
+#### 4.6.2 เวลาและเขตเวลา
+
+| period | ความหมาย (Asia/Bangkok, UTC+7) |
+|--------|----------------------------------|
+| `day` | ตั้งแต่ 00:00 ของวันปฏิทินปัจจุบันที่ Bangkok จนถึงตอนนี้ |
+| `week` | ตั้งแต่ 00:00 วันจันทร์ของสัปดาห์ปฏิทิน Bangkok (ISO week แบบ Monday-start) จนถึงตอนนี้ |
+| `month` | ตั้งแต่ 00:00 วันที่ 1 ของเดือนปฏิทิน Bangkok จนถึงตอนนี้ |
+| `all` | ไม่กรองเวลา |
+
+**คอลัมน์เวลาที่ใช้กรอง**
+
+| แหล่งยอด | คอลัมน์ | เหตุผล |
+|----------|---------|--------|
+| ออเดอร์พร้อมส่งที่สำเร็จ | `orders.created_at` เมื่อ `status='DELIVERED'` | ของเดิมมีอยู่แล้ว; index ตามด้านล่าง |
+| พรีออเดอร์ที่**จ่ายแล้ว** | `reservations.created_at` เมื่อ `status IN ('PREORDER','DELIVERED')` | นับยอดที่จ่ายแล้ว แม้ Admin ยังไม่ส่งของ; ถ้า Mark อยากนับเฉพาะหลังส่งของ ให้ล็อกเป็น `DELIVERED` อย่างเดียวทีหลัง |
+
+หมายเหตุ: ค่า `created_at` ใน SQLite ปัจจุบันเป็น TEXT UTC แบบ `CURRENT_TIMESTAMP` — การตัดช่วง Bangkok ทำที่ชั้นแอปด้วยการคำนวณขอบเขตเป็น UTC แล้วเปรียบเทียบสตริง/unix ตามที่ implement เลือก (ระบุในเทสต์ด้วย fixture เวลาชัด)
+
+#### 4.6.3 การรวมยอด
+
+```text
+spent = SUM(orders.total WHERE DELIVERED และอยู่ในช่วง)
+      + SUM(reservations.total WHERE status IN (PREORDER, DELIVERED) และอยู่ในช่วง)
+orders_count = COUNT(orders…) + COUNT(reservations…)
+จัดอันดับตาม spent DESC แล้ว orders_count DESC
+```
+
+ชื่อใน response = mask แบบเดิม (`ab***c`) · ไม่มี `id`
+
+#### 4.6.4 Index ที่ต้องเพิ่ม (migration ถัดไป)
+
+```sql
+CREATE INDEX IF NOT EXISTS orders_status_created
+  ON orders (status, created_at);
+
+CREATE INDEX IF NOT EXISTS reservations_status_created
+  ON reservations (status, created_at);
+```
+
+(โจทย์บังคับอย่างน้อย `orders(status, created_at)`; แนะนำคู่บน reservations ด้วยเพราะนับพรีออเดอร์)
+
 ## 5. Constraints / Indexes ที่ควรมีในเป้า (สรุป)
 
 | พื้นที่ | ต้องมี |
 |---------|--------|
 | Identity | users.email UNIQUE; sessions → users; role CHECK |
-| Catalog | variants → products; price >= 0 (อนุญาต 0 สำหรับพรีออเดอร์ฟรีตามของเดิม) |
+| Catalog | variants → products; price CHECK ตามของเดิม (`> 0` บน DO 001 — ข้อเสนอ `>= 0` ตัดทิ้งรอบนี้ตาม Owner) |
 | Inventory | fingerprint UNIQUE; index (variant_id, order_id) |
-| Orders | UNIQUE(user_id, request_key); index (user_id, created_at) |
+| Orders | UNIQUE(user_id, request_key); index (user_id, created_at); **index (status, created_at)** |
+| Reservations | UNIQUE(user_id, request_key); **index (status, created_at)** แนะนำ |
 | Payments | idempotency_key UNIQUE; partial unique (provider, provider_ref); XOR order/reservation |
 | Queue | partial unique queue_number |
 | Chat/Notify | index ตาม thread / user |
