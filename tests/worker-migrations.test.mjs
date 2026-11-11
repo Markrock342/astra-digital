@@ -20,7 +20,7 @@ test("MU3: worker migration list matches server/migrations/*.sql", () => {
   const worker = readFileSync(join(root, "../cloud/worker.mjs"), "utf8");
   for (const name of TRACK_A_MIGRATION_FILES) {
     assert.ok(
-      worker.includes(name) || worker.includes("MIGRATION_005_NAME"),
+      worker.includes(name),
       "worker.mjs must reference " + name,
     );
   }

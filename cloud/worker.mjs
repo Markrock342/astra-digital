@@ -4,6 +4,7 @@ import { createCommerceCore } from "../server/domain.mjs";
 import { executeSqliteMigration } from "../server/sqlite-migrations.mjs";
 import {
   applyMigration005,
+  ensureInventoryAvailableIndex,
   MIGRATION_005_NAME,
 } from "../server/migrate-005.mjs";
 import {
@@ -62,6 +63,7 @@ export class Commerce extends DurableObject {
       db.exec(
         "CREATE TABLE IF NOT EXISTS rate_limits(key TEXT PRIMARY KEY,count INTEGER NOT NULL,expires INTEGER NOT NULL)",
       );
+      ensureInventoryAvailableIndex(db);
     });
     this.db = db;
     const adminPassword =

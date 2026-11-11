@@ -1,7 +1,8 @@
 import { createServer } from "node:http";
 import { Readable } from "node:stream";
 import { readFile } from "node:fs/promises";
-import { resolve, extname } from "node:path";
+import { resolve, extname, join, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createAPIHandler, securityHeaders } from "./api-handler.mjs";
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -45,11 +46,11 @@ export function createApp(service, { production = false, d1Catalog } = {}) {
         return send(404, "Use the Vite server at http://127.0.0.1:4330");
       if (!["GET", "HEAD"].includes(req.method))
         return send(405, "Method not allowed");
-      const root = resolve(new URL("../dist", import.meta.url).pathname);
+      const root = resolve(fileURLToPath(new URL("../dist", import.meta.url)));
       let file = resolve(root, "." + decodeURIComponent(url.pathname));
-      if (!file.startsWith(root + "/") && file !== root)
+      if (!file.startsWith(root + sep) && file !== root)
         return send(403, "Forbidden");
-      if (!extname(file) || url.pathname === "/") file = root + "/index.html";
+      if (!extname(file) || url.pathname === "/") file = join(root, "index.html");
       try {
         const content = await readFile(file);
         res.writeHead(200, {

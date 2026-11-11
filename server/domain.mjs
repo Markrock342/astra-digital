@@ -109,12 +109,14 @@ export function createCommerceCore({
     "i.order_id IS NULL AND i.reservation_id IS NULL";
   // Legacy single-secret rows stay in `codes`; real ID + password pairs go to
   // `credentials`, so the customer never sees one item listed twice.
-  const readDeliveredItems = (orderId) => {
+  const readDeliveredItems = (column, bindId) => {
+    if (column !== "order_id" && column !== "reservation_id")
+      throw new Error("invalid inventory bind column");
     const codes = [];
     const credentials = [];
     for (const row of all(
-      "SELECT login_id_enc, password_enc, legacy_single_secret FROM inventory WHERE order_id=? ORDER BY rowid",
-      orderId,
+      `SELECT login_id_enc, password_enc, legacy_single_secret FROM inventory WHERE ${column}=? ORDER BY rowid`,
+      bindId,
     )) {
       const loginId = decrypt(row.login_id_enc);
       if (row.legacy_single_secret) codes.push(loginId);
@@ -822,19 +824,22 @@ export function createCommerceCore({
       }
       if (!reservation) fail(404, "ไม่พบคำสั่งซื้อ");
       const { payment_hash, request_key, ...safe } = reservation;
+      const delivered =
+        ownerView && reservation.status === "DELIVERED"
+          ? readDeliveredItems("reservation_id", orderId)
+          : { codes: [], credentials: [] };
       return {
         ...safe,
         preorder: true,
         reviewed: true,
-        codes: [],
-        credentials: [],
+        ...delivered,
         queueNumber: reservation.queue_number ?? null,
       };
     }
     const { payment_hash, request_key, ...safe } = order;
     const delivered =
       ownerView && order.status === "DELIVERED"
-        ? readDeliveredItems(orderId)
+        ? readDeliveredItems("order_id", orderId)
         : { codes: [], credentials: [] };
     return {
       ...safe,
@@ -1177,6 +1182,40 @@ export function createCommerceCore({
     const variantId = clean(input.variantId, 1, 80, "ตัวเลือกสินค้า");
     if (!one("SELECT id FROM variants WHERE id=?", variantId))
       fail(404, "ไม่พบตัวเลือกสินค้า");
+    const hasCodes = input.codes !== undefined && input.codes !== null;
+    const hasItems = input.items !== undefined && input.items !== null;
+    if (hasCodes && hasItems)
+      fail(400, "ส่งได้แค่ codes หรือ items อย่างใดอย่างหนึ่ง");
+    if (hasItems) {
+      if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 100)
+        fail(400, "รายการคู่ต้องเป็น array 1–100 รายการ");
+      const pairs = [];
+      for (const item of input.items) {
+        if (!item || typeof item !== "object")
+          fail(400, "รายการคู่ไม่ถูกต้อง");
+        if (typeof item.loginId !== "string" || typeof item.password !== "string")
+          fail(400, "loginId และ password ต้องเป็นข้อความ");
+        const loginId = item.loginId.trim();
+        const password = item.password;
+        if (!loginId || loginId.length > 160)
+          fail(400, "loginId ไม่ถูกต้อง");
+        if (password.length > 500)
+          fail(400, "password ยาวเกินกำหนด");
+        pairs.push({ loginId, password });
+      }
+      if (new Set(pairs.map((p) => inventoryFingerprint(p.loginId, p.password))).size !== pairs.length)
+        fail(409, "มีคู่ซ้ำในรายการ");
+      return tx(() => {
+        for (const { loginId, password } of pairs) {
+          const fingerprint = inventoryFingerprint(loginId, password);
+          if (one("SELECT id FROM inventory WHERE fingerprint=?", fingerprint))
+            fail(409, "คู่นี้มีอยู่ในคลังแล้ว");
+          insertInventoryCredential(variantId, loginId, password, { legacy: 0 });
+        }
+        audit(user, "IMPORT_CODES", variantId);
+        return { imported: pairs.length };
+      });
+    }
     const text = clean(input.codes, 1, 20000, "รายการโค้ด");
     const codes = text
       .split(/\r?\n/)
@@ -1200,6 +1239,65 @@ export function createCommerceCore({
       }
       audit(user, "IMPORT_CODES", variantId);
       return { imported: codes.length };
+    });
+  }
+  function deliverReservation(user, id) {
+    requireAdmin(user);
+    const reservationId = clean(id, 1, 80, "รหัสพรีออเดอร์");
+    return tx(() => {
+      const reservation = one(
+        "SELECT * FROM reservations WHERE id=?",
+        reservationId,
+      );
+      if (!reservation) fail(404, "ไม่พบพรีออเดอร์");
+      if (reservation.status === "DELIVERED") {
+        return {
+          id: reservation.id,
+          status: reservation.status,
+          delivered_at: reservation.delivered_at,
+          delivered_by: reservation.delivered_by,
+          delivered: true,
+        };
+      }
+      if (reservation.status !== "PREORDER")
+        fail(409, "พรีออเดอร์นี้ส่งของไม่ได้");
+      const available = all(
+        `SELECT id FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql} ORDER BY rowid LIMIT ?`,
+        reservation.variant_id,
+        reservation.quantity,
+      );
+      if (available.length < reservation.quantity)
+        fail(409, "สต็อกไม่พอสำหรับส่งของ");
+      const now = new Date().toISOString();
+      for (const row of available) {
+        const updated = run(
+          `UPDATE inventory SET reservation_id=?, sold_at=? WHERE id=? AND ${inventoryAvailableSql}`,
+          reservationId,
+          now,
+          row.id,
+        );
+        if (!updated.changes) fail(409, "สต็อกไม่พอสำหรับส่งของ");
+      }
+      run(
+        "UPDATE reservations SET status='DELIVERED', delivered_at=?, delivered_by=? WHERE id=? AND status='PREORDER'",
+        now,
+        user.id,
+        reservationId,
+      );
+      notify(
+        reservation.user_id,
+        "order",
+        "พรีออเดอร์พร้อมใช้งานแล้ว",
+        "รหัสสินค้าถูกจัดส่งแล้ว กดดูคำสั่งซื้อเพื่อรับรหัส",
+      );
+      audit(user, "DELIVER_RESERVATION", reservationId);
+      return {
+        id: reservationId,
+        status: "DELIVERED",
+        delivered_at: now,
+        delivered_by: user.id,
+        delivered: true,
+      };
     });
   }
   function saveProduct(user, input) {
@@ -1320,7 +1418,7 @@ export function createCommerceCore({
        JOIN users u ON u.id=r.user_id
        JOIN variants v ON v.id=r.variant_id
        JOIN products p ON p.id=v.product_id
-       WHERE r.queue_number IS NOT NULL
+       WHERE r.queue_number IS NOT NULL AND r.status='PREORDER'
        ORDER BY r.queue_number ASC`,
     );
   }
@@ -1558,6 +1656,7 @@ export function createCommerceCore({
     topup,
     adminOverview,
     importCodes,
+    deliverReservation,
     saveProduct,
     profile,
     publicUser,
@@ -1572,8 +1671,7 @@ export function createCommerceCore({
     markNotificationRead,
     buyerRanking,
     mode: allowSandbox ? "sandbox" : "live",
-    // Flip each flag when its API ships (DB-005): the admin UI switches on these.
-    features: Object.freeze({ credentialPair: false, preorderDelivery: false }),
+    features: Object.freeze({ credentialPair: true, preorderDelivery: true }),
     logout: (token) =>
       run("DELETE FROM sessions WHERE token_hash=?", hash(token ?? "")),
     orders: (user) => {
