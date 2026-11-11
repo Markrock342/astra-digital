@@ -302,7 +302,7 @@ test("UC7 live shop refuses demo accounts, demo credit and sandbox payment", asy
   );
 });
 
-test("UC5b staff is notified when a customer opens a chat", { todo: "NOTT PR #11 (openChatThread notify + rate limit)" }, async (t) => {
+test("UC5b staff is notified when a customer opens a chat", async (t) => {
   const api = shop(t);
   const alice = await api.register("Alice");
   const staff = await api.register("Staff", ROLES.STAFF);

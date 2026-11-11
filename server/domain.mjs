@@ -121,6 +121,9 @@ export function createCommerceCore({
         501,
         "ช่องทางจ่ายนี้รอการเชื่อมต่อ — ตอนนี้รับเฉพาะ sandbox",
       );
+    // unset+inactive = โหมดเริ่มต้นยังจ่ายได้; sandbox ต้อง active ก่อน
+    if (channel.provider === "sandbox" && !Number(channel.active))
+      fail(403, "ช่องทางจ่ายยังไม่ได้เปิดใช้งาน");
   };
   const notify = (userId, kind, title, body) => {
     run(
@@ -1329,6 +1332,7 @@ export function createCommerceCore({
     requireUser(user);
     const input = withoutClientPrivileges(rawInput);
     const body = clean(input.body ?? "สวัสดี ต้องการความช่วยเหลือ", 1, 1000, "ข้อความ");
+    assertChatRateLimit(user.id);
     return tx(() => {
       let thread = one(
         "SELECT * FROM chat_threads WHERE user_id=? AND status='OPEN' ORDER BY created_at DESC LIMIT 1",
@@ -1355,6 +1359,11 @@ export function createCommerceCore({
         "chat",
         "เปิดแชทแล้ว",
         "ทีมงานจะตอบกลับในเว็บนี้",
+      );
+      notifyStaffChatThrottled(
+        thread.id,
+        "ลูกค้าเปิดแชทใหม่",
+        body.slice(0, 120),
       );
       audit(user, "OPEN_CHAT", thread.id);
       return { thread, messages: chatMessages(user, thread.id) };
