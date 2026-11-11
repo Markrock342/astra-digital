@@ -20,7 +20,7 @@
 | Data Integrity Design | **ผ่าน** | [DATA_INTEGRITY.md](DATA_INTEGRITY.md) ครบ 7 ความเสี่ยง |
 | Migration Plan | **ผ่าน** | [MIGRATION_PLAN.md](MIGRATION_PLAN.md) — ระบุของเดิมที่เก็บ, ลำดับถัดไป, backup, ห้าม deploy |
 | Database Test Plan | **ผ่าน** | [DB_TEST_PLAN.md](DB_TEST_PLAN.md) ครบหัวข้อโจทย์ + map เทสที่มี |
-| Pull Request ให้มาร์คตรวจ | **ผ่าน** | PR #1 OPEN |
+| Pull Request ให้มาร์คตรวจ | **ผ่าน** | PR #1 เปิดแล้วและ **merge เข้า `main` แล้ว** (`f43587f`, 2026-11-09) — สถานะปัจจุบันไม่ใช่ OPEN |
 | ยังไม่ Deploy Migration / ไม่เปลี่ยน Production | **ปฏิบัติตาม** | ไม่มีไฟล์ SQL ใหม่ · ไม่แก้ `004` · ไม่แก้ Worker ใน PR นี้ |
 | ไม่ทำ Frontend / SlipOK / Gateway / เปลี่ยน Architecture เอง | **ปฏิบัติตาม** | ระบุเป็น Blocker แทน |
 
@@ -131,5 +131,5 @@
 
 ## 8. คำขอจากมาร์ค
 
-กรุณา Review PR #1 แล้วตอบ Blocker ข้อ 1–3  
-เมื่อล็อกแล้ว น็อตจะเริ่มงานถัดไปตามลำดับ: (ก) Worker ร้านเดียว ถ้า Approve → (ข) migration/test ตาม SCHEMA ที่ล็อก — ยังไม่ทำจนกว่าจะได้รับคำสั่งชัดเจน
+PR #1 merge แล้ว — Blocker ข้อ 1–3 และการแก้ตามผลตรวจ 11 พ.ย. ไปต่อที่ Roadmap [../roadmaps/NOTT-POST-REVIEW-11NOV.md](../roadmaps/NOTT-POST-REVIEW-11NOV.md)  
+งานถัดไปหลังมาร์คล็อกแบบ: (ก) มาร์คกำลังทำ shop DO ใน Worker — น็อตไม่แตะ · (ข) แก้ Review Pack / API ตาม Task ID ทีละ PR · (ค) ยังไม่เขียน migration 005 จนกว่าเอกสารข้อ 1–6 ผ่าน

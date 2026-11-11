@@ -59,28 +59,25 @@
 ## ตำแหน่งงานปัจจุบัน
 | ระดับ | ค่า |
 |-------|-----|
-| โปรเจกต์ | ASTRA DIGITAL — **NOTT = Database** |
-| Roadmap | [NOTT-DB-ARCHITECTURE.md](../roadmaps/NOTT-DB-ARCHITECTURE.md) (**Approved**) |
-| Phase | 0–5 Review Pack บน branch `feat/nott-database-audit` |
-| ฐานโค้ดต้นทาง | `main` @ `9eebc6f` |
+| โปรเจกต์ | ASTRA — NOTT หลังผลตรวจ 11 พ.ย. |
+| Roadmap | [NOTT-POST-REVIEW-11NOV.md](../roadmaps/NOTT-POST-REVIEW-11NOV.md) (**เสนอ รอมาร์คล็อก**) |
+| Current Task | **DB-DOC-06** — แก้ข้อความไม่ตรงความจริง |
+| Branch | `docs/db-doc-06-factual-fixes` |
 
-## ส่งมอบรอบนี้ (docs only)
-- [x] `docs/database/DB_AUDIT.md`
-- [x] `docs/database/ERD.md`
-- [x] `docs/database/SCHEMA_PROPOSAL.md`
-- [x] `docs/database/DATA_INTEGRITY.md`
-- [x] `docs/database/MIGRATION_PLAN.md`
-- [x] `docs/database/DB_TEST_PLAN.md`
-- [x] PR → Mark Review: https://github.com/Markrock342/astra-digital/pull/1
-- [x] รายงานส่งมาร์ค: [../database/MARK_HANDOFF_REPORT.md](../database/MARK_HANDOFF_REPORT.md)
+## ค่าที่เสนอ รอมาร์คล็อก
+- API-FIX คู่ขนานได้หลัง DOC-06
+- คิวเริ่มต้นในเอกสาร = รวมทั้งร้าน
+- `price >= 0` = ตัดทิ้งรอบนี้
+- ห้ามแตะ shop DO ใน `cloud/worker.mjs` (มาร์คทำ `141ffad` แล้ว)
 
-## ยังไม่ทำ (ตามโจทย์)
-- Deploy migration / เปลี่ยน production DB
-- แก้ `004_commerce_ops.sql`
-- แก้ Worker ฐานร้านเดียว (รอ Mark ล็อก)
-- SlipOK / Gateway / Frontend
+## สถานะ Task
+| Task | สถานะ |
+|------|--------|
+| DB-DOC-06 | แก้ตามรีวิวมาร์คแล้ว รอ merge |
+| DB-DOC-01…05 / API-FIX-01 | แก้ตามลำดับหลัง rebase |
+| API-FIX-02…04 | merge เข้า main แล้ว |
 
 ## Blockers ส่ง Mark
-1. ~~ยืนยันฐานร้านเดียวบน DO~~ ทำแล้วใน `141ffad` (DO ชื่อ `shop`) — ร้านเริ่มจากฐานว่าง ไม่ย้ายข้อมูลจาก `client:*`  
+1. ~~ยืนยันฐานร้านเดียวบน DO~~ ทำแล้วใน `141ffad` (DO ชื่อ `shop`) — ร้านเริ่มจากฐานว่าง (S1)  
 2. ล็อกตารางถัดไป (payment_events / order_items / categories / cart)  
 3. แช่แข็ง D1 จนกว่ามี cutover plan

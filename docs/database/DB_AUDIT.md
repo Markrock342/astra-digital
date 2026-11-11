@@ -91,7 +91,10 @@
 ## 4. จุดซ้ำซ้อน / เสี่ยงสูญหาย
 
 1. **สองรูป inventory** — ถ้า cutover โดยไม่ map ข้อมูล จะสูญเสียความหมาย allocation  
-2. **users rebuild ใน 004 / 0002** — `DROP TABLE users` แล้วสร้างใหม่; ต้องมี FK deferral (มีแล้วใน `sqlite-migrations.mjs` + เทส `tests/migration-upgrade.test.mjs`)  
+2. **users rebuild ใน 004 / 0002** — `DROP TABLE users` แล้วสร้างใหม่  
+   - **แทร็ก A (004):** มี FK deferral ใน `sqlite-migrations.mjs` + เทส `tests/migration-upgrade.test.mjs` บนฐานที่มีข้อมูล  
+   - **แทร็ก B (D1 `0002_commerce_ops.sql`):** ยังใช้ `PRAGMA foreign_keys = OFF/ON` แบบในไฟล์เอง และ**ยังพังบนฐานที่มีข้อมูล** (`FOREIGN KEY constraint failed`) → **ใช้กับฐานใหม่/ว่างเท่านั้น** จนกว่าจะมี helper/เทส upgrade แบบเดียวกับแทร็ก A; อย่า apply 0002 ทับ D1 ที่ populate แล้วโดยไม่มีแผนพิเศษ  
+
 3. **astra_space multi-DB** — ข้อมูลเดโมกระจายหลาย DO; รวมร้านเดียวต้องมีแผนรวม/ทิ้ง tenant เก่า  
 4. **payments คู่กับ payment_hash บน orders/reservations** — ความจริงการยืนยันจ่ายยังพึ่ง hash บนออเดอร์; ตาราง payments เป็น audit/ledger ชั้นเพิ่ม  
 5. **D1 0002 ไม่ mirror ทุกอย่างของ 004 แบบ 1:1** — ต้องระบุในแผนว่าแทร็ก B แช่แข็ง

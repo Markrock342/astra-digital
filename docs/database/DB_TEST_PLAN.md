@@ -15,7 +15,7 @@
 | Duplicate Payment Events | idempotent pay; unique provider_ref | บางส่วน | ต้องมีเมื่อมี webhook/events |
 | Migration Upgrade | 004 บนฐานมีข้อมูล | migration-upgrade.test.mjs | ทำซ้ำแบบเดียวกันทุกไฟล์ใหม่ |
 | Data Preservation | users/orders/keys/balances คงหลัง upgrade | migration-upgrade | backup restore smoke (manual/local) |
-| Authorization / Isolation | อ่านออเดอร์คนอื่น 404; staff ไม่เห็นโค้ด; แชทข้ามบัญชี 403; สินค้าไม่มี secret | commerce, nott-ops, d1-catalog | คิว/อันดับ — มีแล้วใน nott-ops |
+| Authorization / Isolation | อ่านออเดอร์คนอื่น 404; staff ไม่เห็นโค้ด; แชทข้ามบัญชี 403; สินค้าไม่มี secret | commerce, nott-ops, d1-catalog | คิวไม่ซ้ำ (C3), แจ้งเตือนไม่หลุดข้ามบัญชี (A4), สิทธิ์ ranking (A5 ขยาย) = **ยังขาด** |
 
 ## 2. เคสเชิงลบที่ต้องผ่านเสมอ
 
@@ -40,7 +40,7 @@
 |----|-----------|---------|
 | C1 | สต็อก 1 หน่วย สองผู้ซื้อ pay พร้อมกัน | คนหนึ่ง DELIVERED คนหนึ่ง OUT_OF_STOCK |
 | C2 | pay สำเร็จแล้ว pay ซ้ำ | โค้ดชุดเดิม; ledger/inventory ไม่เพิ่ม |
-| C3 | สองพรีออเดอร์ได้ queue_number คนละเลข | UNIQUE ไม่ชน หรือ retry สำเร็จ |
+| C3 | สองพรีออเดอร์ได้ queue_number คนละเลข | UNIQUE ไม่ชน หรือ retry สำเร็จ — **สถานะเทสต์: ยังขาด** (ยังไม่มี automated case ชัดในรีโป) |
 
 ## 5. เคส Authorization / Data Isolation
 
@@ -49,8 +49,8 @@
 | A1 | User B อ่าน order ของ A | 404 |
 | A2 | Staff อ่าน order ของ A | 200 แต่ codes=[] |
 | A3 | User อ่าน chat ของคนอื่น | 403 |
-| A4 | notifications ของ user อื่น | ไม่ปนใน list |
-| A5 | rankings | ไม่มีรหัสสินค้า / ไม่เปิด PII เกิน mask |
+| A4 | notifications ของ user อื่น | ไม่ปนใน list — **สถานะเทสต์: ยังขาด** (ยังไม่มีเคสข้ามบัญชีโดยตรง) |
+| A5 | rankings | เงื่อนไขขั้นต่ำเดิม: ไม่มีรหัสสินค้า / mask ชื่อ — มีบางส่วนใน nott-ops · **ยังขาด:** 401/403 เมื่อไม่ใช่แอดมิน + ตัวกรองช่วงวัน/สัปดาห์/เดือน/ทั้งหมด |
 
 ## 6. เกณฑ์ผ่านรอบ Review (เอกสาร)
 
