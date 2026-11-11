@@ -31,8 +31,8 @@
 |----|-----------|---------|
 | K1 | `GET /api/products` และ `GET /api/products/:id` หลังมีคอลัมน์สองช่อง | JSON ไม่มี `secret`, `login_id`, `password`, `login_id_enc`, `password_enc`, plaintext |
 | K2 | Staff เรียก `GET /api/staff/orders` และดู orderDetail ของลูกค้า | ไม่มี credential คู่ / codes |
-| K3 | Admin overview / inventory admin path (ถ้ามี) | ไม่ส่ง plaintext หรือ enc fields ออก client |
-| K4 | Owner อ่านออเดอร์ตัวเองหลัง DELIVERED | ได้ login+password ของตนเท่านั้น; user อื่น 404 |
+| K3 | Admin overview / inventory admin path / admin deliver ซ้ำ | ไม่ส่ง plaintext หรือ enc fields; deliver ซ้ำได้แค่ metadata (ดู P* ใน DOC-02) |
+| K4 | Owner อ่านออเดอร์/พรีออเดอร์ตัวเองหลัง DELIVERED | ได้ login+password ของตนเท่านั้น; user อื่น 404 |
 
 ## 3. เคส Migration (local เท่านั้นจนกว่าจะได้รับอนุญาต)
 
@@ -42,6 +42,8 @@
 | M2 | ใส่ FK พังระหว่าง rebuild | ไม่มี marker 004; ข้อมูลแม่ไม่หาย (ตามเทสปัจจุบัน) |
 | M3 | (อนาคต) fixture หลัง 004 → apply 005 | คอลัมน์/ตารางใหม่มี; แถวเก่าครบ |
 | M4 | รัน migrate สองครั้ง | ไม่พัง; marker ไม่ซ้ำ |
+| MU5 | ก่อน 005: `COUNT(*)` แถว `inventory` ที่มี secret เก่า | บันทึกจำนวน; ถ้า 0 ข้าม legacy backfill |
+| MU6 | ฐานมีข้อมูล → rebuild inventory ผ่าน `executeSqliteMigration` (credential + `reservation_id` XOR) | แถวเดิมครบ; `login_id_enc`/`password_enc`/`legacy_single_secret` ถูกต้อง; FK ไม่พัง |
 
 ## 4. เคส Concurrent / Allocation
 

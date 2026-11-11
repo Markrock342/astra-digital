@@ -11,8 +11,8 @@
 |--|--|
 | **ป้องกันปัจจุบัน** | เลือกแถว `inventory` ที่ `order_id IS NULL` แล้ว `UPDATE … SET order_id=? WHERE id=? AND order_id IS NULL` ภายใน `tx` / `transactionSync` (`domain.mjs` pay path ~881) |
 | **เสริมด้วย schema** | `fingerprint` UNIQUE — กัน import ของซ้ำ |
-| **เป้า DB-DOC-01** | fingerprint คิดจาก **ทั้ง login_id + password**; เก็บ `login_id_enc` / `password_enc`; ห้ามคืนค่าทั้งสองช่อง (หรือ ciphertext) ใน API สินค้า / staff / admin overview |
-| **ช่องว่าง** | หลาย DO (astra_space) = คนละสต็อก → “แข่งกัน” ไม่เกิดข้ามเบราว์เซอร์จนกว่าจะรวมร้านเดียว; ย้าย `secret`→สองช่องต้องทำบน DO ที่ decrypt ได้ |
+| **เป้า DB-DOC-01** | fingerprint = **HMAC-SHA256(serverKey, JSON canonical ของทั้ง login+password)** — ห้าม SHA-256 เปล่า / ห้าม trim password / ห้ามคั่น `\n`; เก็บ `login_id_enc` / `password_enc`; ห้ามคืนค่าทั้งสองช่องใน API สินค้า / staff / admin overview |
+| **ช่องว่าง** | ย้าย `secret`→สองช่องต้อง **rebuild** ผ่าน `executeSqliteMigration` (secret เป็น NOT NULL); นับแถวก่อน 005; ร้าน live เป็น S1 ว่างแล้ว |
 | **Idempotency** | pay ซ้ำเมื่อสถานะ DELIVERED คืน credential เดิมของเจ้าของออเดอร์ ไม่ allocate เพิ่ม (เทส commerce) |
 
 ### 1.2 Stock ติดลบ / ตัดซ้ำ

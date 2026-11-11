@@ -55,9 +55,9 @@ runtime_flags
 
 | Entity | ตารางปัจจุบัน | เป้าหลัง DB-DOC-01 |
 |--------|----------------|---------------------|
-| Digital credential unit | `inventory` มี `secret` ช่องเดียว | `login_id_enc` + `password_enc` (เข้ารหัสทั้งคู่); `fingerprint = SHA-256(v1\\nlogin\\npassword)` UNIQUE |
-| Allocation | คอลัมน์ `inventory.order_id` | คงรอบแรก; D1 มี `allocations` แยก — ยังไม่บังคับบน DO |
-| Legacy `secret` | ciphertext สตริงเดียว | แผนย้ายใน SCHEMA_PROPOSAL §4.0.3 แล้วค่อย DROP |
+| Digital credential unit | `inventory` มี `secret` ช่องเดียว | `login_id_enc` + `password_enc` (เข้ารหัสทั้งคู่); `fingerprint = HMAC-SHA256(serverKey, JSON{v,login,password})` UNIQUE; `legacy_single_secret` |
+| Allocation | คอลัมน์ `inventory.order_id` | คง + `reservation_id` XOR (rebuild ครั้งเดียวกับ credential) |
+| Legacy `secret` | ciphertext สตริงเดียว NOT NULL | **rebuild** ตารางผ่าน `executeSqliteMigration` (ห้าม ALTER ADD NOT NULL); แผน §4.0.3 |
 
 รายละเอียดสูตร fingerprint / ย้ายข้อมูล / พื้นที่ห้ามรั่ว: [SCHEMA_PROPOSAL.md](SCHEMA_PROPOSAL.md) §4.0
 

@@ -54,51 +54,64 @@
 
 #### 4.0.1 รูปเป้าบนตาราง `inventory` (แทร็ก A)
 
+`secret` ปัจจุบันเป็น `NOT NULL` — **ห้าม** `ALTER TABLE … ADD … NOT NULL` สำหรับคอลัมน์ใหม่  
+ต้อง **rebuild ตาราง** ผ่าน `executeSqliteMigration` + `PRAGMA defer_foreign_keys` (แบบ migration `004_commerce_ops.sql`)  
+รวมคอลัมน์จาก DB-DOC-02 ใน rebuild **ครั้งเดียวกัน** (`reservation_id` + XOR CHECK)
+
 ```text
 inventory (
   id PK,
   variant_id FK → variants,
   fingerprint TEXT NOT NULL UNIQUE,   -- ดูสูตรด้านล่าง
-  login_id_enc TEXT NOT NULL,        -- AES-GCM (หรือ primitive เดิมของร้าน) ของ login/ID
+  login_id_enc TEXT NOT NULL,        -- AES-GCM (primitive เดิมของร้าน) ของ login/ID
   password_enc TEXT NOT NULL,        -- AES-GCM ของ password
-  -- secret TEXT  (คอลัมน์เดิม) → เลิกใช้หลัง migrate แล้ว DROP ในขั้นถัดไปถ้าปลอดภัย
+  legacy_single_secret INTEGER NOT NULL DEFAULT 0,  -- 1 = ย้ายจาก secret ช่องเดียว
   order_id FK NULL → orders,
+  reservation_id FK NULL → reservations,  -- จาก DB-DOC-02; XOR กับ order_id
   sold_at TEXT NULL,
   created_at ...
+  CHECK (
+    (order_id IS NOT NULL AND reservation_id IS NULL)
+    OR (order_id IS NULL AND reservation_id IS NOT NULL)
+    OR (order_id IS NULL AND reservation_id IS NULL)
+  )
 )
 INDEX inventory_available (variant_id, order_id)
+-- ไม่มีคอลัมน์ secret หลัง rebuild (ข้อมูลเก่าถูก map เป็นคู่ + ธง legacy)
 ```
 
-ทางเลือกชื่อคอลัมน์ตามโจทย์: `login_id_enc`, `password_enc` (แนะนำให้ตรงนี้)
+#### 4.0.2 สูตร `fingerprint` (กันของซ้ำ + กันเดา offline)
 
-#### 4.0.2 สูตร `fingerprint` (กันของซ้ำ)
-
-Canonical string ก่อน hash (UTF-8, trim ทั้งสองช่อง, คั่นด้วย `\n`):
+Canonical ก่อน MAC: **JSON UTF-8** (ไม่ใช้ `\n` delimiter — ค่าที่มี `\n` ในช่องจะชน canonical ได้)  
+**ห้าม trim `password`** (รักษาไบต์ที่ผู้ใช้/ผู้นำเข้าใส่); `login_id` เก็บตามที่นำเข้าโดยไม่ trim เพื่อ fingerprint
 
 ```text
-fingerprint = SHA-256( "v1\n" || trim(login_id) || "\n" || trim(password) )
+canonical = UTF8( JSON({ "v": 1, "login": login_id, "password": password }) )
+fingerprint = HMAC-SHA256( serverKey, canonical )
 ```
 
-- ต้องคิดจาก **ทั้งสองช่อง** เสมอ — ห้ามใช้แค่ login หรือแค่ password  
-- เก็บเฉพาะ digest ใน DB · ไม่เก็บ plaintext  
-- `UNIQUE(fingerprint)` คงเดิม → import คู่เดียวกันซ้ำไม่ได้  
-- เวอร์ชัน prefix `v1` เผื่อเปลี่ยน canonical ภายหลังโดยไม่ชนของเก่าโดยไม่ตั้งใจ
+- `serverKey` = วัสดุเข้ารหัส inventory ฝั่งเซิร์ฟเวอร์ (ตระกูล `INVENTORY_KEY` / derivation ตาม shop DO) — **ห้าม** ใช้ SHA-256 เปล่า (ได้ dump DB แล้วเดารหัสผ่าน offline ได้)
+- ต้องคิดจาก **ทั้งสองช่อง** เสมอ — ห้ามใช้แค่ login หรือแค่ password
+- เก็บเฉพาะ digest ใน DB · ไม่เก็บ plaintext
+- `UNIQUE(fingerprint)` คงเดิม → import คู่เดียวกันซ้ำไม่ได้
+- ฟิลด์ `"v": 1` เผื่อเปลี่ยน canonical ภายหลังโดยไม่ชนของเก่าโดยไม่ตั้งใจ
 
 #### 4.0.3 แผนย้ายแถว `secret` เดิม (ช่องเดียว) → สองช่อง
 
 ของปัจจุบัน: `inventory.secret` = ciphertext ของสตริงเดียว (เดโมเป็นโค้ด `DEMO-…`)
 
+ร้าน live ใช้ **S1 ฐานว่าง** แล้ว (`141ffad`) — แต่แผน backfill ยังต้องมีไว้ถ้าพบแถวบนฐานอื่น/เทสต์
+
 | ขั้น | การกระทำ | หมายเหตุ |
 |------|----------|----------|
-| M0 | เพิ่มคอลัมน์ `login_id_enc`, `password_enc` แบบ NULL ได้ชั่วคราว + คง `secret` | migration 005 (ยังไม่ทำใน PR นี้) |
-| M1 | Backfill แถวเก่า: decrypt `secret` → ได้ plaintext เดิม | ใช้ key ของ **DO/DB เดิม** เท่านั้น |
-| M2 | แปลงเป็นคู่ credential ตามกฎ legacy: `login_id = plaintext`, `password = ""` **หรือ** `login_id = "code"`, `password = plaintext` | **ต้องให้ Mark/Owner ล็อกกฎ legacy หนึ่งแบบก่อน backfill จริง** — ค่าแนะนำชั่วคราว: `login_id = legacy_code`, `password = ""` (ว่างที่เข้ารหัสได้) เพื่อไม่ invent password |
-| M3 | คำนวณ fingerprint ใหม่จากคู่ที่ได้ · ชน UNIQUE ให้ fail migration / รายงานแถวซ้ำ | |
-| M4 | encrypt → เขียน `login_id_enc` / `password_enc` · ตรวจอ่านกลับได้ในเทส | |
-| M5 | แอปอ่านสองช่องเป็นหลัก; `secret` เป็น fallback อ่านอย่างเดียวชั่วคราว | |
-| M6 | เมื่อไม่มีโค้ดพึ่ง `secret` แล้ว → DROP `secret` ใน migration ถัดไป | |
+| M0 | **นับแถว** `inventory` ที่มี `secret` ก่อนเขียน 005 — ถ้า `COUNT=0` ข้าม M1–M4 ได้ | บังคับก่อน apply |
+| M1 | Rebuild `inventory` (+ `reservations` ถ้าคู่กับ DOC-02) ด้วย `executeSqliteMigration` | ไม่ใช้ ALTER ADD NOT NULL |
+| M2 | Backfill: decrypt `secret` → plaintext เดิม (key ของ **DO/DB เดิม** เท่านั้น) | |
+| M3 | Legacy ที่มาร์คล็อกแล้ว: `login_id = โค้ดเดิม`, `password = ""`, `legacy_single_secret = 1` | ไม่ invent password |
+| M4 | คำนวณ fingerprint แบบ HMAC จากคู่ · encrypt → `login_id_enc` / `password_enc` | ชน UNIQUE → fail migration / รายงาน |
+| M5 | DROP คอลัมน์ `secret` ใน rebuild เดียวกันเมื่อ map ครบ | ไม่คง dual-read ยาว |
 
-**ข้อจำกัดสำคัญ (โยง DOC-04):** ถ้าย้ายไป DO ชื่อ `shop` ที่ `INVENTORY_KEY` derive คนละ `ctx.id` → **decrypt ของเก่าไม่ได้** ต้อง export→re-encrypt→import หรือเริ่มฐานว่าง — อย่ารัน backfill ข้าม DO โดยคิดว่า key เดิมใช้ได้
+**ข้อจำกัดสำคัญ (โยง DOC-04):** shop DO ใช้ S1 แล้ว — ไม่ทำ S2 re-encrypt ข้าม DO ในรอบนี้
 
 #### 4.0.4 พื้นที่ API ที่ห้ามรั่ว (เกณฑ์เทสต์)
 
@@ -164,7 +177,7 @@ cart_items(
 |---------|--------|
 | Identity | users.email UNIQUE; sessions → users; role CHECK |
 | Catalog | variants → products; price >= 0 (อนุญาต 0 สำหรับพรีออเดอร์ฟรีตามของเดิม) |
-| Inventory | fingerprint UNIQUE จากคู่ login+password; `login_id_enc`+`password_enc` NOT NULL หลัง migrate; index (variant_id, order_id) |
+| Inventory | fingerprint = HMAC-SHA256(serverKey, JSON canonical ของคู่ login+password); `login_id_enc`+`password_enc`+`legacy_single_secret` ผ่าน rebuild (ไม่ ALTER NOT NULL); รวม `reservation_id` XOR; index (variant_id, order_id) |
 | Orders | UNIQUE(user_id, request_key); index (user_id, created_at) |
 | Payments | idempotency_key UNIQUE; partial unique (provider, provider_ref); XOR order/reservation |
 | Queue | partial unique queue_number |
