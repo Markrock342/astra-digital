@@ -2,6 +2,11 @@
 
 อัปเดตล่าสุด: 2026-11-11
 
+## หน้าร้าน ASIA EXTRA ขึ้นแล้ว (11 พ.ย.)
+- Pages `d5f6c0a4` จาก commit ล่าสุดบน main: โลโก้ ASIA EXTRA, สองภาษา TH/EN (มี animation ตอนสลับ), แผงปรับธีม, animation หน้าร้าน
+- deploy เฉพาะ Pages — Worker ยังเป็น `184cd5a1` จึงยังไม่รัน migration 005 · โดเมนของ Worker ยังเสิร์ฟหน้าเก่าจนกว่าจะ deploy Worker
+- โดเมน asiaextra.xyz ยังไม่ต่อ · PR #2 ของแบงค์จะชนกับงานนี้
+
 ## MIG-005 merge แล้ว (ยังไม่ deploy)
 - PR #19 ของน็อต merge เข้า main แล้ว: rebuild `inventory` (ไอดี/รหัสผ่านเข้ารหัส, ธง legacy, `reservation_id`) และ `reservations` (DELIVERED, `delivered_at`/`delivered_by`), index `orders/reservations(status, created_at)`
 - มาร์คแก้หลัง merge: โค้ดแบบเก่ายังอยู่ใน `codes` เท่านั้น คู่ไอดี/รหัสผ่านอยู่ใน `credentials` (เดิมของชิ้นเดียวโผล่ทั้งสองที่)
