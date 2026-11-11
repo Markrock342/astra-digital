@@ -52,11 +52,18 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             products: d1Catalog.listProducts(),
             storage: d1Catalog.storageKind,
           });
-        if (/^\/api\/d1\/products\/[^/]+$/.test(path))
+        if (/^\/api\/d1\/products\/[^/]+$/.test(path)) {
+          let d1ProductId;
+          try {
+            d1ProductId = decodeURIComponent(path.split("/")[4]);
+          } catch {
+            throw new ApiError(400, "รหัสสินค้าไม่ถูกต้อง");
+          }
           return send(200, {
-            product: d1Catalog.getProduct(decodeURIComponent(path.split("/")[4])),
+            product: d1Catalog.getProduct(d1ProductId),
             storage: d1Catalog.storageKind,
           });
+        }
         if (path === "/api/d1/inventory/secrets")
           return send(403, { error: "ไม่อนุญาตให้อ่านรหัสสินค้า" });
       }
@@ -126,12 +133,17 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, { user: service.publicUser(user) });
         if (path === "/api/products")
           return send(200, { products: service.products() });
-        if (/^\/api\/products\/[^/]+$/.test(path))
+        if (/^\/api\/products\/[^/]+$/.test(path)) {
+          let productId;
+          try {
+            productId = decodeURIComponent(path.split("/")[3]);
+          } catch {
+            throw new ApiError(400, "รหัสสินค้าไม่ถูกต้อง");
+          }
           return send(200, {
-            product: service.productDetail(
-              decodeURIComponent(path.split("/")[3]),
-            ),
+            product: service.productDetail(productId),
           });
+        }
         if (path === "/api/overview") return send(200, service.overview());
         if (path === "/api/reviews")
           return send(200, { reviews: service.reviews() });

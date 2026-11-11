@@ -260,3 +260,14 @@ test("HTTP routes expose product detail, channel, queue, chat, rankings", async 
   const queue = await get("/api/queue", staffToken);
   assert.equal(queue.status, 200);
 });
+
+test("API-FIX-03: malformed product URI returns 400 not 500", async (t) => {
+  const { s } = fixture(t);
+  const handle = createAPIHandler(s);
+  const res = await handle(
+    new Request("http://local.test/api/products/%E0%A4"),
+  );
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.ok(body.error);
+});
