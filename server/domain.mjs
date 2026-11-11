@@ -462,10 +462,11 @@ export function createCommerceCore({
     });
   }
   if (adminPassword) {
-    if (adminPassword.length < 12)
-      throw new Error("ASTRA_ADMIN_PASSWORD must have at least 12 characters");
+    if (adminPassword.length < 8)
+      throw new Error("ASTRA_ADMIN_PASSWORD must have at least 8 characters");
     const email = "admin@astra.local";
     const existing = one("SELECT id FROM users WHERE email=?", email);
+    const adminId = existing?.id ?? randomUUID();
     if (existing)
       run(
         "UPDATE users SET password_hash=?,role=? WHERE id=?",
@@ -476,12 +477,15 @@ export function createCommerceCore({
     else
       run(
         "INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,?)",
-        randomUUID(),
+        adminId,
         email,
-        "ผู้ดูแล ASTRA",
+        "ผู้ดูแลร้าน",
         passwordHash(adminPassword),
         ROLES.ADMIN,
       );
+    // Owner can sign in with the short name "admin" too, unless a customer took it.
+    if (!one("SELECT id FROM users WHERE username='admin' AND id<>?", adminId))
+      run("UPDATE users SET username='admin' WHERE id=?", adminId);
   }
   function register(rawInput) {
     const input = withoutClientPrivileges(rawInput);

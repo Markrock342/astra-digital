@@ -662,3 +662,17 @@ test("ISSUE-18 DB-005: deliver refuses when stock is short (P4)", (t) => {
     "PREORDER",
   );
 });
+
+test("owner signs in as 'admin' with the configured password", () => {
+  const s = createCommerce({ adminPassword: "admin1234", seed: false, allowSandbox: false, allowDemoAdmin: false });
+  try {
+    const auth = s.login({ username: "admin", password: "admin1234" });
+    assert.equal(s.session(auth.token).role, "ADMIN");
+    assert.throws(() => s.login({ username: "admin", password: "wrong-pass" }));
+    assert.throws(() =>
+      s.register({ name: "imposter", username: "admin", password: "Imposter-password-1" }),
+    );
+  } finally {
+    s.db.close();
+  }
+});
