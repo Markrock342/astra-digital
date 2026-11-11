@@ -1,6 +1,12 @@
 # สถานะปัจจุบัน (CURRENT)
 
-อัปเดตล่าสุด: 2026-11-11
+อัปเดตล่าสุด: 2026-11-12
+
+## Admin FR Backend — งาน 1 พร้อม PR (ห้าม deploy)
+- อ้างอิง [ADMIN-FR-20261111](../requirements/ADMIN-FR-20261111.md) · Roadmap [NOTT-ADMIN-FR-20261111](../roadmaps/NOTT-ADMIN-FR-20261111.md)
+- งาน 1 เสร็จในเครื่อง: สัญญาแชท/แจ้งเตือน/อันดับ + unread inbox + admin ops notify + features ใน `/api/me` + FR-F10 `salesRevenueSatang` · branch `feat/admin-fr-work1-api-contract-revenue`
+- หลักฐาน: `npm test` 63/63 · `npm run test:e2e` 11/11 · รายงาน [MARK_REPORT_ADMIN_FR_WORK1](../database/MARK_REPORT_ADMIN_FR_WORK1.md)
+- **ห้าม deploy** · รอ Mark รีวิว/merge ก่อนเริ่มงาน 2 · งาน 5 ร่าง docs อย่างเดียว
 
 ## Deploy Worker 11 พ.ย. (ล่าสุด)
 - Worker `15392db2` จาก main (`009ef0a` + worker fix) + Pages `40ae3b40` — **migration 005 รันบนร้านจริงแล้ว** · `features` ทั้งคู่ `true` (ปุ่มส่งของพรีออเดอร์ + นำเข้าไอดี/รหัสผ่านเปิดใช้)

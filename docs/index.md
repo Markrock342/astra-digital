@@ -12,11 +12,12 @@
 | Task Spec / handoff | [process/handoff.md](process/handoff.md) |
 | Definition of Done | [process/definition-of-done.md](process/definition-of-done.md) |
 | Architecture ระดับกระบวนการ | [architecture/overview.md](architecture/overview.md) · [architecture/api-contract-shop.md](architecture/api-contract-shop.md) · [architecture/security.md](architecture/security.md) · [architecture/auth-rbac.md](architecture/auth-rbac.md) · [architecture/erd-target.md](architecture/erd-target.md) · [architecture/erd-sprint1.md](architecture/erd-sprint1.md) · [architecture/adr-d1-migration-path.md](architecture/adr-d1-migration-path.md) · [architecture/payment-fulfillment.md](architecture/payment-fulfillment.md) |
-| Roadmaps | [roadmaps/README.md](roadmaps/README.md) · [NOTT Sprint 1](roadmaps/NOTT-SPRINT1.md) (Approved) · [NOTT DB Architecture](roadmaps/NOTT-DB-ARCHITECTURE.md) (Approved) · [Post-Review 11 Nov](roadmaps/NOTT-POST-REVIEW-11NOV.md) (เสนอ รอมาร์คล็อก) |
+| Roadmaps | [roadmaps/README.md](roadmaps/README.md) · [NOTT Sprint 1](roadmaps/NOTT-SPRINT1.md) (Approved) · [NOTT DB Architecture](roadmaps/NOTT-DB-ARCHITECTURE.md) (Approved) · [Post-Review 11 Nov](roadmaps/NOTT-POST-REVIEW-11NOV.md) (เสนอ รอมาร์คล็อก) · [Admin FR 11 พ.ย.](roadmaps/NOTT-ADMIN-FR-20261111.md) (งาน 1 พร้อม PR · ห้าม deploy) |
 | Database Review Pack (NOTT → Mark) | [database/README.md](database/README.md) · Audit · ERD · Schema · Integrity · Migration Plan · Test Plan |
 | รายงาน MIG-005 (NOTT → Mark) | [database/MARK_REPORT_MIG_005.md](database/MARK_REPORT_MIG_005.md) |
 | รายงาน ISSUE-18 APIs (NOTT → Mark) | [database/MARK_REPORT_ISSUE_18.md](database/MARK_REPORT_ISSUE_18.md) |
-| Task Specs | [prompts/TASK-PROMPT-TEMPLATE.md](prompts/TASK-PROMPT-TEMPLATE.md) · [SOW FIFACORP 10 พ.ย. 2026](prompts/SOW-FIFACORP-FINAL-20261110.md) · [งานมาร์ค/น็อต](prompts/TASKS-MARK-NOTT-20261110.md) · [ISSUE-18 DB-005 APIs](prompts/ISSUE-18-db005-apis.md) |
+| รายงาน Admin FR งาน 1 (NOTT → Mark) | [database/MARK_REPORT_ADMIN_FR_WORK1.md](database/MARK_REPORT_ADMIN_FR_WORK1.md) |
+| Task Specs | [prompts/TASK-PROMPT-TEMPLATE.md](prompts/TASK-PROMPT-TEMPLATE.md) · [SOW FIFACORP 10 พ.ย. 2026](prompts/SOW-FIFACORP-FINAL-20261110.md) · [งานมาร์ค/น็อต](prompts/TASKS-MARK-NOTT-20261110.md) · [ISSUE-18 DB-005 APIs](prompts/ISSUE-18-db005-apis.md) · [Admin FR Work1](prompts/ADMIN-FR-WORK1-api-contract-revenue.md) |
 | Changelog กระบวนการ | [changelog.md](changelog.md) |
 
 ## Requirement / Ownership (intake)
@@ -25,6 +26,7 @@
 |--------|------|
 | Prompt pack LCS×FIFA (Mark/Nott/Bank) | [requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md](requirements/LCS_FIFA_AI_Prompts_MARK_NOTT_BANK_20261109.md) |
 | แผนรายสัปดาห์ NOTT/Bank/Mark | [requirements/NOTT_BANK_MARK_WEEKLY_TH.md](requirements/NOTT_BANK_MARK_WEEKLY_TH.md) |
+| Admin FR Audit + Requirements (11 พ.ย.) | [requirements/ADMIN-FR-20261111.md](requirements/ADMIN-FR-20261111.md) |
 | Roadmap NOTT Weekly | [roadmaps/NOTT-WEEKLY.md](roadmaps/NOTT-WEEKLY.md) |
 | Module: Backend NOTT (ขอบเขตทีมนี้) | [modules/backend-nott.md](modules/backend-nott.md) |
 | Catalog API contract (Phase 3) | [modules/api-contract-catalog.md](modules/api-contract-catalog.md) |
