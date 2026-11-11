@@ -56,10 +56,12 @@
 
 | ID | สถานการณ์ | คาดหวัง |
 |----|-----------|---------|
-| P1 | Admin deliver reservation สถานะ PREORDER สต็อกพอ | status=DELIVERED; มี delivered_at/by; inventory.reservation_id ถูกผูกตาม quantity |
-| P2 | เรียก deliver ซ้ำหลังสำเร็จ | ไม่ allocate เพิ่ม; ผลลัพธ์เดิม; inventory นับเท่าเดิม |
-| P3 | Customer/Staff (ถ้าไม่ได้รับอนุญาต) เรียก deliver | 401/403 |
+| P1 | Admin deliver reservation สถานะ PREORDER สต็อกพอ | status=DELIVERED; มี delivered_at/by; inventory.reservation_id ถูกผูกตาม quantity; response เป็น metadata ไม่มี credential |
+| P2 | เรียก deliver ซ้ำหลังสำเร็จ | ไม่ allocate เพิ่ม; คืน metadata เดิมเท่านั้น (ไม่มี credential); inventory นับเท่าเดิม |
+| P3 | Customer/Staff เรียก deliver | 401/403 (STAFF ไม่ได้ — ADMIN เท่านั้น) |
 | P4 | สต็อกไม่พอตอน deliver | 409; reservation ยัง PREORDER; inventory ไม่ถูกผูก |
+| P5 | Owner อ่าน orderDetail reservation หลัง DELIVERED | ได้ login+password ของตน; คนอื่น 404 |
+| P6 | ฐานมีข้อมูล → rebuild reservations CHECK + inventory XOR | แถวเดิมครบ; DELIVERED/XOR ใช้ได้ |
 
 ## 7. เกณฑ์ผ่านรอบ Review (เอกสาร)
 

@@ -36,8 +36,8 @@
 | **สถานะ orders** | PENDING_PAYMENT → DELIVERED \| FAILED \| OUT_OF_STOCK \| CANCELLED |
 | **สถานะ reservations (ปัจจุบัน)** | PENDING_PAYMENT → PREORDER \| FAILED \| CANCELLED |
 | **สถานะ reservations (เป้า DB-DOC-02)** | PENDING_PAYMENT → PREORDER → **DELIVERED** (Admin fulfill) · หรือ FAILED/CANCELLED |
-| **ป้องกัน** | pay ตรวจสถานะก่อนทำงาน; DELIVERED/PREORDER แล้วเรียก pay ซ้ำ = no-op; **deliver ซ้ำเมื่อ DELIVERED แล้ว = คืนของเดิมไม่ allocate เพิ่ม** |
-| **ช่องว่างปัจจุบัน** | ยังไม่มี Admin deliver path / `delivered_at` / ผูก inventory↔reservation — ออกแบบใน SCHEMA §4.5 แล้วยังไม่ implement |
+| **ป้องกัน** | pay ตรวจสถานะก่อนทำงาน; DELIVERED/PREORDER แล้วเรียก pay ซ้ำ = no-op; **deliver ซ้ำเมื่อ DELIVERED แล้ว = metadata เดิม ไม่ allocate เพิ่ม ไม่คืน credential** |
+| **ช่องว่างปัจจุบัน** | ยังไม่มี Admin deliver path / `delivered_at` / ผูก inventory↔reservation / owner codes จาก `reservation_id` — ออกแบบใน SCHEMA §4.5 แล้วยังไม่ implement; ต้อง rebuild reservations+inventory |
 
 ### 1.5 Preorder Queue หมายเลขซ้ำ
 
@@ -72,7 +72,8 @@ Role **ไม่รับจาก body ฝั่ง client** (`withoutClientPri
 1. **สร้างออเดอร์** — insert order/reservation + เก็บ payment_hash ใน tx เดียว  
 2. **จ่ายสำเร็จ (สินค้าพร้อมส่ง)** — ตรวจสถานะ → จอง inventory ว่าง → หัก ledger DEMO_CREDIT → ตั้ง DELIVERED → บันทึก payments → notify  
 3. **จ่ายพรีออเดอร์** — หักเครดิต (ถ้ามี) → PREORDER + queue_number → payments → notify (**ยังไม่ส่งของ**)  
-4. **Admin deliver พรีออเดอร์ (เป้า)** — ตรวจ PREORDER → bind inventory ว่างด้วย `reservation_id` → DELIVERED + delivered_* → notify; ถ้า DELIVERED แล้ว = no-op สำเร็จ  
+4. **Admin deliver พรีออเดอร์ (เป้า)** — ตรวจ PREORDER → bind inventory ว่างด้วย `reservation_id` → DELIVERED + delivered_* → notify; ถ้า DELIVERED แล้ว = no-op สำเร็จ คืน metadata เท่านั้น; เจ้าของอ่านรหัสผ่าน orderDetail หลัง bind  
+
 5. **Import โค้ด** — ตรวจ fingerprint ซ้ำทั้งชุดแล้ว insert ใน tx (fail ทั้งก้อนถ้าซ้ำ)  
 6. **Migration** — ทั้งไฟล์ใน tx ของ DO; ตรวจ FK ก่อน commit ทาง logic ของ helper  
 

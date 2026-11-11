@@ -107,17 +107,19 @@ PENDING_PAYMENT → PREORDER → DELIVERED
 ```
 
 - เพิ่มสถานะ **`DELIVERED`** (= ส่งของแล้ว) ใน CHECK ของ `reservations.status`  
+- SQLite **เปลี่ยน CHECK ไม่ได้ด้วย ALTER** → ต้อง **rebuild ตาราง `reservations`** ผ่าน `executeSqliteMigration` + FK deferral  
 - คง `PREORDER` = จ่ายแล้ว รอ Admin ส่ง  
-- คอลัมน์ใหม่บน `reservations`:
+- คอลัมน์ใหม่บน `reservations` (มากับ rebuild เดียวกัน):
 
 ```text
 delivered_at  TEXT NULL,           -- เมื่อเข้า DELIVERED
-delivered_by  TEXT NULL REFERENCES users(id)  -- ADMIN (หรือ STAFF ถ้า Mark อนุญาต)
+delivered_by  TEXT NULL REFERENCES users(id)  -- ADMIN เท่านั้น
 ```
 
 #### 4.5.2 ผูกของกับ reservation — ข้อเสนอหลัก
 
-**แนะนำรอบนี้: ขยาย `inventory` ให้ผูก order หรือ reservation อย่างใดอย่างหนึ่ง (XOR)**
+**ขยาย `inventory` ด้วย `reservation_id` + XOR CHECK** — รวมใน **rebuild ครั้งเดียวกับ credential คู่ (DB-DOC-01)**  
+ห้าม ALTER ADD แล้วหวัง NOT NULL / CHECK ใหม่บนตารางเดิมโดยไม่มี rebuild
 
 ```text
 inventory (
@@ -131,34 +133,47 @@ inventory (
   )
 )
 -- ว่างพร้อมขาย: order_id IS NULL AND reservation_id IS NULL
-CREATE UNIQUE INDEX ... optional partial unique ถ้าต้องการกัน double-bind
 ```
 
-**ทางเลือกรอง:** ตาราง `allocations` แยก (แบบ D1) — ใช้เมื่อ Mark อยากให้ DO กับ D1 ชื่อตารางตรงกัน; รอบแรกไม่จำเป็นถ้า XOR บน inventory พอ
+แผนเทสต์บน**ฐานที่มีข้อมูล** (โยง MU* / DOC-04): apply 005 แล้วแถว reservation/inventory เดิมครบ + CHECK ใหม่บังคับ
+
+**ทางเลือกรอง:** ตาราง `allocations` แยก (แบบ D1) — รอบแรกไม่ใช้ถ้า XOR บน inventory พอ
 
 #### 4.5.3 Transaction ส่งของ (idempotent)
 
-API สมมติ (ให้ Mark ล็อกชื่อ path ทีหลัง): `POST /api/admin/reservations/:id/deliver`
+API สมมติ (เสนอ รอมาร์คล็อกชื่อ path): `POST /api/admin/reservations/:id/deliver`
 
 ใน `tx` เดียว:
 
 1. โหลด reservation ด้วย `id` + ล็อกแถว (SQLite: อ่านใน tx เดียวกัน)  
-2. ถ้า `status === 'DELIVERED'` แล้ว → **คืนผลเดิม** (credential ที่ผูก reservation นี้) · ไม่ allocate เพิ่ม · ไม่เขียน delivered_* ซ้ำ  
+2. ถ้า `status === 'DELIVERED'` แล้ว → **คืน metadata เดิมเท่านั้น** (`id`, `status`, `delivered_at`, `delivered_by`, จำนวนชิ้นที่ผูก) · **ไม่คืน credential** · ไม่ allocate เพิ่ม · ไม่เขียน delivered_* ซ้ำ  
 3. ถ้า `status !== 'PREORDER'` → 409  
 4. เลือก inventory ว่างตาม `variant_id` จำนวน `quantity` (`order_id IS NULL AND reservation_id IS NULL`)  
 5. ถ้าไม่พอ → 409 สต็อกไม่พอ (ไม่เปลี่ยนสถานะ)  
 6. `UPDATE inventory SET reservation_id=?, sold_at=CURRENT_TIMESTAMP WHERE id=? AND order_id IS NULL AND reservation_id IS NULL` ทีละชิ้น · ถ้าแถวไม่ถูกอัปเดต → abort ทั้ง tx  
 7. `UPDATE reservations SET status='DELIVERED', delivered_at=..., delivered_by=adminId WHERE id=? AND status='PREORDER'` · ถ้า changes=0 → abort (แข่งกับ deliver อื่น)  
 8. `notify` เจ้าของออเดอร์ · `audit`  
-9. commit → คืนเมตา (staff/admin ไม่ต้องได้ plaintext ถ้า정책 ห้าม; owner อ่านผ่าน orderDetail ของตน)
+9. commit → คืน metadata ให้ ADMIN (สอดคล้อง K3 — admin ไม่ได้ plaintext)
 
-Idempotency key เสริม (optional): header/`requestKey` ของ deliver เก็บใน `audit` หรือตารางเล็ก — แต่สถานะ `DELIVERED` + inventory ที่ผูก reservation แล้วถือเป็นความจริงหลัก
+Idempotency: สถานะ `DELIVERED` + แถว inventory ที่ `reservation_id` ชี้แล้ว = ความจริงหลัก
 
-#### 4.5.4 สิทธิ์
+#### 4.5.4 สิทธิ์ (มาร์คล็อกแล้ว)
 
-- เรียก deliver ได้เฉพาะ **ADMIN** (ค่าเริ่มต้นเอกสารนี้)  
-- ถ้าต้องการให้ STAFF deliver ได้ → Mark ล็อกเพิ่ม  
-- Staff/Admin list ยังไม่คืน credential plaintext
+- เรียก deliver ได้เฉพาะ **ADMIN** (SOW: ผู้ดูแลเป็นคนส่ง) — STAFF ได้ 403  
+- Staff/Admin list และ deliver response **ไม่คืน** credential plaintext
+
+#### 4.5.5 เจ้าของอ่านรหัสพรีออเดอร์หลังส่งแล้ว
+
+สถานะโค้ดปัจจุบัน: `orderDetail` เส้น reservation คืน `codes: []` เสมอ และผูก inventory แค่ `order_id`
+
+เป้าหลัง DELIVERED:
+
+1. Owner เรียก orderDetail ด้วย **reservation id** ของตน  
+2. Server ตรวจ `reservations.user_id === owner` และ `status === 'DELIVERED'`  
+3. อ่าน inventory ที่ `reservation_id = ?` แล้ว decrypt → คืน credential คู่ **เฉพาะเจ้าของ**  
+4. Staff/Admin เรียก path เดียวกันได้เมตา แต่ `codes` ว่าง
+
+เทสต์: K4 + P2 (deliver ซ้ำไม่มี credential ใน response admin)
 
 ## 5. Constraints / Indexes ที่ควรมีในเป้า (สรุป)
 

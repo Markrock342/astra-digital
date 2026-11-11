@@ -77,7 +77,7 @@ runtime_flags
 
 | Entity | ปัจจุบัน | เป้า DB-DOC-02 |
 |--------|----------|----------------|
-| Preorder | `reservations` สถานะถึง `PREORDER` | เพิ่ม `DELIVERED` + `delivered_at` / `delivered_by` |
+| Preorder | `reservations` สถานะถึง `PREORDER` | **rebuild** เพิ่ม `DELIVERED` ใน CHECK + `delivered_at` / `delivered_by`; inventory `reservation_id` XOR ใน rebuild เดียวกับ DOC-01; deliver = ADMIN + metadata; owner อ่านรหัสผ่าน orderDetail |
 | Queue number | `queue_number` partial UNIQUE | คง (นโยบายก่อน/หลังจ่าย = DOC-05) |
 | Stock bind | inventory ผูกได้แค่ `order_id` | เพิ่ม `reservation_id` แบบ XOR กับ `order_id` (หรือ allocations แยก) |
 
