@@ -699,19 +699,55 @@ export function createCommerceCore({
           : [],
     };
   }
-  function staffOrders(user) {
+  function staffOrders(user, { limit = 50, cursor } = {}) {
     requireStaff(user);
-    return all(
+    let lim = 50;
+    if (limit != null && String(limit).trim() !== "") {
+      const parsed = Number(limit);
+      if (!Number.isInteger(parsed) || parsed < 1)
+        fail(400, "จำนวนรายการไม่ถูกต้อง");
+      lim = Math.min(100, parsed);
+    }
+    let cursorCreated = null;
+    let cursorId = null;
+    if (cursor != null && String(cursor).trim() !== "") {
+      try {
+        const raw = Buffer.from(String(cursor), "base64url").toString("utf8");
+        const [created, id] = raw.split("\n");
+        if (!created || !id) fail(400, "cursor ไม่ถูกต้อง");
+        cursorCreated = created;
+        cursorId = id;
+      } catch {
+        fail(400, "cursor ไม่ถูกต้อง");
+      }
+    }
+    const rows = all(
       `SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product,0 AS preorder,NULL AS queue_number
        FROM orders o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id
        UNION ALL
        SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product,1 AS preorder,o.queue_number
        FROM reservations o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id
-       ORDER BY 5 DESC`,
-    ).map(({ payment_hash, request_key, ...row }) => ({
-      ...row,
-      codes: undefined,
-    }));
+       ORDER BY 5 DESC, 1 DESC`,
+    )
+      .map(({ payment_hash, request_key, ...row }) => ({
+        ...row,
+        codes: undefined,
+      }))
+      .filter((row) => {
+        if (!cursorCreated) return true;
+        if (row.created_at < cursorCreated) return true;
+        if (row.created_at > cursorCreated) return false;
+        return row.id < cursorId;
+      })
+      .slice(0, lim + 1);
+    const page = rows.slice(0, lim);
+    const next =
+      rows.length > lim
+        ? Buffer.from(page[page.length - 1].created_at + "\n" + page[page.length - 1].id, "utf8").toString(
+            "base64url",
+          )
+        : null;
+    return { orders: page, nextCursor: next };
   }
   function getPaymentChannel() {
     const channel = paymentChannel();

@@ -61,8 +61,8 @@ test("staff can list orders without codes; client role field is ignored", (t) =>
   });
   assert.equal(paid.codes.length, 1);
   const listed = s.staffOrders(staff);
-  assert.ok(listed.some((o) => o.id === order.id));
-  assert.ok(listed.every((o) => o.codes === undefined));
+  assert.ok(listed.orders.some((o) => o.id === order.id));
+  assert.ok(listed.orders.every((o) => o.codes === undefined));
   assert.deepEqual(s.orderDetail(staff, order.id).codes, []);
   assert.throws(() => s.staffOrders(user), (e) => e.status === 403);
   const channel = s.setPaymentChannel(merchant, {
@@ -259,4 +259,36 @@ test("HTTP routes expose product detail, channel, queue, chat, rankings", async 
   assert.ok(Array.isArray(staffOrders.body.orders));
   const queue = await get("/api/queue", staffToken);
   assert.equal(queue.status, 200);
+});
+
+test("API-FIX-04: staff orders support limit/cursor pagination", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  for (let i = 0; i < 3; i++) {
+    const order = s.createOrder(user, {
+      variantId: "stream-plus-30",
+      quantity: 1,
+      requestKey: "page-order-" + i + "-" + Date.now(),
+    });
+    s.pay(user, order.id, {
+      paymentToken: order.paymentToken,
+      outcome: "success",
+    });
+  }
+  const page1 = s.staffOrders(staff, { limit: 2 });
+  assert.equal(page1.orders.length, 2);
+  assert.ok(page1.nextCursor);
+  const page2 = s.staffOrders(staff, {
+    limit: 2,
+    cursor: page1.nextCursor,
+  });
+  assert.ok(page2.orders.length >= 1);
+  assert.ok(
+    !page2.orders.some((o) => o.id === page1.orders[0].id),
+    "pages should not repeat first item",
+  );
+  assert.throws(
+    () => s.staffOrders(staff, { limit: 1.5 }),
+    (e) => e.status === 400,
+  );
 });
