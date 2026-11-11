@@ -354,4 +354,5 @@ export const EN_STRINGS: Record<string, string> = {
   "มน": "Soft",
   "โค้งมาก": "Round",
   "เหลี่ยม": "Sharp",
+  "สีธีม": "Theme color",
 };

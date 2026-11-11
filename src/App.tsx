@@ -53,7 +53,6 @@ import {
   Marquee,
   ScrollProgress,
   ThemePanel,
-  ThemeSwitch,
   shopName,
   useCardTilt,
 } from "./Theme";
@@ -432,7 +431,6 @@ function Footer() {
           <div className="footer-legal">
             <Link to="/terms">{t("ข้อกำหนดร้าน")}</Link>
             <Link to="/privacy">{t("ความเป็นส่วนตัว")}</Link>
-            <ThemeSwitch />
           </div>
         </div>
       </div>
