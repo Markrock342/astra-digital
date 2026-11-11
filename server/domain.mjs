@@ -568,6 +568,8 @@ export function createCommerceCore({
       ) ?? null
     );
   }
+  const PUBLIC_STOCK_CAP = 10;
+  const LOW_STOCK_AT = 3;
   function mapProduct(p) {
     return {
       ...p,
@@ -577,6 +579,10 @@ export function createCommerceCore({
       ).map((v) => ({
         ...v,
         price: p.preorder && v.id === "cinema-max-30" ? 0 : v.price,
+        // Public stock is capped at the per-order maximum so exact inventory stays private.
+        stock: Math.min(v.stock, PUBLIC_STOCK_CAP),
+        stockStatus:
+          v.stock <= 0 ? "out" : v.stock <= LOW_STOCK_AT ? "low" : "in",
       })),
       rating: one(
         "SELECT AVG(r.rating) AS average,COUNT(*) AS count FROM reviews r JOIN orders o ON o.id=r.order_id JOIN variants v ON v.id=o.variant_id WHERE v.product_id=?",

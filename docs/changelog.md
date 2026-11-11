@@ -6,6 +6,8 @@
 - อันดับผู้ซื้อกรองได้ วัน/สัปดาห์/เดือน/ทั้งหมด ตามเวลาไทย นับพรีออเดอร์ที่จ่ายแล้ว ไม่ส่ง user id และ limit ผิดตอบ 400 แทน 500 — [api-contract-shop.md](architecture/api-contract-shop.md)
 - หลังบ้านเรียงคำสั่งซื้อตามเวลาสร้างล่าสุด (เดิมเรียงตาม customer_id)
 - Merge PR ของน็อต #12 (แชท rate limit/throttle/ปิดห้อง) #13 (URI ผิดตอบ 400) #14 (staff orders แบ่งหน้า) และ #3 (origin ตอน dev) · อันดับผู้ซื้อนับพรีออเดอร์ DELIVERED ด้วย · `npm test` 45 ผ่าน · ยังไม่ deploy
+- ตัดสิน: ออกเลขคิวหลังจ่ายเงิน และหน้าร้านแสดงสต็อกแค่ มี/เหลือน้อย/หมด (API ส่ง stock ไม่เกิน 10 + stockStatus) — [api-contract-shop.md](architecture/api-contract-shop.md)
+- เพิ่ม `tests/use-cases.test.mjs` 7 use case ผ่าน HTTP (ซื้อ, พรีออเดอร์+คิว, สต็อก, ของหมด, แชท/แจ้งเตือน, ranking, โหมด live) · Playwright 3/6 ไม่ผ่านเพราะ e2e ยังหาปุ่มบัญชีทดลองที่ถูกเอาออกใน `141ffad` ต้องเขียน e2e ใหม่สำหรับโหมด live
 - PR #4–#11 และ #15 ส่งกลับให้น็อตแก้ก่อน (fingerprint ต้องใช้ HMAC, แผน rebuild ตาราง, ตัดคำว่า Approved ที่ยังไม่ได้อนุมัติ, openChatThread ยังยิงได้ไม่จำกัด)
 
 ## 2026-11-10

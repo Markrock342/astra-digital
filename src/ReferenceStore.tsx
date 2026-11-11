@@ -397,9 +397,11 @@ export function ReferenceProduct({ id }: { id: string }) {
                   <small>
                     {product.preorder
                       ? ""
-                      : v.stock
-                        ? "เหลือ " + v.stock + " ชิ้น"
-                        : "สินค้าหมด"}
+                      : v.stockStatus === "low"
+                        ? "เหลือน้อย"
+                        : v.stock
+                          ? "มีสินค้า"
+                          : "สินค้าหมด"}
                   </small>
                 </span>
                 <strong>{money(v.price)}</strong>

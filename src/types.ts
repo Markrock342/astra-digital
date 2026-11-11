@@ -3,7 +3,9 @@ export type Variant = {
   product_id: string;
   label: string;
   price: number;
+  /** Public API caps this at 10; admin overview returns the exact count. */
   stock: number;
+  stockStatus?: "in" | "low" | "out";
 };
 export type Product = {
   id: string;

@@ -868,7 +868,8 @@ function ProductDetail({ id }: { id: string }) {
             {variant.stock > 0 ? (
               <>
                 <span className="service-dot" />
-                พร้อมจัดส่ง · เหลือ {variant.stock} ชิ้น
+                พร้อมจัดส่ง
+                {variant.stockStatus === "low" ? " · เหลือน้อย" : ""}
               </>
             ) : (
               <span className="muted">สินค้าหมดชั่วคราว</span>
