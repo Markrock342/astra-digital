@@ -174,6 +174,10 @@ test("in-web chat and notifications stay scoped", (t) => {
   });
   assert.ok(opened.thread.id);
   assert.equal(opened.messages.length, 1);
+  assert.ok(
+    s.notifications(staff).some((n) => n.title.includes("เปิดแชท")),
+    "opening chat should notify staff",
+  );
   const reply = s.postChatMessage(staff, opened.thread.id, {
     body: "รับทราบครับ กำลังตรวจให้",
   });
@@ -401,4 +405,51 @@ test("API-FIX-04: staff orders support limit/cursor pagination", (t) => {
     () => s.staffOrders(staff, { limit: 1.5 }),
     (e) => e.status === 400,
   );
+});
+
+test("API-FIX-01: inactive sandbox blocks pay; openChat rate+throttle; ranking decimal", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const order = s.createOrder(user, {
+    variantId: "stream-plus-30",
+    quantity: 1,
+    requestKey: "inactive-channel-pay",
+  });
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: false });
+  assert.throws(
+    () =>
+      s.pay(user, order.id, {
+        paymentToken: order.paymentToken,
+        outcome: "success",
+      }),
+    (e) => e.status === 403,
+  );
+
+  assert.throws(
+    () => s.buyerRanking(merchant, { limit: 1.5 }),
+    (e) => e.status === 400,
+  );
+
+  const first = s.openChatThread(user, { body: "เปิดครั้งแรก" });
+  const afterOpen = s.notifications(staff).filter((n) => n.kind === "chat")
+    .length;
+  assert.ok(afterOpen >= 1, "staff should be notified on open");
+  s.openChatThread(user, { body: "เปิดซ้ำห้องเดิม" });
+  assert.equal(
+    s.notifications(staff).filter((n) => n.kind === "chat").length,
+    afterOpen,
+    "re-open same thread within throttle must not fan-out again",
+  );
+  s.closeChatThread(user, first.thread.id);
+  let limited = null;
+  for (let i = 0; i < 40; i++) {
+    try {
+      const opened = s.openChatThread(user, { body: "flood-open-" + i });
+      s.closeChatThread(user, opened.thread.id);
+    } catch (e) {
+      limited = e;
+      break;
+    }
+  }
+  assert.equal(limited?.status, 429);
 });
