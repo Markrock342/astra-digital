@@ -14,6 +14,7 @@
 | Architecture ระดับกระบวนการ | [architecture/overview.md](architecture/overview.md) · [architecture/api-contract-shop.md](architecture/api-contract-shop.md) · [architecture/security.md](architecture/security.md) · [architecture/auth-rbac.md](architecture/auth-rbac.md) · [architecture/erd-target.md](architecture/erd-target.md) · [architecture/erd-sprint1.md](architecture/erd-sprint1.md) · [architecture/adr-d1-migration-path.md](architecture/adr-d1-migration-path.md) · [architecture/payment-fulfillment.md](architecture/payment-fulfillment.md) |
 | Roadmaps | [roadmaps/README.md](roadmaps/README.md) · [NOTT Sprint 1](roadmaps/NOTT-SPRINT1.md) (Approved) · [NOTT DB Architecture](roadmaps/NOTT-DB-ARCHITECTURE.md) (Approved) · [Post-Review 11 Nov](roadmaps/NOTT-POST-REVIEW-11NOV.md) (เสนอ รอมาร์คล็อก) |
 | Database Review Pack (NOTT → Mark) | [database/README.md](database/README.md) · Audit · ERD · Schema · Integrity · Migration Plan · Test Plan |
+| รายงาน MIG-005 (NOTT → Mark) | [database/MARK_REPORT_MIG_005.md](database/MARK_REPORT_MIG_005.md) |
 | Task Specs | [prompts/TASK-PROMPT-TEMPLATE.md](prompts/TASK-PROMPT-TEMPLATE.md) · [SOW FIFACORP 10 พ.ย. 2026](prompts/SOW-FIFACORP-FINAL-20261110.md) · [งานมาร์ค/น็อต](prompts/TASKS-MARK-NOTT-20261110.md) |
 | Changelog กระบวนการ | [changelog.md](changelog.md) |
 
