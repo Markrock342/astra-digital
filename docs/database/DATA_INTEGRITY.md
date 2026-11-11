@@ -5,14 +5,15 @@
 
 ## 1. แผนที่ความเสี่ยง → การป้องกันปัจจุบัน → ช่องว่าง
 
-### 1.1 ซื้อพร้อมกันได้ Digital Key เดียวกัน
+### 1.1 ซื้อพร้อมกันได้ Digital Key / credential เดียวกัน
 
 | | |
 |--|--|
 | **ป้องกันปัจจุบัน** | เลือกแถว `inventory` ที่ `order_id IS NULL` แล้ว `UPDATE … SET order_id=? WHERE id=? AND order_id IS NULL` ภายใน `tx` / `transactionSync` (`domain.mjs` pay path ~881) |
-| **เสริมด้วย schema** | `fingerprint` UNIQUE — กัน import โค้ดซ้ำ |
-| **ช่องว่าง** | หลาย DO (astra_space) = คนละสต็อก → “แข่งกัน” ไม่เกิดข้ามเบราว์เซอร์จนกว่าจะรวมร้านเดียว |
-| **Idempotency** | pay ซ้ำเมื่อสถานะ DELIVERED คืนโค้ดเดิม ไม่ allocate เพิ่ม (เทส commerce) |
+| **เสริมด้วย schema** | `fingerprint` UNIQUE — กัน import ของซ้ำ |
+| **เป้า DB-DOC-01** | fingerprint = **HMAC-SHA256(serverKey, JSON canonical ของทั้ง login+password)** — ห้าม SHA-256 เปล่า / ห้าม trim password / ห้ามคั่น `\n`; เก็บ `login_id_enc` / `password_enc`; ห้ามคืนค่าทั้งสองช่องใน API สินค้า / staff / admin overview |
+| **ช่องว่าง** | ย้าย `secret`→สองช่องต้อง **rebuild** ผ่าน `executeSqliteMigration` (secret เป็น NOT NULL); นับแถวก่อน 005; ร้าน live เป็น S1 ว่างแล้ว |
+| **Idempotency** | pay ซ้ำเมื่อสถานะ DELIVERED คืน credential เดิมของเจ้าของออเดอร์ ไม่ allocate เพิ่ม (เทส commerce) |
 
 ### 1.2 Stock ติดลบ / ตัดซ้ำ
 
@@ -54,7 +55,9 @@
 | แชท | เจ้าของ thread หรือ staff; ห้ามอ่าน thread คนอื่น |
 | แจ้งเตือน | filter `user_id` |
 | อันดับผู้ซื้อ | aggregate + ปิดบังชื่อ; ไม่เปิดรหัสสินค้า |
-| สินค้า API | ไม่มี secret / DEMO-KEY |
+| สินค้า API | ไม่มี `secret` / `login_id` / `password` / `*_enc` / DEMO plaintext |
+| Staff / Admin list | ไม่เห็น credential คู่; เห็นได้เฉพาะเมตาออเดอร์/สต็อกนับ |
+| Owner หลังส่งของ | decrypt แล้วส่งเฉพาะเจ้าของออเดอร์ |
 
 Role **ไม่รับจาก body ฝั่ง client** (`withoutClientPrivileges` / `auth-policy.mjs`)
 

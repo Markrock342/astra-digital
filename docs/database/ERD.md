@@ -53,10 +53,13 @@ runtime_flags
 
 ### 3.3 Digital Keys / Stock Inventory
 
-| Entity | ตารางปัจจุบัน | หมายเหตุ |
-|--------|----------------|----------|
-| Digital Key unit | `inventory` | fingerprint UNIQUE; secret encrypted; ว่างเมื่อ `order_id IS NULL` |
-| Allocation | คอลัมน์ `inventory.order_id` | แทร็ก D1 ใช้ตาราง `allocations` แยก — ยังไม่บังคับบน DO |
+| Entity | ตารางปัจจุบัน | เป้าหลัง DB-DOC-01 |
+|--------|----------------|---------------------|
+| Digital credential unit | `inventory` มี `secret` ช่องเดียว | `login_id_enc` + `password_enc` (เข้ารหัสทั้งคู่); `fingerprint = HMAC-SHA256(serverKey, JSON{v,login,password})` UNIQUE; `legacy_single_secret` |
+| Allocation | คอลัมน์ `inventory.order_id` | คง + `reservation_id` XOR (rebuild ครั้งเดียวกับ credential) |
+| Legacy `secret` | ciphertext สตริงเดียว NOT NULL | **rebuild** ตารางผ่าน `executeSqliteMigration` (ห้าม ALTER ADD NOT NULL); แผน §4.0.3 |
+
+รายละเอียดสูตร fingerprint / ย้ายข้อมูล / พื้นที่ห้ามรั่ว: [SCHEMA_PROPOSAL.md](SCHEMA_PROPOSAL.md) §4.0
 
 ### 3.4 Orders / Order Items
 
