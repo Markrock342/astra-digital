@@ -162,8 +162,13 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, { orders: service.orders(user) });
         if (/^\/api\/orders\/[^/]+$/.test(path))
           return send(200, service.orderDetail(user, path.split("/")[3]));
-        if (path === "/api/staff/orders")
-          return send(200, { orders: service.staffOrders(user) });
+        if (path === "/api/staff/orders") {
+          const page = service.staffOrders(user, {
+            limit: url.searchParams.get("limit"),
+            cursor: url.searchParams.get("cursor"),
+          });
+          return send(200, page);
+        }
         if (path === "/api/ledger")
           return send(200, { entries: service.ledger(user) });
         if (path === "/api/payment-channel")
