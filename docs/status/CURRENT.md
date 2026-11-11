@@ -2,6 +2,11 @@
 
 อัปเดตล่าสุด: 2026-11-11
 
+## Deploy Worker 11 พ.ย. (ล่าสุด)
+- Worker `15392db2` จาก main (`009ef0a` + worker fix) + Pages `40ae3b40` — **migration 005 รันบนร้านจริงแล้ว** · `features` ทั้งคู่ `true` (ปุ่มส่งของพรีออเดอร์ + นำเข้าไอดี/รหัสผ่านเปิดใช้)
+- แอดมินล็อกอินด้วย `admin` (หรือ `admin@astra.local`) · รหัสตั้งชั่วคราวตามที่มาร์คสั่ง **ต้องเปลี่ยนก่อนเปิดขายจริง** (`npx wrangler secret put ASTRA_ADMIN_PASSWORD`, อย่างน้อย 8 ตัว)
+- ตรวจหลังขึ้น: health/หน้าร้าน/หลังบ้าน 200, ไม่ล็อกอินเรียก ranking/admin 401, ล็อกอินแอดมินผ่านแล้ว logout
+
 ## ISSUE-18 DB-005 APIs — PR #20 merge แล้ว (ยังไม่ deploy)
 - น็อตเปิด PR: import `items[{loginId,password}]`, `POST /api/admin/reservations/:id/deliver`, owner อ่าน credentials หลัง DELIVERED, คิวซ่อน DELIVERED, `features` ทั้งคู่ `true`, ขยาย `inventory_available` ให้มี `reservation_id`, MU3 เข้ม
 - **ห้าม deploy** — มาร์ครีวิว/merge แล้วค่อยขึ้นพร้อมกันกับ schema 005
