@@ -16,6 +16,7 @@ import {
   assertStaff,
   isStaff,
 } from "./auth-policy.mjs";
+import { credentialFingerprint } from "./migrate-005.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
@@ -82,6 +83,38 @@ export function createCommerceCore({
     decipher.setAuthTag(Buffer.from(tag, "hex"));
     return decipher.update(data, "hex", "utf8") + decipher.final("utf8");
   };
+  const inventoryFingerprint = (loginId, password) =>
+    credentialFingerprint(key, loginId, password);
+  const insertInventoryCredential = (
+    variantId,
+    loginId,
+    password,
+    { legacy = 0 } = {},
+  ) => {
+    run(
+      `INSERT INTO inventory(
+        id, variant_id, fingerprint, login_id_enc, password_enc, legacy_single_secret
+      ) VALUES(?,?,?,?,?,?)`,
+      randomUUID(),
+      variantId,
+      inventoryFingerprint(loginId, password),
+      encrypt(loginId),
+      encrypt(password),
+      legacy ? 1 : 0,
+    );
+  };
+  const inventoryAvailableSql =
+    "order_id IS NULL AND reservation_id IS NULL";
+  const inventoryAvailableAliased =
+    "i.order_id IS NULL AND i.reservation_id IS NULL";
+  const readDeliveredCredentials = (orderId) =>
+    all(
+      "SELECT login_id_enc, password_enc FROM inventory WHERE order_id=?",
+      orderId,
+    ).map((row) => ({
+      loginId: decrypt(row.login_id_enc),
+      password: decrypt(row.password_enc),
+    }));
   const publicUser = (user) =>
     user
       ? {
@@ -216,13 +249,7 @@ export function createCommerceCore({
       for (const v of variants)
         for (let i = 0; i < 4; i++) {
           const code = "DEMO-KEY-NOT-VALID-" + String(n++).padStart(4, "0");
-          run(
-            "INSERT INTO inventory(id,variant_id,fingerprint,secret) VALUES(?,?,?,?)",
-            randomUUID(),
-            v.id,
-            hash(code),
-            encrypt(code),
-          );
+          insertInventoryCredential(v.id, code, "", { legacy: 1 });
         }
       // Real persisted demo activity, never fabricated live events.
       for (const [i, name] of ["jd-demo", "first-demo"].entries()) {
@@ -253,7 +280,7 @@ export function createCommerceCore({
           hash(randomBytes(32)),
         );
         const stock = one(
-          "SELECT id FROM inventory WHERE variant_id=? AND order_id IS NULL LIMIT 1",
+          `SELECT id FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql} LIMIT 1`,
           "stream-plus-30",
         );
         run(
@@ -307,7 +334,7 @@ export function createCommerceCore({
         ["stream-plus-90", 17],
       ]) {
         const present = one(
-          "SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND order_id IS NULL",
+          `SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql}`,
           variantId,
         ).n;
         for (let i = present; i < target; i++) {
@@ -316,13 +343,7 @@ export function createCommerceCore({
             variantId.toUpperCase() +
             "-" +
             String(i).padStart(4, "0");
-          run(
-            "INSERT INTO inventory(id,variant_id,fingerprint,secret) VALUES(?,?,?,?)",
-            randomUUID(),
-            variantId,
-            hash(code),
-            encrypt(code),
-          );
+          insertInventoryCredential(variantId, code, "", { legacy: 1 });
         }
       }
       run(
@@ -577,7 +598,7 @@ export function createCommerceCore({
     return {
       ...p,
       variants: all(
-        "SELECT v.*, CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND i.order_id IS NULL) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=? ORDER BY CASE WHEN v.id='stream-plus-full' THEN 0 WHEN v.id LIKE '%-30' THEN 1 ELSE 2 END,price",
+        `SELECT v.*, CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=? ORDER BY CASE WHEN v.id='stream-plus-full' THEN 0 WHEN v.id LIKE '%-30' THEN 1 ELSE 2 END,price`,
         p.id,
       ).map((v) => ({
         ...v,
@@ -677,7 +698,7 @@ export function createCommerceCore({
       shop: settings(),
       customers: one("SELECT COUNT(*) AS n FROM users WHERE role='CUSTOMER'").n,
       products: one(
-        "SELECT COUNT(*) AS n FROM inventory i JOIN variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE p.active=1 AND p.hidden_seed=0 AND p.preorder=0 AND i.order_id IS NULL",
+        `SELECT COUNT(*) AS n FROM inventory i JOIN variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE p.active=1 AND p.hidden_seed=0 AND p.preorder=0 AND ${inventoryAvailableAliased}`,
       ).n,
       orders: one("SELECT COUNT(*) AS n FROM orders WHERE status='DELIVERED'")
         .n,
@@ -744,7 +765,7 @@ export function createCommerceCore({
 
     if (
       one(
-        "SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND order_id IS NULL",
+        `SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql}`,
         variantId,
       ).n < quantity
     )
@@ -799,19 +820,20 @@ export function createCommerceCore({
         preorder: true,
         reviewed: true,
         codes: [],
+        credentials: [],
         queueNumber: reservation.queue_number ?? null,
       };
     }
     const { payment_hash, request_key, ...safe } = order;
+    const credentials =
+      ownerView && order.status === "DELIVERED"
+        ? readDeliveredCredentials(orderId)
+        : [];
     return {
       ...safe,
       reviewed: !!one("SELECT id FROM reviews WHERE order_id=?", orderId),
-      codes:
-        ownerView && order.status === "DELIVERED"
-          ? all("SELECT secret FROM inventory WHERE order_id=?", orderId).map(
-              (c) => decrypt(c.secret),
-            )
-          : [],
+      codes: credentials.map((c) => c.loginId),
+      credentials,
     };
   }
   function staffOrders(user, { limit = 50, cursor } = {}) {
@@ -1003,7 +1025,7 @@ export function createCommerceCore({
         return orderDetail(user, id);
       }
       const available = all(
-        "SELECT id FROM inventory WHERE variant_id=? AND order_id IS NULL ORDER BY " +
+        `SELECT id FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql} ORDER BY ` +
           (settings().stockOrder === "newest"
             ? "rowid DESC"
             : settings().stockOrder === "random"
@@ -1031,7 +1053,7 @@ export function createCommerceCore({
       );
       for (const item of available)
         run(
-          "UPDATE inventory SET order_id=?,sold_at=CURRENT_TIMESTAMP WHERE id=? AND order_id IS NULL",
+          `UPDATE inventory SET order_id=?,sold_at=CURRENT_TIMESTAMP WHERE id=? AND ${inventoryAvailableSql}`,
           id,
           item.id,
         );
@@ -1122,12 +1144,12 @@ export function createCommerceCore({
         "SELECT COALESCE(SUM(quantity),0) AS n FROM orders WHERE status='DELIVERED'",
       ).n,
       stock: one(
-        "SELECT COUNT(*) AS n FROM inventory i JOIN variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE i.order_id IS NULL AND p.hidden_seed=0 AND p.preorder=0",
+        `SELECT COUNT(*) AS n FROM inventory i JOIN variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE ${inventoryAvailableAliased} AND p.hidden_seed=0 AND p.preorder=0`,
       ).n,
       products: all("SELECT * FROM products WHERE hidden_seed=0").map((p) => ({
         ...p,
         variants: all(
-          "SELECT v.*,CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND order_id IS NULL) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=?",
+          `SELECT v.*,CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=?`,
           p.id,
         ).map((v) => ({
           ...v,
@@ -1165,15 +1187,10 @@ export function createCommerceCore({
     if (new Set(codes).size !== codes.length) fail(409, "มีโค้ดซ้ำในรายการ");
     return tx(() => {
       for (const code of codes) {
-        if (one("SELECT id FROM inventory WHERE fingerprint=?", hash(code)))
+        const fingerprint = inventoryFingerprint(code, "");
+        if (one("SELECT id FROM inventory WHERE fingerprint=?", fingerprint))
           fail(409, "โค้ดนี้มีอยู่ในคลังแล้ว");
-        run(
-          "INSERT INTO inventory(id,variant_id,fingerprint,secret) VALUES(?,?,?,?)",
-          randomUUID(),
-          variantId,
-          hash(code),
-          encrypt(code),
-        );
+        insertInventoryCredential(variantId, code, "", { legacy: 1 });
       }
       audit(user, "IMPORT_CODES", variantId);
       return { imported: codes.length };

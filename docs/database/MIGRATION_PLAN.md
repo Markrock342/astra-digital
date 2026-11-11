@@ -50,9 +50,9 @@ key = HMAC-SHA256(INVENTORY_KEY, ctx.id.toString())
 
 ## 3. Schema ที่จะเพิ่ม/ปรับ — ไฟล์ `005_*.sql` เดียว
 
-**ยังไม่เริ่มเขียน SQL** จนกว่า PR **#6 + #7 + #9** แก้และ **merge** แล้ว (ตามมาร์ค)
+**สถานะ implement:** เปิด PR `feat/mig-005-credential-preorder` — รอ Mark Review · **ยังไม่ deploy**
 
-เมื่ออนุญาตแล้ว ใช้ **ไฟล์เดียว** ประกอบด้วย:
+ใช้ **ไฟล์เดียว** `005_credential_preorder_indexes.sql` + orchestrator `server/migrate-005.mjs` ประกอบด้วย:
 
 1. **Rebuild `inventory`** ผ่าน `executeSqliteMigration`  
    - credential คู่: `login_id_enc`, `password_enc`, `legacy_single_secret`  

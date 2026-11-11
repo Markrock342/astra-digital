@@ -3,6 +3,10 @@ import { createHmac, createHash } from "node:crypto";
 import { createCommerceCore } from "../server/domain.mjs";
 import { executeSqliteMigration } from "../server/sqlite-migrations.mjs";
 import {
+  applyMigration005,
+  MIGRATION_005_NAME,
+} from "../server/migrate-005.mjs";
+import {
   createAPIHandler,
   securityHeaders,
   authenticationPaths,
@@ -11,6 +15,7 @@ import initial from "../server/migrations/001_initial.sql";
 import reviews from "../server/migrations/002_reviews.sql";
 import referenceLayout from "../server/migrations/003_reference_layout.sql";
 import commerceOps from "../server/migrations/004_commerce_ops.sql";
+import credentialPreorder from "../server/migrations/005_credential_preorder_indexes.sql";
 export class Commerce extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -24,6 +29,10 @@ export class Commerce extends DurableObject {
         run: (...a) => sql.exec(s, ...a),
       }),
     };
+    if (!env.INVENTORY_KEY) throw Error("Inventory key is missing");
+    const key = createHmac("sha256", env.INVENTORY_KEY)
+      .update(ctx.id.toString())
+      .digest();
     transaction(() => {
       db.exec(
         "CREATE TABLE IF NOT EXISTS schema_migrations(name TEXT PRIMARY KEY,applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
@@ -33,24 +42,27 @@ export class Commerce extends DurableObject {
         ["002_reviews.sql", reviews],
         ["003_reference_layout.sql", referenceLayout],
         ["004_commerce_ops.sql", commerceOps],
+        [MIGRATION_005_NAME, credentialPreorder],
       ]) {
         if (
           !db
             .prepare("SELECT name FROM schema_migrations WHERE name=?")
             .get(name)
         ) {
-          executeSqliteMigration(db, content);
-          db.prepare("INSERT INTO schema_migrations(name) VALUES(?)").run(name);
+          if (name === MIGRATION_005_NAME) {
+            applyMigration005(db, key, content);
+          } else {
+            executeSqliteMigration(db, content);
+            db.prepare("INSERT INTO schema_migrations(name) VALUES(?)").run(
+              name,
+            );
+          }
         }
       }
       db.exec(
         "CREATE TABLE IF NOT EXISTS rate_limits(key TEXT PRIMARY KEY,count INTEGER NOT NULL,expires INTEGER NOT NULL)",
       );
     });
-    if (!env.INVENTORY_KEY) throw Error("Inventory key is missing");
-    const key = createHmac("sha256", env.INVENTORY_KEY)
-      .update(ctx.id.toString())
-      .digest();
     this.db = db;
     const adminPassword =
       typeof env.ASTRA_ADMIN_PASSWORD === "string"

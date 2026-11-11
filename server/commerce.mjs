@@ -11,12 +11,17 @@ import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { createCommerceCore } from "./domain.mjs";
 import { executeSqliteMigration } from "./sqlite-migrations.mjs";
+import {
+  applyMigration005,
+  MIGRATION_005_NAME,
+} from "./migrate-005.mjs";
 export { ApiError } from "./domain.mjs";
 
 export function createCommerce(options = {}) {
   const path = options.path ?? ":memory:";
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
+  const key = options.key ?? randomBytes(32);
   db.exec(
     "PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;",
   );
@@ -29,14 +34,18 @@ export function createCommerce(options = {}) {
     if (
       !db.prepare("SELECT name FROM schema_migrations WHERE name=?").get(file)
     ) {
-      const sql = readFileSync(
-        new URL("./migrations/" + file, import.meta.url),
-        "utf8",
-      );
       db.exec("BEGIN IMMEDIATE");
       try {
-        executeSqliteMigration(db, sql);
-        db.prepare("INSERT INTO schema_migrations(name) VALUES(?)").run(file);
+        if (file === MIGRATION_005_NAME) {
+          applyMigration005(db, key);
+        } else {
+          const sql = readFileSync(
+            new URL("./migrations/" + file, import.meta.url),
+            "utf8",
+          );
+          executeSqliteMigration(db, sql);
+          db.prepare("INSERT INTO schema_migrations(name) VALUES(?)").run(file);
+        }
         db.exec("COMMIT");
       } catch (e) {
         db.exec("ROLLBACK");
@@ -44,7 +53,7 @@ export function createCommerce(options = {}) {
       }
     }
   }
-  return createCommerceCore({ ...options, db });
+  return createCommerceCore({ ...options, db, key });
 }
 export function openLocalCommerce({
   seed = true,
