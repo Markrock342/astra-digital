@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createCommerce, ApiError } from "../server/commerce.mjs";
 import { createApp } from "../server/http.mjs";
+import { createAPIHandler } from "../server/api-handler.mjs";
 import { ROLES, withoutClientPrivileges } from "../server/auth-policy.mjs";
 function fixture(t) {
   const s = createCommerce();
@@ -666,4 +667,28 @@ test("expired session and anonymous callers cannot use protected commerce APIs",
     (e) => e.status === 401,
   );
   void user;
+});
+
+test("POST origin check allows local dev ports but still blocks other sites", async (t) => {
+  const s = createCommerce();
+  t.after(() => s.db.close());
+  const handle = createAPIHandler(s);
+  const post = (url, origin) =>
+    handle(
+      new Request(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Astra-Request": "1",
+          Origin: origin,
+        },
+        body: "{}",
+      }),
+    ).then((r) => r.status);
+  // Vite on :4330 proxies to the API on :4331 with Host rewritten.
+  assert.equal(await post("http://127.0.0.1:4331/api/logout", "http://127.0.0.1:4330"), 200);
+  assert.equal(await post("http://127.0.0.1:4331/api/logout", "http://localhost:4330"), 200);
+  assert.equal(await post("http://127.0.0.1:4331/api/logout", "https://other.invalid"), 403);
+  assert.equal(await post("https://shop.example/api/logout", "http://localhost:4330"), 403);
+  assert.equal(await post("https://shop.example/api/logout", "not a url"), 403);
 });
