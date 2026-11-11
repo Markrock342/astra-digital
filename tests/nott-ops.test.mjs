@@ -453,3 +453,40 @@ test("API-FIX-01: inactive sandbox blocks pay; openChat rate+throttle; ranking d
   }
   assert.equal(limited?.status, 429);
 });
+
+test("API-FIX-05: staffOrders pages in SQL without repeating rows", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const ids = [];
+  for (let i = 0; i < 5; i++) {
+    const order = s.createOrder(user, {
+      variantId: "stream-plus-30",
+      quantity: 1,
+      requestKey: "sql-page-" + i + "-" + Date.now(),
+    });
+    s.pay(user, order.id, {
+      paymentToken: order.paymentToken,
+      outcome: "success",
+    });
+    ids.push(order.id);
+  }
+  const page1 = s.staffOrders(staff, { limit: 2 });
+  assert.equal(page1.orders.length, 2);
+  assert.ok(page1.nextCursor);
+  const page2 = s.staffOrders(staff, {
+    limit: 2,
+    cursor: page1.nextCursor,
+  });
+  assert.equal(page2.orders.length, 2);
+  const seen = new Set(page1.orders.map((o) => o.id));
+  for (const row of page2.orders) assert.equal(seen.has(row.id), false);
+  const page3 = s.staffOrders(staff, {
+    limit: 2,
+    cursor: page2.nextCursor,
+  });
+  assert.ok(page3.orders.length >= 1);
+  for (const row of page3.orders) {
+    assert.equal(seen.has(row.id), false);
+    assert.equal(page2.orders.some((o) => o.id === row.id), false);
+  }
+});

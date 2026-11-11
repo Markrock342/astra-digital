@@ -836,31 +836,33 @@ export function createCommerceCore({
         fail(400, "cursor ไม่ถูกต้อง");
       }
     }
+    const cursorSql = cursorCreated
+      ? " WHERE created_at < ? OR (created_at = ? AND id < ?)"
+      : "";
+    const params = cursorCreated
+      ? [cursorCreated, cursorCreated, cursorId, lim + 1]
+      : [lim + 1];
     const rows = all(
-      `SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product,0 AS preorder,NULL AS queue_number
-       FROM orders o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id
-       UNION ALL
-       SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product,1 AS preorder,o.queue_number
-       FROM reservations o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id
-       ORDER BY 5 DESC, 1 DESC`,
-    )
-      .map(({ payment_hash, request_key, ...row }) => ({
-        ...row,
-        codes: undefined,
-      }))
-      .filter((row) => {
-        if (!cursorCreated) return true;
-        if (row.created_at < cursorCreated) return true;
-        if (row.created_at > cursorCreated) return false;
-        return row.id < cursorId;
-      })
-      .slice(0, lim + 1);
+      `SELECT id,status,total,quantity,created_at,customer_id,customer,product_id,product,preorder,queue_number
+       FROM (
+         SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product,0 AS preorder,NULL AS queue_number
+         FROM orders o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id
+         UNION ALL
+         SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product,1 AS preorder,o.queue_number
+         FROM reservations o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id
+       )
+       ${cursorSql}
+       ORDER BY created_at DESC, id DESC
+       LIMIT ?`,
+      ...params,
+    ).map((row) => ({ ...row, codes: undefined }));
     const page = rows.slice(0, lim);
     const next =
       rows.length > lim
-        ? Buffer.from(page[page.length - 1].created_at + "\n" + page[page.length - 1].id, "utf8").toString(
-            "base64url",
-          )
+        ? Buffer.from(
+            page[page.length - 1].created_at + "\n" + page[page.length - 1].id,
+            "utf8",
+          ).toString("base64url")
         : null;
     return { orders: page, nextCursor: next };
   }
