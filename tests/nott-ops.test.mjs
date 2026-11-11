@@ -155,6 +155,7 @@ test("preorder pay assigns queue number and notifies buyer", (t) => {
     outcome: "success",
   });
   assert.equal(paid.status, "PREORDER");
+  assert.ok(paid.total > 0, "preorder has a price");
   assert.ok(paid.queueNumber >= 1);
   assert.deepEqual(paid.codes, []);
   assert.ok(
@@ -238,6 +239,33 @@ test("buyer ranking is admin-only, filters by Bangkok period and validates limit
     () => s.buyerRanking(merchant, { period: "year" }),
     (e) => e.status === 400,
   );
+});
+
+test("buyer ranking counts paid preorders but not unpaid ones", (t) => {
+  const { s, user, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const variant = s.db
+    .prepare(
+      "SELECT v.id FROM variants v JOIN products p ON p.id=v.product_id WHERE p.preorder=1 AND p.active=1 AND v.id<>'cinema-max-30' LIMIT 1",
+    )
+    .get();
+  assert.ok(variant, "seed has a preorder variant");
+  const unpaid = s.createOrder(user, {
+    variantId: variant.id,
+    quantity: 1,
+    requestKey: "rank-preorder-unpaid",
+  });
+  const spent = () =>
+    s.buyerRanking(merchant, {}).find((b) => b.email === "buyer@example.invalid")
+      ?.spentSatang ?? 0;
+  assert.equal(spent(), 0, "unpaid preorder is not counted");
+  const paid = s.pay(user, unpaid.id, {
+    paymentToken: unpaid.paymentToken,
+    outcome: "success",
+  });
+  assert.equal(paid.status, "PREORDER");
+  assert.ok(paid.total > 0, "preorder has a price");
+  assert.equal(spent(), paid.total, "paid preorder is counted");
 });
 
 test("HTTP routes expose product detail, channel, queue, chat, rankings", async (t) => {

@@ -1390,13 +1390,13 @@ export function createCommerceCore({
     const period = query.period ?? "all";
     if (!RANKING_PERIODS.includes(period)) fail(400, "ช่วงเวลาไม่ถูกต้อง");
     const since = rankingSince(period);
-    // Paid spend: delivered orders plus paid preorders (status PREORDER after pay).
+    // Paid spend: delivered orders plus paid preorders (PREORDER after pay, DELIVERED once fulfilled).
     return all(
       `SELECT u.name,u.email,COUNT(*) AS orders,SUM(x.total) AS spent_satang
        FROM (
          SELECT user_id,total,created_at FROM orders WHERE status='DELIVERED'
          UNION ALL
-         SELECT user_id,total,created_at FROM reservations WHERE status='PREORDER'
+         SELECT user_id,total,created_at FROM reservations WHERE status IN ('PREORDER','DELIVERED')
        ) x
        JOIN users u ON u.id=x.user_id
        WHERE u.role='CUSTOMER' AND (? IS NULL OR x.created_at >= ?)
