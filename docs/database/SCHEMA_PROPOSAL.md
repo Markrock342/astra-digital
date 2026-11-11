@@ -97,13 +97,14 @@ cart_items(
 
 ### 4.6 รายงานอันดับผู้ซื้อ (Task DB-DOC-03)
 
-ของปัจจุบัน: `GET /api/rankings/buyers` สาธารณะ · นับแค่ `orders.status='DELIVERED'` · ส่ง `id` ผู้ใช้ · ไม่มีตัวกรองช่วงเวลา
+จัดให้ตรงโค้ดบน main (`22657a2` + นับพรีออเดอร์) — เอกสารนี้เป็นสัญญา/เทสต์แผน ไม่ใช่ mask อีกต่อไป
 
-#### 4.6.1 สิทธิ์และสัญญา API (เป้า)
+#### 4.6.1 สิทธิ์และสัญญา API
 
-- **เฉพาะ ADMIN** (401 ถ้าไม่ล็อกอิน · 403 ถ้าไม่ใช่แอดมิน)  
-- Query: `period=day|week|month|all` (default `all`) · `limit` จำนวนเต็ม 1–50  
-- Response ต่อแถว: `{ rank, nameMasked, orders, spentSatang }` — **ห้ามส่ง `user id`**  
+- **เฉพาะ ADMIN** (401 ถ้าไม่ล็อกอิน · 403 ถ้า CUSTOMER/STAFF)  
+- Query: `period=day|week|month|all` (default `all`) · `limit` จำนวนเต็ม 1–50 · **default `limit=10`** เมื่อไม่ส่ง  
+- `limit` / `period` ผิดรูป → **400**  
+- Response ต่อแถว: `{ rank, name, email, orders, spentSatang }` — **ชื่อและอีเมลเต็ม** (ไม่ mask) · **ห้ามส่ง `user id`**  
 - ไม่ส่งรหัสสินค้า / credential
 
 #### 4.6.2 เวลาและเขตเวลา
@@ -119,10 +120,12 @@ cart_items(
 
 | แหล่งยอด | คอลัมน์ | เหตุผล |
 |----------|---------|--------|
-| ออเดอร์พร้อมส่งที่สำเร็จ | `orders.created_at` เมื่อ `status='DELIVERED'` | ของเดิมมีอยู่แล้ว; index ตามด้านล่าง |
-| พรีออเดอร์ที่**จ่ายแล้ว** | `reservations.created_at` เมื่อ `status IN ('PREORDER','DELIVERED')` | นับยอดที่จ่ายแล้ว แม้ Admin ยังไม่ส่งของ; ถ้า Mark อยากนับเฉพาะหลังส่งของ ให้ล็อกเป็น `DELIVERED` อย่างเดียวทีหลัง |
+| ออเดอร์สำเร็จ | `orders.created_at` เมื่อ `status='DELIVERED'` | ของเดิม; index ตามด้านล่าง |
+| พรีออเดอร์ที่จ่ายแล้ว / ส่งแล้ว | `reservations.created_at` เมื่อ `status IN ('PREORDER','DELIVERED')` | หลัง DOC-02 มี `DELIVERED` บน reservations |
 
-หมายเหตุ: ค่า `created_at` ใน SQLite ปัจจุบันเป็น TEXT UTC แบบ `CURRENT_TIMESTAMP` — การตัดช่วง Bangkok ทำที่ชั้นแอปด้วยการคำนวณขอบเขตเป็น UTC แล้วเปรียบเทียบสตริง/unix ตามที่ implement เลือก (ระบุในเทสต์ด้วย fixture เวลาชัด)
+**หมายเหตุสำคัญ:** กรองด้วย **`created_at` ของแถว** — **ไม่ใช่เวลาจ่าย / finalized_at** (ยังไม่มีคอลัมน์เวลาจ่ายแยก)
+
+ค่า `created_at` ใน SQLite เป็น TEXT UTC แบบ `CURRENT_TIMESTAMP` — ขอบเขต Bangkok คำนวณที่ชั้นแอปแล้วเปรียบเทียบ
 
 #### 4.6.3 การรวมยอด
 
@@ -133,9 +136,9 @@ orders_count = COUNT(orders…) + COUNT(reservations…)
 จัดอันดับตาม spent DESC แล้ว orders_count DESC
 ```
 
-ชื่อใน response = mask แบบเดิม (`ab***c`) · ไม่มี `id`
+Response = `name` + `email` เต็ม · ไม่มี `id`
 
-#### 4.6.4 Index ที่ต้องเพิ่ม (migration ถัดไป)
+#### 4.6.4 Index ที่ต้องเพิ่ม (ใน 005 หลัง #6/#7/#9 merge)
 
 ```sql
 CREATE INDEX IF NOT EXISTS orders_status_created

@@ -53,7 +53,7 @@
 | คิว | `queueBoard` = STAFF/ADMIN; `myQueue` = ของตัวเอง |
 | แชท | เจ้าของ thread หรือ staff; ห้ามอ่าน thread คนอื่น |
 | แจ้งเตือน | filter `user_id` |
-| อันดับผู้ซื้อ | **เป้า DB-DOC-03:** เฉพาะ ADMIN; กรอง day/week/month/all เขต Asia/Bangkok; นับ orders DELIVERED + reservations ที่จ่ายแล้ว; **ไม่ส่ง user id**; mask ชื่อ; ไม่เปิดรหัสสินค้า |
+| อันดับผู้ซื้อ | เฉพาะ ADMIN; กรอง day/week/month/all เขต Asia/Bangkok; นับ orders DELIVERED + reservations `IN ('PREORDER','DELIVERED')`; กรองด้วย `created_at` (ไม่ใช่เวลาจ่าย); **ไม่ส่ง user id**; **ส่ง name+email เต็ม**; ไม่เปิดรหัสสินค้า; limit/period ผิด → 400; default limit=10 |
 | สินค้า API | ไม่มี secret / DEMO-KEY |
 
 Role **ไม่รับจาก body ฝั่ง client** (`withoutClientPrivileges` / `auth-policy.mjs`)

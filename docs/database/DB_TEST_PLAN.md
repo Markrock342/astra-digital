@@ -58,9 +58,10 @@
 |----|-----------|---------|
 | R1 | ไม่มี session เรียก rankings | **401** |
 | R2 | CUSTOMER / STAFF เรียก rankings | **403** |
-| R3 | ADMIN เรียก `period=day\|week\|month\|all` | 200; แต่ละ period กรองถูกตาม Asia/Bangkok |
-| R4 | มีพรีออเดอร์ที่จ่ายแล้ว (PREORDER) ในช่วง | ถูกนับใน spent/orders |
-| R5 | ตัว response | ไม่มี `id` ผู้ใช้; มีชื่อ mask; ไม่มีรหัสสินค้า/credential |
+| R3 | ADMIN เรียก `period=day\|week\|month\|all` | 200; แต่ละ period กรองถูกตาม Asia/Bangkok ด้วย `created_at` |
+| R3b | `limit` ทศนิยม / นอกช่วง หรือ `period` ผิด | **400**; ไม่ส่ง limit → default 10 |
+| R4 | มีพรีออเดอร์ `PREORDER` หรือ `DELIVERED` ในช่วง | ถูกนับใน spent/orders |
+| R5 | ตัว response | ไม่มี `id` ผู้ใช้; มี **name + email เต็ม**; ไม่มีรหัสสินค้า/credential |
 
 ## 7. เกณฑ์ผ่านรอบ Review (เอกสาร)
 
