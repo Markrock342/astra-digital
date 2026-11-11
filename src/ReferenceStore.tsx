@@ -28,7 +28,7 @@ import {
   useStore,
 } from "./App";
 import { t } from "./i18n";
-import { shopName } from "./Theme";
+import { BrandLogo, shopName } from "./Theme";
 import { api, dateTime, money } from "./api";
 import type { Order, Product, Review } from "./types";
 export function ReferenceCatalog() {
@@ -163,6 +163,9 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
   return (
     <main className="reference-auth-main">
       <div className="reference-auth-heading">
+        <Link to="/" className="reference-auth-brand" aria-label={t("หน้าแรก")}>
+          <BrandLogo />
+        </Link>
         <h1>{register ? t("สมัครสมาชิก") : t("เข้าสู่ระบบ")}</h1>
         <p>{shopName(overview?.shop?.shopName)}</p>
       </div>

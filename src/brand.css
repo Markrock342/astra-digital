@@ -755,27 +755,16 @@ html.theme-fade *::after {
 .storefront-shell .footer-brand .brand-logo img {
   height: 38px;
 }
-.footer-wordmark {
-  text-align: center;
-  font-weight: 900;
-  font-size: clamp(54px, 15vw, 220px);
-  line-height: 0.82;
-  letter-spacing: -0.05em;
-  white-space: nowrap;
-  color: transparent;
-  -webkit-text-stroke: 1px var(--border);
-  user-select: none;
-  padding-top: 18px;
-  margin-bottom: -0.12em;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  background-size: 0% 100%;
-  background-repeat: no-repeat;
-  transition: background-size 1.4s var(--ease-out-expo);
+:root[data-theme="dark"] .storefront-shell select {
+  color-scheme: dark;
 }
-.site-footer:hover .footer-wordmark {
-  background-size: 100% 100%;
+:root[data-theme="light"] .storefront-shell select,
+:root:not([data-theme]) .storefront-shell select {
+  color-scheme: light;
+}
+.storefront-shell select option {
+  background: var(--surface);
+  color: var(--text);
 }
 .storefront-shell .contact-card {
   border-radius: var(--radius);
@@ -1377,6 +1366,308 @@ html.lang-swap .storefront-shell .main-nav {
 }
 @media (prefers-reduced-motion: reduce) {
   .storefront-shell .reference-variants button:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* ---------- Cart and checkout ---------- */
+.storefront-shell .reference-cart-page {
+  position: relative;
+  isolation: isolate;
+}
+.storefront-shell .reference-cart-page::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 340px;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at 20% 0%, #000 12%, transparent 72%);
+  -webkit-mask-image: radial-gradient(ellipse at 20% 0%, #000 12%, transparent 72%);
+}
+.storefront-shell .reference-cart-page > .page-heading {
+  animation: rise 0.7s var(--ease-out-expo) both;
+}
+.storefront-shell .reference-cart-page > .page-heading h1 {
+  font-size: clamp(36px, 5vw, 48px);
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+.storefront-shell .reference-cart-page .checkout-layout {
+  animation: rise 0.7s var(--ease-out-expo) both;
+}
+.storefront-shell .reference-cart-page .cart-panel,
+.storefront-shell .reference-cart-page .order-summary,
+.storefront-shell .reference-cart-page .empty-state {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.storefront-shell .reference-cart-page .empty-icon,
+.storefront-shell .reference-cart-page .small-note svg {
+  color: var(--accent-text);
+}
+.storefront-shell .reference-cart-page .empty-icon {
+  background: var(--raised);
+  border-color: var(--border);
+}
+.storefront-shell .reference-cart-page .cart-art,
+.storefront-shell .reference-cart-page .quantity-control,
+.storefront-shell .reference-cart-page .cart-product > .icon-button {
+  border-radius: var(--radius-sm);
+}
+.storefront-shell .reference-cart-page .quantity-control {
+  height: 44px;
+  background: var(--raised);
+}
+.storefront-shell .reference-cart-page .quantity-control button,
+.storefront-shell .reference-cart-page .cart-product > .icon-button {
+  width: 44px;
+  height: 44px;
+}
+.storefront-shell .reference-cart-page .cart-product > .icon-button {
+  border: 1px solid var(--border);
+  background: var(--raised);
+}
+.storefront-shell .reference-cart-page .cart-info > strong,
+.storefront-shell .reference-cart-page .summary-total {
+  color: var(--text);
+}
+.storefront-shell .reference-cart-page .cart-info {
+  min-width: 0;
+}
+.storefront-shell .reference-cart-page .cart-info > a,
+.storefront-shell .reference-cart-page .sandbox-note,
+.storefront-shell .reference-cart-page .balance-note {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .storefront-shell .reference-cart-page .checkout-layout {
+    grid-template-columns: 1fr;
+  }
+  .storefront-shell .reference-cart-page .cart-product {
+    flex-wrap: wrap;
+  }
+  .storefront-shell .reference-cart-page .button.full {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .storefront-shell .reference-cart-page .cart-product > .icon-button:hover {
+    transform: none;
+  }
+}
+
+/* ---------- Order, history, account, auth, info, 404 ---------- */
+.storefront-shell .reference-order-page,
+.storefront-shell .reference-history-page,
+.storefront-shell .reference-account-page,
+.storefront-shell .reference-auth-main,
+.storefront-shell .reference-info-page,
+.storefront-shell .reference-missing-page {
+  position: relative;
+  isolation: isolate;
+}
+.storefront-shell .reference-order-page::before,
+.storefront-shell .reference-history-page::before,
+.storefront-shell .reference-account-page::before,
+.storefront-shell .reference-auth-main::before,
+.storefront-shell .reference-info-page::before,
+.storefront-shell .reference-missing-page::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 340px;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at 20% 0%, #000 12%, transparent 72%);
+  -webkit-mask-image: radial-gradient(ellipse at 20% 0%, #000 12%, transparent 72%);
+}
+.storefront-shell .reference-order-page > .page-heading,
+.storefront-shell .reference-history-page > .page-heading,
+.storefront-shell .reference-account-page > .page-heading,
+.storefront-shell .reference-auth-heading,
+.storefront-shell .reference-info-page > .page-heading,
+.storefront-shell .reference-order-page .order-result-heading,
+.storefront-shell .reference-order-page .delivery-panel,
+.storefront-shell .reference-history-page .orders-list,
+.storefront-shell .reference-account-page .account-summary,
+.storefront-shell .reference-info-page .prose,
+.storefront-shell .reference-missing-page .empty-state {
+  animation: rise 0.7s var(--ease-out-expo) both;
+}
+.storefront-shell .reference-history-page .eyebrow {
+  display: inline;
+}
+.storefront-shell .reference-history-page > .page-heading h1,
+.storefront-shell .reference-account-page > .page-heading h1,
+.storefront-shell .reference-info-page > .page-heading h1,
+.storefront-shell .reference-order-page .order-result-heading h1 {
+  font-size: clamp(32px, 5vw, 44px);
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+.storefront-shell .reference-order-page .delivery-panel,
+.storefront-shell .reference-order-page .empty-state,
+.storefront-shell .reference-history-page .history-card,
+.storefront-shell .reference-history-page .empty-state,
+.storefront-shell .reference-account-page .account-summary,
+.storefront-shell .reference-account-page .account-shortcuts a,
+.storefront-shell .reference-account-page .profile-form,
+.storefront-shell .reference-account-page .empty-state,
+.storefront-shell .reference-auth-form,
+.storefront-shell .reference-info-page .prose,
+.storefront-shell .reference-missing-page .empty-state {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.storefront-shell .reference-order-page .empty-icon,
+.storefront-shell .reference-order-page .success-ring,
+.storefront-shell .reference-order-page .code-heading svg,
+.storefront-shell .reference-order-page .note-box svg,
+.storefront-shell .reference-history-page .empty-icon,
+.storefront-shell .reference-history-page .history-card-bottom svg,
+.storefront-shell .reference-account-page .empty-icon,
+.storefront-shell .reference-account-page .account-shortcuts svg,
+.storefront-shell .reference-info-page .prose h2 svg,
+.storefront-shell .reference-missing-page .empty-icon {
+  color: var(--accent-text);
+}
+.storefront-shell .reference-order-page .success-ring {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.storefront-shell .reference-order-page .back-link,
+.storefront-shell .reference-order-page .text-button {
+  min-height: 44px;
+}
+.storefront-shell .reference-order-page .code-heading {
+  flex-wrap: wrap;
+}
+.storefront-shell .reference-order-page .code-row {
+  background: var(--raised);
+  border-radius: var(--radius-sm);
+  min-height: 44px;
+}
+.storefront-shell .reference-order-page .code-row code {
+  flex: 1;
+  min-width: 0;
+}
+.storefront-shell .reference-order-page .code-row .icon-button {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.storefront-shell .reference-order-page .note-box,
+.storefront-shell .reference-history-page .history-art {
+  border-radius: var(--radius-sm);
+}
+.storefront-shell .status-pending_payment {
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+.storefront-shell .reference-history-page .history-card {
+  transition:
+    transform 0.3s var(--spring),
+    border-color 0.2s ease;
+}
+.storefront-shell .reference-history-page .history-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+}
+.storefront-shell .reference-history-page .category-chip {
+  min-height: 44px;
+  border-radius: var(--radius-btn);
+  background: var(--raised);
+}
+.storefront-shell .reference-history-page .category-chip.selected {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+.storefront-shell .reference-account-page .avatar.large {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.storefront-shell .reference-account-page .field input {
+  border-radius: var(--radius-sm);
+  background: var(--raised);
+  min-height: 44px;
+}
+.storefront-shell .reference-auth-main {
+  width: min(420px, calc(100% - 32px));
+  max-width: none;
+}
+.storefront-shell .reference-auth-heading h1 {
+  letter-spacing: -0.04em;
+}
+.storefront-shell .reference-auth-brand {
+  display: inline-flex;
+  margin-bottom: 16px;
+}
+.storefront-shell .reference-auth-brand .brand-logo img {
+  height: 36px;
+}
+.storefront-shell .reference-auth-form {
+  padding: 24px;
+}
+.storefront-shell .reference-auth-form .field input {
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: var(--raised);
+}
+.storefront-shell .reference-auth-form .password-field input {
+  padding-right: 48px;
+}
+.storefront-shell .reference-auth-form .password-field .icon-button {
+  width: 44px;
+  height: 44px;
+  top: 0;
+  right: 0;
+}
+.storefront-shell .reference-auth-switch a {
+  color: var(--accent-text);
+}
+@media (max-width: 700px) {
+  .storefront-shell .reference-order-page .delivery-product,
+  .storefront-shell .reference-history-page .history-card-body,
+  .storefront-shell .reference-account-page .account-summary {
+    flex-wrap: wrap;
+  }
+  .storefront-shell .reference-order-page .delivery-product .status {
+    margin-left: 0;
+  }
+  .storefront-shell .reference-history-page .category-bar {
+    overflow: visible;
+    flex-wrap: wrap;
+  }
+  .storefront-shell .reference-history-page .history-card-body > div {
+    min-width: 0;
+    flex: 1;
+  }
+  .storefront-shell .reference-account-page .account-shortcuts {
+    grid-template-columns: 1fr;
+  }
+  .storefront-shell .reference-auth-main {
+    width: auto;
+    padding-inline: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .storefront-shell .reference-history-page .history-card:hover,
+  .storefront-shell .reference-auth-brand:hover .brand-logo img {
     transform: none;
   }
 }

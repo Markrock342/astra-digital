@@ -436,9 +436,6 @@ function Footer() {
           </div>
         </div>
       </div>
-      <div className="footer-wordmark" aria-hidden="true">
-        ASIA EXTRA
-      </div>
     </footer>
   );
 }
@@ -1126,7 +1123,7 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
     }
   }
   return (
-    <main className="container page-main">
+    <main className="container page-main reference-cart-page">
       <div className="page-heading">
         <span className="eyebrow">{checkout ? "CHECKOUT" : "YOUR BAG"}</span>
         <h1>{checkout ? t("ตรวจสอบคำสั่งซื้อ") : t("ตะกร้าสินค้า")}</h1>
@@ -1271,7 +1268,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
     }
   }
   return (
-    <main className="container page-main narrow-main">
+    <main className="container page-main narrow-main reference-order-page">
       {!user ? (
         <RequireLogin />
       ) : !order ? (
@@ -1857,7 +1854,7 @@ function Account() {
     }
   }
   return (
-    <main className="container page-main narrow-main">
+    <main className="container page-main narrow-main reference-account-page">
       <div className="page-heading">
         <span className="eyebrow">MY ACCOUNT</span>
         <h1>{t("บัญชีของฉัน")}</h1>
@@ -1952,7 +1949,7 @@ function InfoPage({ kind }: { kind: string }) {
           ? t("ความเป็นส่วนตัว")
           : t("ข้อกำหนดร้าน");
   return (
-    <main className="container page-main narrow-main">
+    <main className="container page-main narrow-main reference-info-page">
       <div className="page-heading">
         <span className="eyebrow">{name}</span>
         <h1>{title}</h1>
@@ -2045,7 +2042,7 @@ function InfoPage({ kind }: { kind: string }) {
 }
 function NotFound() {
   return (
-    <main className="container page-main">
+    <main className="container page-main reference-missing-page">
       <Empty
         icon={<Search />}
         heading={t("ไม่พบหน้านี้")}
