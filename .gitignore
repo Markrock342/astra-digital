@@ -26,3 +26,11 @@ dist-pages/
 /docs/comparison/
 /docs/screenshots/
 /docs/previews/page@*.webm
+
+# Local-only requirements / call recordings (do not push to GitHub)
+/local/
+*.m4a
+*.mp3
+*.wav
+*.webm
+Req_FIFA*
