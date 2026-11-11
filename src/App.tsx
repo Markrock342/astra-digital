@@ -54,6 +54,7 @@ import {
   ScrollProgress,
   ThemePanel,
   shopName,
+  ThemeSwitch,
   useCardTilt,
 } from "./Theme";
 import { flushSync } from "react-dom";
@@ -90,7 +91,7 @@ type Store = {
   path: string;
   loading: boolean;
   lang: Lang;
-  changeLang: (lang: Lang) => void;
+  changeLang: (lang: Lang, origin?: { x: number; y: number }) => void;
 };
 const Context = createContext<Store>(null!);
 export const useStore = () => useContext(Context);
@@ -431,6 +432,7 @@ function Footer() {
           <div className="footer-legal">
             <Link to="/terms">{t("ข้อกำหนดร้าน")}</Link>
             <Link to="/privacy">{t("ความเป็นส่วนตัว")}</Link>
+            <ThemeSwitch />
           </div>
         </div>
       </div>
@@ -2124,36 +2126,46 @@ export default function App() {
   setMerchantScope(merchant);
   useRouteMotion(path);
   useCardTilt();
-  const changeLang = (value: Lang) => {
+  const changeLang = (value: Lang, origin?: { x: number; y: number }) => {
     if (value === lang) return;
+    const root = document.documentElement;
+    const x = origin?.x ?? innerWidth - 120;
+    const y = origin?.y ?? 32;
+    // Radius that reaches the farthest corner from the toggle.
+    const r = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    root.style.setProperty("--lx", x + "px");
+    root.style.setProperty("--ly", y + "px");
+    root.style.setProperty("--lr", Math.ceil(r) + "px");
+    let ring: HTMLDivElement | null = null;
     const swap = () => {
       setLang(value);
       flushSync(() => setLangState(value));
+      ring = document.createElement("div");
+      ring.className = "lang-ring";
+      ring.setAttribute("aria-hidden", "true");
+      (document.querySelector(".storefront-shell") ?? document.body).append(ring);
     };
-    const root = document.documentElement;
-    const calm =
-      root.dataset.motion === "calm" ||
-      matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (calm) return swap();
-    root.dataset.langDir = value === "en" ? "next" : "prev";
+    const cleanup = () => {
+      ring?.remove();
+      root.classList.remove("lang-swap");
+    };
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      swap();
+      return cleanup();
+    }
     const doc = document as Document & {
       startViewTransition?: (cb: () => void) => { finished: Promise<void> };
     };
     if (doc.startViewTransition) {
-      doc.startViewTransition(swap).finished.finally(() => {
-        delete root.dataset.langDir;
-      });
+      doc.startViewTransition(swap).finished.finally(cleanup);
       return;
     }
-    // Fallback: animate the new text in.
+    // Fallback without View Transitions: ring + text rising in.
     swap();
     root.classList.remove("lang-swap");
     void root.offsetWidth;
     root.classList.add("lang-swap");
-    setTimeout(() => {
-      root.classList.remove("lang-swap");
-      delete root.dataset.langDir;
-    }, 600);
+    setTimeout(cleanup, 900);
   };
   const [user, setUser] = useState<User | null>(null);
   const [products, setProducts] = useState<Product[]>([]);

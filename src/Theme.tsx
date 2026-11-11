@@ -1,7 +1,7 @@
 // ASIA EXTRA brand pieces: logo, theme preferences, language toggle,
 // scroll progress and the marquee strip. Preferences are per-browser only.
 import { useEffect, useRef, useState } from "react";
-import { Palette, X } from "lucide-react";
+import { Monitor, Moon, Palette, Sun, X } from "lucide-react";
 import { getLang, t, type Lang } from "./i18n";
 
 export const BRAND = "ASIA EXTRA";
@@ -18,19 +18,21 @@ export function BrandLogo({ className = "" }: { className?: string }) {
 }
 
 type Accent = "blue" | "yellow" | "mono" | "duo";
+type Mode = "system" | "light" | "dark";
 const ACCENT_KEY = "asiax-accent";
+const MODE_KEY = "asiax-mode";
 const ACCENT_VALUES: Accent[] = ["blue", "yellow", "duo", "mono"];
+const MODE_VALUES: Mode[] = ["system", "light", "dark"];
 
-// Light/dark always follows the device; corners are fixed to the soft style.
-// The only visitor choice is the accent colour.
-function readAccent(): Accent {
+// Light/dark follows the device unless the visitor picks one; corners stay soft.
+function read<T extends string>(key: string, allowed: T[], fallback: T): T {
   try {
-    const saved = localStorage.getItem(ACCENT_KEY);
-    if (ACCENT_VALUES.includes(saved as Accent)) return saved as Accent;
+    const saved = localStorage.getItem(key);
+    if (allowed.includes(saved as T)) return saved as T;
   } catch {
     /* storage blocked: default */
   }
-  return "blue";
+  return fallback;
 }
 
 const darkQuery =
@@ -38,54 +40,90 @@ const darkQuery =
     ? matchMedia("(prefers-color-scheme: dark)")
     : null;
 
-function apply(value: Accent) {
+let accent = read(ACCENT_KEY, ACCENT_VALUES, "blue");
+let mode = read(MODE_KEY, MODE_VALUES, "system");
+
+function apply() {
   const root = document.documentElement;
-  const dark = !!darkQuery?.matches;
+  const dark = mode === "dark" || (mode === "system" && !!darkQuery?.matches);
   root.dataset.theme = dark ? "dark" : "light";
-  root.dataset.accent = value;
+  root.dataset.accent = accent;
   root.dataset.shape = "soft";
   root.dataset.motion = "full";
   document
     .querySelector('meta[name="theme-color"]')
     ?.setAttribute("content", dark ? "#0a0a0a" : "#ffffff");
 }
-
-const listeners = new Set<(a: Accent) => void>();
-let accent = readAccent();
-if (typeof document !== "undefined") {
-  apply(accent);
-  darkQuery?.addEventListener("change", () => {
-    const root = document.documentElement;
-    root.classList.add("theme-fade");
-    apply(accent);
-    setTimeout(() => root.classList.remove("theme-fade"), 450);
-  });
-}
-
-function setAccent(value: Accent) {
-  accent = value;
-  try {
-    localStorage.setItem(ACCENT_KEY, value);
-  } catch {
-    /* ignore */
-  }
+function fade() {
   // Animate the colour change instead of flashing.
   const root = document.documentElement;
   root.classList.add("theme-fade");
-  apply(accent);
+  apply();
   setTimeout(() => root.classList.remove("theme-fade"), 450);
-  listeners.forEach((fn) => fn(accent));
 }
 
-function useAccent() {
-  const [value, setValue] = useState(accent);
+const listeners = new Set<() => void>();
+if (typeof document !== "undefined") {
+  apply();
+  darkQuery?.addEventListener("change", () => mode === "system" && fade());
+}
+
+function save(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* ignore */
+  }
+}
+function setAccent(value: Accent) {
+  accent = value;
+  save(ACCENT_KEY, value);
+  fade();
+  listeners.forEach((fn) => fn());
+}
+function setMode(value: Mode) {
+  mode = value;
+  save(MODE_KEY, value);
+  fade();
+  listeners.forEach((fn) => fn());
+}
+
+function useTheme() {
+  const [, force] = useState(0);
   useEffect(() => {
-    listeners.add(setValue);
+    const fn = () => force((n) => n + 1);
+    listeners.add(fn);
     return () => {
-      listeners.delete(setValue);
+      listeners.delete(fn);
     };
   }, []);
-  return value;
+  return { accent, mode };
+}
+
+const MODES: [Mode, typeof Sun, string][] = [
+  ["system", Monitor, "ตามระบบ"],
+  ["light", Sun, "สว่าง"],
+  ["dark", Moon, "มืด"],
+];
+
+/** Compact light/dark/system switch (footer). */
+export function ThemeSwitch() {
+  const current = useTheme();
+  return (
+    <div className="theme-switch" aria-label={t("รูปแบบสี")}>
+      {MODES.map(([value, Icon, label]) => (
+        <button
+          key={value}
+          className={current.mode === value ? "selected" : ""}
+          aria-label={t("ธีม" + label)}
+          aria-pressed={current.mode === value}
+          onClick={() => setMode(value)}
+        >
+          <Icon size={17} />
+        </button>
+      ))}
+    </div>
+  );
 }
 
 const ACCENTS: [Accent, string][] = [
@@ -97,7 +135,7 @@ const ACCENTS: [Accent, string][] = [
 
 /** Header button + small panel to pick the accent colour. */
 export function ThemePanel() {
-  const current = useAccent();
+  const current = useTheme();
   const [open, setOpen] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -138,7 +176,7 @@ export function ThemePanel() {
         inert={!open}
       >
         <div className="theme-panel-head">
-          <strong>{t("สีธีม")}</strong>
+          <strong>{t("ปรับธีม")}</strong>
           <button
             className="icon-button"
             aria-label={t("ปิด")}
@@ -147,19 +185,38 @@ export function ThemePanel() {
             <X size={18} />
           </button>
         </div>
-        <div className="theme-options swatches">
-          {ACCENTS.map(([value, label]) => (
-            <button
-              key={value}
-              className={current === value ? "selected" : ""}
-              aria-pressed={current === value}
-              onClick={() => setAccent(value)}
-            >
-              <i className={"swatch swatch-" + value} />
-              {t(label)}
-            </button>
-          ))}
-        </div>
+        <fieldset>
+          <legend>{t("โหมดสี")}</legend>
+          <div className="theme-options three">
+            {MODES.map(([value, Icon, label]) => (
+              <button
+                key={value}
+                className={current.mode === value ? "selected" : ""}
+                aria-pressed={current.mode === value}
+                onClick={() => setMode(value)}
+              >
+                <Icon size={16} />
+                {t(label)}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>{t("สีธีม")}</legend>
+          <div className="theme-options swatches">
+            {ACCENTS.map(([value, label]) => (
+              <button
+                key={value}
+                className={current.accent === value ? "selected" : ""}
+                aria-pressed={current.accent === value}
+                onClick={() => setAccent(value)}
+              >
+                <i className={"swatch swatch-" + value} />
+                {t(label)}
+              </button>
+            ))}
+          </div>
+        </fieldset>
       </div>
     </>
   );
@@ -170,7 +227,7 @@ export function LanguageToggle({
   onChange,
 }: {
   lang: Lang;
-  onChange: (lang: Lang) => void;
+  onChange: (lang: Lang, origin?: { x: number; y: number }) => void;
 }) {
   return (
     <div
@@ -185,7 +242,13 @@ export function LanguageToggle({
           key={value}
           aria-pressed={lang === value}
           lang={value}
-          onClick={() => onChange(value)}
+          onClick={(e) => {
+            const box = e.currentTarget.getBoundingClientRect();
+            onChange(value, {
+              x: box.left + box.width / 2,
+              y: box.top + box.height / 2,
+            });
+          }}
         >
           {value === "th" ? "TH" : "EN"}
         </button>

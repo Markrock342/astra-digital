@@ -7682,3 +7682,66 @@ td small {
 .import-kind label:has(input:checked) {
   border-color: var(--text);
 }
+
+/* Back office on phones: tables become one card per row, every value
+   labelled with its column title (labels set in Admin.tsx). */
+@media (max-width: 600px) {
+  .merchant-shell .table-scroll,
+  .merchant-shell .reference-table {
+    overflow: visible;
+    border: 0;
+    background: none;
+  }
+  .merchant-shell table,
+  .merchant-shell tbody {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+  }
+  .merchant-shell thead {
+    display: none;
+  }
+  .merchant-shell tbody tr {
+    display: block;
+    margin-bottom: 10px;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+  .merchant-shell tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    border: 0;
+    border-bottom: 1px dashed var(--border);
+    text-align: right;
+    white-space: normal;
+    min-width: 0;
+    width: auto !important;
+  }
+  .merchant-shell tbody td:last-child {
+    border-bottom: 0;
+  }
+  .merchant-shell tbody td[data-label]:not([data-label=""])::before {
+    content: attr(data-label);
+    flex: none;
+    max-width: 45%;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+    text-align: left;
+  }
+  .merchant-shell tbody td[colspan] {
+    justify-content: center;
+    text-align: center;
+  }
+  .merchant-shell tbody td[colspan]::before {
+    content: none !important;
+  }
+  .merchant-shell tbody td > * {
+    min-width: 0;
+  }
+}

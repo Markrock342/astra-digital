@@ -85,6 +85,26 @@ function codeId(id: string) {
 export default function Admin() {
   const { user, path, overview, refresh, toast, go } = useStore();
   const [data, setData] = useState<AdminData | null>(null);
+  // Phones show each table row as a card; label every cell with its column title.
+  useEffect(() => {
+    const label = () =>
+      document.querySelectorAll(".merchant-shell table").forEach((table) => {
+        const heads = [...table.querySelectorAll("thead th")].map(
+          (th) => th.textContent?.trim() ?? "",
+        );
+        table.querySelectorAll("tbody tr").forEach((row) =>
+          [...row.children].forEach((cell, i) => {
+            if (cell.getAttribute("data-label") !== (heads[i] ?? ""))
+              cell.setAttribute("data-label", heads[i] ?? "");
+          }),
+        );
+      });
+    label();
+    const observer = new MutationObserver(label);
+    const root = document.querySelector(".merchant-shell") ?? document.body;
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");

@@ -991,75 +991,70 @@ html.theme-fade *::after {
 }
 
 /* ---------- Language switch ----------
-   View Transitions: the page text slides and blurs between languages while
-   the header (logo + toggle) stays still. Fallback class for other browsers. */
-.storefront-shell #content {
-  view-transition-name: page-content;
-}
-.storefront-shell .site-footer {
-  view-transition-name: page-footer;
-}
+   The new language spreads out from the TH/EN toggle as a growing circle
+   (View Transitions clip-path), led by a glowing accent ring and a soft
+   blur-in of the new text. Browsers without View Transitions get the ring
+   and a text rise. */
 .lang-toggle {
   view-transition-name: lang-toggle;
-}
-::view-transition-old(page-content),
-::view-transition-old(page-footer) {
-  animation: lang-out 0.32s cubic-bezier(0.4, 0, 1, 1) both;
-}
-::view-transition-new(page-content),
-::view-transition-new(page-footer) {
-  animation: lang-in 0.55s var(--ease-out-expo) 0.08s both;
-}
-:root[data-lang-dir="prev"]::view-transition-old(page-content),
-:root[data-lang-dir="prev"]::view-transition-old(page-footer) {
-  animation-name: lang-out-prev;
-}
-:root[data-lang-dir="prev"]::view-transition-new(page-content),
-:root[data-lang-dir="prev"]::view-transition-new(page-footer) {
-  animation-name: lang-in-prev;
-}
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 0.3s;
 }
 ::view-transition-group(lang-toggle) {
   animation-duration: 0s;
 }
+::view-transition-old(root) {
+  animation: lang-old 0.8s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+::view-transition-new(root) {
+  animation: lang-reveal 0.8s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+@keyframes lang-reveal {
+  from {
+    clip-path: circle(0 at var(--lx) var(--ly));
+    filter: blur(6px) saturate(1.4);
+  }
+  60% {
+    filter: blur(0) saturate(1.1);
+  }
+  to {
+    clip-path: circle(var(--lr) at var(--lx) var(--ly));
+    filter: none;
+  }
+}
+@keyframes lang-old {
+  to {
+    filter: blur(3px);
+    opacity: 0.6;
+    transform: scale(0.985);
+  }
+}
+.lang-ring {
+  position: fixed;
+  z-index: 9999;
+  left: var(--lx);
+  top: var(--ly);
+  width: calc(var(--lr) * 2);
+  height: calc(var(--lr) * 2);
+  margin: calc(var(--lr) * -1) 0 0 calc(var(--lr) * -1);
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 3px var(--accent),
+    inset 0 0 50px 4px color-mix(in srgb, var(--accent-2) 55%, transparent),
+    0 0 40px 6px color-mix(in srgb, var(--accent) 40%, transparent);
+  transform: scale(0);
+  animation: lang-ring 0.8s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+@keyframes lang-ring {
+  70% {
+    opacity: 1;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
 html.lang-swap .storefront-shell #content,
 html.lang-swap .storefront-shell .site-footer,
 html.lang-swap .storefront-shell .main-nav {
-  animation: lang-in 0.55s var(--ease-out-expo) both;
-}
-html.lang-swap[data-lang-dir="prev"] .storefront-shell #content,
-html.lang-swap[data-lang-dir="prev"] .storefront-shell .site-footer,
-html.lang-swap[data-lang-dir="prev"] .storefront-shell .main-nav {
-  animation-name: lang-in-prev;
-}
-@keyframes lang-out {
-  to {
-    opacity: 0;
-    transform: translateX(-28px);
-    filter: blur(6px);
-  }
-}
-@keyframes lang-in {
-  from {
-    opacity: 0;
-    transform: translateX(28px);
-    filter: blur(6px);
-  }
-}
-@keyframes lang-out-prev {
-  to {
-    opacity: 0;
-    transform: translateX(28px);
-    filter: blur(6px);
-  }
-}
-@keyframes lang-in-prev {
-  from {
-    opacity: 0;
-    transform: translateX(-28px);
-    filter: blur(6px);
-  }
+  animation: rise 0.6s var(--ease-out-expo) both;
 }

@@ -154,7 +154,8 @@ test("language switch, theme panel and brand assets", async ({ page }) => {
   await page.getByRole("button", { name: /EXTRA yellow/ }).click();
   await expect(page.locator("html")).toHaveAttribute("data-accent", "yellow");
   await expect(page.locator("html")).toHaveAttribute("data-shape", "soft");
-  await expect(page.getByRole("dialog", { name: "Customize theme" })).not.toContainText(/Light|Dark|Sharp|Animations/);
+  await expect(page.getByRole("dialog", { name: "Customize theme" })).toContainText("Dark");
+  await expect(page.getByRole("dialog", { name: "Customize theme" })).not.toContainText(/Sharp|Animations/);
   await page.keyboard.press("Escape");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-accent", "yellow");
