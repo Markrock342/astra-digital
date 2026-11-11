@@ -7,6 +7,7 @@ import {
   ensureInventoryAvailableIndex,
   MIGRATION_005_NAME,
 } from "../server/migrate-005.mjs";
+import { ensureChatThreadReads } from "../server/ensure-admin-fr.mjs";
 import {
   createAPIHandler,
   securityHeaders,
@@ -64,6 +65,7 @@ export class Commerce extends DurableObject {
         "CREATE TABLE IF NOT EXISTS rate_limits(key TEXT PRIMARY KEY,count INTEGER NOT NULL,expires INTEGER NOT NULL)",
       );
       ensureInventoryAvailableIndex(db);
+      ensureChatThreadReads(db);
     });
     this.db = db;
     const adminPassword =

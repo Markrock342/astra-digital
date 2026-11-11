@@ -142,7 +142,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             features: service.features ?? {},
           });
         if (path === "/api/me")
-          return send(200, { user: service.publicUser(user) });
+          return send(200, {
+            user: service.publicUser(user),
+            features: service.features ?? {},
+          });
         if (path === "/api/products")
           return send(200, { products: service.products() });
         if (/^\/api\/products\/[^/]+$/.test(path)) {

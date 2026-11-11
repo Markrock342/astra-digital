@@ -177,6 +177,42 @@ export function createCommerceCore({
       body,
     );
   };
+  const notifyStaffRoles = (kind, title, body) => {
+    for (const staff of all(
+      "SELECT id FROM users WHERE role IN ('STAFF','ADMIN')",
+    ))
+      notify(staff.id, kind, title, body);
+  };
+  const stockLowCooldown = new Map();
+  const maybeNotifyStockLow = (variantId) => {
+    const row = one(
+      `SELECT v.id,v.label,p.name,
+              (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) AS stock
+       FROM variants v JOIN products p ON p.id=v.product_id
+       WHERE v.id=? AND p.preorder=0`,
+      variantId,
+    );
+    if (!row || row.stock > LOW_STOCK_AT) return;
+    const now = Date.now();
+    const last = stockLowCooldown.get(variantId) ?? 0;
+    if (now - last < 300000) return;
+    stockLowCooldown.set(variantId, now);
+    notifyStaffRoles(
+      "stock_low",
+      "สต็อกใกล้หมด",
+      row.name + " / " + row.label + " เหลือ " + row.stock,
+    );
+  };
+  const salesRevenueSatang = () => {
+    const succeeded = one(
+      "SELECT COALESCE(SUM(amount),0) AS n FROM payments WHERE status='SUCCEEDED'",
+    ).n;
+    // Refunds land in Work 3 / FR-F6; until then nothing to subtract.
+    const refunded = one(
+      "SELECT COALESCE(SUM(ABS(amount)),0) AS n FROM ledger WHERE kind='REFUND'",
+    ).n;
+    return succeeded - refunded;
+  };
   const nextQueueNumber = () => {
     const row = one(
       "SELECT COALESCE(MAX(queue_number),0)+1 AS n FROM reservations",
@@ -1011,6 +1047,11 @@ export function createCommerceCore({
           "ได้รับเลขคิวพรีออเดอร์",
           "คิวของคุณคือ #" + queueNumber,
         );
+        notifyStaffRoles(
+          "preorder_queue_admin",
+          "คิวพรีออเดอร์ใหม่",
+          "คิว #" + queueNumber + " · " + id.slice(0, 8),
+        );
         audit(user, "PREORDER_PAID", id);
         return orderDetail(user, id);
       });
@@ -1091,6 +1132,12 @@ export function createCommerceCore({
         "ส่งโค้ดสำเร็จ",
         "คำสั่งซื้อ " + id.slice(0, 8) + " ได้รับโค้ดแล้ว",
       );
+      notifyStaffRoles(
+        "order_new",
+        "ออเดอร์ใหม่",
+        "คำสั่งซื้อ " + id.slice(0, 8) + " ชำระแล้วและส่งของแล้ว",
+      );
+      maybeNotifyStockLow(order.variant_id);
       audit(user, "PAYMENT_AND_DELIVERY", id);
       return orderDetail(user, id);
     });
@@ -1149,9 +1196,8 @@ export function createCommerceCore({
   function adminOverview(user) {
     requireAdmin(user);
     return {
-      revenue: one(
-        "SELECT COALESCE(SUM(total),0) AS n FROM orders WHERE status='DELIVERED'",
-      ).n,
+      // FR-F10: one formula — payments SUCCEEDED minus REFUND ledger (0 until refunds ship).
+      revenue: salesRevenueSatang(),
       orderCount: one(
         "SELECT (SELECT COUNT(*) FROM orders)+(SELECT COUNT(*) FROM reservations) AS n",
       ).n,
@@ -1295,6 +1341,7 @@ export function createCommerceCore({
         "พรีออเดอร์พร้อมใช้งานแล้ว",
         "รหัสสินค้าถูกจัดส่งแล้ว กดดูคำสั่งซื้อเพื่อรับรหัส",
       );
+      maybeNotifyStockLow(reservation.variant_id);
       audit(user, "DELIVER_RESERVATION", reservationId);
       return {
         id: reservationId,
@@ -1445,14 +1492,33 @@ export function createCommerceCore({
     if (isStaff(user))
       return all(
         `SELECT t.*,u.name AS customer,u.email AS customer_email,
-                (SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id=t.id) AS messages
+                (SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id=t.id) AS messages,
+                COALESCE(
+                  (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.thread_id=t.id),
+                  t.created_at
+                ) AS lastMessageAt,
+                (
+                  SELECT COUNT(*) FROM chat_messages m
+                  WHERE m.thread_id=t.id AND m.sender_type='USER'
+                    AND m.created_at > COALESCE(
+                      (SELECT r.last_read_at FROM chat_thread_reads r
+                       WHERE r.thread_id=t.id AND r.user_id=?),
+                      '1970-01-01 00:00:00'
+                    )
+                ) AS unreadCount
          FROM chat_threads t JOIN users u ON u.id=t.user_id
-         ORDER BY t.created_at DESC`,
+         ORDER BY lastMessageAt DESC, t.id DESC`,
+        user.id,
       );
     return all(
       `SELECT t.*,
-              (SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id=t.id) AS messages
-       FROM chat_threads t WHERE t.user_id=? ORDER BY t.created_at DESC`,
+              (SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id=t.id) AS messages,
+              COALESCE(
+                (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.thread_id=t.id),
+                t.created_at
+              ) AS lastMessageAt,
+              0 AS unreadCount
+       FROM chat_threads t WHERE t.user_id=? ORDER BY lastMessageAt DESC, t.id DESC`,
       user.id,
     );
   }
@@ -1504,6 +1570,20 @@ export function createCommerceCore({
     if (!thread) fail(404, "ไม่พบแชท");
     if (thread.user_id !== user.id && !isStaff(user))
       fail(403, "ไม่มีสิทธิ์ดูแชทนี้");
+    if (isStaff(user) && thread.user_id !== user.id) {
+      const latest = one(
+        "SELECT COALESCE(MAX(created_at), CURRENT_TIMESTAMP) AS t FROM chat_messages WHERE thread_id=?",
+        id,
+      ).t;
+      run(
+        `INSERT INTO chat_thread_reads(user_id,thread_id,last_read_at)
+         VALUES(?,?,?)
+         ON CONFLICT(user_id,thread_id) DO UPDATE SET last_read_at=excluded.last_read_at`,
+        user.id,
+        id,
+        latest,
+      );
+    }
     return all(
       "SELECT id,thread_id,sender_type,body,created_at FROM chat_messages WHERE thread_id=? ORDER BY created_at ASC,rowid ASC",
       id,
@@ -1676,7 +1756,14 @@ export function createCommerceCore({
     markNotificationRead,
     buyerRanking,
     mode: allowSandbox ? "sandbox" : "live",
-    features: Object.freeze({ credentialPair: true, preorderDelivery: true }),
+    features: Object.freeze({
+      credentialPair: true,
+      preorderDelivery: true,
+      adminChatInbox: true,
+      adminOpsNotifications: true,
+      salesRevenueFromPayments: true,
+    }),
+    salesRevenueSatang,
     logout: (token) =>
       run("DELETE FROM sessions WHERE token_hash=?", hash(token ?? "")),
     orders: (user) => {

@@ -64,10 +64,9 @@ async function loginAdmin(page, next) {
 test("queue board lists paid preorders with deliver enabled", async ({ page }) => {
   expect(paidPreorder.status).toBe("PREORDER");
   const health = await page.request.get(base + "/api/health");
-  expect((await health.json()).features).toEqual({
-    credentialPair: true,
-    preorderDelivery: true,
-  });
+  const features = (await health.json()).features;
+  expect(features.credentialPair).toBe(true);
+  expect(features.preorderDelivery).toBe(true);
   await loginAdmin(page, "/admin/preorders");
   await expect(page.getByRole("heading", { name: "คิวพรีออเดอร์" })).toBeVisible();
   const row = page.locator("tbody tr").filter({ hasText: "#" + paidPreorder.queueNumber });

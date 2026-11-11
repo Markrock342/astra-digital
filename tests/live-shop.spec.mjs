@@ -97,7 +97,9 @@ test("admin creates a product, prices it, opens it and imports codes", async ({
     await page
       .getByLabel("สินค้าและตัวเลือก")
       .selectOption({ label: productName + " · โค้ดดิจิทัล" });
-    await page.getByRole("radio", { name: "โค้ดเดี่ยว" }).check();
+    const singleCode = page.getByRole("radio", { name: "โค้ดเดี่ยว" });
+    await expect(singleCode).toBeVisible({ timeout: 15000 });
+    await singleCode.check();
     await page.getByLabel("โค้ด (หนึ่งโค้ดต่อบรรทัด)").fill(text);
     await page
       .getByRole("button", { name: "นำเข้าโค้ด", exact: true })
