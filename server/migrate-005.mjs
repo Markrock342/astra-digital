@@ -20,6 +20,12 @@ export const TRACK_A_MIGRATION_FILES = [
 
 /** Widen inventory_available so freeness checks can use reservation_id (idempotent). */
 export function ensureInventoryAvailableIndex(db) {
+  // Runs on every start: only rebuild when the old two-column index is there.
+  const columns = db
+    .prepare("PRAGMA index_info(inventory_available)")
+    .all()
+    .map((c) => c.name);
+  if (columns.includes("reservation_id")) return;
   db.exec("DROP INDEX IF EXISTS inventory_available");
   db.exec(
     "CREATE INDEX IF NOT EXISTS inventory_available ON inventory(variant_id, order_id, reservation_id)",

@@ -1268,7 +1268,8 @@ export function createCommerceCore({
       );
       if (available.length < reservation.quantity)
         fail(409, "สต็อกไม่พอสำหรับส่งของ");
-      const now = new Date().toISOString();
+      // Same text format as CURRENT_TIMESTAMP so dateTime() and period filters work.
+      const now = new Date().toISOString().slice(0, 19).replace("T", " ");
       for (const row of available) {
         const updated = run(
           `UPDATE inventory SET reservation_id=?, sold_at=? WHERE id=? AND ${inventoryAvailableSql}`,

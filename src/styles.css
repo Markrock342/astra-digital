@@ -7664,3 +7664,21 @@ td small {
 .queue-pending-note {
   margin-bottom: 12px;
 }
+.import-kind {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.import-kind label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.import-kind label:has(input:checked) {
+  border-color: var(--text);
+}

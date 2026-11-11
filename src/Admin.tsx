@@ -97,6 +97,9 @@ export default function Admin() {
   const [queue, setQueue] = useState<QueueItem[] | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [pairs, setPairs] = useState<Credential[]>([{ loginId: "", password: "" }]);
+  // Accounts (ID + password) are the default; single license codes stay available.
+  const [importKind, setImportKind] = useState<"pair" | "code">("pair");
+  const pairMode = features.credentialPair && importKind === "pair";
   const tab = path.split("/")[2] ?? "";
   const sub = path.split("/").slice(2).join("/");
   const productGroup = productTabs.some(([key]) => key === tab);
@@ -205,14 +208,14 @@ export default function Admin() {
     try {
       const form = Object.fromEntries(new FormData(e.currentTarget));
       const items = pairs.filter((p) => p.loginId.trim() || p.password);
-      if (features.credentialPair) {
+      if (pairMode) {
         if (!items.length) throw new Error("กรุณาใส่ไอดีและรหัสผ่านอย่างน้อยหนึ่งรายการ");
         if (items.some((p) => !p.loginId.trim() || !p.password))
           throw new Error("ทุกแถวต้องมีทั้งไอดีและรหัสผ่าน");
       }
       const result = await api<{ imported: number }>(
         "/admin/inventory",
-        features.credentialPair
+        pairMode
           ? {
               variantId: form.variantId,
               items: items.map((p) => ({
@@ -226,7 +229,7 @@ export default function Admin() {
       await refresh();
       setImporting(false);
       toast(
-        features.credentialPair
+        pairMode
           ? `นำเข้า ${result.imported} บัญชีสำเร็จ`
           : `นำเข้า ${result.imported} โค้ดสำเร็จ`,
       );
@@ -1389,7 +1392,27 @@ export default function Admin() {
                     )}
                   </select>
                 </label>
-                {features.credentialPair ? (
+                {features.credentialPair && (
+                  <div className="import-kind" role="radiogroup" aria-label="รูปแบบสินค้า">
+                    {(
+                      [
+                        ["pair", "ไอดี + รหัสผ่าน"],
+                        ["code", "โค้ดเดี่ยว"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <label key={value}>
+                        <input
+                          type="radio"
+                          name="import-kind"
+                          checked={importKind === value}
+                          onChange={() => setImportKind(value)}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {pairMode ? (
                   <fieldset className="credential-rows">
                     <legend>ไอดีและรหัสผ่าน</legend>
                     {pairs.map((pair, i) => (

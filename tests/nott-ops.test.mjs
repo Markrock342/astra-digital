@@ -574,7 +574,7 @@ test("ISSUE-18 DB-005: import pairs, deliver, owner credentials, queue, index", 
   const delivered = s.deliverReservation(merchant, reservation.id);
   assert.equal(delivered.status, "DELIVERED");
   assert.equal(delivered.delivered, true);
-  assert.ok(delivered.delivered_at);
+  assert.match(delivered.delivered_at, /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/);
   assert.equal(delivered.delivered_by, merchant.id);
   assert.equal(delivered.loginId, undefined);
   assert.equal(delivered.password, undefined);
