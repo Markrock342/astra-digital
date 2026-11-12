@@ -42,18 +42,43 @@ function fixture(t) {
   return { s, merchant, buyer, merchantToken: merchantAuth.token, buyerToken: buyerAuth.token };
 }
 
-test("UP-1: magic bytes sniff and reject SVG", () => {
+function gifBytes() {
+  const bytes = new Uint8Array(32);
+  bytes.set([0x47, 0x49, 0x46, 0x38, 0x39, 0x61], 0); // GIF89a
+  return bytes;
+}
+
+function htmlBytes() {
+  return new TextEncoder().encode("<!doctype html><html><body>x</body></html>");
+}
+
+function failThrow(status, message) {
+  const err = new Error(message);
+  err.status = status;
+  throw err;
+}
+
+test("UP-1: magic bytes sniff and reject SVG/GIF/HTML", () => {
   assert.equal(sniffImageMime(pngBytes()), "image/png");
   assert.equal(sniffImageMime(jpegBytes()), "image/jpeg");
   assert.equal(sniffImageMime(webpBytes()), "image/webp");
   assert.equal(sniffImageMime(svgBytes()), null);
+  assert.equal(sniffImageMime(gifBytes()), null);
+  assert.equal(sniffImageMime(htmlBytes()), null);
   assert.throws(
-    () =>
-      assertAllowedImage("image/svg+xml", svgBytes(), (status, message) => {
-        const err = new Error(message);
-        err.status = status;
-        throw err;
-      }),
+    () => assertAllowedImage("image/svg+xml", svgBytes(), failThrow),
+    (e) => e.status === 415,
+  );
+  assert.throws(
+    () => assertAllowedImage("image/gif", gifBytes(), failThrow),
+    (e) => e.status === 415,
+  );
+  assert.throws(
+    () => assertAllowedImage("image/png", gifBytes(), failThrow),
+    (e) => e.status === 415,
+  );
+  assert.throws(
+    () => assertAllowedImage("text/html", htmlBytes(), failThrow),
     (e) => e.status === 415,
   );
 });
@@ -116,6 +141,59 @@ test("UP-1: add reorder delete product images; storefront lists images", async (
       s.reorderProductImages(buyer, product.id, { order: [a.image.id] }),
     (e) => e.status === 403,
   );
+
+  const addAudit = s.db
+    .prepare(
+      "SELECT action FROM audit WHERE action='PRODUCT_IMAGE_ADD' AND entity_id=? ORDER BY id DESC LIMIT 1",
+    )
+    .get(a.image.id);
+  assert.equal(addAudit?.action, "PRODUCT_IMAGE_ADD");
+  const reorderAudit = s.db
+    .prepare(
+      "SELECT action FROM audit WHERE action='PRODUCT_IMAGE_REORDER' AND entity_id=? ORDER BY id DESC LIMIT 1",
+    )
+    .get(product.id);
+  assert.equal(reorderAudit?.action, "PRODUCT_IMAGE_REORDER");
+  const removeAudit = s.db
+    .prepare(
+      "SELECT action FROM audit WHERE action='PRODUCT_IMAGE_REMOVE' AND entity_id=? ORDER BY id DESC LIMIT 1",
+    )
+    .get(b.image.id);
+  assert.equal(removeAudit?.action, "PRODUCT_IMAGE_REMOVE");
+});
+
+test("UP-1: max 8 images; 9th is 409; deleted file key 404", async (t) => {
+  const { s, merchant } = fixture(t);
+  const product = s.saveProduct(merchant, {
+    name: "Upload Cap Product",
+    description: "ทดสอบจำกัด 8 รูป",
+    category: "streaming",
+    price: 500,
+    active: true,
+  });
+  const uploaded = [];
+  for (let i = 0; i < 8; i++) {
+    uploaded.push(
+      await s.addProductImage(merchant, product.id, {
+        bytes: pngBytes(48 + i),
+        contentType: "image/png",
+      }),
+    );
+  }
+  assert.equal(s.productDetail(product.id).images.length, 8);
+  await assert.rejects(
+    () =>
+      s.addProductImage(merchant, product.id, {
+        bytes: pngBytes(99),
+        contentType: "image/png",
+      }),
+    (e) => e.status === 409,
+  );
+
+  const goneKey = uploaded[0].image.url.split("/").pop();
+  await s.deleteProductImage(merchant, uploaded[0].image.id);
+  await assert.rejects(() => s.getFile(goneKey), (e) => e.status === 404);
+  assert.equal(s.productDetail(product.id).images.length, 7);
 });
 
 test("UP-1: reject oversized mismatched unauthorized via HTTP", async (t) => {
@@ -200,4 +278,59 @@ test("UP-1: reject oversized mismatched unauthorized via HTTP", async (t) => {
     contentType: "image/webp",
   });
   assert.equal(jsonStillRequired.status, 415);
+
+  const gif = await call("POST", `/api/admin/products/${product.id}/images`, {
+    token: merchantToken,
+    body: gifBytes(),
+    contentType: "image/gif",
+  });
+  assert.equal(gif.status, 415);
+
+  const empty = await call("POST", `/api/admin/products/${product.id}/images`, {
+    token: merchantToken,
+    body: new Uint8Array(0),
+    contentType: "image/png",
+  });
+  assert.equal(empty.status, 415);
+
+  const missing = await call("GET", "/api/files/00000000-0000-4000-8000-000000000000");
+  assert.equal(missing.status, 404);
+});
+
+test("UP-1: upload rate limit 30 per 10 minutes", async (t) => {
+  const { s, merchantToken } = fixture(t);
+  const handle = createAPIHandler(s);
+  const product = s.saveProduct(s.session(merchantToken), {
+    name: "Rate Limit Product",
+    description: "ทดสอบ rate limit อัปโหลด",
+    category: "streaming",
+    price: 500,
+    active: true,
+  });
+  async function uploadOnce() {
+    const response = await handle(
+      new Request(
+        "http://fixture/api/admin/products/" + product.id + "/images",
+        {
+          method: "POST",
+          headers: {
+            "X-Astra-Request": "1",
+            Cookie: "astra_session=" + merchantToken,
+            "Content-Type": "image/png",
+            "Content-Length": "64",
+          },
+          body: pngBytes(),
+        },
+      ),
+    );
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 200 && data.image?.id)
+      await s.deleteProductImage(s.session(merchantToken), data.image.id);
+    return response.status;
+  }
+  for (let i = 0; i < 30; i++) {
+    const status = await uploadOnce();
+    assert.equal(status, 200, "upload #" + (i + 1) + " should pass");
+  }
+  assert.equal(await uploadOnce(), 429);
 });

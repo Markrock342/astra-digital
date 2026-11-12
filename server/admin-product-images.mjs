@@ -46,19 +46,22 @@ export function createAdminProductImageApis({
     const productId = clean(productIdRaw, 1, 80, "สินค้า");
     if (!one("SELECT id FROM products WHERE id=?", productId))
       fail(404, "ไม่พบสินค้า");
+    if (!bytes || bytes.byteLength === 0) fail(415, "ชนิดไฟล์ไม่ถูกต้อง");
     const mime = assertAllowedImage(contentType, bytes, fail);
-    const count = one(
-      "SELECT COUNT(*) AS n FROM product_images WHERE product_id=?",
-      productId,
-    ).n;
-    if (count >= 8) fail(409, "อัปโหลดรูปสินค้าได้สูงสุด 8 รูป");
 
     const key = randomUUID();
     const id = randomUUID();
-    const sortOrder = count;
+    // Store bytes first; count+insert inside tx so concurrent uploads cannot exceed 8.
     await fileStore.put(key, bytes, mime);
+    let sortOrder;
     try {
       tx(() => {
+        const count = one(
+          "SELECT COUNT(*) AS n FROM product_images WHERE product_id=?",
+          productId,
+        ).n;
+        if (count >= 8) fail(409, "อัปโหลดรูปสินค้าได้สูงสุด 8 รูป");
+        sortOrder = count;
         run(
           "INSERT INTO product_images(id,product_id,file_key,sort_order) VALUES(?,?,?,?)",
           id,
