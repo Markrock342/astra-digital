@@ -1,5 +1,5 @@
 /**
- * UP-1 smoke against wrangler dev --local (SQLite files store, no R2).
+ * UP-1 + UP-2 smoke against wrangler dev --local (SQLite files store, no R2).
  * Usage: npm run cloud:setup && npm run build && npm run cloud:dev
  *        node scripts/wrangler-local-uploads-smoke.mjs [baseUrl]
  */
@@ -22,17 +22,23 @@ function loadAdminPassword() {
   return match[1].trim();
 }
 
+// Real 1×1 images (not magic-only stubs). Fake RIFF/WEBP stubs make browsers show a broken icon.
 function webpBytes() {
-  const bytes = new Uint8Array(64);
-  bytes.set([0x52, 0x49, 0x46, 0x46], 0);
-  bytes.set([0x57, 0x45, 0x42, 0x50], 8);
-  return bytes;
+  return Uint8Array.from(
+    Buffer.from(
+      "UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=",
+      "base64",
+    ),
+  );
 }
 
 function pngBytes() {
-  const bytes = new Uint8Array(64);
-  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
-  return bytes;
+  return Uint8Array.from(
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  );
 }
 
 const adminPassword = loadAdminPassword();
@@ -150,5 +156,56 @@ ok(
   after.data.product.images.length === 1 &&
     after.data.product.images[0].id === up1.data.image.id,
 );
+
+// --- UP-2 avatar + logo ---
+const avatar = await api("POST", "/api/profile/avatar", {
+  body: webpBytes(),
+  contentType: "image/webp",
+});
+ok(
+  "upload avatar",
+  avatar.status === 200 && avatar.data?.avatarUrl,
+  JSON.stringify(avatar.data),
+);
+const me = await api("GET", "/api/me");
+ok(
+  "me has avatarUrl",
+  me.status === 200 && me.data?.user?.avatarUrl === avatar.data.avatarUrl,
+  JSON.stringify(me.data?.user),
+);
+const avatarKey = avatar.data.avatarUrl.split("/").pop();
+const avatarFile = await api("GET", `/api/files/${avatarKey}`);
+ok(
+  "GET avatar bytes match",
+  avatarFile.status === 200 &&
+    avatarFile.headers.get("Content-Type") === "image/webp" &&
+    avatarFile.buf[0] === 0x52,
+);
+
+const logo = await api("POST", "/api/admin/settings/logo", {
+  body: pngBytes(),
+  contentType: "image/png",
+});
+ok(
+  "upload logo",
+  logo.status === 200 && logo.data?.logoUrl,
+  JSON.stringify(logo.data),
+);
+const overview = await api("GET", "/api/overview");
+ok(
+  "overview has logoUrl",
+  overview.status === 200 && overview.data?.shop?.logoUrl === logo.data.logoUrl,
+  JSON.stringify(overview.data?.shop),
+);
+
+const delAvatar = await api("DELETE", "/api/profile/avatar");
+ok("delete avatar", delAvatar.status === 200 && delAvatar.data?.avatarUrl === null);
+const meCleared = await api("GET", "/api/me");
+ok("me avatar cleared", meCleared.data?.user?.avatarUrl == null);
+
+const delLogo = await api("DELETE", "/api/admin/settings/logo");
+ok("delete logo", delLogo.status === 200 && delLogo.data?.logoUrl === null);
+const overviewCleared = await api("GET", "/api/overview");
+ok("overview logo cleared", overviewCleared.data?.shop?.logoUrl == null);
 
 console.log("\nwrangler local uploads smoke:", passed, "passed");

@@ -1,13 +1,15 @@
 # สถานะปัจจุบัน (CURRENT)
 
-อัปเดตล่าสุด: 2026-11-12
+อัปเดตล่าสุด: 2026-11-13
 
-## Admin FR W5 UP-1 — อัปโหลดรูปสินค้า (PR พร้อม)
-- PR #40 · branch `feat/admin-fr-w5-up1-product-images` จาก main หลัง #37/#38
-- file-store + MIG-008 + product images APIs + `uploads` flag · ห้ามแตะ src/ · ห้าม UP-2/3 ใน PR นี้
-- หลักฐาน: npm test 91/91 · e2e 31/31 · wrangler local smoke 10/10
+## Admin FR W5 UP-2 — รูปโปรไฟล์ + โลโก้ร้าน (กำลังทำ)
+- สาขา `feat/admin-fr-w5-up2-avatar-logo` จาก main ล่าสุด (หลัง #40 + money/auth)
+- ตามสเปก [ADMIN-FR-WORK5-uploads](../prompts/ADMIN-FR-WORK5-uploads.md) · roadmap [NOTT-ADMIN-FR-W5-UPLOADS](../roadmaps/NOTT-ADMIN-FR-W5-UPLOADS.md)
+- ห้าม UP-3 · ห้าม deploy · มาร์ค merge + deploy
+
+## Admin FR W5 UP-1 — อัปโหลดรูปสินค้า (merge แล้ว)
+- PR #40 merge + deploy แล้ว · file-store + MIG-008 + product images + `uploads`
 - รายงาน [MARK_REPORT_ADMIN_FR_W5_UPLOADS](../database/MARK_REPORT_ADMIN_FR_W5_UPLOADS.md)
-- **ห้าม deploy**
 
 ## Hotfix DO `run().changes` — merge แล้ว
 - PR #37 ใน main · รายงาน [MARK_REPORT_DO_SQL_RUN_CHANGES](../database/MARK_REPORT_DO_SQL_RUN_CHANGES.md)
