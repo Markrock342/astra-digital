@@ -25,7 +25,7 @@ export type User = {
   id: string;
   email: string;
   name: string;
-  role: "CUSTOMER" | "ADMIN";
+  role: "CUSTOMER" | "ADMIN" | "STAFF";
   balance: number;
 };
 export type Order = {

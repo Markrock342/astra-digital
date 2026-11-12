@@ -77,10 +77,10 @@ test("admin creates a product, prices it, opens it and imports codes", async ({
   await page
     .getByLabel("รายละเอียด", { exact: true })
     .fill("ไลเซนส์สำหรับตรวจระบบร้านจริงแบบอัตโนมัติ");
+  await page.getByLabel("ราคาตัวเลือกแรก (บาท)").fill("125");
   await page.getByRole("button", { name: "สร้างฉบับร่าง", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("สร้างฉบับร่างแล้ว");
 
-  await page.getByLabel("ราคา (บาท)").fill("125");
   await page.getByRole("checkbox", { name: "เปิดขายสินค้า", exact: true }).check();
   await page.getByRole("button", { name: "บันทึก", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("บันทึกสินค้าแล้ว");
@@ -148,6 +148,7 @@ test("customer sees a stock label, never a count or a code, and orders wait for 
   await page
     .getByLabel("ยืนยันรหัสผ่าน", { exact: true })
     .fill("Live-UI-test-12345");
+  await page.getByLabel(/ฉันยอมรับ/).check();
   await page.getByRole("button", { name: "สมัครสมาชิก", exact: true }).click();
   await expect(page).toHaveURL(base + "/account");
 
@@ -160,10 +161,9 @@ test("customer sees a stock label, never a count or a code, and orders wait for 
   await page.getByRole("button", { name: "ซื้อเลย", exact: true }).click();
   const proceed = page.getByRole("button", { name: /^ไปบันทึกคำสั่งซื้อ/ });
   if (await proceed.isVisible()) await proceed.click();
-  await expect(page.getByText("การชำระเงินจะเชื่อมต่อภายหลัง").first()).toBeVisible();
   await page.getByRole("button", { name: /^บันทึกคำสั่งซื้อ/ }).click();
   await expect(page).toHaveURL(/\/(checkout|orders)\/[a-z0-9-]+$/);
-  await expect(body).toContainText(/รอเชื่อมการชำระเงิน|การชำระเงินจะเชื่อมต่อภายหลัง|รอชำระเงิน/);
+  await expect(body).toContainText(/ชำระเงินเพื่อรับสินค้า|รอชำระเงิน/);
   await expect(page.locator(".code-row")).toHaveCount(0);
   for (const code of codes) await expect(body).not.toContainText(code);
 

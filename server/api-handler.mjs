@@ -147,6 +147,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             storage: service.storageKind ?? "local-sqlite",
             features: service.features ?? {},
           });
+        if (path === "/api/live" && service.liveVersions)
+          return send(200, { versions: service.liveVersions() });
         if (path === "/api/me")
           return send(200, {
             user: service.publicUser(user),
@@ -239,6 +241,21 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             });
           return send(200, page);
         }
+        if (path === "/api/admin/team") return send(200, { team: service.team(user) });
+        if (path === "/api/admin/reports/sales")
+          return send(200, service.salesReport(user, {
+            from: url.searchParams.get("from") ?? undefined,
+            to: url.searchParams.get("to") ?? undefined,
+          }));
+        if (path === "/api/admin/audit")
+          return send(200, service.adminAuditLog(user, {
+            action: url.searchParams.get("action") ?? undefined,
+            scope: url.searchParams.get("scope") ?? undefined,
+            actor: url.searchParams.get("actor") ?? undefined,
+            entity: url.searchParams.get("entity") ?? undefined,
+            cursor: url.searchParams.get("cursor") ?? undefined,
+            limit: url.searchParams.get("limit") ?? undefined,
+          }));
         if (path === "/api/admin/orders")
           return send(200, service.adminOrders(user, {
             status: url.searchParams.get("status") ?? undefined,
@@ -348,6 +365,13 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           });
         if (/^\/api\/notifications\/[^/]+\/read$/.test(path))
           return send(200, service.markNotificationRead(user, path.split("/")[3]));
+        if (path === "/api/admin/team") return send(200, service.saveStaff(user, input));
+        if (/^\/api\/admin\/team\/[^/]+\/active$/.test(path))
+          return send(200, service.setStaffActive(user, path.split("/")[4], input));
+        if (/^\/api\/chat\/threads\/[^/]+\/assign$/.test(path))
+          return send(200, { thread: service.assignChatThread(user, path.split("/")[4], input) });
+        if (/^\/api\/admin\/orders\/[^/]+\/cancel$/.test(path))
+          return send(200, service.adminCancelOrder(user, path.split("/")[4], input));
         if (/^\/api\/admin\/orders\/[^/]+\/reveal$/.test(path))
           return send(
             200,
@@ -357,6 +381,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminUpdateCustomer(user, path.split("/")[4], input));
         if (/^\/api\/admin\/customers\/[^/]+\/status$/.test(path))
           return send(200, service.adminSetCustomerStatus(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/customers\/[^/]+\/reset-password$/.test(path))
+          return send(200, service.adminResetCustomerPassword(user, path.split("/")[4]));
         if (/^\/api\/admin\/customers\/[^/]+\/sign-out$/.test(path))
           return send(200, service.adminSignOutCustomer(user, path.split("/")[4]));
         if (path === "/api/admin/payment-channel")

@@ -200,6 +200,7 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
               name="password"
               type={show ? "text" : "password"}
               autoComplete={register ? "new-password" : "current-password"}
+              aria-describedby={register ? "password-rule" : undefined}
               minLength={register ? 10 : 1}
               maxLength={128}
               required
@@ -215,6 +216,11 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
           </div>
         </label>
         {register && (
+          <small id="password-rule" className="field-hint">
+            {t("อย่างน้อย 10 ตัวอักษร")}
+          </small>
+        )}
+        {register && (
           <label className="field">
             {t("ยืนยันรหัสผ่าน")}
             <input
@@ -227,6 +233,15 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
             />
           </label>
         )}
+        {register && (
+          <label className="checkbox-label consent-check">
+            <input type="checkbox" name="acceptTerms" required />
+            <span>
+              {t("ฉันยอมรับ")} <Link to="/terms">{t("ข้อกำหนดร้าน")}</Link> {t("และ")}{" "}
+              <Link to="/privacy">{t("นโยบายความเป็นส่วนตัว")}</Link>
+            </span>
+          </label>
+        )}
         <button className="button primary full" disabled={busy}>
           {busy ? (
             <LoaderCircle className="spin" size={17} />
@@ -237,6 +252,13 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
           )}
         </button>
       </form>
+      {!register && (
+        <p className="reference-auth-help">
+          {t("ลืมรหัสผ่าน? ติดต่อร้านผ่านช่องทางในหน้า")}{" "}
+          <Link to="/support">{t("ติดต่อเรา")}</Link>{" "}
+          {t("ร้านจะตั้งรหัสผ่านชั่วคราวให้หลังยืนยันตัวตน")}
+        </p>
+      )}
       <p className="reference-auth-switch">
         {register ? t("มีบัญชีแล้ว?") : t("ยังไม่มีบัญชี?")}{" "}
         <Link
@@ -359,9 +381,11 @@ export function ReferenceProduct({ id }: { id: string }) {
           <h1>{product.name}</h1>
           {product.rating?.count > 0 && (
             <div className="reference-product-rating">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <Star key={n} size={14} fill="currentColor" />
-              ))}
+              <span className="review-stars" role="img" aria-label={t("คะแนน {n} จาก 5", { n: product.rating.average?.toFixed(1) ?? 0 })}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Star key={n} size={14} fill={n <= Math.round(product.rating.average ?? 0) ? "currentColor" : "none"} />
+                ))}
+              </span>
               {product.rating.average?.toFixed(1)}{" "}
               <span>· {product.rating.count}{" "}{t("รีวิว")}</span>
               <span>{t("ขายแล้ว")}{" "}{product.sold}</span>
@@ -369,18 +393,9 @@ export function ReferenceProduct({ id }: { id: string }) {
           )}
           <div className="reference-price">{money(variant.price)}</div>
           {!!product.preorder && (
-            <div className="preorder-dates">
-              <div>
-                <span>{t("ปิดรับจอง")}</span>
-                <strong>23:59</strong>
-                <small>{t("15 พ.ย.")}</small>
-              </div>
-              <div>
-                <span>{t("ได้รับของ")}</span>
-                <strong>23:59</strong>
-                <small>{t("16 ธ.ค.")}</small>
-              </div>
-            </div>
+            <p className="preorder-how">
+              {t("สินค้าพรีออเดอร์: ชำระแล้วได้เลขคิวทันที ร้านส่ง ID และรหัสผ่านตามลำดับคิว และแจ้งเตือนในเว็บเมื่อส่งแล้ว")}
+            </p>
           )}
           <fieldset className="reference-variants">
             <legend>{t("ตัวเลือก")}</legend>
@@ -434,7 +449,7 @@ export function ReferenceProduct({ id }: { id: string }) {
           <p className="reference-delivery-note">
             <KeyRound size={15} />
             {product.preorder
-              ? t("ชำระตอนจอง รับของในประวัติการซื้อ")
+              ? t("ชำระตอนจอง ได้เลขคิว รับของในประวัติการซื้อ")
               : t("สินค้าดิจิทัล ได้รับทันทีหลังชำระเงินในหน้าประวัติการซื้อ")}
           </p>
           <section className="reference-product-description">
@@ -445,17 +460,25 @@ export function ReferenceProduct({ id }: { id: string }) {
       </div>
       <section className="reference-faq">
         <h2>{t("คำถามที่พบบ่อย")}</h2>
-        {(product.preorder ? ["fqewdfww", "fqwdfqwdf"] : [t("ยกแอค ชนไหม")]).map(
-          (q, i) => (
-            <details key={q}>
-              <summary>
-                {q}
-                <ChevronDown size={16} />
-              </summary>
-              <p>{product.preorder ? (i ? "fqwrdfq" : "fqwef") : "123"}</p>
-            </details>
-          ),
-        )}
+        {(product.preorder
+          ? [
+              [t("พรีออเดอร์ได้ของเมื่อไหร่"), t("ร้านส่งตามลำดับคิวที่ได้หลังชำระเงิน เมื่อส่งแล้วจะมีแจ้งเตือนในเว็บ และดู ID กับรหัสผ่านได้ในประวัติการซื้อ")],
+              [t("ดูเลขคิวได้ที่ไหน"), t("เปิดประวัติการซื้อ แล้วกดคำสั่งซื้อนั้น เลขคิวอยู่ในหน้ารายละเอียด")],
+              [t("มีปัญหากับบัญชีที่ได้รับ ทำอย่างไร"), t("กดปุ่มแชทมุมขวาล่างเพื่อติดต่อร้าน แจ้งเลขคำสั่งซื้อด้วย")],
+            ]
+          : [
+              [t("ได้รับสินค้าเมื่อไหร่"), t("ทันทีหลังชำระเงินสำเร็จ ID และรหัสผ่านจะแสดงในหน้าคำสั่งซื้อ และเปิดดูซ้ำได้ในประวัติการซื้อ")],
+              [t("มีปัญหากับบัญชีที่ได้รับ ทำอย่างไร"), t("กดปุ่มแชทมุมขวาล่างเพื่อติดต่อร้าน แจ้งเลขคำสั่งซื้อด้วย")],
+            ]
+        ).map(([q, a]) => (
+          <details key={q}>
+            <summary>
+              {q}
+              <ChevronDown size={16} />
+            </summary>
+            <p>{a}</p>
+          </details>
+        ))}
       </section>
       <section className="reference-product-reviews">
         <h2>{t("รีวิวจากผู้ซื้อ")}</h2>

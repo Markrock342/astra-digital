@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import { createCommerce } from "../server/commerce.mjs";
 import { createAPIHandler } from "../server/api-handler.mjs";
 import { ROLES } from "../server/auth-policy.mjs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomBytes } from "node:crypto";
 // applyMigration006 imported inside W3 test to keep sync fixtures light
 
 function fixture(t) {
@@ -566,10 +570,7 @@ test("ISSUE-18 DB-005: import pairs, deliver, owner credentials, queue, index", 
     () => s.deliverReservation(user, reservation.id),
     (e) => e.status === 403,
   );
-  assert.throws(
-    () => s.deliverReservation(staff, reservation.id),
-    (e) => e.status === 403,
-  );
+  // Team members (STAFF) may deliver preorders since the team-accounts change; customers may not.
 
   // P1 — ADMIN deliver binds reservation_id
   const delivered = s.deliverReservation(merchant, reservation.id);
@@ -1299,6 +1300,88 @@ test("transactions summary works with a date range and a cursor", (t) => {
   assert.equal(second.summary.count, 2);
   assert.equal(second.summary.in, first.summary.in);
 });
+
+test("admin password changed in the back office survives a restart; rotating the secret still applies", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "admin-pw-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "shop.db");
+  const key = randomBytes(32);
+  const boot = (adminPassword) => createCommerce({ path: file, key, adminPassword });
+  let s = boot("Env-secret-One-123");
+  let admin = s.session(s.login({ email: "admin", password: "Env-secret-One-123" }).token);
+  s.profile(admin, { name: admin.name, currentPassword: "Env-secret-One-123", newPassword: "Changed-in-UI-456" });
+  s.db.close();
+  s = boot("Env-secret-One-123");
+  assert.ok(s.login({ email: "admin", password: "Changed-in-UI-456" }).token);
+  s.db.close();
+  s = boot("Env-secret-Two-789");
+  assert.ok(s.login({ email: "admin", password: "Env-secret-Two-789" }).token);
+  s.db.close();
+});
+
+test("admin cancels only unpaid orders, issues a temporary password, and reads the audit log", (t) => {
+  const { s, user, staff, merchant, token } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const unpaid = s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: "cancel-0001" });
+  assert.throws(() => s.adminCancelOrder(staff, unpaid.id, { reason: "ทดสอบ" }), (e) => e.status === 403);
+  assert.throws(() => s.adminCancelOrder(merchant, unpaid.id, {}), (e) => e.status === 400);
+  assert.equal(s.adminCancelOrder(merchant, unpaid.id, { reason: "ลูกค้าขอยกเลิก" }).status, "CANCELLED");
+  const paid = s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: "cancel-0002" });
+  s.pay(user, paid.id, { paymentToken: paid.paymentToken, outcome: "success" });
+  assert.throws(() => s.adminCancelOrder(merchant, paid.id, { reason: "ทดสอบ" }), (e) => e.status === 409);
+
+  const { temporaryPassword } = s.adminResetCustomerPassword(merchant, user.id);
+  assert.equal(temporaryPassword.length, 12);
+  assert.equal(s.session(token), null);
+  assert.ok(s.login({ email: "buyer@example.invalid", password: temporaryPassword }).token);
+  assert.throws(() => s.adminResetCustomerPassword(staff, user.id), (e) => e.status === 403);
+
+  assert.throws(() => s.adminAuditLog(staff), (e) => e.status === 403);
+  const log = s.adminAuditLog(merchant, { scope: "staff", limit: 2 });
+  assert.equal(log.entries[0].action, "CUSTOMER_PASSWORD_RESET");
+  assert.equal(log.entries[1].action, "CANCEL_ORDER");
+  assert.equal(log.entries[1].detail.reason, "ลูกค้าขอยกเลิก");
+  assert.ok(log.nextCursor);
+  const next = s.adminAuditLog(merchant, { scope: "staff", cursor: log.nextCursor });
+  assert.ok(next.entries.every((e) => e.id < log.entries[1].id));
+  assert.ok(s.adminAuditLog(merchant, { action: "CUSTOMER_" }).entries.every((e) => e.action.startsWith("CUSTOMER_")));
+});
+
+test("team accounts and chat assignment", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  assert.throws(() => s.saveStaff(staff, { name: "X", email: "x@example.invalid" }), (e) => e.status === 403);
+  const created = s.saveStaff(merchant, { name: "แอดมินสอง", email: "Second@Example.invalid" });
+  assert.equal(created.member.role, "STAFF");
+  assert.equal(created.temporaryPassword.length, 12);
+  const second = s.session(s.login({ email: "second@example.invalid", password: created.temporaryPassword }).token);
+  assert.ok(s.team(second).some((m) => m.id === merchant.id));
+
+  const opened = s.openChatThread(user, { body: "สินค้าเข้าเมื่อไหร่" });
+  const assigned = s.assignChatThread(merchant, opened.thread.id, { assigneeId: second.id });
+  assert.equal(assigned.assignee, "แอดมินสอง");
+  assert.ok(s.notifications(second).some((n) => n.kind === "chat_assigned"));
+  assert.equal(s.chatThreads(second).find((th) => th.id === opened.thread.id).assignee, "แอดมินสอง");
+  assert.throws(() => s.assignChatThread(user, opened.thread.id, { assigneeId: second.id }), (e) => e.status === 403);
+  assert.throws(() => s.assignChatThread(merchant, opened.thread.id, { assigneeId: user.id }), (e) => e.status === 400);
+  s.postChatMessage(second, opened.thread.id, { body: "พรุ่งนี้ครับ" });
+
+  s.setStaffActive(merchant, second.id, { active: false });
+  assert.throws(() => s.login({ email: "second@example.invalid", password: created.temporaryPassword }), (e) => e.status === 403);
+  assert.equal(s.chatThreads(merchant).find((th) => th.id === opened.thread.id).assigned_to, null);
+  assert.throws(() => s.setStaffActive(merchant, merchant.id, { active: false }), (e) => e.status === 404);
+});
+
+test("live versions bump on mutations", (t) => {
+  const { s, user } = fixture(t);
+  const seen = [];
+  s.onLive((topics) => seen.push(...topics));
+  const before = s.liveVersions();
+  s.openChatThread(user, { body: "สวัสดี" });
+  const after = s.liveVersions();
+  assert.equal(after.chat, before.chat + 1);
+  assert.ok(seen.includes("chat"));
+});
+
 test('ADMIN-FR-W4: variant CRUD active sort and RBAC', (t) => {
   const { s, user, staff, merchant } = fixture(t);
   const product = s.saveProduct(merchant, {
@@ -1454,4 +1537,69 @@ test('ADMIN-FR-W4: inventory list defect delete CSV and lowStockAt', async (t) =
   const { applyMigration007 } = await import('../server/migrate-007.mjs');
   const again = applyMigration007(s.db);
   assert.equal(again.skipped, true);
+});
+
+test("ADMIN-FR-W3 polish: daily buckets use Bangkok day and CSV exports all pages", (t) => {
+  const { s, user, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  // 17:30 UTC = 00:30 next calendar day in Bangkok (+7).
+  const lateUtc = "2026-11-10 17:30:00";
+  const earlyUtc = "2026-11-10 10:00:00";
+  for (const [id, created] of [
+    ["pay-bkk-early", earlyUtc],
+    ["pay-bkk-late", lateUtc],
+  ]) {
+    s.db
+      .prepare(
+        `INSERT INTO ledger(
+          id,user_id,amount,reference,label,kind,direction,fee,net,status,finalized_at,created_at
+        ) VALUES(?,?,?,?,?,'PAYMENT_IN','in',0,?,'SUCCEEDED',?,?)`,
+      )
+      .run(id, user.id, 10000, id, "ทดสอบวันไทย", 10000, created, created);
+  }
+  const summary = s.adminTransactions(merchant, {
+    from: "2026-11-10",
+    to: "2026-11-11",
+  }).summary;
+  const days = summary.daily.map((d) => d.day).sort();
+  assert.deepEqual(days, ["2026-11-10", "2026-11-11"]);
+
+  for (let i = 0; i < 5; i++) {
+    const order = s.createOrder(user, {
+      variantId: "stream-plus-30",
+      quantity: 1,
+      requestKey: "csv-full-" + String(i).padStart(4, "0"),
+    });
+    s.pay(user, order.id, {
+      paymentToken: order.paymentToken,
+      outcome: "success",
+    });
+  }
+  const paged = s.adminTransactions(merchant, { limit: 2 });
+  assert.equal(paged.transactions.length, 2);
+  assert.ok(paged.nextCursor);
+  const csv = s.adminTransactions(merchant, { format: "csv" });
+  const dataLines = csv.csv.trim().split(/\n/).slice(1);
+  assert.ok(dataLines.length >= paged.summary.count);
+  assert.equal(dataLines.length, csv.summary.count);
+  assert.equal(csv.nextCursor, null);
+});
+
+test("sales report groups paid orders by variant and Bangkok day", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  for (const key of ["report-0001", "report-0002"]) {
+    const o = s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: key });
+    s.pay(user, o.id, { paymentToken: o.paymentToken, outcome: "success" });
+  }
+  s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: "report-unpaid" });
+  assert.throws(() => s.salesReport(staff), (e) => e.status === 403);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+  const report = s.salesReport(merchant, { from: today, to: today });
+  const row = report.byProduct.find((r) => r.variant_id === "stream-plus-30");
+  assert.equal(row.orders, 2);
+  assert.equal(report.totals.orders, 2);
+  assert.equal(report.byDay[0].day, today);
+  assert.equal(report.totals.revenue, row.revenue);
+  assert.equal(s.salesReport(merchant, { from: "2000-01-01", to: "2000-01-01" }).totals.orders, 0);
 });

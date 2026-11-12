@@ -1,5 +1,6 @@
 import {
   createHash,
+  createHmac,
   randomBytes,
   randomUUID,
   scryptSync,
@@ -21,6 +22,9 @@ import { credentialFingerprint } from "./migrate-005.mjs";
 import { createAdminListApis } from "./admin-list-apis.mjs";
 import { createAdminFinanceApis } from "./admin-finance-apis.mjs";
 import { createAdminCustomerApis } from "./admin-customers.mjs";
+import { withLive } from "./live.mjs";
+import { createTeamApis } from "./admin-team.mjs";
+import { createReportApis } from "./admin-reports.mjs";
 import { createAdminVariantStockApis } from "./admin-variant-stock-apis.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
@@ -606,13 +610,18 @@ export function createCommerceCore({
     const email = "admin@astra.local";
     const existing = one("SELECT id FROM users WHERE email=?", email);
     const adminId = existing?.id ?? randomUUID();
-    if (existing)
+    // Apply the env password only when the secret itself changes, so a password the
+    // owner changed in the back office survives restarts. Rotating the secret still wins.
+    const secretMark = createHmac("sha256", key).update("admin-secret:" + adminPassword).digest("hex");
+    const appliedMark = one("SELECT value FROM runtime_flags WHERE key='admin-secret'")?.value;
+    if (existing && appliedMark !== secretMark)
       run(
         "UPDATE users SET password_hash=?,role=? WHERE id=?",
         passwordHash(adminPassword),
         ROLES.ADMIN,
         existing.id,
       );
+    else if (existing) run("UPDATE users SET role=? WHERE id=?", ROLES.ADMIN, existing.id);
     else
       run(
         "INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,?)",
@@ -622,6 +631,10 @@ export function createCommerceCore({
         passwordHash(adminPassword),
         ROLES.ADMIN,
       );
+    run(
+      "INSERT INTO runtime_flags(key,value) VALUES('admin-secret',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+      secretMark,
+    );
     // Owner can sign in with the short name "admin" too, unless a customer took it.
     if (!one("SELECT id FROM users WHERE username='admin' AND id<>?", adminId))
       run("UPDATE users SET username='admin' WHERE id=?", adminId);
@@ -1470,7 +1483,7 @@ export function createCommerceCore({
     });
   }
   function deliverReservation(user, id) {
-    requireAdmin(user);
+    requireStaff(user);
     const reservationId = clean(id, 1, 80, "รหัสพรีออเดอร์");
     return tx(() => {
       const reservation = one(
@@ -1680,7 +1693,7 @@ export function createCommerceCore({
     requireUser(user);
     if (isStaff(user))
       return all(
-        `SELECT t.*,u.name AS customer,u.email AS customer_email,
+        `SELECT t.*,u.name AS customer,u.email AS customer_email,a.name AS assignee,
                 (SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id=t.id) AS messages,
                 COALESCE(
                   (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.thread_id=t.id),
@@ -1695,7 +1708,7 @@ export function createCommerceCore({
                       '1970-01-01 00:00:00'
                     )
                 ) AS unreadCount
-         FROM chat_threads t JOIN users u ON u.id=t.user_id
+         FROM chat_threads t JOIN users u ON u.id=t.user_id LEFT JOIN users a ON a.id=t.assigned_to
          ORDER BY lastMessageAt DESC, t.id DESC`,
         user.id,
       );
@@ -1907,7 +1920,11 @@ export function createCommerceCore({
     adminUpdateCustomer,
     adminSetCustomerStatus,
     adminSignOutCustomer,
+    adminResetCustomerPassword,
+    adminAuditLog,
+    adminCancelOrder,
   } = createAdminCustomerApis({
+    passwordHash,
     requireStaff,
     requireAdmin,
     one,
@@ -1916,6 +1933,18 @@ export function createCommerceCore({
     tx,
     fail,
     clean,
+  });
+  const { team, saveStaff, setStaffActive, assignChatThread } = createTeamApis({
+    passwordHash,
+    requireAdmin,
+    requireStaff,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    notify,
   });
   const {
     adminProductVariants,
@@ -1944,6 +1973,7 @@ export function createCommerceCore({
     getLowStockAt,
     randomUUID,
   });
+  const { salesReport } = createReportApis({ requireAdmin, all, one, fail, bangkokDayRange });
   function buyerRanking(user, query = {}) {
     requireAdmin(user);
     const rawLimit = query.limit ?? null;
@@ -1976,7 +2006,7 @@ export function createCommerceCore({
       spentSatang: row.spent_satang,
     }));
   }
-  return {
+  const service = {
     db,
     reviews,
     settings,
@@ -2003,6 +2033,14 @@ export function createCommerceCore({
     adminUpdateCustomer,
     adminSetCustomerStatus,
     adminSignOutCustomer,
+    adminResetCustomerPassword,
+    adminAuditLog,
+    adminCancelOrder,
+    team,
+    saveStaff,
+    setStaffActive,
+    assignChatThread,
+    salesReport,
     adminProductVariants,
     createVariant,
     updateVariant,
@@ -2046,6 +2084,9 @@ export function createCommerceCore({
       productPreorderForm: true,
       adminFinance: true,
       adminCustomerManage: true,
+      liveUpdates: true,
+      teamAccounts: true,
+      chatAssignment: true,
       adminVariantCrud: true,
       adminStockApi: true,
     }),
@@ -2076,4 +2117,5 @@ export function createCommerceCore({
       );
     },
   };
+  return withLive(service, { run, all });
 }

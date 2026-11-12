@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   UserRound,
 } from "lucide-react";
+import { useLive, type LiveTopic } from "./live";
+import { AdminChat as AdminChatLazy, BuyerRankingCard as BuyerRankingInline } from "./Ops";
 import { Art, ErrorMessage, Link, Status, useStore } from "./App";
 import { api, dateTime, money } from "./api";
 
@@ -27,7 +29,9 @@ const query = (filters: Filters, cursor?: string | null) => {
 };
 
 /** Cursor list that refetches when filters change (search is debounced). */
-function useCursorList<T>(path: string, key: string, filters: Filters) {
+function useCursorList<T>(path: string, key: string, filters: Filters, topics: LiveTopic[] = []) {
+  const [tick, setTick] = useState(0);
+  useLive(topics, () => setTick((n) => n + 1));
   const [rows, setRows] = useState<T[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -49,7 +53,7 @@ function useCursorList<T>(path: string, key: string, filters: Filters) {
     }, 250);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, serial]);
+  }, [path, serial, tick]);
   async function more() {
     if (!next) return;
     setLoadingMore(true);
@@ -173,6 +177,22 @@ function MoreRow({ next, more, loading, count }: { next: string | null; more: ()
 
 const shortId = (id: string) => "#" + id.slice(0, 8).toUpperCase();
 
+/** CSV with a BOM for Excel; cells starting with = + - @ are quoted as text. */
+function downloadCsv(name: string, rows: unknown[][]) {
+  const cell = (v: unknown) => {
+    let text = String(v ?? "");
+    if (/^[=+\-@\t\r]/.test(text)) text = "'" + text;
+    return '"' + text.replace(/"/g, '""') + '"';
+  };
+  const csv = rows.map((row) => row.map(cell).join(",")).join("\r\n");
+  const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ---------------------------------------------------------------- Orders
 
 type OrderRow = {
@@ -205,7 +225,7 @@ export function AdminOrders() {
   const { go } = useStore();
   const [filters, setFilters] = useState<Filters>(emptyOrderFilters);
   const [exporting, setExporting] = useState(false);
-  const list = useCursorList<OrderRow>("/admin/orders", "orders", { ...filters, limit: "50" });
+  const list = useCursorList<OrderRow>("/admin/orders", "orders", { ...filters, limit: "50" }, ["orders"]);
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
   const active = Object.values(filters).some(Boolean);
   async function exportCsv() {
@@ -220,8 +240,7 @@ export function AdminOrders() {
         all.push(...page.orders);
         cursor = page.nextCursor;
       } while (cursor && all.length < 10000);
-      const cell = (v: unknown) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
-      const csv = [
+      downloadCsv("orders.csv", [
         ["เลขออเดอร์", "วันที่", "ลูกค้า", "อีเมล", "สินค้า", "ตัวเลือก", "ประเภท", "คิว", "จำนวน", "ยอด (บาท)", "สถานะ"],
         ...all.map((o) => [
           o.id,
@@ -236,15 +255,7 @@ export function AdminOrders() {
           (o.total / 100).toFixed(2),
           o.status,
         ]),
-      ]
-        .map((row) => row.map(cell).join(","))
-        .join("\n");
-      const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "orders.csv";
-      a.click();
-      URL.revokeObjectURL(url);
+      ]);
     } finally {
       setExporting(false);
     }
@@ -354,7 +365,20 @@ const eventText: Record<string, string> = {
 };
 
 export function AdminOrderDetail({ id }: { id: string }) {
-  const { toast } = useStore();
+  const { toast, user } = useStore();
+  const [cancelling, setCancelling] = useState(false);
+  const [reason, setReason] = useState("");
+  async function cancel(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    try {
+      await api("/admin/orders/" + id + "/cancel", { reason });
+      toast("ยกเลิกออเดอร์แล้ว");
+      setCancelling(false);
+      setOrder(await api<OrderDetail>("/admin/orders/" + id));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [revealed, setRevealed] = useState<Pick<OrderDetail, "codes" | "credentials"> | null>(null);
   const [error, setError] = useState("");
@@ -393,6 +417,31 @@ export function AdminOrderDetail({ id }: { id: string }) {
             </div>
             <Status status={order.status} />
           </div>
+          {order.status === "PENDING_PAYMENT" && user?.role === "ADMIN" && (
+            <section className="reference-admin-card admin-detail-card">
+              {cancelling ? (
+                <form className="admin-reason-form" onSubmit={cancel}>
+                  <label className="field">
+                    เหตุผลที่ยกเลิก (บันทึกภายใน)
+                    <input required minLength={3} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
+                  </label>
+                  <div className="admin-action-row">
+                    <button type="button" className="button secondary" onClick={() => setCancelling(false)}>
+                      ไม่ยกเลิก
+                    </button>
+                    <button className="button danger">ยืนยันยกเลิกออเดอร์</button>
+                  </div>
+                </form>
+              ) : (
+                <div className="admin-action-row">
+                  <span className="muted">ออเดอร์นี้ยังไม่ชำระ</span>
+                  <button className="button secondary" onClick={() => setCancelling(true)}>
+                    ยกเลิกออเดอร์
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
           <div className="admin-detail-grid">
             <section className="reference-admin-card admin-detail-card">
               <h2>สินค้า</h2>
@@ -500,9 +549,38 @@ export function AdminCustomers() {
   const { go, user } = useStore();
   const admin = user?.role === "ADMIN";
   const [filters, setFilters] = useState<Filters>(emptyCustomerFilters);
-  const list = useCursorList<CustomerRow>("/admin/customers", "customers", { ...filters, limit: "50" });
+  const list = useCursorList<CustomerRow>("/admin/customers", "customers", { ...filters, limit: "50" }, ["customers", "orders"]);
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
   const active = Object.entries(filters).some(([k, v]) => v && !(k === "sort" && v === "created_at"));
+  const [exporting, setExporting] = useState(false);
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      const rows: CustomerRow[] = [];
+      let cursor: string | null = null;
+      do {
+        const page: { customers: CustomerRow[]; nextCursor: string | null } = await api(
+          "/admin/customers" + query({ ...filters, limit: "100" }, cursor),
+        );
+        rows.push(...page.customers);
+        cursor = page.nextCursor;
+      } while (cursor && rows.length < 20000);
+      downloadCsv("customers.csv", [
+        ["ชื่อ", "อีเมล", "เบอร์โทร", "สถานะ", "ออเดอร์", ...(admin ? ["ยอดซื้อสะสม (บาท)"] : []), "สมัครเมื่อ"],
+        ...rows.map((c) => [
+          c.name,
+          c.email,
+          c.phone ?? "",
+          statusText[c.status] ?? c.status,
+          c.orderCount,
+          ...(admin ? [((c.spentSatang ?? 0) / 100).toFixed(2)] : []),
+          c.created_at,
+        ]),
+      ]);
+    } finally {
+      setExporting(false);
+    }
+  }
   return (
     <>
       <div className="reference-admin-heading">
@@ -510,6 +588,10 @@ export function AdminCustomers() {
           <h1>ลูกค้า</h1>
           <p>กดที่ลูกค้าเพื่อดูยอดเงิน ออเดอร์ แก้ข้อมูล หรือระงับบัญชี</p>
         </div>
+        <button className="button secondary" onClick={exportCsv} disabled={exporting}>
+          <Download size={15} />
+          {exporting ? "กำลังเตรียมไฟล์…" : "ดาวน์โหลด CSV"}
+        </button>
       </div>
       <FilterBar
         search={filters.q}
@@ -627,6 +709,7 @@ const historyText = (h: CustomerDetail["history"][number]) => {
     return "เปลี่ยนสถานะเป็น " + (statusText[s.to] ?? s.to) + (s.reason ? " · " + s.reason : "");
   }
   if (h.action === "CUSTOMER_SIGN_OUT") return "บังคับออกจากระบบทุกอุปกรณ์";
+  if (h.action === "CUSTOMER_PASSWORD_RESET") return "ตั้งรหัสผ่านชั่วคราว";
   if (h.action === "CUSTOMER_UPDATE") {
     const labels: Record<string, string> = { firstName: "ชื่อ", lastName: "นามสกุล", email: "อีเมล", phone: "เบอร์โทร", note: "หมายเหตุ" };
     return "แก้ " + Object.keys(d).map((k) => labels[k] ?? k).join(", ");
@@ -642,6 +725,20 @@ export function AdminCustomerDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [statusDraft, setStatusDraft] = useState<"" | "SUSPENDED" | "BANNED">("");
   const [reason, setReason] = useState("");
+  const [temporary, setTemporary] = useState("");
+  async function resetPassword() {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ temporaryPassword: string }>("/admin/customers/" + id + "/reset-password", {});
+      setTemporary(result.temporaryPassword);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function load() {
     try {
       setData(await api<CustomerDetail>("/admin/customers/" + id));
@@ -802,6 +899,24 @@ export function AdminCustomerDetail({ id }: { id: string }) {
                   บังคับออกจากระบบ ({data.activeSessions})
                 </button>
               )}
+              {admin && (
+                <>
+                  <h2>ลูกค้าลืมรหัสผ่าน</h2>
+                  {temporary ? (
+                    <div className="admin-temp-password">
+                      <p>รหัสผ่านชั่วคราว (แสดงครั้งเดียว ส่งให้ลูกค้าทางช่องทางที่ยืนยันตัวตนแล้ว แล้วให้ลูกค้าเปลี่ยนในหน้าบัญชี)</p>
+                      <code>{temporary}</code>
+                      <button className="button secondary" onClick={() => void navigator.clipboard?.writeText(temporary)}>
+                        คัดลอก
+                      </button>
+                    </div>
+                  ) : (
+                    <button className="button secondary" disabled={busy} onClick={resetPassword}>
+                      ตั้งรหัสผ่านชั่วคราว
+                    </button>
+                  )}
+                </>
+              )}
               <h2>ประวัติการแก้ไข</h2>
               {data.history.length === 0 && <p className="muted">ยังไม่มีการแก้ไขจากแอดมิน</p>}
               <ol className="admin-timeline">
@@ -885,7 +1000,7 @@ export function AdminProducts({
 }) {
   const { go } = useStore();
   const [filters, setFilters] = useState<Filters>(emptyProductFilters);
-  const list = useCursorList<ProductRow>("/admin/products", "products", { ...filters, limit: "50" });
+  const list = useCursorList<ProductRow>("/admin/products", "products", { ...filters, limit: "50" }, ["catalog", "orders"]);
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
   const active = Object.entries(filters).some(([k, v]) => v && !(k === "sort" && v === "name"));
   return (
@@ -1061,7 +1176,7 @@ export function AdminFinance() {
   const [filters, setFilters] = useState<Filters>(emptyFinanceFilters);
   const [summary, setSummary] = useState<TxnSummary | null>(null);
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
-  const list = useCursorList<Txn>("/admin/transactions", "transactions", { ...filters, limit: "50" });
+  const list = useCursorList<Txn>("/admin/transactions", "transactions", { ...filters, limit: "50" }, ["orders", "customers"]);
   const serial = JSON.stringify(filters);
   useEffect(() => {
     api<{ summary: TxnSummary }>("/admin/transactions" + query({ ...filters, limit: "1" }))
@@ -1209,6 +1324,809 @@ export function AdminFinance() {
         )}
       </div>
       {list.rows && <MoreRow next={list.next} more={list.more} loading={list.loadingMore} count={list.rows.length} />}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Settings: account + audit (FR-S3, FR-S5)
+
+export function AdminAccount() {
+  const { user, toast, refresh, go } = useStore();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
+    if (form.newPassword && form.newPassword !== form.confirmPassword) {
+      setError("รหัสผ่านใหม่สองช่องไม่ตรงกัน");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await api("/profile", {
+        name: form.name,
+        ...(form.newPassword ? { currentPassword: form.currentPassword, newPassword: form.newPassword } : {}),
+      });
+      if (form.newPassword) {
+        toast("เปลี่ยนรหัสผ่านแล้ว กรุณาเข้าสู่ระบบใหม่");
+        await refresh();
+        go("/login?next=%2Fadmin");
+      } else {
+        toast("บันทึกแล้ว");
+        await refresh();
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>บัญชีแอดมิน</h1>
+          <p>เปลี่ยนชื่อที่แสดงและรหัสผ่านของบัญชีผู้ดูแล รหัสใหม่มีผลทันทีและอยู่ถาวร</p>
+        </div>
+      </div>
+      <section className="reference-admin-card admin-detail-card admin-account-card">
+        <form onSubmit={submit} className="admin-form-grid">
+          <ErrorMessage message={error} />
+          <label className="field span-2">
+            ชื่อที่แสดง
+            <input name="name" required minLength={2} maxLength={60} defaultValue={user?.name} />
+          </label>
+          <label className="field span-2">
+            รหัสผ่านปัจจุบัน
+            <input name="currentPassword" type="password" autoComplete="current-password" maxLength={128} />
+          </label>
+          <label className="field">
+            รหัสผ่านใหม่
+            <input name="newPassword" type="password" autoComplete="new-password" minLength={10} maxLength={128} />
+          </label>
+          <label className="field">
+            ยืนยันรหัสผ่านใหม่
+            <input name="confirmPassword" type="password" autoComplete="new-password" minLength={10} maxLength={128} />
+          </label>
+          <p className="field-help span-2">เว้นช่องรหัสผ่านว่างถ้าต้องการเปลี่ยนแค่ชื่อ · รหัสใหม่อย่างน้อย 10 ตัวอักษร · เปลี่ยนแล้วทุกอุปกรณ์จะถูกออกจากระบบ</p>
+          <button className="button primary span-2" disabled={busy}>
+            บันทึก
+          </button>
+        </form>
+      </section>
+    </>
+  );
+}
+
+type AuditEntry = {
+  id: number;
+  action: string;
+  entity_id: string | null;
+  detail: Record<string, unknown> | null;
+  created_at: string;
+  actor: string | null;
+  actor_role: string | null;
+};
+const actionText: Record<string, string> = {
+  SAVE_PRODUCT: "บันทึกสินค้า",
+  PRODUCT_SET_PREORDER: "ตั้งสินค้าเป็นพรีออเดอร์",
+  PRODUCT_SET_READY: "ตั้งสินค้าเป็นพร้อมส่ง",
+  IMPORT_CODES: "เติมสต็อก",
+  DELIVER_RESERVATION: "ส่งของพรีออเดอร์",
+  REVEAL_ORDER_CREDENTIALS: "เปิดดูรหัสในออเดอร์",
+  SAVE_SETTINGS: "แก้ตั้งค่าร้าน",
+  SET_PAYMENT_CHANNEL: "แก้ช่องทางรับเงิน",
+  CUSTOMER_UPDATE: "แก้ข้อมูลลูกค้า",
+  CUSTOMER_STATUS: "เปลี่ยนสถานะลูกค้า",
+  CUSTOMER_SIGN_OUT: "บังคับลูกค้าออกจากระบบ",
+  CUSTOMER_PASSWORD_RESET: "ตั้งรหัสผ่านชั่วคราวให้ลูกค้า",
+  UPDATE_PROFILE: "แก้บัญชีตัวเอง",
+  CREATE_ORDER: "สร้างออเดอร์",
+  CREATE_PREORDER: "สร้างพรีออเดอร์",
+  PAYMENT_AND_DELIVERY: "ชำระและส่งของ",
+  PREORDER_PAID: "ชำระพรีออเดอร์",
+  PAYMENT_FAILED: "ชำระไม่สำเร็จ",
+  ADD_REVIEW: "เขียนรีวิว",
+  OPEN_CHAT: "เปิดแชท",
+  CHAT_MESSAGE: "ส่งข้อความแชท",
+  CLOSE_CHAT: "ปิดแชท",
+  DEMO_TOPUP: "เติมเครดิตทดลอง",
+};
+
+export function AdminAudit() {
+  const [scope, setScope] = useState("staff");
+  const [action, setAction] = useState("");
+  const list = useCursorList<AuditEntry>("/admin/audit", "entries", { scope: scope === "staff" ? "staff" : "", action, limit: "50" });
+  const entityLink = (e: AuditEntry) => {
+    if (!e.entity_id) return null;
+    if (e.action.startsWith("CUSTOMER_")) return "/admin/customers/" + e.entity_id;
+    if (["REVEAL_ORDER_CREDENTIALS", "DELIVER_RESERVATION", "CREATE_ORDER", "CREATE_PREORDER", "PAYMENT_AND_DELIVERY", "PREORDER_PAID"].includes(e.action))
+      return "/admin/orders/" + e.entity_id;
+    if (e.action.startsWith("PRODUCT_") || e.action === "SAVE_PRODUCT") return "/admin/products/" + e.entity_id;
+    return null;
+  };
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>ประวัติการทำงาน</h1>
+          <p>ทุกการกระทำในหลังบ้านถูกบันทึกและแก้ไขไม่ได้ ใคร ทำอะไร กับอะไร เมื่อไหร่</p>
+        </div>
+      </div>
+      <div className="admin-filters">
+        <Select
+          label="ผู้ทำ"
+          value={scope}
+          onChange={setScope}
+          options={[
+            ["staff", "เฉพาะแอดมินและทีมงาน"],
+            ["all", "ทุกคน (รวมลูกค้า)"],
+          ]}
+        />
+        <Select
+          label="การกระทำ"
+          value={action}
+          onChange={setAction}
+          options={[
+            ["", "ทุกการกระทำ"],
+            ["CUSTOMER_", "จัดการลูกค้า"],
+            ["PRODUCT_", "เปลี่ยนวิธีส่งของ"],
+            ["SAVE_PRODUCT", "บันทึกสินค้า"],
+            ["IMPORT_CODES", "เติมสต็อก"],
+            ["DELIVER_RESERVATION", "ส่งของพรีออเดอร์"],
+            ["REVEAL_ORDER_CREDENTIALS", "เปิดดูรหัส"],
+            ["SAVE_SETTINGS", "ตั้งค่าร้าน"],
+          ]}
+        />
+      </div>
+      <ErrorMessage message={list.error} />
+      <div className="table-scroll reference-table admin-list-table">
+        <table>
+          <thead>
+            <tr>
+              <th>เวลา</th>
+              <th>ผู้ทำ</th>
+              <th>การกระทำ</th>
+              <th>รายละเอียด</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.rows?.map((e) => {
+              const link = entityLink(e);
+              return (
+                <tr key={e.id}>
+                  <td className="nowrap">{dateTime(e.created_at)}</td>
+                  <td>
+                    {e.actor ?? "ระบบ"}
+                    <small>{e.actor_role === "ADMIN" ? "แอดมิน" : e.actor_role === "STAFF" ? "ทีมงาน" : e.actor_role ? "ลูกค้า" : ""}</small>
+                  </td>
+                  <td>{actionText[e.action] ?? e.action}</td>
+                  <td>
+                    {link ? <Link to={link}>{shortId(e.entity_id!)}</Link> : e.entity_id ? shortId(e.entity_id) : "–"}
+                    {e.detail && <small className="audit-detail">{JSON.stringify(e.detail)}</small>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {list.rows === null && !list.error && <p className="reference-empty-text">กำลังโหลด…</p>}
+        {list.rows?.length === 0 && <p className="reference-empty-text">ยังไม่มีรายการ</p>}
+      </div>
+      {list.rows && <MoreRow next={list.next} more={list.more} loading={list.loadingMore} count={list.rows.length} />}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Settings: team (FR-S4)
+
+type Member = { id: string; name: string; email: string; role: string; active: boolean; created_at: string };
+
+export function AdminTeam() {
+  const { toast, user } = useStore();
+  const [team, setTeam] = useState<Member[] | null>(null);
+  const [error, setError] = useState("");
+  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = () =>
+    api<{ team: Member[] }>("/admin/team")
+      .then((r) => setTeam(r.team))
+      .catch((e) => setError((e as Error).message));
+  useEffect(() => {
+    void load();
+  }, []);
+  useLive(["team"], () => void load());
+  async function add(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const values = Object.fromEntries(new FormData(form)) as Record<string, string>;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ member: Member; temporaryPassword: string }>("/admin/team", values);
+      setCreated({ email: result.member.email, password: result.temporaryPassword });
+      form.reset();
+      toast("เพิ่มทีมงานแล้ว");
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function toggle(m: Member) {
+    try {
+      await api("/admin/team/" + m.id + "/active", { active: !m.active });
+      toast(m.active ? "ปิดบัญชีทีมงานแล้ว" : "เปิดบัญชีทีมงานแล้ว");
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>ทีมงาน</h1>
+          <p>ทีมงานตอบแชท ดูออเดอร์ ส่งของพรีออเดอร์ และดูลูกค้าได้ · ไม่เห็นการเงิน ตั้งค่า และแก้สินค้าไม่ได้</p>
+        </div>
+      </div>
+      <ErrorMessage message={error} />
+      <div className="admin-detail-grid">
+        <section className="reference-admin-card admin-detail-card">
+          <h2>สมาชิก</h2>
+          {!team && <p className="muted">กำลังโหลด…</p>}
+          {team?.map((m) => (
+            <div className="settings-row" key={m.id}>
+              <span>
+                {m.name} {m.id === user?.id && <span className="admin-chip">ฉัน</span>}
+                <small>
+                  {m.email} · {m.role === "ADMIN" ? "แอดมิน (เจ้าของ)" : "ทีมงาน"}
+                  {!m.active && " · ปิดอยู่"}
+                </small>
+              </span>
+              {m.role === "STAFF" && (
+                <button className={"button " + (m.active ? "ghost" : "secondary")} onClick={() => void toggle(m)}>
+                  {m.active ? "ปิดบัญชี" : "เปิดบัญชี"}
+                </button>
+              )}
+            </div>
+          ))}
+        </section>
+        <section className="reference-admin-card admin-detail-card">
+          <h2>เพิ่มทีมงาน</h2>
+          <form onSubmit={add} className="admin-form-grid">
+            <label className="field span-2">
+              ชื่อ
+              <input name="name" required minLength={2} maxLength={60} />
+            </label>
+            <label className="field span-2">
+              อีเมลสำหรับเข้าสู่ระบบ
+              <input name="email" type="email" required maxLength={160} />
+            </label>
+            <button className="button primary span-2" disabled={busy}>
+              เพิ่มทีมงาน
+            </button>
+          </form>
+          {created && (
+            <div className="admin-temp-password">
+              <p>ส่งข้อมูลนี้ให้ทีมงาน (แสดงครั้งเดียว) แล้วให้เปลี่ยนรหัสผ่านหลังเข้าสู่ระบบ</p>
+              <span>อีเมล: {created.email}</span>
+              <code>{created.password}</code>
+            </div>
+          )}
+        </section>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- STAFF back office
+
+type QueueRow = {
+  id: string;
+  queue_number: number;
+  status: string;
+  total: number;
+  quantity: number;
+  created_at: string;
+  customer: string;
+  product: string;
+  label: string;
+};
+
+function StaffQueue() {
+  const { toast } = useStore();
+  const [queue, setQueue] = useState<QueueRow[] | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+  const load = () =>
+    api<{ queue: QueueRow[] }>("/queue")
+      .then((r) => setQueue(r.queue))
+      .catch((e) => setError((e as Error).message));
+  useEffect(() => {
+    void load();
+  }, []);
+  useLive(["orders", "catalog"], () => void load());
+  async function deliver(item: QueueRow) {
+    setBusy(item.id);
+    setError("");
+    try {
+      await api("/admin/reservations/" + item.id + "/deliver", {});
+      toast("ส่งของคิว #" + item.queue_number + " แล้ว");
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+  const waiting = (queue ?? []).filter((q) => q.status === "PREORDER");
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>คิวพรีออเดอร์</h1>
+          <p>ส่งของตามลำดับคิว ระบบดึง ID และรหัสผ่านจากสต็อกให้อัตโนมัติ (แอดมินต้องเติมสต็อกก่อน)</p>
+        </div>
+      </div>
+      <ErrorMessage message={error} />
+      <div className="table-scroll reference-table admin-list-table">
+        <table>
+          <thead>
+            <tr>
+              <th>คิว</th>
+              <th>ลูกค้า</th>
+              <th>สินค้า</th>
+              <th>วันที่</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {waiting.map((q) => (
+              <tr key={q.id}>
+                <td>
+                  <strong>#{q.queue_number}</strong>
+                </td>
+                <td>{q.customer}</td>
+                <td>
+                  {q.product}
+                  <small>
+                    {q.label} · {q.quantity} ชิ้น
+                  </small>
+                </td>
+                <td className="nowrap">{dateTime(q.created_at)}</td>
+                <td>
+                  <button className="button primary" disabled={!!busy} onClick={() => void deliver(q)}>
+                    {busy === q.id ? "กำลังส่ง…" : "ส่งของ"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {queue && !waiting.length && <p className="reference-empty-text">ไม่มีคิวรอส่ง</p>}
+      </div>
+    </>
+  );
+}
+
+/** Team members (STAFF): chat, orders, preorder queue, customers (no money), own account. */
+export function StaffBackOffice({ tab, sub, detailId }: { tab: string; sub: string; detailId?: string }) {
+  if (tab === "chat" || tab === "") return <AdminChatLazy />;
+  if (tab === "orders") return detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />;
+  if (tab === "preorders") return <StaffQueue />;
+  if (tab === "customers") return detailId ? <AdminCustomerDetail id={detailId} /> : <AdminCustomers />;
+  if (sub === "settings/account") return <AdminAccount />;
+  return (
+    <section className="reference-admin-card editor-panel">
+      <h1>ไม่มีสิทธิ์เข้าหน้านี้</h1>
+      <p>บัญชีทีมงานใช้ได้เฉพาะแชท ออเดอร์ คิวพรีออเดอร์ และลูกค้า</p>
+      <Link to="/admin/chat" className="button primary">
+        ไปที่แชท
+      </Link>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- Product variants + stock (FR-P2, FR-P7)
+
+type Variant = {
+  id: string;
+  label: string;
+  price: number;
+  active: boolean;
+  sort_order: number;
+  stock: number;
+  stockStatus: "out" | "low" | "in";
+};
+type StockUnit = {
+  id: string;
+  status: "available" | "sold" | "defective";
+  loginIdMasked?: string;
+  codeMasked?: string;
+  created_at: string;
+  sold_at?: string | null;
+  order_id?: string | null;
+  reservation_id?: string | null;
+  defective_reason?: string | null;
+};
+
+function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () => void }) {
+  const { toast } = useStore();
+  const [status, setStatus] = useState("available");
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const list = useCursorList<StockUnit>(
+    "/admin/variants/" + variant.id + "/inventory",
+    "inventory",
+    { status, limit: "50" },
+    ["catalog", "orders"],
+  );
+  // Excel/Sheets paste uses tabs; "id:password" and "id password" also accepted.
+  const rows = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^([^\t,:\s]+)[\t,:\s]+(.+)$/);
+      return match ? { loginId: match[1], password: match[2].trim() } : null;
+    });
+  const bad = rows.filter((r) => !r).length;
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    if (!rows.length || bad) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api("/admin/inventory", { variantId: variant.id, items: rows });
+      toast("เติมสต็อก " + rows.length + " บัญชีแล้ว");
+      setText("");
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function defect(unit: StockUnit) {
+    const reason = prompt("เหตุผลที่บัญชีนี้ใช้ไม่ได้");
+    if (!reason) return;
+    try {
+      await api("/admin/inventory/" + unit.id + "/defect", { reason });
+      toast("ทำเครื่องหมายว่าเสียแล้ว");
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  async function remove(unit: StockUnit) {
+    if (!confirm("ลบบัญชีนี้ออกจากสต็อก?")) return;
+    try {
+      await api("/admin/inventory/" + unit.id, {}, "DELETE");
+      toast("ลบออกจากสต็อกแล้ว");
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  return (
+    <div className="variant-stock">
+      <form onSubmit={add} className="variant-stock-add">
+        <label className="field">
+          เติมสต็อก: ID และรหัสผ่าน บรรทัดละ 1 บัญชี
+          <textarea
+            aria-label={"เติมสต็อก " + variant.label}
+            rows={4}
+            placeholder={"user1@mail.com,password1\nuser2@mail.com,password2"}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </label>
+        <p className="field-help">
+          วางจาก Excel ได้ (2 คอลัมน์) · คั่นด้วย , หรือ : ก็ได้ · รหัสผ่านเก็บแบบเข้ารหัส ลูกค้าเห็นหลังจ่ายเงินเท่านั้น
+          {rows.length > 0 && !bad && ` · พร้อมเติม ${rows.length} บัญชี`}
+          {bad > 0 && <strong className="danger-text"> · {bad} บรรทัดไม่มีรหัสผ่าน</strong>}
+        </p>
+        <ErrorMessage message={error} />
+        <button className="button primary" disabled={busy || !rows.length || bad > 0}>
+          <Plus size={15} />
+          เติม {rows.length || ""} บัญชี
+        </button>
+      </form>
+      <div className="variant-stock-list">
+        <div className="reference-status-tabs" role="group" aria-label="สถานะสต็อก">
+          {[
+            ["available", "พร้อมขาย"],
+            ["sold", "ขายแล้ว"],
+            ["defective", "เสีย"],
+          ].map(([key, label]) => (
+            <button key={key} type="button" className={status === key ? "active" : ""} onClick={() => setStatus(key)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {list.rows?.length === 0 && <p className="muted">ไม่มีรายการ</p>}
+        {list.rows?.map((u) => (
+          <div className="settings-row" key={u.id}>
+            <span>
+              <code>{u.loginIdMasked ?? u.codeMasked ?? "•••"}</code>
+              <small>
+                เติมเมื่อ {dateTime(u.created_at)}
+                {u.sold_at && " · ขาย " + dateTime(u.sold_at)}
+                {(u.order_id || u.reservation_id) && (
+                  <>
+                    {" · "}
+                    <Link to={"/admin/orders/" + (u.order_id ?? u.reservation_id)}>ออเดอร์</Link>
+                  </>
+                )}
+                {u.defective_reason && " · " + u.defective_reason}
+              </small>
+            </span>
+            {u.status === "available" && (
+              <span className="admin-action-row">
+                <button type="button" className="button ghost" onClick={() => void defect(u)}>
+                  เสีย
+                </button>
+                <button type="button" className="button ghost" onClick={() => void remove(u)}>
+                  ลบ
+                </button>
+              </span>
+            )}
+            {u.status === "sold" && (
+              <button type="button" className="button ghost" onClick={() => void defect(u)}>
+                แจ้งเสีย
+              </button>
+            )}
+          </div>
+        ))}
+        {list.next && (
+          <button type="button" className="button secondary" onClick={list.more}>
+            โหลดเพิ่ม
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function VariantManager({ productId, preorder }: { productId: string; preorder: boolean }) {
+  const { toast } = useStore();
+  const [variants, setVariants] = useState<Variant[] | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const load = () =>
+    api<{ variants: Variant[] }>("/admin/products/" + productId + "/variants")
+      .then((r) => setVariants(r.variants))
+      .catch((e) => setError((e as Error).message));
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId]);
+  useLive(["catalog", "orders"], () => void load());
+  const baht = (value: FormDataEntryValue | null) => Math.round(Number(value ?? 0) * 100);
+  async function create(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const data = new FormData(form);
+    try {
+      await api("/admin/products/" + productId + "/variants", { label: data.get("label"), price: baht(data.get("price")) });
+      toast("เพิ่มตัวเลือกแล้ว");
+      form.reset();
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  async function update(v: Variant, patch: Partial<Variant>) {
+    try {
+      await api("/admin/variants/" + v.id, patch, "PATCH");
+      toast("บันทึกตัวเลือกแล้ว");
+      setEditing(null);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  async function remove(v: Variant) {
+    if (!confirm("ลบตัวเลือก " + v.label + "? ถ้าเคยมีออเดอร์ ระบบจะให้ปิดแทน")) return;
+    try {
+      await api("/admin/variants/" + v.id, {}, "DELETE");
+      toast("ลบตัวเลือกแล้ว");
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  return (
+    <section className="reference-admin-card editor-panel variant-manager">
+      <h2>ตัวเลือก ราคา และสต็อก</h2>
+      <p className="field-help">
+        {preorder
+          ? "สินค้าพรีออเดอร์: ลูกค้าจ่ายแล้วได้คิว เติมสต็อกเมื่อของพร้อม แล้วกดส่งในคิวพรีออเดอร์"
+          : "ลูกค้าจ่ายแล้วได้ ID และรหัสผ่านจากสต็อกของตัวเลือกนั้นทันที สต็อกหมดหน้าร้านขึ้นว่าหมดเอง"}
+      </p>
+      <ErrorMessage message={error} />
+      {variants?.map((v) => (
+        <div className={"variant-row" + (v.active ? "" : " inactive")} key={v.id}>
+          {editing === v.id ? (
+            <form
+              className="variant-edit"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const data = new FormData(e.currentTarget);
+                void update(v, { label: String(data.get("label")), price: baht(data.get("price")) });
+              }}
+            >
+              <input name="label" aria-label="ชื่อตัวเลือก" defaultValue={v.label} required maxLength={80} />
+              <input name="price" aria-label="ราคา (บาท)" type="number" min="1" step="0.01" defaultValue={v.price / 100} required />
+              <button className="button primary">บันทึก</button>
+              <button type="button" className="button ghost" onClick={() => setEditing(null)}>
+                ยกเลิก
+              </button>
+            </form>
+          ) : (
+            <div className="variant-summary">
+              <span>
+                <strong>{v.label}</strong>
+                <small>
+                  {money(v.price)} · {v.active ? "เปิดขาย" : "ปิดอยู่"}
+                </small>
+              </span>
+              <button
+                type="button"
+                className={"stock-link stock-" + v.stockStatus}
+                aria-expanded={open === v.id}
+                onClick={() => setOpen(open === v.id ? null : v.id)}
+              >
+                สต็อก {v.stock} {open === v.id ? "▲" : "▼"}
+              </button>
+              <span className="admin-action-row">
+                <button type="button" className="button ghost" onClick={() => setEditing(v.id)}>
+                  แก้
+                </button>
+                <button type="button" className="button ghost" onClick={() => void update(v, { active: !v.active })}>
+                  {v.active ? "ปิด" : "เปิด"}
+                </button>
+                <button type="button" className="button ghost" onClick={() => void remove(v)}>
+                  ลบ
+                </button>
+              </span>
+            </div>
+          )}
+          {open === v.id && <VariantStock variant={v} onChanged={() => void load()} />}
+        </div>
+      ))}
+      <form className="variant-edit variant-new" onSubmit={create}>
+        <input name="label" aria-label="ชื่อตัวเลือกใหม่" placeholder="ชื่อตัวเลือก เช่น 30 วัน จอส่วนตัว" required maxLength={80} />
+        <input name="price" aria-label="ราคาตัวเลือกใหม่ (บาท)" type="number" min="1" step="0.01" placeholder="ราคา (บาท)" required />
+        <button className="button secondary">
+          <Plus size={15} />
+          เพิ่มตัวเลือก
+        </button>
+      </form>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- Reports (FR-R)
+
+type SalesRow = { product_id: string; product: string; variant_id: string; variant: string; preorder: boolean; orders: number; units: number; revenue: number };
+type DayRow = { day: string; orders: number; units: number; revenue: number; buyers: number };
+type SalesReport = {
+  totals: { orders: number; units: number; revenue: number; buyers: number; refunds: number; net: number };
+  byProduct: SalesRow[];
+  byDay: DayRow[];
+};
+
+export function AdminReports() {
+  const [range, setRange] = useState<{ from: string; to: string }>({ from: bangkokDay(29), to: bangkokDay(0) });
+  const [report, setReport] = useState<SalesReport | null>(null);
+  const [error, setError] = useState("");
+  const [tick, setTick] = useState(0);
+  useLive(["orders"], () => setTick((n) => n + 1));
+  useEffect(() => {
+    api<SalesReport>("/admin/reports/sales" + query(range))
+      .then((r) => {
+        setReport(r);
+        setError("");
+      })
+      .catch((e) => setError((e as Error).message));
+  }, [range.from, range.to, tick]);
+  const presets: [string, string, string][] = [
+    ["วันนี้", bangkokDay(0), bangkokDay(0)],
+    ["7 วัน", bangkokDay(6), bangkokDay(0)],
+    ["30 วัน", bangkokDay(29), bangkokDay(0)],
+    ["เดือนนี้", bangkokDay(0).slice(0, 8) + "01", bangkokDay(0)],
+    ["ทั้งหมด", "", ""],
+  ];
+  const peak = Math.max(1, ...(report?.byDay ?? []).map((d) => d.revenue));
+  const exportCsv = () =>
+    report &&
+    downloadCsv("sales-report.csv", [
+      ["สินค้า", "ตัวเลือก", "ประเภท", "ออเดอร์", "ชิ้น", "ยอดขาย (บาท)"],
+      ...report.byProduct.map((r) => [r.product, r.variant, r.preorder ? "พรีออเดอร์" : "พร้อมส่ง", r.orders, r.units, (r.revenue / 100).toFixed(2)]),
+      [],
+      ["วัน", "ออเดอร์", "ชิ้น", "ผู้ซื้อ", "ยอดขาย (บาท)"],
+      ...report.byDay.map((d) => [d.day, d.orders, d.units, d.buyers, (d.revenue / 100).toFixed(2)]),
+    ]);
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>รายงานยอดขาย</h1>
+          <p>นับเฉพาะออเดอร์ที่ชำระสำเร็จ · เวลาไทย · ยอดสุทธิหักคืนเงินแล้ว</p>
+        </div>
+        <button className="button secondary" onClick={exportCsv} disabled={!report}>
+          <Download size={15} />
+          ดาวน์โหลด CSV
+        </button>
+      </div>
+      <div className="admin-filters">
+        <div className="reference-status-tabs" role="group" aria-label="ช่วงรายงาน">
+          {presets.map(([label, from, to]) => (
+            <button key={label} className={range.from === from && range.to === to ? "active" : ""} onClick={() => setRange({ from, to })}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <DateRange from={range.from} to={range.to} onChange={(from, to) => setRange({ from, to })} />
+      </div>
+      <ErrorMessage message={error} />
+      <div className="admin-stat-row">
+        {[
+          ["ยอดขาย", report ? money(report.totals.revenue) : "–"],
+          ["ยอดสุทธิ (หักคืนเงิน)", report ? money(report.totals.net) : "–"],
+          ["ออเดอร์ที่ชำระ", report ? String(report.totals.orders) : "–"],
+          ["ผู้ซื้อ", report ? String(report.totals.buyers) : "–"],
+        ].map(([label, value]) => (
+          <div className="reference-admin-card" key={label}>
+            <small>{label}</small>
+            <strong>{value}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="admin-detail-grid">
+        <section className="reference-admin-card admin-detail-card">
+          <h2>ยอดขายตามสินค้า</h2>
+          {report?.byProduct.length === 0 && <p className="muted">ยังไม่มียอดขายในช่วงนี้</p>}
+          {report?.byProduct.map((r) => (
+            <div className="report-bar-row" key={r.variant_id}>
+              <span>
+                <Link to={"/admin/products/" + r.product_id}>{r.product}</Link>
+                <small>
+                  {r.variant} · {r.units} ชิ้น · {r.orders} ออเดอร์{r.preorder ? " · พรีออเดอร์" : ""}
+                </small>
+              </span>
+              <strong>{money(r.revenue)}</strong>
+              <i style={{ width: (r.revenue / Math.max(1, report.byProduct[0].revenue)) * 100 + "%" }} />
+            </div>
+          ))}
+        </section>
+        <section className="reference-admin-card admin-detail-card">
+          <h2>ยอดขายรายวัน</h2>
+          {report?.byDay.length === 0 && <p className="muted">ยังไม่มียอดขายในช่วงนี้</p>}
+          {report?.byDay
+            .slice()
+            .reverse()
+            .map((d) => (
+              <div className="report-bar-row" key={d.day}>
+                <span>
+                  {new Date(d.day + "T12:00:00+07:00").toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" })}
+                  <small>
+                    {d.orders} ออเดอร์ · {d.buyers} ผู้ซื้อ
+                  </small>
+                </span>
+                <strong>{money(d.revenue)}</strong>
+                <i style={{ width: (d.revenue / peak) * 100 + "%" }} />
+              </div>
+            ))}
+        </section>
+      </div>
+      <BuyerRankingInline />
     </>
   );
 }

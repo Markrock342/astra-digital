@@ -11,6 +11,7 @@ import {
   applyMigration006,
   MIGRATION_006_NAME,
 } from "../server/migrate-006.mjs";
+import { ensureLiveVersions } from "../server/live.mjs";
 import {
   applyMigration007,
   MIGRATION_007_NAME,
@@ -83,6 +84,7 @@ export class Commerce extends DurableObject {
       ensureInventoryAvailableIndex(db);
       ensureChatThreadReads(db);
       ensureCustomerAdmin(db);
+      ensureLiveVersions(db);
     });
     this.db = db;
     const adminPassword =
@@ -105,6 +107,16 @@ export class Commerce extends DurableObject {
           : undefined,
     });
     this.service.storageKind = "cloudflare-durable-sqlite";
+    this.service.onLive((topics) => {
+      const message = JSON.stringify({ topics });
+      for (const ws of this.ctx.getWebSockets()) {
+        try {
+          ws.send(message);
+        } catch {
+          // client went away; the runtime cleans it up
+        }
+      }
+    });
     this.presentation = false;
     this.handle = createAPIHandler(this.service, {
       rateLimit: (key) =>
@@ -131,7 +143,26 @@ export class Commerce extends DurableObject {
     });
   }
   async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname === "/api/live" && request.headers.get("Upgrade") === "websocket") {
+      // Signals only ("chat changed"), never data, so anonymous storefront tabs may listen too.
+      if (this.ctx.getWebSockets().length >= 500)
+        return new Response("Too many live connections", { status: 503 });
+      const pair = new WebSocketPair();
+      this.ctx.acceptWebSocket(pair[1]);
+      return new Response(null, { status: 101, webSocket: pair[0] });
+    }
     return this.handle(request);
+  }
+  webSocketMessage(ws, message) {
+    if (message === "ping") ws.send("pong");
+  }
+  webSocketClose(ws, code) {
+    try {
+      ws.close(code, "bye");
+    } catch {
+      // already closed
+    }
   }
 }
 export default {
@@ -164,6 +195,7 @@ export default {
             );
         }
         response = await shop.fetch(request);
+        if (response.status === 101) return response;
       } else {
         if (
           /\/(?:\.data|\.env|server|cloud|node_modules)(?:\/|$)/.test(

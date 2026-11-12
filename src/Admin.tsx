@@ -36,11 +36,19 @@ import {
   X,
   Clock3,
 } from "lucide-react";
+import { useLive } from "./live";
 import { Art, Empty, ErrorMessage, Link, Status, useStore } from "./App";
 import { useDialog } from "./dialog";
 import { api, dateTime, money } from "./api";
+import { AdminDashboard } from "./AdminDashboard";
 import { AdminChat, BuyerRanking, BuyerRankingCard, PaymentChannelSettings } from "./Ops";
 import {
+  AdminAccount,
+  AdminAudit,
+  AdminReports,
+  AdminTeam,
+  StaffBackOffice,
+  VariantManager,
   AdminCustomerDetail,
   AdminFinance,
   AdminCustomers,
@@ -61,6 +69,9 @@ const orderTabs = [
 const settingTabs = [
   ["settings", "ร้าน"],
   ["settings/payment", "รับเงิน"],
+  ["settings/team", "ทีมงาน"],
+  ["settings/account", "บัญชีแอดมิน"],
+  ["settings/audit", "ประวัติการทำงาน"],
 ];
 function Subnav({ items, current }: { items: string[][]; current: string }) {
   return (
@@ -107,7 +118,6 @@ export default function Admin() {
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
   const [importing, setImporting] = useState(false);
-  const [range, setRange] = useState("today");
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
   const [features, setFeatures] = useState<Features>({});
@@ -150,6 +160,11 @@ export default function Admin() {
       setError((e as Error).message);
     }
   }
+  // Orders, stock and queue counts refresh the moment anything changes.
+  useLive(["orders", "catalog", "customers"], () => {
+    if (user?.role === "ADMIN") void load();
+    if (user?.role === "ADMIN" && tab === "preorders") void loadQueue();
+  });
   useEffect(() => {
     if (user?.role === "ADMIN") void load();
   }, [user?.id]);
@@ -268,12 +283,21 @@ export default function Admin() {
       setBusy(false);
     }
   }
+  if (user?.role === "STAFF")
+    return (
+      <>
+        {orderGroup && <Subnav items={orderTabs} current={tab} />}
+        <main className="reference-admin-main">
+          <StaffBackOffice tab={tab} sub={sub} detailId={detailId} />
+        </main>
+      </>
+    );
   if (!user || user.role !== "ADMIN")
     return (
       <main className="reference-merchant-login">
-        <div className="merchant-login-logo">A</div>
+        <div className="merchant-login-logo">AX</div>
         <h1>เข้าสู่ระบบ</h1>
-        <p>จัดการร้านค้าของคุณบน ASTRA</p>
+        <p>หลังบ้าน ASIA EXTRA สำหรับผู้ดูแลร้าน</p>
         {user && (
           <p className="error-message">
             บัญชีนี้ไม่มีสิทธิ์เข้าถึงระบบจัดการร้านค้า
@@ -342,29 +366,6 @@ export default function Admin() {
       ))}
     </section>
   );
-  const todayKey = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Bangkok",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-  const start = new Date();
-  if (range === "week") start.setDate(start.getDate() - 7);
-  else if (range === "month") start.setDate(start.getDate() - 30);
-  const period = data.orders.filter(
-    (o) =>
-      range === "all" ||
-      (range === "today"
-        ? o.created_at.startsWith(todayKey)
-        : new Date(o.created_at + "Z") >= start),
-  );
-  const paid = period.filter(
-    (o) => o.status === "DELIVERED" || o.status === "PREORDER",
-  );
-  const revenue = paid.reduce((n, o) => n + o.total, 0);
-  const tasks = data.orders.filter(
-    (o) => o.status === "PENDING_PAYMENT",
-  ).length;
   return (
     <>
       {productGroup && <Subnav items={productTabs} current={tab} />}{" "}
@@ -376,7 +377,8 @@ export default function Admin() {
         }
       >
         {!importing && <ErrorMessage message={error} />}
-        {tab === "" || tab === "reports" ? (
+        {tab === "reports" && <AdminReports />}
+        {tab === "" ? (
           <>
             <div className="reference-overview-title">
               <div>
@@ -458,152 +460,13 @@ export default function Admin() {
                 </div>
               )}
             </section>
-            <div className="reference-section-heading">
-              <div>
-                <h2>ยอดขายและเงินเข้า</h2>
-                <p>เทียบเมื่อวาน</p>
-              </div>
-              <div className="segmented-control">
-                {[
-                  ["today", "วันนี้"],
-                  ["week", "สัปดาห์นี้"],
-                  ["month", "เดือนนี้"],
-                  ["all", "เลือกเอง"],
-                ].map(([key, label]) => (
-                  <button
-                    className={range === key ? "active" : ""}
-                    key={key}
-                    onClick={() => setRange(key)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <section className="reference-admin-metrics">
-              {[
-                ["ยอดขาย", money(revenue), "ยังไม่มีทั้งสองช่วง"],
-                [
-                  "ออเดอร์ที่ชำระแล้ว",
-                  String(paid.length),
-                  "ยังไม่มีทั้งสองช่วง",
-                ],
-                ["รหัสสินค้าคงเหลือ", String(data.stock), "ชิ้นที่ยังไม่ถูกส่ง"],
-                [
-                  "ลูกค้าใหม่",
-                  String(
-                    data.customers.filter((c) =>
-                      c.created_at.startsWith(todayKey),
-                    ).length,
-                  ),
-                  "ลูกค้าทั้งหมด " +
-                    data.customers.filter((c) => c.role === "CUSTOMER").length +
-                    " คน",
-                ],
-              ].map(([label, value, note]) => (
-                <div key={label}>
-                  <span>{label}</span>
-                  <strong>{value}</strong>
-                  <small>{note}</small>
-                </div>
-              ))}
-            </section>
-            <div className="reference-dashboard-grid">
-              <section className="reference-admin-card sales-graph">
-                <div className="reference-card-heading">
-                  <h2>ยอดขายตามช่วงเวลา</h2>
-                  <div className="segmented-control small">
-                    <button className="active">ยอดขาย</button>
-                    <button onClick={() => go("/admin/payments")}>
-                      เงินเติมเข้า
-                    </button>
-                  </div>
-                </div>
-                {paid.length ? (
-                  <div className="reference-sales-bars">
-                    {paid.slice(-7).map((o) => (
-                      <div key={o.id}>
-                        <span>{money(o.total)}</span>
-                        <i
-                          style={{
-                            height: Math.max(
-                              5,
-                              (o.total /
-                                Math.max(...paid.map((x) => x.total))) *
-                                180,
-                            ),
-                          }}
-                        />
-                        <small>{dateTime(o.created_at).split(" ").slice(0,3).join(" ")}</small>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="reference-chart-empty">
-                    ยังไม่มียอดขายในช่วงนี้
-                  </div>
-                )}
-              </section>
-              <section className="reference-admin-card tasks-card">
-                <div className="reference-card-heading">
-                  <h2>งานที่ต้องทำ</h2>
-                  <span>{tasks} เรื่อง</span>
-                </div>
-                {tasks ? (
-                  <Link to="/admin/orders" className="task-item">
-                    <span className="task-icon">
-                      <Receipt size={24} />
-                    </span>
-                    <div>
-                      <strong>ออเดอร์รอชำระ</strong>
-                      <p>คำสั่งซื้อที่บันทึกแล้วและยังรอการชำระเงิน</p>
-                    </div>
-                    <b>{tasks}</b>
-                    <ChevronRight size={17} />
-                  </Link>
-                ) : (
-                  <p className="reference-empty-text">ไม่มีงานค้างในขณะนี้</p>
-                )}
-              </section>
-              <section className="reference-admin-card">
-                <div className="reference-card-heading">
-                  <h2>ลูกค้าจ่ายด้วยอะไร</h2>
-                </div>
-                <p className="reference-empty-text">
-                  {tasks
-                    ? tasks + " รายการรอเชื่อมช่องทางชำระเงิน"
-                    : paid.length
-                      ? paid.length + " รายการที่จัดส่งแล้ว"
-                      : "ยังไม่มีออเดอร์ในช่วงนี้"}
-                </p>
-              </section>
-              <section className="reference-admin-card">
-                <div className="reference-card-heading">
-                  <h2>ขายดีที่สุด</h2>
-                </div>
-                {paid.length ? (
-                  data.products
-                    .filter((p) => paid.some((o) => o.product_id === p.id))
-                    .map((p) => (
-                      <div className="reference-bestseller" key={p.id}>
-                        <span>{p.name}</span>
-                        <strong>
-                          {paid
-                            .filter((o) => o.product_id === p.id)
-                            .reduce((n, o) => n + o.quantity, 0)}{" "}
-                          ชิ้น
-                        </strong>
-                      </div>
-                    ))
-                ) : (
-                  <p className="reference-empty-text">
-                    ยังไม่มีสินค้าที่ขายได้ในช่วงนี้
-                  </p>
-                )}
-              </section>
+            <AdminDashboard
+              pendingPayment={data.orders.filter((o) => o.status === "PENDING_PAYMENT").length}
+              preorderQueue={data.orders.filter((o) => o.status === "PREORDER").length}
+            >
               <BuyerRankingCard />
               {recent}
-            </div>
+            </AdminDashboard>
           </>
         ) : null}
         {tab === "products" && !formOpen && (
@@ -716,7 +579,7 @@ export default function Admin() {
                     />
                   </div>
                   <small>
-                    ลิงก์สำหรับสินค้าจะถูกกำหนดให้อัตโนมัติในร้านทดลอง
+                    ระบบกำหนดลิงก์ให้อัตโนมัติจากรหัสสินค้า
                   </small>
                 </label>
                 <label className="field">
@@ -744,6 +607,13 @@ export default function Admin() {
                     ))}
                   </select>
                 </label>
+                {newProduct && (
+                  <label className="field">
+                    ราคาตัวเลือกแรก (บาท)
+                    <input name="price" type="number" step="0.01" min="1" max="100000" required />
+                    <small>เพิ่มตัวเลือกอื่น (เช่น 30 วัน / 90 วัน) และเติมสต็อกได้หลังสร้าง</small>
+                  </label>
+                )}
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
@@ -767,46 +637,16 @@ export default function Admin() {
                       />
                     </div>
                   </section>
-                  <section className="reference-admin-card editor-panel">
-                    <h2>ตัวเลือกราคาและสต็อก</h2>
-                    <label className="field">
-                      ราคา (บาท)
-                      <input
-                        name="price"
-                        type="number"
-                        step="0.01"
-                        min="1"
-                        max="100000"
-                        required
-                        defaultValue={
-                          Math.max(
-                            1,
-                            editingProduct!.variants.find((v) => v.price > 0)
-                              ?.price ?? 100,
-                          ) / 100
-                        }
-                      />
-                    </label>
-                    <div className="editor-variant-list">
-                      {editingProduct!.variants.map((v) => (
-                        <div key={v.id}>
-                          <span>
-                            {v.label}
-                            <small>{money(v.price)}</small>
-                          </span>
-                          <strong>{v.stock} ชิ้น</strong>
-                        </div>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      className="button secondary"
-                      onClick={() => setImporting(true)}
-                    >
-                      <Plus size={15} />
-                      เติมสต็อก
-                    </button>
-                  </section>
+                  <input
+                    type="hidden"
+                    name="price"
+                    value={
+                      Math.max(
+                        100,
+                        Math.min(...editingProduct!.variants.map((v) => v.price).filter((p) => p > 0), 1e9),
+                      ) / 100
+                    }
+                  />
                   <section className="reference-admin-card editor-panel">
                     <h2>สถานะสินค้า</h2>
                     <label className="checkbox-label">
@@ -823,8 +663,8 @@ export default function Admin() {
               <div className="editor-save-bar">
                 <span>
                   {newProduct
-                    ? "ขั้นถัดไป: รูปภาพ ตัวเลือกราคา และสต็อก แล้วกดเปิดขาย"
-                    : "มีการแก้ไขที่ยังไม่บันทึก"}
+                    ? "สร้างแล้วจะไปหน้าตัวเลือกและสต็อก จากนั้นเติมบัญชีแล้วกดเปิดขาย"
+                    : "บันทึกข้อมูลสินค้า (ตัวเลือกและสต็อกบันทึกทันทีด้านล่าง)"}
                 </span>
                 <Link className="button secondary" to="/admin/products">
                   ยกเลิก
@@ -835,6 +675,9 @@ export default function Admin() {
                 </button>
               </div>
             </form>
+            {editingProduct && !newProduct && (
+              <VariantManager productId={editingProduct.id} preorder={!!editingProduct.preorder} />
+            )}
           </>
         )}
         {tab === "inventory" && (
@@ -1010,6 +853,12 @@ export default function Admin() {
         {tab === "settings" &&
           (sub === "settings/payment" ? (
             <PaymentChannelSettings />
+          ) : sub === "settings/team" ? (
+            <AdminTeam />
+          ) : sub === "settings/account" ? (
+            <AdminAccount />
+          ) : sub === "settings/audit" ? (
+            <AdminAudit />
           ) : (
             <ReferenceSettings sub={sub} />
           ))}

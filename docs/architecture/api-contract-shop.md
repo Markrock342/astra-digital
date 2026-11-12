@@ -130,7 +130,8 @@
 - kinds เงินจริง: `PAYMENT_IN|TOPUP|PURCHASE|REFUND|ADJUSTMENT|WITHDRAWAL|FEE`
 - คืน `{ transactions[], summary, nextCursor }`
 - `summary` ตามตัวกรองเดียวกัน: `{ in, out, net, pending, count, daily[] }`
-- `format=csv` → ไฟล์ CSV ตามตัวกรอง (FR-F9)
+- `summary.daily[].day` = วันปฏิทิน **Asia/Bangkok** (ไม่ใช่ substr UTC ของ `created_at`)
+- `format=csv` → ไฟล์ CSV **ทุกแถวตามตัวกรอง** (ไม่ตัดตามหน้า cursor) สูงสุด 10 000 แถว เกินแล้ว 400 (FR-F9)
 - ตอนชำระ sandbox สำเร็จ บันทึกอย่างน้อย `PAYMENT_IN` ใน ledger (แยกจาก `DEMO_CREDIT` / `PURCHASE` ของ wallet)
 - runtime **ห้าม** UPDATE/DELETE แถวเงิน — แก้ด้วยแถว `ADJUSTMENT` (UI คืนเงิน/ถอน = งาน 5)
 

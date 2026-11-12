@@ -158,3 +158,25 @@ test("finance lists real money with timestamps and hides demo credit by default"
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await noSideScroll(page)).toBe(true);
 });
+
+test("dashboard reads server numbers, audit log lists admin actions, unpaid order can be cancelled", async ({ page }) => {
+  await as(page, adminToken);
+  await page.goto(base + "/admin");
+  await expect(page.locator(".reference-admin-metrics")).toContainText("ยอดขาย");
+  await expect(page.locator(".reference-admin-metrics")).not.toContainText("เลือกเอง");
+  await page.getByRole("button", { name: "ทั้งหมด", exact: true }).click();
+  await expect(page.locator(".reference-admin-metrics")).toContainText("฿100.00");
+
+  const unpaid = service.createOrder(buyer, { variantId: "stream-plus-30", quantity: 1, requestKey: "lists-e2e-unpaid-01" });
+  await page.goto(base + "/admin/orders/" + unpaid.id);
+  await page.getByRole("button", { name: "ยกเลิกออเดอร์" }).click();
+  await page.getByLabel(/เหตุผลที่ยกเลิก/).fill("ลูกค้าขอยกเลิก");
+  await page.getByRole("button", { name: "ยืนยันยกเลิกออเดอร์" }).click();
+  await expect(page.getByText("ยกเลิกออเดอร์แล้ว")).toBeVisible();
+
+  await page.goto(base + "/admin/settings/audit");
+  await expect(page.locator(".admin-list-table tbody")).toContainText("ลูกค้าขอยกเลิก");
+  await expect(page.locator(".admin-list-table tbody")).toContainText("เปลี่ยนสถานะลูกค้า");
+  await page.goto(base + "/admin/settings/account");
+  await expect(page.getByRole("heading", { name: "บัญชีแอดมิน" })).toBeVisible();
+});
