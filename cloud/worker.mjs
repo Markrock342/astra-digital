@@ -27,6 +27,7 @@ import {
   ensureCustomerAdmin,
   ensureOrderHistory,
   ensureProductsStock,
+  ensureAlertsBackup,
 } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
 import {
@@ -99,6 +100,7 @@ export class Commerce extends DurableObject {
       ensureProductsStock(db);
       ensureLiveVersions(db);
       ensureAppendOnlyMoney(db);
+      ensureAlertsBackup(db);
     });
     this.db = db;
     const adminPassword =
@@ -117,6 +119,13 @@ export class Commerce extends DurableObject {
       seed: false,
       // R2 binding UPLOADS when Mark creates the bucket; otherwise SQLite files BLOB.
       uploads: env.UPLOADS,
+      // Automatic daily backup only when Mark binds the BACKUPS bucket (wrangler.jsonc).
+      backups: env.BACKUPS,
+      // Outbound alerts: fire-and-forget fetch, kept alive with waitUntil.
+      alertFetch: (url, init) => fetch(url, init),
+      waitUntil: (promise) => ctx.waitUntil?.(promise),
+      // Local wrangler tests only: loopback URL that replaces the provider host.
+      alertRedirect: env.ASTRA_ALERT_REDIRECT,
       adminPassword:
         typeof adminPassword === "string" && adminPassword.length >= 8
           ? adminPassword
@@ -171,7 +180,44 @@ export class Commerce extends DurableObject {
       this.ctx.acceptWebSocket(pair[1]);
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
-    return this.handle(request);
+    const response = await this.handle(request);
+    // Saving alert settings can switch the daily summary on/off: re-check the alarm now.
+    await this.ensureAlarm(
+      request.method === "POST" && url.pathname === "/api/admin/alerts" && response.ok,
+    );
+    return response;
+  }
+  /**
+   * One Durable Object alarm drives the scheduled work (daily summary at 21:00 Bangkok,
+   * R2 backup from 04:00 Bangkok when BACKUPS is bound). No alarm when neither is on.
+   * Checked at most every 5 minutes on requests, and again after each alarm.
+   */
+  async ensureAlarm(force = false) {
+    const now = Date.now();
+    if (!force && now - (this.alarmCheckedAt ?? 0) < 300000) return;
+    this.alarmCheckedAt = now;
+    try {
+      const next = this.service.nextScheduledRun(now);
+      const current = await this.ctx.storage.getAlarm();
+      if (next == null) {
+        if (current != null) await this.ctx.storage.deleteAlarm();
+      } else if (current == null || current > next || current <= now) {
+        await this.ctx.storage.setAlarm(next);
+      }
+    } catch (error) {
+      console.error("Alarm check failed", error?.message);
+    }
+  }
+  async alarm() {
+    try {
+      const result = await this.service.runScheduledJobs(Date.now());
+      if (result?.backup && !result.backup.ok)
+        console.error("Scheduled backup failed", result.backup.error);
+    } catch (error) {
+      console.error("Scheduled jobs failed", error?.message);
+    } finally {
+      await this.ensureAlarm(true);
+    }
   }
   webSocketMessage(ws, message) {
     if (message === "ping") ws.send("pong");

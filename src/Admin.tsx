@@ -62,6 +62,7 @@ import {
   AdminProducts,
 } from "./AdminLists";
 import { StockImport } from "./StockImport";
+import { AdminAlerts, AdminBackup } from "./AdminAlerts";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 const productTabs = [
   ["products", "สินค้าทั้งหมด"],
@@ -76,6 +77,8 @@ const settingTabs = [
   ["settings", "ร้าน"],
   ["settings/payment", "รับเงิน"],
   ["settings/account", "บัญชีแอดมิน"],
+  ["settings/alerts", "แจ้งเตือนนอกเว็บ"],
+  ["settings/backup", "สำรองข้อมูล"],
   ["settings/audit", "ประวัติการทำงาน"],
 ];
 function Subnav({ items, current }: { items: string[][]; current: string }) {
@@ -738,6 +741,10 @@ export default function Admin() {
             <AdminAccount />
           ) : sub === "settings/audit" ? (
             <AdminAudit />
+          ) : sub === "settings/alerts" ? (
+            <AdminAlerts />
+          ) : sub === "settings/backup" ? (
+            <AdminBackup />
           ) : (
             <ReferenceSettings sub={sub} />
           ))}

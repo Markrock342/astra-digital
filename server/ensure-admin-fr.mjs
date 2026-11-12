@@ -122,3 +122,30 @@ export function ensureProductsStock(db) {
   add("inventory", "login_key", "TEXT");
   db.exec("CREATE INDEX IF NOT EXISTS inventory_login_key ON inventory(login_key)");
 }
+
+/**
+ * Outside-the-website alerts + backups (idempotent, no numbered migration):
+ * - alert_log: one row per outbound attempt (attempt=1) or per event held back by the
+ *   rate limit (attempt=0). Rows older than 30 days are pruned when new alerts go out.
+ * - alert_state: small key/value store (encrypted alert settings, stock level per variant
+ *   for "once per crossing", daily-summary day, last R2 backup result).
+ */
+export function ensureAlertsBackup(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS alert_log (
+    id TEXT PRIMARY KEY,
+    at_ms INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    event TEXT NOT NULL,
+    attempt INTEGER NOT NULL DEFAULT 1,
+    ok INTEGER NOT NULL DEFAULT 0,
+    status INTEGER,
+    error TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_alert_log_channel_time ON alert_log(channel, at_ms)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_alert_log_time ON alert_log(at_ms)");
+  db.exec(`CREATE TABLE IF NOT EXISTS alert_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )`);
+}
