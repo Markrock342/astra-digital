@@ -1,4 +1,10 @@
+import { createHash } from "node:crypto";
 import { ApiError } from "./domain.mjs";
+/**
+ * Coupon guessing guard: every coupon check and every order placed with a code counts,
+ * per signed-in account and per client IP, in a 10-minute window.
+ */
+export const COUPON_RATE_LIMIT = { perUser: 15, perIp: 40, windowMs: 600000 };
 export const securityHeaders = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -56,6 +62,36 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
     if (!hit || hit.expires < now) hit = { n: 0, expires: now + 600000 };
     uploadAttempts.set(key, hit);
     return ++hit.n <= 30;
+  }
+  const windowAttempts = new Map();
+  function localWindowLimit(key, max, windowMs) {
+    const now = Date.now();
+    if (windowAttempts.size > 5000)
+      for (const [k, v] of windowAttempts) if (v.expires < now) windowAttempts.delete(k);
+    let hit = windowAttempts.get(key);
+    if (!hit || hit.expires < now) hit = { n: 0, expires: now + windowMs };
+    windowAttempts.set(key, hit);
+    return ++hit.n <= max;
+  }
+  function assertCouponRate(request, env, user) {
+    const ip = createHash("sha256")
+      .update(clientIp(request, env) ?? "local")
+      .digest("hex")
+      .slice(0, 32);
+    const { perUser, perIp, windowMs } = COUPON_RATE_LIMIT;
+    for (const [key, max] of [
+      ["coupon:user:" + user.id, perUser],
+      ["coupon:ip:" + ip, perIp],
+    ]) {
+      const allowed = rateLimit
+        ? rateLimit(key, max, windowMs)
+        : localWindowLimit(key, max, windowMs);
+      if (!allowed)
+        throw new ApiError(
+          429,
+          "ลองโค้ดส่วนลดบ่อยเกินไป กรุณารอ 10 นาทีแล้วลองใหม่",
+        );
+    }
   }
   /** Client IP for the audit trail: Cloudflare header, then proxy header, then the socket. */
   function clientIp(request, env) {
@@ -353,6 +389,15 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             });
           return send(200, report);
         }
+        if (path === "/api/admin/coupons")
+          return send(200, service.adminCoupons(user, {
+            q: url.searchParams.get("q") ?? undefined,
+            status: url.searchParams.get("status") ?? undefined,
+          }));
+        if (/^\/api\/admin\/coupons\/[^/]+\/redemptions$/.test(path))
+          return send(200, service.adminCouponRedemptions(user, path.split("/")[4]));
+        if (/^\/api\/admin\/coupons\/[^/]+$/.test(path))
+          return send(200, service.adminCoupon(user, path.split("/")[4]));
         if (/^\/api\/admin\/orders\/[^/]+\/payment-summary$/.test(path))
           return send(200, service.adminOrderPaymentSummary(user, path.split("/")[4]));
         if (path === "/api/admin/audit")
@@ -420,6 +465,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             }),
           );
       } else if (request.method === "PATCH") {
+        if (/^\/api\/admin\/coupons\/[^/]+$/.test(path))
+          return send(200, service.adminUpdateCoupon(user, path.split("/")[4], input));
         if (/^\/api\/admin\/products\/[^/]+\/images$/.test(path))
           return send(
             200,
@@ -456,8 +503,23 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             },
           );
         }
-        if (path === "/api/orders")
+        if (path === "/api/coupons/check") {
+          if (!user) throw new ApiError(401, "กรุณาเข้าสู่ระบบเพื่อใช้โค้ดส่วนลด");
+          assertCouponRate(request, env, user);
+          return send(200, service.checkCoupon(user, input));
+        }
+        if (path === "/api/orders") {
+          // A code sent with the order is a guess too: same budget as /coupons/check.
+          if (user && typeof input.couponCode === "string" && input.couponCode.trim())
+            assertCouponRate(request, env, user);
           return send(201, service.createOrder(user, input));
+        }
+        if (path === "/api/admin/coupons")
+          return send(201, service.adminCreateCoupon(user, input));
+        if (/^\/api\/admin\/coupons\/[^/]+\/disable$/.test(path))
+          return send(200, service.adminDisableCoupon(user, path.split("/")[4]));
+        if (/^\/api\/admin\/coupons\/[^/]+\/duplicate$/.test(path))
+          return send(201, service.adminDuplicateCoupon(user, path.split("/")[4]));
         if (/^\/api\/orders\/[^/]+\/pay$/.test(path))
           return send(200, service.pay(user, path.split("/")[3], input));
         if (/^\/api\/orders\/[^/]+\/retry$/.test(path))

@@ -122,3 +122,72 @@ export function ensureProductsStock(db) {
   add("inventory", "login_key", "TEXT");
   db.exec("CREATE INDEX IF NOT EXISTS inventory_login_key ON inventory(login_key)");
 }
+
+/**
+ * Coupons / discount codes (idempotent, no numbered migration).
+ * - coupons: one row per code. `code` is stored upper-case and unique (NOCASE).
+ *   type PERCENT (value 1–90, optional max_discount cap in satang) or FIXED (value
+ *   in satang). starts_at / ends_at are UTC "YYYY-MM-DD HH:MM:SS" (the admin enters
+ *   Bangkok time). usage_limit / per_user_limit NULL = unlimited.
+ * - coupon_products: the chosen products when scope = 'PRODUCTS'.
+ * - coupon_redemptions: one row per order or preorder that used a code. A row whose
+ *   released_at is set no longer counts towards the limits (order cancelled, failed,
+ *   out of stock or expired before payment). No foreign keys, so the one-time demo
+ *   cleanup can delete orders without touching this table first.
+ * - orders / reservations get `discount` (satang, 0 = none) and `coupon_code`.
+ *   `total` stays the amount the customer pays (after the discount).
+ */
+export function ensureCoupons(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS coupons (
+    id TEXT PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    type TEXT NOT NULL CHECK (type IN ('PERCENT','FIXED')),
+    value INTEGER NOT NULL CHECK (value > 0),
+    max_discount INTEGER CHECK (max_discount IS NULL OR max_discount > 0),
+    min_total INTEGER NOT NULL DEFAULT 0 CHECK (min_total >= 0),
+    starts_at TEXT,
+    ends_at TEXT,
+    usage_limit INTEGER CHECK (usage_limit IS NULL OR usage_limit > 0),
+    per_user_limit INTEGER CHECK (per_user_limit IS NULL OR per_user_limit > 0),
+    scope TEXT NOT NULL DEFAULT 'ALL' CHECK (scope IN ('ALL','PRODUCTS')),
+    first_order_only INTEGER NOT NULL DEFAULT 0 CHECK (first_order_only IN (0,1)),
+    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS coupon_products (
+    coupon_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    PRIMARY KEY (coupon_id, product_id)
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS coupon_redemptions (
+    id TEXT PRIMARY KEY,
+    coupon_id TEXT NOT NULL,
+    code TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    order_id TEXT,
+    reservation_id TEXT,
+    amount INTEGER NOT NULL CHECK (amount > 0),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    released_at TEXT,
+    released_reason TEXT,
+    CHECK ((order_id IS NULL) <> (reservation_id IS NULL))
+  )`);
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_coupon ON coupon_redemptions(coupon_id, user_id)",
+  );
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_coupon_redemptions_order ON coupon_redemptions(order_id) WHERE order_id IS NOT NULL",
+  );
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_coupon_redemptions_reservation ON coupon_redemptions(reservation_id) WHERE reservation_id IS NOT NULL",
+  );
+  const has = (table, column) =>
+    db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  for (const table of ["orders", "reservations"]) {
+    if (!has(table, "discount"))
+      db.exec(`ALTER TABLE ${table} ADD COLUMN discount INTEGER NOT NULL DEFAULT 0`);
+    if (!has(table, "coupon_code")) db.exec(`ALTER TABLE ${table} ADD COLUMN coupon_code TEXT`);
+  }
+}

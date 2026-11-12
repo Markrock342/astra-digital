@@ -54,7 +54,15 @@ export type Order = {
   /** FR-F6: set once the shop refunded part or all of the order. */
   refundStatus?: "REFUNDED" | "PARTIALLY_REFUNDED" | null;
   refundedTotal?: number;
+  /** Coupon discount in satang (0 = none); `total` is already after it. */
+  discount?: number;
+  /** Price before the discount (total + discount). */
+  subtotal?: number;
+  coupon_code?: string | null;
 };
+/** POST /api/coupons/check: a preview only; the order is priced again on the server. */
+export type CouponPreview = { valid: true; code: string; subtotal: number; discount: number; total: number };
+export type CouponCheck = CouponPreview | { valid: false; reason: string };
 export type Ledger = {
   id: string;
   /** Signed: + credit in, − credit out. */

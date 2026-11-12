@@ -38,6 +38,7 @@ import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createFileStore } from "./file-store.mjs";
 import { createAuthHardening } from "./auth-hardening.mjs";
 import { createAdminMoneyApis } from "./admin-money.mjs";
+import { createCouponApis, normalizeCouponCode } from "./coupons.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -403,6 +404,20 @@ export function createCommerceCore({
       fail(400, label + "ไม่ถูกต้อง");
     return v.trim();
   };
+  const coupons = createCouponApis({
+    requireAdmin,
+    requireUser,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    randomUUID,
+    clock,
+    moneyScope,
+  });
+  const { releaseCouponForOrder } = coupons;
   const issueSession = (user) => {
     const token = randomBytes(32).toString("hex");
     const now = clock();
@@ -692,6 +707,13 @@ export function createCommerceCore({
         )
           run("DELETE FROM runtime_flags WHERE key='shop-settings'");
       }
+      // Coupon uses taken by demo orders deleted above must not count after launch.
+      if (one("SELECT name FROM sqlite_master WHERE type='table' AND name='coupon_redemptions'"))
+        run(
+          `DELETE FROM coupon_redemptions
+           WHERE (order_id IS NOT NULL AND order_id NOT IN (SELECT id FROM orders))
+              OR (reservation_id IS NOT NULL AND reservation_id NOT IN (SELECT id FROM reservations))`,
+        );
       run(
         "INSERT INTO runtime_flags(key,value) VALUES('template-ready','1')",
       );
@@ -987,82 +1009,125 @@ export function createCommerceCore({
       })),
     };
   }
+  /** Variant a customer may buy, with the price the shop charges (never the client's). */
+  const buyableVariant = (variantId) => {
+    const variant = one(
+      "SELECT v.*,p.preorder FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.active=1 AND p.hidden_seed=0 AND COALESCE(v.active,1)=1",
+      variantId,
+    );
+    if (!variant) fail(404, "ไม่พบสินค้า");
+    const unitPrice =
+      variant.preorder && variant.id === "cinema-max-30" ? 0 : variant.price;
+    return { ...variant, unitPrice };
+  };
+  /**
+   * POST /api/coupons/check — discount preview for one line. Same rules as
+   * createOrder; nothing is written. An unusable code answers { valid:false, reason }.
+   */
+  function checkCoupon(user, input = {}) {
+    requireUser(user);
+    const variantId = clean(input.variantId, 1, 80, "สินค้า");
+    const quantity = integer(input.quantity, 1, 10, "จำนวน");
+    const variant = buyableVariant(variantId);
+    try {
+      const result = coupons.evaluate(user, input.code, {
+        productId: variant.product_id,
+        subtotal: variant.unitPrice * quantity,
+      });
+      return {
+        valid: true,
+        code: result.code,
+        subtotal: result.subtotal,
+        discount: result.discount,
+        total: result.total,
+      };
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 400)
+        return { valid: false, reason: error.message };
+      throw error;
+    }
+  }
   function createOrder(user, input) {
     requireUser(user);
     if (!settings().shopOpen) fail(409, "ร้านปิดให้บริการชั่วคราว");
     const variantId = clean(input.variantId, 1, 80, "สินค้า");
     const quantity = integer(input.quantity, 1, 10, "จำนวน");
     const requestKey = clean(input.requestKey, 8, 128, "รหัสคำขอ");
-    const reservation = one(
-      "SELECT * FROM reservations WHERE user_id=? AND request_key=?",
-      user.id,
-      requestKey,
-    );
-    if (reservation) {
+    if (input.couponCode != null && typeof input.couponCode !== "string")
+      fail(400, "โค้ดส่วนลดไม่ถูกต้อง");
+    const couponCode = normalizeCouponCode(input.couponCode) || null;
+    // Check, count and insert in one transaction so a coupon's last use is taken once.
+    return tx(() => {
+      const reservation = one(
+        "SELECT * FROM reservations WHERE user_id=? AND request_key=?",
+        user.id,
+        requestKey,
+      );
+      if (reservation) {
+        if (
+          reservation.variant_id !== variantId ||
+          reservation.quantity !== quantity ||
+          (reservation.coupon_code ?? null) !== couponCode
+        )
+          fail(409, "รหัสคำขอถูกใช้กับคำสั่งซื้ออื่นแล้ว");
+        return { ...orderDetail(user, reservation.id), paymentToken: null };
+      }
+      const prior = one(
+        "SELECT * FROM orders WHERE user_id=? AND request_key=?",
+        user.id,
+        requestKey,
+      );
+      if (prior) {
+        if (
+          prior.variant_id !== variantId ||
+          prior.quantity !== quantity ||
+          (prior.coupon_code ?? null) !== couponCode
+        )
+          fail(409, "รหัสคำขอถูกใช้กับคำสั่งซื้ออื่นแล้ว");
+        return { ...orderDetail(user, prior.id), paymentToken: null };
+      }
+      const variant = buyableVariant(variantId);
+      const subtotal = variant.unitPrice * quantity;
       if (
-        reservation.variant_id !== variantId ||
-        reservation.quantity !== quantity
+        !variant.preorder &&
+        one(
+          `SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql}`,
+          variantId,
+        ).n < quantity
       )
-        fail(409, "รหัสคำขอถูกใช้กับคำสั่งซื้ออื่นแล้ว");
-      return { ...orderDetail(user, reservation.id), paymentToken: null };
-    }
-    const prior = one(
-      "SELECT * FROM orders WHERE user_id=? AND request_key=?",
-      user.id,
-      requestKey,
-    );
-    if (prior) {
-      if (prior.variant_id !== variantId || prior.quantity !== quantity)
-        fail(409, "รหัสคำขอถูกใช้กับคำสั่งซื้ออื่นแล้ว");
-      return { ...orderDetail(user, prior.id), paymentToken: null };
-    }
-    const variant = one(
-      "SELECT v.*,p.preorder FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.active=1 AND p.hidden_seed=0 AND COALESCE(v.active,1)=1",
-      variantId,
-    );
-    if (!variant) fail(404, "ไม่พบสินค้า");
-    if (variant.preorder) {
+        fail(409, "สินค้าคงเหลือไม่เพียงพอ กรุณาเลือกจำนวนใหม่");
+      // Discount from the coupon row and the database price only (never the client's).
+      const applied = couponCode
+        ? coupons.evaluate(user, couponCode, { productId: variant.product_id, subtotal })
+        : null;
+      const discount = applied?.discount ?? 0;
       const token = randomBytes(32).toString("hex"),
         id = randomUUID();
-      const price = variant.id === "cinema-max-30" ? 0 : variant.price;
       run(
-        "INSERT INTO reservations(id,user_id,variant_id,quantity,total,request_key,payment_hash,warranty_days) VALUES(?,?,?,?,?,?,?,?)",
+        `INSERT INTO ${variant.preorder ? "reservations" : "orders"}(id,user_id,variant_id,quantity,total,request_key,payment_hash,warranty_days,discount,coupon_code) VALUES(?,?,?,?,?,?,?,?,?,?)`,
         id,
         user.id,
         variantId,
         quantity,
-        price * quantity,
+        subtotal - discount,
         requestKey,
         hash(token),
         // Warranty is what the customer saw when buying; the end date is set at delivery.
         variant.warranty_days ?? 0,
+        discount,
+        applied ? applied.code : null,
       );
-      audit(user, "CREATE_PREORDER", id);
+      if (applied)
+        coupons.redeem({
+          coupon: applied.coupon,
+          userId: user.id,
+          orderId: variant.preorder ? null : id,
+          reservationId: variant.preorder ? id : null,
+          amount: discount,
+        });
+      audit(user, variant.preorder ? "CREATE_PREORDER" : "CREATE_ORDER", id);
       return { ...orderDetail(user, id), paymentToken: token };
-    }
-
-    if (
-      one(
-        `SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql}`,
-        variantId,
-      ).n < quantity
-    )
-      fail(409, "สินค้าคงเหลือไม่เพียงพอ กรุณาเลือกจำนวนใหม่");
-    const token = randomBytes(32).toString("hex"),
-      id = randomUUID();
-    run(
-      "INSERT INTO orders(id,user_id,variant_id,quantity,total,request_key,payment_hash,warranty_days) VALUES(?,?,?,?,?,?,?,?)",
-      id,
-      user.id,
-      variantId,
-      quantity,
-      variant.price * quantity,
-      requestKey,
-      hash(token),
-      variant.warranty_days ?? 0,
-    );
-    audit(user, "CREATE_ORDER", id);
-    return { ...orderDetail(user, id), paymentToken: token };
+    });
   }
   function orderDetail(user, id) {
     requireUser(user);
@@ -1105,6 +1170,8 @@ export function createCommerceCore({
         reviewed: true,
         ...delivered,
         ...orderRefundState(orderId, true),
+        discount: reservation.discount ?? 0,
+        subtotal: reservation.total + (reservation.discount ?? 0),
         queueNumber: reservation.queue_number ?? null,
       };
     }
@@ -1119,6 +1186,8 @@ export function createCommerceCore({
       reviewed: !!one("SELECT id FROM reviews WHERE order_id=?", orderId),
       ...delivered,
       ...orderRefundState(orderId, false),
+      discount: order.discount ?? 0,
+      subtotal: order.total + (order.discount ?? 0),
     };
   }
   function staffOrders(user, { limit = 50, cursor } = {}) {
@@ -1244,6 +1313,7 @@ export function createCommerceCore({
           fail(400, "ผลการทดลองไม่ถูกต้อง");
         if (input.outcome === "failure") {
           run("UPDATE reservations SET status='FAILED' WHERE id=?", id);
+          releaseCouponForOrder(id, "PAYMENT_FAILED");
           return orderDetail(user, id);
         }
         if (publicUser(user).balance < o.total)
@@ -1325,6 +1395,7 @@ export function createCommerceCore({
         fail(400, "ผลการทดลองไม่ถูกต้อง");
       if (input.outcome === "failure") {
         run("UPDATE orders SET status='FAILED' WHERE id=?", id);
+        releaseCouponForOrder(id, "PAYMENT_FAILED");
         audit(user, "PAYMENT_FAILED", id);
         return orderDetail(user, id);
       }
@@ -1341,6 +1412,7 @@ export function createCommerceCore({
       );
       if (available.length !== order.quantity) {
         run("UPDATE orders SET status='OUT_OF_STOCK' WHERE id=?", id);
+        releaseCouponForOrder(id, "OUT_OF_STOCK");
         audit(user, "OUT_OF_STOCK", id);
         return orderDetail(user, id);
       }
@@ -2232,6 +2304,7 @@ export function createCommerceCore({
     fail,
     clean,
     moneyScope,
+    releaseCouponForOrder,
   });
   const { team, saveStaff, setMemberRole, setStaffActive, assignChatThread } = createTeamApis({
     passwordHash,
@@ -2355,6 +2428,16 @@ export function createCommerceCore({
     productDetail,
     overview,
     createOrder,
+    checkCoupon,
+    adminCoupons: coupons.adminCoupons,
+    adminCoupon: coupons.adminCoupon,
+    adminCreateCoupon: coupons.adminCreateCoupon,
+    adminUpdateCoupon: coupons.adminUpdateCoupon,
+    adminDisableCoupon: coupons.adminDisableCoupon,
+    adminDuplicateCoupon: coupons.adminDuplicateCoupon,
+    adminCouponRedemptions: coupons.adminCouponRedemptions,
+    // For code that ends an unpaid order (e.g. auto-expiry); see server/coupons.mjs.
+    releaseCouponForOrder,
     orderDetail,
     staffOrders,
     adminOrders,
@@ -2449,6 +2532,7 @@ export function createCommerceCore({
       livemodeFinance: true,
       adminRefunds: true,
       creditAdjust: true,
+      coupons: true,
     }),
     salesRevenueSatang,
     logout: (token) =>

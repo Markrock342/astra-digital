@@ -62,11 +62,13 @@ import {
   AdminProducts,
 } from "./AdminLists";
 import { StockImport } from "./StockImport";
+import { AdminCoupons } from "./AdminCoupons";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 const productTabs = [
   ["products", "สินค้าทั้งหมด"],
   ["inventory", "บัญชีสต็อก"],
   ["categories", "หมวดหมู่"],
+  ["coupons", "คูปอง"],
 ];
 const orderTabs = [
   ["orders", "ออเดอร์ทั้งหมด"],
@@ -722,6 +724,7 @@ export default function Admin() {
         {tab === "orders" &&
           (detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />)}
         {tab === "preorders" && <PreorderQueue />}
+        {tab === "coupons" && <AdminCoupons id={productId} />}
         {tab === "customers" &&
           (detailId ? (
             <AdminCustomerDetail id={detailId} />
@@ -775,6 +778,7 @@ export default function Admin() {
           "inventory",
           "orders",
           "preorders",
+          "coupons",
           "customers",
           "payments",
           "top-ups",

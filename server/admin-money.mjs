@@ -83,6 +83,10 @@ export function createAdminMoneyApis({
     ).n;
     const closed = ["FAILED", "CANCELLED", "OUT_OF_STOCK"].includes(order.status) && paid === 0;
     return {
+      // Coupon: total is already the discounted amount; subtotal is the price before it.
+      subtotal: order.total + (order.discount ?? 0),
+      discount: order.discount ?? 0,
+      couponCode: order.coupon_code ?? null,
       paid,
       refunded,
       outstanding: closed ? 0 : Math.max(0, order.total - paid),

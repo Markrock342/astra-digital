@@ -17,6 +17,7 @@ export function createAdminCustomerApis({
   fail,
   clean,
   moneyScope,
+  releaseCouponForOrder = () => ({ released: false }),
 }) {
   const auditDetail = (user, action, entity, detail) =>
     run(
@@ -254,7 +255,9 @@ export function createAdminCustomerApis({
       if (row.status !== "PENDING_PAYMENT")
         fail(409, "ยกเลิกได้เฉพาะออเดอร์ที่ยังไม่ชำระ ออเดอร์ที่ชำระแล้วต้องใช้การคืนเงิน");
       run(`UPDATE ${table} SET status='CANCELLED' WHERE id=? AND status='PENDING_PAYMENT'`, orderId);
-      auditDetail(user, "CANCEL_ORDER", orderId, { reason });
+      // An unpaid order gives its coupon use back (same transaction as the cancel).
+      const coupon = releaseCouponForOrder(orderId, "CANCELLED");
+      auditDetail(user, "CANCEL_ORDER", orderId, coupon.released ? { reason, couponReleased: coupon.code } : { reason });
       return { id: orderId, status: "CANCELLED" };
     });
   }

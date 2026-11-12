@@ -419,6 +419,10 @@ type OrderDetail = {
 };
 
 type PaymentSummary = {
+  /** Coupon: price before the discount; the order total is already after it. */
+  subtotal?: number;
+  discount?: number;
+  couponCode?: string | null;
   paid: number;
   refunded: number;
   outstanding: number;
@@ -532,6 +536,21 @@ function OrderMoney({
         <h2>สรุปการเงิน</h2>
         {summary.refundStatus && <Status status={summary.refundStatus} />}
       </div>
+      {!!summary.discount && (
+        <dl className="money-summary money-summary-coupon">
+          <div>
+            <dt>ราคาก่อนส่วนลด</dt>
+            <dd>{money(summary.subtotal ?? 0)}</dd>
+          </div>
+          <div>
+            <dt>
+              ส่วนลดคูปอง
+              {summary.couponCode && <span className="admin-chip">{summary.couponCode}</span>}
+            </dt>
+            <dd className="negative">−{money(summary.discount)}</dd>
+          </div>
+        </dl>
+      )}
       <dl className="money-summary">
         <div>
           <dt>ชำระแล้ว</dt>
@@ -2744,6 +2763,9 @@ const actionText: Record<string, string> = {
   CHAT_ASSIGN: "มอบหมายแชท",
   ORDER_NOTE: "เขียนหมายเหตุออเดอร์",
   CANCEL_ORDER: "ยกเลิกออเดอร์",
+  COUPON_CREATE: "สร้างคูปอง",
+  COUPON_UPDATE: "แก้คูปอง",
+  COUPON_DISABLE: "ปิดใช้งานคูปอง",
   PRODUCT_IMAGE_ADD: "เพิ่มรูปสินค้า",
   PRODUCT_IMAGE_REMOVE: "ลบรูปสินค้า",
   PRODUCT_IMAGE_REORDER: "เรียงรูปสินค้า",
@@ -2769,6 +2791,9 @@ const detailLabel: Record<string, string> = {
   updated: "เปลี่ยนจริง:",
   variants: "ตัวเลือก",
   images: "รูป",
+  code: "โค้ด",
+  duplicatedFrom: "คัดลอกจาก",
+  couponReleased: "คืนสิทธิ์คูปอง",
 };
 function auditDetailText(detail: Record<string, unknown>) {
   const parts: string[] = [];
@@ -2799,6 +2824,7 @@ export function AdminAudit() {
     if (["REVEAL_ORDER_CREDENTIALS", "REVEAL_LIMIT", "ORDER_NOTE", "CANCEL_ORDER", "DELIVER_RESERVATION", "CREATE_ORDER", "CREATE_PREORDER", "PAYMENT_AND_DELIVERY", "PREORDER_PAID"].includes(e.action))
       return "/admin/orders/" + e.entity_id;
     if (e.action.startsWith("PRODUCT_") || e.action === "SAVE_PRODUCT") return "/admin/products/" + e.entity_id;
+    if (e.action.startsWith("COUPON_")) return "/admin/coupons/" + e.entity_id;
     return null;
   };
   return (
@@ -2829,6 +2855,7 @@ export function AdminAudit() {
             ["PRODUCT_", "เปลี่ยนวิธีส่งของ"],
             ["SAVE_PRODUCT", "บันทึกสินค้า"],
             ["IMPORT_CODES", "เติมสต็อก"],
+            ["COUPON_", "คูปอง"],
             ["DELIVER_RESERVATION", "ส่งของพรีออเดอร์"],
             ["REVEAL_ORDER_CREDENTIALS", "เปิดดูรหัส"],
             ["SAVE_SETTINGS", "ตั้งค่าร้าน"],
@@ -3715,7 +3742,17 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
 type SalesRow = { product_id: string; product: string; variant_id: string; variant: string; preorder: boolean; orders: number; units: number; revenue: number };
 type DayRow = { day: string; orders: number; units: number; revenue: number; buyers: number };
 type SalesReport = {
-  totals: { orders: number; units: number; revenue: number; buyers: number; refunds: number; net: number };
+  totals: {
+    orders: number;
+    units: number;
+    revenue: number;
+    buyers: number;
+    refunds: number;
+    net: number;
+    /** Coupon discounts on paid orders; a separate figure, never subtracted from revenue. */
+    discounts?: number;
+    discountedOrders?: number;
+  };
   byProduct: SalesRow[];
   byDay: DayRow[];
 };
@@ -3747,7 +3784,7 @@ export function AdminReports() {
       <div className="reference-admin-heading">
         <div>
           <h1>รายงานยอดขาย</h1>
-          <p>นับเฉพาะออเดอร์ที่ชำระสำเร็จ · เวลาไทย · ยอดสุทธิหักคืนเงินแล้ว</p>
+          <p>นับเฉพาะออเดอร์ที่ชำระสำเร็จ · เวลาไทย · ยอดขายคือยอดที่ลูกค้าจ่ายจริงหลังหักส่วนลด · ยอดสุทธิหักคืนเงินแล้ว</p>
         </div>
         <a className="button secondary" href={"/api/admin/reports/sales" + query({ ...range, format: "csv" })}>
           <Download size={15} />
@@ -3771,6 +3808,7 @@ export function AdminReports() {
           ["ยอดขาย", report ? money(report.totals.revenue) : "–"],
           ["คืนเงิน", report ? money(report.totals.refunds) : "–"],
           ["ยอดสุทธิ (หักคืนเงิน)", report ? money(report.totals.net) : "–"],
+          ["ส่วนลดคูปองที่ให้ไป", report ? money(report.totals.discounts ?? 0) : "–"],
           ["ออเดอร์ที่ชำระ", report ? String(report.totals.orders) : "–"],
           ["ผู้ซื้อ", report ? String(report.totals.buyers) : "–"],
         ].map(([label, value]) => (
