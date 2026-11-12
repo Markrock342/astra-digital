@@ -65,6 +65,16 @@
 - `GET /api/health` และ `GET /api/me` ส่ง `features` ชุดเดียวกัน
 - หลังงาน 1 มีอย่างน้อย: `credentialPair`, `preorderDelivery`, `adminChatInbox`, `adminOpsNotifications`, `salesRevenueFromPayments` (boolean)
 - หลังงาน 2 เพิ่ม: `adminOrdersApi`, `adminCustomersApi`, `adminProductsApi`, `adminSummaryApi` (boolean)
+- หลัง FR-P3: `productPreorderForm` (boolean) — `POST /api/admin/products` รับ `preorder`
+
+### สินค้า — ตั้งพรีออเดอร์จากฟอร์ม (FR-P3)
+
+`POST /api/admin/products` (ADMIN)
+
+- body เดิม + `preorder` (boolean / `"on"` / `1`)
+- สร้างใหม่: ไม่ส่ง `preorder` → `0` · ส่ง true → สินค้าเป็นพรีออเดอร์ (สั่งแล้วเข้า `reservations`)
+- แก้ของเดิม: ไม่ส่ง `preorder` → คงค่าเดิม · ส่ง false → ปิดพรีออเดอร์
+- ตอบ `{ id, preorder }`
 
 ### สรุปยอดตามช่วงวัน (Admin FR งาน 2 เพิ่ม · FR-F10 / FR-R2)
 

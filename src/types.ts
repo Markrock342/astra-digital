@@ -113,6 +113,7 @@ export type Features = {
   adminCustomersApi?: boolean;
   adminProductsApi?: boolean;
   adminSummaryApi?: boolean;
+  productPreorderForm?: boolean;
 };
 export type QueueItem = {
   id: string;

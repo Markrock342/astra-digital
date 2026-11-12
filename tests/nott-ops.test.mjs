@@ -986,3 +986,84 @@ test("ADMIN-FR-W2: admin summary uses Bangkok range and FR-F10 revenue", async (
   assert.equal(customerDenied.status, 403);
   assert.equal(s.features.adminSummaryApi, true);
 });
+
+test("ADMIN-FR-P3: saveProduct accepts preorder create/update; staff forbidden", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  assert.throws(
+    () =>
+      s.saveProduct(staff, {
+        name: "Staff Product",
+        description: "ห้ามสร้างโดยพนักงาน",
+        category: "streaming",
+        price: 10000,
+        preorder: true,
+      }),
+    (e) => e.status === 403,
+  );
+  assert.throws(
+    () =>
+      s.saveProduct(user, {
+        name: "Buyer Product",
+        description: "ห้ามสร้างโดยลูกค้า",
+        category: "streaming",
+        price: 10000,
+        preorder: true,
+      }),
+    (e) => e.status === 403,
+  );
+
+  const created = s.saveProduct(merchant, {
+    name: "Preorder Form Item",
+    description: "สินค้าพรีออเดอร์จากฟอร์มแอดมิน",
+    category: "streaming",
+    price: 19900,
+    preorder: true,
+    active: true,
+  });
+  assert.equal(created.preorder, true);
+  assert.equal(
+    s.db.prepare("SELECT preorder FROM products WHERE id=?").get(created.id)
+      .preorder,
+    1,
+  );
+  const variant = s.db
+    .prepare("SELECT id FROM variants WHERE product_id=? LIMIT 1")
+    .get(created.id);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const order = s.createOrder(user, {
+    variantId: variant.id,
+    quantity: 1,
+    requestKey: "p3-preorder-order",
+  });
+  assert.equal(order.preorder, true);
+  assert.ok(
+    s.db.prepare("SELECT id FROM reservations WHERE id=?").get(order.id),
+  );
+
+  const cleared = s.saveProduct(merchant, {
+    id: created.id,
+    name: "Preorder Form Item",
+    description: "สินค้าพรีออเดอร์จากฟอร์มแอดมิน",
+    category: "streaming",
+    price: 19900,
+    preorder: false,
+    active: true,
+  });
+  assert.equal(cleared.preorder, false);
+  assert.equal(
+    s.db.prepare("SELECT preorder FROM products WHERE id=?").get(created.id)
+      .preorder,
+    0,
+  );
+
+  const untouched = s.saveProduct(merchant, {
+    id: "cinema-max",
+    name: "MONOMAX",
+    description: "wrgwreg3g34g43rtq34twefq24t",
+    category: "streaming",
+    price: 10000,
+    active: true,
+  });
+  assert.equal(untouched.preorder, true, "omit preorder keeps existing value");
+  assert.equal(s.features.productPreorderForm, true);
+});
