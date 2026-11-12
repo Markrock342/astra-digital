@@ -3,7 +3,7 @@
 **ถึง:** มาร์ค  
 **จาก:** น็อต  
 **วันที่:** 2026-11-12  
-**PR:** (ใส่ลิงก์หลังเปิด)  
+**PR:** https://github.com/Markrock342/astra-digital/pull/26  
 **Branch:** `feat/admin-fr-work2-list-apis`  
 **ฐาน:** `main` @ `6b37c4a`  
 **Deploy:** **ยังไม่ทำ** · ไม่รัน `qa:cloud` ร้านจริง
