@@ -34,38 +34,33 @@ import {
   Users,
   Wallet,
   X,
+  Clock3,
 } from "lucide-react";
 import { Art, Empty, ErrorMessage, Link, Status, useStore } from "./App";
 import { useDialog } from "./dialog";
 import { api, dateTime, money } from "./api";
 import { AdminChat, BuyerRanking, BuyerRankingCard, PaymentChannelSettings } from "./Ops";
+import {
+  AdminCustomerDetail,
+  AdminFinance,
+  AdminCustomers,
+  AdminOrderDetail,
+  AdminOrders,
+  AdminProducts,
+} from "./AdminLists";
 import type { AdminData, Credential, Features, Product, QueueItem } from "./types";
 const productTabs = [
   ["products", "สินค้าทั้งหมด"],
   ["inventory", "บัญชีสต็อก"],
   ["categories", "หมวดหมู่"],
-  ["coupons", "โค้ดส่วนลด"],
-  ["stamps", "บัตรสะสมแสตมป์"],
-  ["reviews", "รีวิว"],
 ];
 const orderTabs = [
   ["orders", "ออเดอร์ทั้งหมด"],
   ["preorders", "คิวพรีออเดอร์"],
-  ["rentals", "เช่าไอดี"],
-  ["issues", "แจ้งปัญหา"],
-  ["otp", "รับ OTP"],
 ];
 const settingTabs = [
   ["settings", "ร้าน"],
-  ["settings/storefront", "หน้าร้าน"],
   ["settings/payment", "รับเงิน"],
-  ["settings/shipping", "จัดส่ง"],
-  ["settings/rentals", "เช่าไอดี"],
-  ["settings/line", "บอท LINE"],
-  ["settings/otp", "บัญชีรับรหัส"],
-  ["settings/members", "ทีมงาน"],
-  ["settings/domains", "โดเมน"],
-  ["settings/billing", "แพ็กเกจ"],
 ];
 function Subnav({ items, current }: { items: string[][]; current: string }) {
   return (
@@ -111,7 +106,6 @@ export default function Admin() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
   const [importing, setImporting] = useState(false);
   const [range, setRange] = useState("today");
   const [expanded, setExpanded] = useState(true);
@@ -128,11 +122,23 @@ export default function Admin() {
   const productGroup = productTabs.some(([key]) => key === tab);
   const orderGroup = orderTabs.some(([key]) => key === tab);
   const productId = path.split("/")[3];
+  const detailId = ["orders", "customers"].includes(tab) ? productId : undefined;
   const editingProduct = data?.products.find(
     (p) => p.id === (editing ?? productId),
   );
   const newProduct = tab === "products" && productId === "new";
   const formOpen = newProduct || !!editingProduct;
+  const realProducts = data?.products ?? [];
+  const setupSteps: [string, string, boolean][] = [
+    ["ใส่ชื่อร้านและช่องทางติดต่อ", "settings", !!overview?.shop?.shopName],
+    ["เพิ่มสินค้าชิ้นแรก", "products", realProducts.length > 0],
+    [
+      "เติมบัญชีสต็อกให้สินค้าพร้อมส่ง",
+      "inventory",
+      realProducts.some((p) => !p.preorder && p.variants.some((v) => v.stock > 0)),
+    ],
+    ["เปิดขายสินค้า", "products", realProducts.some((p) => p.active)],
+  ];
   useDialog(importing, ".reference-import-modal", () => setImporting(false));
   async function load() {
     try {
@@ -194,7 +200,6 @@ export default function Admin() {
   }
   useEffect(() => {
     setQuery("");
-    setStatus("all");
     setImporting(false);
     setConfirming(null);
     setEditing(null);
@@ -203,10 +208,11 @@ export default function Admin() {
     e.preventDefault();
     setBusy(true);
     setError("");
-    const values = Object.fromEntries(new FormData(e.currentTarget));
+    const { type, ...values } = Object.fromEntries(new FormData(e.currentTarget));
     try {
       const result = await api<{ id: string }>("/admin/products", {
         ...values,
+        preorder: type === "preorder",
         name: values.name,
         description: values.description,
         category: values.category ?? "streaming",
@@ -262,50 +268,6 @@ export default function Admin() {
       setBusy(false);
     }
   }
-  function download() {
-    if (!data) return;
-    const rows = [
-      [
-        "order",
-        "customer",
-        "product",
-        "quantity",
-        "test_thb",
-        "status",
-        "date",
-      ],
-      ...data.orders.map((o) => [
-        o.id,
-        o.customer,
-        o.product,
-        o.quantity,
-        o.total / 100,
-        o.status,
-        o.created_at,
-      ]),
-    ];
-    const csv =
-      "\ufeff" +
-      rows
-        .map((row) =>
-          row
-            .map((x) => {
-              let s = String(x);
-              if (/^[=+@\-\t\r]/.test(s)) s = "'" + s;
-              return '"' + s.replaceAll('"', '""') + '"';
-            })
-            .join(","),
-        )
-        .join("\r\n");
-    const url = URL.createObjectURL(
-      new Blob([csv], { type: "text/csv;charset=utf-8" }),
-    );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "astra-demo-orders.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
   if (!user || user.role !== "ADMIN")
     return (
       <main className="reference-merchant-login">
@@ -332,20 +294,6 @@ export default function Admin() {
         </div>
       </main>
     );
-  const orders = data.orders.filter(
-    (o) =>
-      (status === "all" || o.status === status) &&
-      (o.id + " " + o.product + " " + o.customer)
-        .toLowerCase()
-        .includes(query.toLowerCase()),
-  );
-  const filteredProducts = data.products
-    .filter(
-      (p) =>
-        p.name.toLowerCase().includes(query.toLowerCase()) &&
-        (status === "all" || (status === "active" ? !!p.active : !p.active)),
-    )
-    .sort((a, b) => Number(b.preorder ?? 0) - Number(a.preorder ?? 0));
   const toolbar = (
     <div className="reference-table-toolbar">
       <label className="search-field">
@@ -363,13 +311,6 @@ export default function Admin() {
           onChange={(e) => setQuery(e.target.value)}
         />
       </label>
-      <button
-        className="button secondary filter-toggle"
-        onClick={() => setStatus(status === "all" ? "DELIVERED" : "all")}
-      >
-        <Filter size={15} />
-        ตัวกรอง
-      </button>
     </div>
   );
   const recent = (
@@ -385,10 +326,7 @@ export default function Admin() {
         <button
           className="reference-order-row"
           key={o.id}
-          onClick={() => {
-            go("/admin/orders");
-            setQuery(o.id);
-          }}
+          onClick={() => go("/admin/orders/" + o.id)}
         >
           <span>
             <strong>{codeId(o.id)}</strong>
@@ -431,15 +369,6 @@ export default function Admin() {
     <>
       {productGroup && <Subnav items={productTabs} current={tab} />}{" "}
       {orderGroup && <Subnav items={orderTabs} current={tab} />}{" "}
-      {(tab === "payments" || tab === "top-ups") && (
-        <Subnav
-          items={[
-            ["payments", "รับเงิน"],
-            ["ledger", "ประวัติเงินเข้าออก"],
-          ]}
-          current={tab === "top-ups" ? "payments" : tab}
-        />
-      )}{" "}
       {tab === "settings" && <Subnav items={settingTabs} current={sub} />}
       <main
         className={
@@ -496,19 +425,24 @@ export default function Admin() {
               </div>
               <div className="setup-progress">
                 <i>
-                  <b />
+                  <b
+                    style={{
+                      width:
+                        (setupSteps.filter((step) => step[2]).length /
+                          setupSteps.length) *
+                          100 +
+                        "%",
+                    }}
+                  />
                 </i>
-                <strong>4/5</strong>
+                <strong>
+                  {setupSteps.filter((step) => step[2]).length}/
+                  {setupSteps.length}
+                </strong>
               </div>
               {expanded && (
                 <div className="setup-checklist">
-                  {[
-                    ["ตั้งช่องทางรับเงิน", "settings/payment", true],
-                    ["ใส่โลโก้และคำอธิบายร้าน", "settings", true],
-                    ["ตั้งวิธีจัดส่ง", "settings/shipping", false],
-                    ["เพิ่มสินค้าชิ้นแรก", "products", true],
-                    ["เปิดขายสินค้า", "products", true],
-                  ].map(([label, to, done]) => (
+                  {setupSteps.map(([label, to, done]) => (
                     <Link
                       key={label as string}
                       to={"/admin/" + to}
@@ -517,7 +451,6 @@ export default function Admin() {
                       {done ? <CheckCircle2 size={19} /> : <Circle size={19} />}
                       <span>
                         {label as string}
-                        {!done && <small>ถ้าขายของที่ต้องส่ง</small>}
                       </span>
                       {!done && <ChevronRight size={17} />}
                     </Link>
@@ -674,106 +607,22 @@ export default function Admin() {
           </>
         ) : null}
         {tab === "products" && !formOpen && (
-          <>
-            <div className="reference-admin-heading">
-              <div>
-                <h1>สินค้า</h1>
-                <p>
-                  สินค้าแต่ละชิ้นมีได้หลายตัวเลือกราคา
-                  และแต่ละตัวเลือกมีสต็อกของตัวเอง
-                </p>
-              </div>
-              <Link to="/admin/products/new" className="button primary">
-                <Plus size={16} />
-                เพิ่มสินค้า
-              </Link>
-            </div>
-            <div className="reference-status-tabs">
-              {[
-                ["all", "ทั้งหมด"],
-                ["active", "เปิดขาย"],
-                ["draft", "ฉบับร่าง"],
-                ["inactive", "ปิดขาย"],
-              ].map(([key, label]) => (
-                <button
-                  key={key}
-                  className={status === key ? "active" : ""}
-                  onClick={() => setStatus(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {toolbar}
-            <div className="table-scroll reference-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>สินค้า</th>
-                    <th>ราคา</th>
-                    <th>สต็อก</th>
-                    <th>อัปเดต</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredProducts.map((p) => (
-                    <tr key={p.id}>
-                      <td>
-                        <div className="merchant-product-cell">
-                          <div className="merchant-product-art">
-                            <Art small type={p.art} name={p.name} />
-                          </div>
-                          <div>
-                            <Link to={"/admin/products/" + p.id}>{p.name}</Link>
-                            <span className="product-state">
-                              <span>{p.active ? "เปิดขาย" : "ฉบับร่าง"}</span>
-                              {!!p.preorder && <span>เปิดจอง</span>}
-                            </span>
-                            <small>
-                              /
-                              {p.id === "stream-plus"
-                                ? "disney"
-                                : p.id === "cinema-max"
-                                  ? "monomax"
-                                  : p.id}
-                            </small>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        {money(Math.min(...p.variants.map((v) => v.price)))}
-                        {p.variants.length > 1 &&
-                          " – " +
-                            money(Math.max(...p.variants.map((v) => v.price)))}
-                      </td>
-                      <td>
-                        <button
-                          className="stock-link"
-                          onClick={() => {
-                            go("/admin/inventory");
-                            setQuery(p.name);
-                          }}
-                        >
-                          {p.variants.reduce((n, v) => n + v.stock, 0)}
-                        </button>
-                      </td>
-                      <td className="muted">เมื่อวานซืน</td>
-                      <td>
-                        <Link
-                          to={"/admin/products/" + p.id}
-                          className="icon-button"
-                          aria-label={"แก้ไข " + p.name}
-                        >
-                          <MoreHorizontal size={18} />
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
+          <AdminProducts
+            categories={overview?.categories ?? []}
+            priceOf={(id) => {
+              const p = data.products.find((x) => x.id === id);
+              if (!p || !p.variants.length) return "–";
+              const prices = p.variants.map((v) => v.price);
+              const low = money(Math.min(...prices));
+              return Math.max(...prices) > Math.min(...prices)
+                ? low + " – " + money(Math.max(...prices))
+                : low;
+            }}
+            onStock={(name) => {
+              go("/admin/inventory");
+              setQuery(name);
+            }}
+          />
         )}
         {formOpen && (
           <>
@@ -804,17 +653,41 @@ export default function Admin() {
                   สินค้าใหม่เริ่มเป็นฉบับร่าง ลูกค้ายังไม่เห็น
                   เพิ่มราคาและสต็อกให้เรียบร้อยแล้วค่อยกดเปิดขาย
                 </p>
-                <label className="field">ประเภทสินค้า</label>
-                <div className="product-type-option">
-                  <Package size={22} />
-                  <div>
-                    <strong>สินค้าดิจิทัล</strong>
-                    <small>
-                      ไอดี คีย์ โค้ด ส่งให้อัตโนมัติทันทีหลังชำระเงิน
-                    </small>
-                  </div>
-                  <CheckCircle2 size={17} />
-                </div>
+                <fieldset className="product-type-group">
+                  <legend className="field">วิธีส่งของ</legend>
+                  <label className="product-type-option">
+                    <input
+                      type="radio"
+                      name="type"
+                      value="ready"
+                      defaultChecked={!editingProduct?.preorder}
+                    />
+                    <Package size={22} />
+                    <div>
+                      <strong>พร้อมส่ง</strong>
+                      <small>
+                        ส่ง ID และรหัสผ่านจากสต็อกให้อัตโนมัติทันทีหลังชำระเงิน
+                      </small>
+                    </div>
+                    <CheckCircle2 size={17} className="product-type-check" />
+                  </label>
+                  <label className="product-type-option">
+                    <input
+                      type="radio"
+                      name="type"
+                      value="preorder"
+                      defaultChecked={!!editingProduct?.preorder}
+                    />
+                    <Clock3 size={22} />
+                    <div>
+                      <strong>พรีออเดอร์</strong>
+                      <small>
+                        ลูกค้าจ่ายแล้วได้เลขคิว แอดมินส่งของภายหลังจากเมนูคิวพรีออเดอร์
+                      </small>
+                    </div>
+                    <CheckCircle2 size={17} className="product-type-check" />
+                  </label>
+                </fieldset>
                 <label className="field">
                   ชื่อสินค้า
                   <input
@@ -1024,79 +897,8 @@ export default function Admin() {
             </div>
           </>
         )}
-        {tab === "orders" && (
-          <>
-            <div className="reference-admin-heading">
-              <div>
-                <h1>ออเดอร์</h1>
-                <p>ออเดอร์ที่ยังไม่ชำระแสดงแยกจากสินค้าที่จัดส่งสำเร็จแล้ว</p>
-              </div>
-              <button className="button secondary" onClick={download}>
-                <Download size={15} />
-                ดาวน์โหลด CSV
-              </button>
-            </div>
-            <div className="reference-status-tabs">
-              {[
-                ["all", "ทั้งหมด"],
-                ["PENDING_PAYMENT", "รอชำระ"],
-                ["PREORDER", "ต้องจัดส่ง"],
-                ["DELIVERED", "สำเร็จ"],
-                ["FAILED", "ยกเลิก"],
-                ["OUT_OF_STOCK", "สินค้าหมด"],
-              ].map(([key, label]) => (
-                <button
-                  key={key}
-                  className={status === key ? "active" : ""}
-                  onClick={() => setStatus(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {toolbar}
-            <div className="table-scroll reference-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>ออเดอร์</th>
-                    <th>ลูกค้า</th>
-                    <th>สถานะ</th>
-                    <th>การชำระ</th>
-                    <th>ยอดรวม</th>
-                    <th>วันที่</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.map((o) => (
-                    <tr key={o.id}>
-                      <td>
-                        <strong className="order-number">{codeId(o.id)}</strong>
-                        <small>
-                          {o.product} · {o.quantity} ชิ้น
-                        </small>
-                      </td>
-                      <td>{o.customer}</td>
-                      <td>
-                        <Status status={o.status} />
-                      </td>
-                      <td>
-                        {["DELIVERED", "PREORDER"].includes(o.status)
-                          ? "ชำระแล้ว"
-                          : "ยังไม่ชำระ"}
-                      </td>
-                      <td>{money(o.total)}</td>
-                      <td>{dateTime(o.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {!orders.length && (
-                <p className="reference-empty-text">ยังไม่มีออเดอร์</p>
-              )}
-            </div>
-          </>
-        )}
+        {tab === "orders" &&
+          (detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />)}
         {tab === "preorders" && (
           <>
             <div className="reference-admin-heading">
@@ -1198,128 +1000,13 @@ export default function Admin() {
             </div>
           </>
         )}
-        {tab === "customers" && (
-          <>
-            <div className="reference-admin-heading">
-              <div>
-                <h1>ลูกค้า</h1>
-                <p>
-                  บัญชีลูกค้าแยกตามร้าน ลูกค้าคนเดียวกันต้องสมัครใหม่ในแต่ละร้าน
-                </p>
-              </div>
-            </div>
-            {toolbar}
-            <div className="table-scroll reference-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>ลูกค้า</th>
-                    <th>สถานะ</th>
-                    <th>ยอดเงิน</th>
-                    <th>สมัครเมื่อ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.customers
-                    .filter(
-                      (c) =>
-                        c.role === "CUSTOMER" &&
-                        (c.name + " " + c.email)
-                          .toLowerCase()
-                          .includes(query.toLowerCase()),
-                    )
-                    .map((c) => (
-                      <tr key={c.id}>
-                        <td>
-                          <div className="merchant-customer-cell">
-                            <span className="avatar">{c.name.slice(0, 2)}</span>
-                            <span>
-                              {c.name}
-                              <small>
-                                {c.email.endsWith(".local") ? "—" : c.email}
-                              </small>
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className="status">ปกติ</span>
-                        </td>
-                        <td>
-                          {money(
-                            data.ledger
-                              .filter(
-                                (l) =>
-                                  (l as { user_id?: string }).user_id === c.id,
-                              )
-                              .reduce((n, l) => n + l.amount, 0),
-                          )}
-                        </td>
-                        <td>{dateTime(c.created_at).split(" ").slice(0,3).join(" ")}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-        {["payments", "top-ups", "ledger"].includes(tab) && (
-          <>
-            <div className="reference-admin-heading">
-              <div>
-                <h1>{tab === "ledger" ? "ประวัติเงินเข้าออก" : "รับเงิน"}</h1>
-                <p>
-                  รายการรับเงินในระบบ ช่องทางจ่ายภายนอกยังไม่เชื่อม
-                </p>
-              </div>
-            </div>
-            <div className="reference-status-tabs">
-              <button className="active">รายการ</button>
-              <Link to="/admin/ledger">ประวัติเงินเข้าออก</Link>
-            </div>
-            {toolbar}
-            <div className="table-scroll reference-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>ลูกค้า</th>
-                    <th>สถานะ</th>
-                    <th>หมายเหตุ</th>
-                    <th>ยอดโอน</th>
-                    <th>เข้ายอด</th>
-                    <th>วันที่</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.ledger
-                    .filter(
-                      (l) =>
-                        (tab === "ledger" || l.amount > 0) &&
-                        (l.name + " " + l.label)
-                          .toLowerCase()
-                          .includes(query.toLowerCase()),
-                    )
-                    .map((l) => (
-                      <tr key={l.id}>
-                        <td>{l.name}</td>
-                        <td>
-                          <span className="status status-delivered">
-                            {l.amount > 0 ? "สำเร็จ" : "ชำระแล้ว"}
-                          </span>
-                        </td>
-                        <td>{l.label}</td>
-                        <td>{money(Math.abs(l.amount))}</td>
-                        <td className={l.amount > 0 ? "positive" : ""}>
-                          {l.amount > 0 ? "+" : "−"}
-                          {money(Math.abs(l.amount))}
-                        </td>
-                        <td>{dateTime(l.created_at)}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
+        {tab === "customers" &&
+          (detailId ? (
+            <AdminCustomerDetail id={detailId} />
+          ) : (
+            <AdminCustomers />
+          ))}
+        {["payments", "top-ups", "ledger"].includes(tab) && <AdminFinance />}
         {tab === "settings" &&
           (sub === "settings/payment" ? (
             <PaymentChannelSettings />
@@ -1333,8 +1020,18 @@ export default function Admin() {
             <h1>คู่มือร้านค้า</h1>
             <h2>เริ่มขายสินค้าดิจิทัล</h2>
             <p>
-              เพิ่มสินค้า → ตั้งตัวเลือกราคา → เติมโค้ดทดลอง → เปิดขาย →
-              เปิดหน้าร้านและทดลองสั่งซื้อ
+              เพิ่มสินค้า → เลือกวิธีส่งของ (พร้อมส่ง หรือพรีออเดอร์) → ตั้งราคา →
+              เติมบัญชีสต็อกแบบ ID + รหัสผ่าน (เฉพาะสินค้าพร้อมส่ง) → เปิดขาย
+            </p>
+            <h2>สินค้าพรีออเดอร์</h2>
+            <p>
+              ลูกค้าจ่ายแล้วได้เลขคิว เปิดเมนูออเดอร์ › คิวพรีออเดอร์
+              แล้วกดส่งของเมื่อมีบัญชีพร้อม ลูกค้าจะได้แจ้งเตือนในเว็บ
+            </p>
+            <h2>ตอบแชทลูกค้า</h2>
+            <p>
+              เมนูแชทแสดงห้องที่ยังไม่อ่าน กระดิ่งมุมบนจะเด้งเมื่อมีแชทใหม่
+              ออเดอร์ใหม่ หรือสต็อกใกล้หมด
             </p>
             <Link to="/admin/products" className="button primary">
               ไปที่สินค้า
@@ -1364,7 +1061,7 @@ export default function Admin() {
                 ([key]) => key === tab,
               )?.[1] ?? "รายการ"}
             </h1>
-            <p>ยังไม่มีรายการในร้านทดลองนี้</p>
+            {tab !== "categories" && <p>ไม่พบหน้านี้</p>}
             {tab === "categories" &&
               overview?.categories.map((c) => (
                 <div className="settings-row" key={c.id}>
@@ -1375,12 +1072,6 @@ export default function Admin() {
                   </strong>
                 </div>
               ))}
-            {tab === "reviews" && (
-              <Link to="/reviews" className="button secondary">
-                เปิดเครดิตร้าน
-                <ArrowUpRight size={15} />
-              </Link>
-            )}
           </section>
         )}
         {importing && (

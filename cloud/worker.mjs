@@ -11,7 +11,7 @@ import {
   applyMigration006,
   MIGRATION_006_NAME,
 } from "../server/migrate-006.mjs";
-import { ensureChatThreadReads } from "../server/ensure-admin-fr.mjs";
+import { ensureChatThreadReads, ensureCustomerAdmin } from "../server/ensure-admin-fr.mjs";
 import {
   createAPIHandler,
   securityHeaders,
@@ -74,6 +74,7 @@ export class Commerce extends DurableObject {
       );
       ensureInventoryAvailableIndex(db);
       ensureChatThreadReads(db);
+      ensureCustomerAdmin(db);
     });
     this.db = db;
     const adminPassword =

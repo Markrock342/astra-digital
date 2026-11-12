@@ -695,3 +695,44 @@ test("POST origin check allows local dev ports but still blocks other sites", as
   assert.equal(await post("https://shop.example/api/logout", "http://localhost:4330"), 403);
   assert.equal(await post("https://shop.example/api/logout", "not a url"), 403);
 });
+
+test("FR-P3: admin switches a product between ready stock and preorder", (t) => {
+  const { s, user, other } = fixture(t);
+  s.db.prepare("UPDATE users SET role='ADMIN' WHERE id=?").run(other.id);
+  const admin = s.session(
+    s.login({ email: other.email, password: "Another-test-only-123" }).token,
+  );
+  const base = {
+    name: "Preorder test",
+    description: "Ships later from the queue",
+    category: "streaming",
+    price: 15000,
+    active: true,
+  };
+  const { id } = s.saveProduct(admin, { ...base, preorder: true });
+  const created = s.adminOverview(admin).products.find((p) => p.id === id);
+  assert.equal(Number(created.preorder), 1);
+  // Paying for a preorder product gives a queue number, not stock.
+  const reservation = s.createOrder(user, {
+    variantId: id + "-30",
+    quantity: 1,
+    requestKey: "fr-p3-preorder-0001",
+  });
+  s.topup(user, { amount: 500, requestKey: "fr-p3-topup-0001" });
+  const paid = s.pay(user, reservation.id, {
+    paymentToken: reservation.paymentToken,
+    outcome: "success",
+  });
+  assert.equal(paid.status, "PREORDER");
+  assert.ok(paid.queueNumber >= 1);
+  // Saving without a type keeps the current mode.
+  s.saveProduct(admin, { ...base, id });
+  assert.equal(Number(s.adminOverview(admin).products.find((p) => p.id === id).preorder), 1);
+  s.saveProduct(admin, { ...base, id, preorder: false });
+  assert.equal(Number(s.adminOverview(admin).products.find((p) => p.id === id).preorder), 0);
+  const actions = s.db
+    .prepare("SELECT action FROM audit WHERE entity_id=? ORDER BY rowid")
+    .all(id)
+    .map((r) => r.action);
+  assert.ok(actions.includes("PRODUCT_SET_READY"));
+});

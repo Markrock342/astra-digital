@@ -192,3 +192,16 @@ Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์
 - จำนวนคนในหลังบ้านและสิทธิ์ย่อย
 
 น็อตตรวจฐานเดิมเรื่อง transaction ตอนตัดสต็อก การกันขายโค้ดซ้ำ และสิทธิ์ตามตารางนี้ ยังไม่ต้องขึ้นเซิร์ฟเวอร์ซ้ำจากสัญญานี้
+
+## Admin screens — Mark (12 พ.ย. 2026, branch `feat/admin-screens-mark`)
+
+- `POST /api/admin/products` ใช้ `preorder: boolean` ของน็อต (#27) · หน้าจอส่งค่านี้จากช่อง "วิธีส่งของ" · เปลี่ยนแล้ว audit `PRODUCT_SET_PREORDER` / `PRODUCT_SET_READY`
+- `GET /api/admin/customers/:id` (STAFF+) โปรไฟล์ สถานะ ออเดอร์ 50 รายการล่าสุด ประวัติ audit · ADMIN ได้ `spentSatang`, `creditSatang`, `ledger` เพิ่ม
+- `POST /api/admin/customers/:id` (ADMIN) `{firstName, lastName, email, phone, note}` · อีเมลซ้ำ 409 · audit `CUSTOMER_UPDATE` พร้อมค่าก่อน/หลัง
+- `POST /api/admin/customers/:id/status` (ADMIN) `{status: ACTIVE|SUSPENDED|BANNED, reason}` · ระงับ/แบนต้องมีเหตุผล ลบ session ทันที login ได้ 403 · audit `CUSTOMER_STATUS`
+- `POST /api/admin/customers/:id/sign-out` (ADMIN) ลบ session ทั้งหมด
+- Schema: `ensureCustomerAdmin` (idempotent ALTER) เพิ่ม `users.status, status_reason, status_changed_at, status_changed_by, first_name, last_name, phone, note` และ `audit.detail` (JSON) · ไม่ใช้เลข migration (006 สงวนให้ ledger ของน็อต)
+- บั๊กรีวิว PR #26 ใช้ฉบับน็อต (#28) · มาร์คเพิ่ม: STAFF ส่ง `minSpent`/`maxSpent` ได้ 403
+- แก้จาก #28: `GET /api/ledger` (กระเป๋าลูกค้า) และเครดิตในหน้าลูกค้าแสดงเฉพาะ kind เครดิต (ไม่รวม PAYMENT_IN/FEE/WITHDRAWAL) · `adminTransactions` summary ตอนกรองช่วงวันไม่พัง (เดิมตัดเงื่อนไข `created_at <=` ทิ้งแต่พารามิเตอร์ค้าง)
+- หน้าจอ: `/admin/payments` ใช้ `GET /api/admin/transactions`
+- `/api/admin/customers?status=` กรองสถานะจริงแล้ว
