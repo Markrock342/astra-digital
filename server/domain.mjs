@@ -2069,6 +2069,7 @@ export function createCommerceCore({
     tx,
     fail,
     clean,
+    moneyScope,
   });
   const { team, saveStaff, setStaffActive, assignChatThread } = createTeamApis({
     passwordHash,
@@ -2130,6 +2131,11 @@ export function createCommerceCore({
     notify,
     maybeNotifyStockLow,
   });
+  /** S2: in live mode an order paid with sandbox money is not real spend. */
+  const liveOnlySql = (idCol, payCol) =>
+    moneyScope.live
+      ? ` AND NOT EXISTS (SELECT 1 FROM payments sp WHERE sp.${payCol}=${idCol} AND sp.provider='sandbox')`
+      : "";
   function buyerRanking(user, query = {}) {
     requireAdmin(user);
     const rawLimit = query.limit ?? null;
@@ -2142,9 +2148,9 @@ export function createCommerceCore({
     return all(
       `SELECT u.name,u.email,COUNT(*) AS orders,SUM(x.total) AS spent_satang
        FROM (
-         SELECT user_id,total,created_at FROM orders WHERE status='DELIVERED'
+         SELECT user_id,total,created_at FROM orders o WHERE status='DELIVERED'${liveOnlySql("o.id", "order_id")}
          UNION ALL
-         SELECT user_id,total,created_at FROM reservations WHERE status IN ('PREORDER','DELIVERED')
+         SELECT user_id,total,created_at FROM reservations o WHERE status IN ('PREORDER','DELIVERED')${liveOnlySql("o.id", "reservation_id")}
        ) x
        JOIN users u ON u.id=x.user_id
        WHERE u.role='CUSTOMER' AND (? IS NULL OR x.created_at >= ?)

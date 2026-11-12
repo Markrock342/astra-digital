@@ -16,6 +16,7 @@ export function createAdminCustomerApis({
   tx,
   fail,
   clean,
+  moneyScope,
 }) {
   const auditDetail = (user, action, entity, detail) =>
     run(
@@ -91,7 +92,7 @@ export function createAdminCustomerApis({
     const money = seesMoney
       ? {
           spentSatang: one(
-            "SELECT COALESCE(SUM(amount),0) AS n FROM payments WHERE user_id=? AND status='SUCCEEDED'",
+            `SELECT COALESCE(SUM(amount),0) AS n FROM payments WHERE user_id=? AND status='SUCCEEDED' AND ${moneyScope ? moneyScope.payment() : "1=1"}`,
             row.id,
           ).n,
           creditSatang: one(walletBalanceSql, row.id).value,

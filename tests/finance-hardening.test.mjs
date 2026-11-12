@@ -395,6 +395,11 @@ test("S2: test money counts in sandbox mode and is excluded everywhere in live m
   const csv = live.adminTransactions(admin, { format: "csv" }).csv.trim().split("\n");
   assert.equal(csv.length, 2);
   assert.ok(!csv.join("\n").includes("sandbox"));
+  // Buyer ranking and customer spend count only the real payment.
+  const ranked = live.buyerRanking(admin).find((r) => r.email === "money-buyer@example.invalid");
+  assert.equal(ranked.spentSatang, realOrder.total);
+  assert.equal(live.adminCustomerDetail(admin, user.id).spentSatang, realOrder.total);
+  assert.ok(s.buyerRanking(merchant).find((r) => r.email === "money-buyer@example.invalid").spentSatang > realOrder.total);
   const sandboxRow = s.adminTransactions(merchant, { kind: "PAYMENT_IN" }).transactions.find((r) => r.order_id === paid.id);
   assert.throws(() => live.adminTransactionDetail(admin, sandboxRow.id), (e) => e.status === 404);
 });
@@ -428,4 +433,81 @@ test("S9: ledger and audit rows cannot be updated or deleted; demo cleanup still
     .prepare("INSERT INTO ledger(id,user_id,amount,reference,label,kind,direction,fee,net) VALUES(?,?,100,'x-1','x','ADJUSTMENT','in',0,100)")
     .run(randomUUID(), real.user.id);
   assert.throws(() => s.db.prepare("DELETE FROM ledger").run(), /append-only/);
+});
+
+test("S9 on workerd: Durable Object SQLite enforces the append-only triggers", { timeout: 120000 }, async (t) => {
+  const { Miniflare, convertV4MiniflareOptions } = await import("miniflare");
+  const { build } = await import("esbuild");
+  const { mkdtempSync, rmSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const dir = mkdtempSync(join(tmpdir(), "astra-do-triggers-"));
+  let mf;
+  t.after(async () => {
+    await mf?.dispose();
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const server = fileURLToPath(new URL("../server/", import.meta.url));
+  const entry = join(dir, "entry.mjs");
+  writeFileSync(
+    entry,
+    `import { DurableObject } from "cloudflare:workers";
+import { createDoSqliteAdapter } from ${JSON.stringify(server + "do-sqlite-adapter.mjs")};
+import { ensureAppendOnlyMoney, dropAppendOnlyMoney } from ${JSON.stringify(server + "ensure-admin-fr.mjs")};
+export class Probe extends DurableObject {
+  async fetch() {
+    const db = createDoSqliteAdapter(this.ctx.storage.sql);
+    const tx = (fn) => this.ctx.storage.transactionSync(fn);
+    const out = {};
+    const attempt = (name, fn) => { try { fn(); out[name] = "allowed"; } catch (e) { out[name] = String(e.message); } };
+    tx(() => {
+      db.exec("CREATE TABLE IF NOT EXISTS ledger(id TEXT PRIMARY KEY, amount INTEGER, status TEXT)");
+      db.exec("CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT)");
+      ensureAppendOnlyMoney(db);
+      ensureAppendOnlyMoney(db);
+    });
+    db.prepare("INSERT INTO ledger VALUES(?,?,?)").run("a", 1, "SUCCEEDED");
+    db.prepare("INSERT INTO audit(action) VALUES(?)").run("X");
+    attempt("updateLedger", () => db.prepare("UPDATE ledger SET status='REFUNDED'").run());
+    attempt("deleteLedger", () => db.prepare("DELETE FROM ledger").run());
+    attempt("updateAudit", () => db.prepare("UPDATE audit SET action='Y'").run());
+    attempt("deleteAudit", () => db.prepare("DELETE FROM audit").run());
+    attempt("cleanup", () => tx(() => {
+      dropAppendOnlyMoney(db);
+      db.prepare("DELETE FROM ledger").run();
+      ensureAppendOnlyMoney(db);
+    }));
+    out.rowsAfterCleanup = db.prepare("SELECT COUNT(*) AS n FROM ledger").get().n;
+    db.prepare("INSERT INTO ledger VALUES(?,?,?)").run("b", 2, "SUCCEEDED");
+    attempt("deleteAfterCleanup", () => db.prepare("DELETE FROM ledger").run());
+    out.triggers = db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='trigger'").get().n;
+    return Response.json(out);
+  }
+}
+export default { fetch: () => new Response("ok") };
+`,
+  );
+  const script = (
+    await build({ entryPoints: [entry], bundle: true, write: false, format: "esm", platform: "node", external: ["cloudflare:workers", "node:*"] })
+  ).outputFiles[0].text;
+  mf = new Miniflare({
+    ...convertV4MiniflareOptions({
+      name: "astra-do-append-only",
+      modules: true,
+      script,
+      compatibilityDate: "2026-10-01",
+      compatibilityFlags: ["nodejs_compat"],
+      durableObjects: { PROBE: { className: "Probe", useSQLite: true } },
+      cf: false,
+    }),
+    resourcePersistencePath: dir,
+  });
+  const ns = await mf.getDurableObjectNamespace("PROBE");
+  const out = await (await ns.get(ns.idFromName("p")).fetch("http://probe/")).json();
+  for (const name of ["updateLedger", "deleteLedger", "updateAudit", "deleteAudit", "deleteAfterCleanup"])
+    assert.match(out[name], /append-only/, name);
+  assert.equal(out.cleanup, "allowed");
+  assert.equal(out.rowsAfterCleanup, 0);
+  assert.equal(out.triggers, 4);
 });
