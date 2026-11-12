@@ -1722,10 +1722,11 @@ test("ADMIN-FR-W5-O5: replace delivered ready credential; staff forbidden", (t) 
       .defective,
     1,
   );
+  // B2: the old unit stays linked to the order for history (defective, hidden from the customer).
   assert.equal(
     s.db.prepare("SELECT order_id FROM inventory WHERE id=?").get(soldId)
       .order_id,
-    null,
+    order.id,
   );
   const notes = s.notifications(user);
   assert.ok(notes.some((n) => n.title.includes("เปลี่ยน")));
@@ -1804,13 +1805,14 @@ test("FR-O7: staff keeps an internal order note that the customer never sees", (
   const { s, user, staff, merchant } = fixture(t);
   s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
   const o = s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: "note-0001" });
-  assert.throws(() => s.adminSetOrderNote(user, o.id, { note: "ลูกค้าแก้" }), (e) => e.status === 403);
-  s.adminSetOrderNote(staff, o.id, { note: "ลูกค้าขอให้ส่งก่อน 18:00" });
-  assert.equal(s.adminOrderDetail(merchant, o.id).note, "ลูกค้าขอให้ส่งก่อน 18:00");
+  assert.throws(() => s.adminAddOrderNote(user, o.id, { body: "ลูกค้าแก้" }), (e) => e.status === 403);
+  s.adminAddOrderNote(staff, o.id, { body: "ลูกค้าขอให้ส่งก่อน 18:00" });
+  assert.equal(s.adminOrderDetail(merchant, o.id).notes[0].body, "ลูกค้าขอให้ส่งก่อน 18:00");
   assert.ok(!JSON.stringify(s.orderDetail(user, o.id)).includes("18:00"));
-  s.adminSetOrderNote(merchant, o.id, { note: "" });
-  assert.equal(s.adminOrderDetail(merchant, o.id).note, null);
-  assert.throws(() => s.adminSetOrderNote(merchant, "missing-order", { note: "x" }), (e) => e.status === 404);
+  // Append-only: an empty note is refused and never wipes earlier ones.
+  assert.throws(() => s.adminAddOrderNote(merchant, o.id, { body: "" }), (e) => e.status === 400);
+  assert.equal(s.adminOrderDetail(merchant, o.id).notes.length, 1);
+  assert.throws(() => s.adminAddOrderNote(merchant, "missing-order", { body: "x" }), (e) => e.status === 404);
 });
 
 test("an existing customer can be given staff or admin rights and taken back to customer", (t) => {

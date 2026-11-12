@@ -25,6 +25,7 @@ import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
   ensureCustomerAdmin,
+  ensureOrderHistory,
 } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
 import {
@@ -93,6 +94,7 @@ export class Commerce extends DurableObject {
       ensureChatThreadReads(db);
       ensureCustomerAdmin(db);
       ensureAuthHardening(db);
+      ensureOrderHistory(db);
       ensureLiveVersions(db);
       ensureAppendOnlyMoney(db);
     });

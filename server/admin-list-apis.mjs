@@ -51,6 +51,17 @@ function likeContains(value) {
   );
 }
 
+// Status tabs on the orders page (Polaris resource-index idea, shadcn/ui tabs).
+// "todo" is the STAFF default: paid preorders waiting to be sent. Chat threads
+// are not linked to orders, so "unread issues" cannot be counted cheaply yet.
+export const ORDER_STATUS_GROUPS = {
+  pending: ["PENDING_PAYMENT"],
+  preorder: ["PREORDER"],
+  delivered: ["DELIVERED"],
+  failed: ["FAILED", "OUT_OF_STOCK", "CANCELLED"],
+  todo: ["PREORDER"],
+};
+
 const ORDER_UNION = `
   SELECT o.id,o.status,o.total,o.quantity,o.created_at,o.variant_id,
          u.id AS customer_id,u.name AS customer,u.email AS customer_email,
@@ -87,6 +98,7 @@ export function createAdminListApis({
   bangkokDayRange,
   isAdmin,
   paymentSummaryFor,
+  history,
 }) {
   const auditDetail = (user, action, entity, detail) =>
     run(
@@ -133,14 +145,18 @@ export function createAdminListApis({
       query.q != null && String(query.q).trim() !== ""
         ? clean(query.q, 1, 120, "คำค้น")
         : null;
+    const groupRaw =
+      query.group != null && String(query.group).trim() !== ""
+        ? clean(query.group, 1, 20, "แท็บสถานะ")
+        : null;
+    if (groupRaw && groupRaw !== "all" && !ORDER_STATUS_GROUPS[groupRaw])
+      fail(400, "แท็บสถานะไม่ถูกต้อง");
+    const group = groupRaw && groupRaw !== "all" ? ORDER_STATUS_GROUPS[groupRaw] : null;
     const cursorParts = decodeCursor(query.cursor, fail, 2);
 
+    // Filters other than status: shared by the page and the tab counts.
     const where = [];
     const params = [];
-    if (status) {
-      where.push("status = ?");
-      params.push(status);
-    }
     if (range) {
       where.push("created_at >= ?");
       params.push(range.fromUtc);
@@ -166,6 +182,16 @@ export function createAdminListApis({
       const like = likeContains(q);
       params.push(like, like, like, like);
     }
+    const baseWhere = [...where];
+    const baseParams = [...params];
+    if (status) {
+      where.push("status = ?");
+      params.push(status);
+    }
+    if (group) {
+      where.push(`status IN (${group.map(() => "?").join(",")})`);
+      params.push(...group);
+    }
     if (cursorParts) {
       const [created, id] = cursorParts;
       where.push("(created_at < ? OR (created_at = ? AND id < ?))");
@@ -180,6 +206,30 @@ export function createAdminListApis({
       ...params,
       lim + 1,
     );
+    // Tab counts for the current filters except status; first page only.
+    let counts;
+    if (!cursorParts) {
+      const inList = (key) => ORDER_STATUS_GROUPS[key].map((s) => `'${s}'`).join(",");
+      const c = one(
+        `SELECT COUNT(*) AS total,
+                COALESCE(SUM(status IN (${inList("pending")})),0) AS pending,
+                COALESCE(SUM(status IN (${inList("preorder")})),0) AS preorder,
+                COALESCE(SUM(status IN (${inList("delivered")})),0) AS delivered,
+                COALESCE(SUM(status IN (${inList("failed")})),0) AS failed,
+                COALESCE(SUM(status IN (${inList("todo")})),0) AS todo
+         FROM (${ORDER_UNION})
+         ${baseWhere.length ? " WHERE " + baseWhere.join(" AND ") : ""}`,
+        ...baseParams,
+      );
+      counts = {
+        all: c.total,
+        pending: c.pending,
+        preorder: c.preorder,
+        delivered: c.delivered,
+        failed: c.failed,
+        todo: c.todo,
+      };
+    }
     const page = rows.slice(0, lim).map((row) => ({
       id: row.id,
       status: row.status,
@@ -204,7 +254,7 @@ export function createAdminListApis({
             page[page.length - 1].id,
           ])
         : null;
-    return { orders: page, nextCursor };
+    return counts ? { orders: page, nextCursor, counts } : { orders: page, nextCursor };
   }
 
   function loadAdminOrderRow(orderId) {
@@ -261,7 +311,8 @@ export function createAdminListApis({
       const deliveredAt =
         row.delivered_at ??
         one(
-          `SELECT MAX(sold_at) AS t FROM inventory WHERE ${
+          // MIN: a later replacement must not move the first delivery time.
+          `SELECT MIN(sold_at) AS t FROM inventory WHERE ${
             row.preorder ? "reservation_id" : "order_id"
           }=?`,
           row.id,
@@ -271,6 +322,8 @@ export function createAdminListApis({
     }
     if (row.status === "FAILED" || row.status === "OUT_OF_STOCK")
       events.push({ at: row.created_at, event: row.status.toLowerCase() });
+    // Replaced by the CANCEL_ORDER audit entry (with time, actor and reason) when there is one.
+    if (row.status === "CANCELLED") events.push({ at: row.created_at, event: "cancelled" });
     return events.sort((a, b) => String(a.at).localeCompare(String(b.at)));
   }
 
@@ -280,6 +333,7 @@ export function createAdminListApis({
     const row = loadAdminOrderRow(orderId);
     if (!row) fail(404, "ไม่พบคำสั่งซื้อ");
     const payments = paymentsForOrder(row);
+    const notes = history.notesFor(orderId);
     const bind = row.preorder ? "reservation_id" : "order_id";
     const delivered =
       row.status === "DELIVERED"
@@ -306,7 +360,6 @@ export function createAdminListApis({
       queue_number: row.queue_number ?? null,
       delivered_at: row.delivered_at ?? null,
       delivered_by: row.delivered_by ?? null,
-      note: row.admin_note ?? null,
       product: {
         id: row.product_id,
         name: row.product,
@@ -324,7 +377,9 @@ export function createAdminListApis({
       ...(paymentSummaryFor && isAdmin(user)
         ? { paymentSummary: paymentSummaryFor(row) }
         : {}),
-      timeline: buildTimeline(row, payments),
+      timeline: history.activityFor(row, buildTimeline(row, payments), notes),
+      notes,
+      replacements: history.replacementsFor(orderId),
       units,
       codes: delivered.codes.map(maskCredential),
       credentials: delivered.credentials.map(maskCredential),

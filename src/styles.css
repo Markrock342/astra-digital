@@ -9862,3 +9862,137 @@ a.button.is-disabled {
   font-size: 13px;
   font-weight: 550;
 }
+
+/* Order history: status tabs with counts, activity timeline, notes, replacements.
+   Tabs follow the shadcn/ui Tabs pattern (MIT) on the existing pill tabs. */
+.order-status-tabs {
+  flex-wrap: wrap;
+  overflow: visible;
+  margin: 4px 0 16px;
+}
+.order-status-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  font-weight: 500;
+}
+.order-status-tabs .tab-count {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.order-status-tabs .active .tab-count {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+.admin-activity li.event-cancelled::before,
+.admin-activity li.event-out_of_stock::before {
+  background: #dc2626;
+}
+.admin-activity li.event-replaced::before {
+  background: #f59e0b;
+}
+.admin-activity li.event-revealed::before {
+  background: #2563eb;
+}
+.admin-activity li.event-note::before {
+  background: #64748b;
+}
+.admin-timeline-actor {
+  display: block;
+  color: #334155;
+  font-size: 12px;
+}
+.admin-timeline-reason,
+.admin-timeline-note {
+  margin: 4px 0 2px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.admin-timeline-note {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  white-space: pre-wrap;
+}
+.order-notes-card .field-help {
+  margin: -6px 0 12px;
+}
+.order-note-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.order-note-list li {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.order-note-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 13px;
+}
+.order-note-head .admin-chip {
+  margin-left: 0;
+}
+.order-note-head time {
+  margin-left: auto;
+  color: #64748b;
+  font-size: 12px;
+}
+.order-note-list p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.order-note-actions {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.order-replacements {
+  margin: 16px 0;
+}
+.order-replacements ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.order-replacements li {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #f59e0b;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+}
+.order-replacement-swap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.order-replacements p {
+  margin: 4px 0 2px;
+  overflow-wrap: anywhere;
+}
+.order-replacements small {
+  color: #64748b;
+}
