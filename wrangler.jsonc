@@ -37,6 +37,9 @@
   // (turns off test credit and test payments).
   "vars": {
     "ASTRA_TEST_PAYMENTS": "on",
+    // Turnstile widget "asia-extra-shop" (domain astra-demo-133.pages.dev). The secret is a
+    // Worker secret: npx wrangler secret put TURNSTILE_SECRET
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAF-jasVnNavNr3-A",
   },
   "observability": {
     "enabled": true,
