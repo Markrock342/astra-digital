@@ -373,11 +373,16 @@ test(
       await (await stub()).fetch("http://fixture/api/me", { headers })
     ).json();
     assert.equal(me.user.balance, 90000);
+    // Signed-in reads may write bookkeeping (session last_seen, the once-a-minute unpaid
+    // order sweep mark), so compare the reopened object with its state just before closing.
+    const beforeReopen = await (
+      await (await stub()).fetch("http://fixture/snapshot")
+    ).json();
     await mf.dispose();
     mf = new Miniflare(options(current));
     assert.deepEqual(
       await (await (await stub()).fetch("http://fixture/snapshot")).json(),
-      upgraded,
+      beforeReopen,
     );
     assert.deepEqual(
       (

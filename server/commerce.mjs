@@ -26,6 +26,7 @@ import {
   ensureCustomerAdmin,
   ensureOrderHistory,
   ensureProductsStock,
+  ensureSmallUxB,
 } from "./ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "./auth-hardening.mjs";
 export { ApiError } from "./domain.mjs";
@@ -78,6 +79,7 @@ export function createCommerce(options = {}) {
   ensureAuthHardening(db);
   ensureOrderHistory(db);
   ensureProductsStock(db);
+  ensureSmallUxB(db);
   ensureLiveVersions(db);
   ensureAppendOnlyMoney(db);
   return createCommerceCore({ ...options, db, key });

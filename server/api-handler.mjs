@@ -194,17 +194,21 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             429,
             "มีคำขอมากเกินไป กรุณาลองอีกครั้งในหนึ่งนาที",
           );
-        const ctx = { ip: clientIp(request, env) };
+        // ip: login audit + "my devices" (stored masked); userAgent: coarse device label only.
+        const ctx = {
+          ip: clientIp(request, env),
+          userAgent: request.headers.get("User-Agent") ?? "",
+        };
         const result =
           path === "/api/login"
             ? service.login(input, ctx)
             : path === "/api/login/totp"
               ? service.loginTotp(input, ctx)
               : path === "/api/register"
-                ? service.register(input)
+                ? service.register(input, ctx)
                 : path === "/api/demo-merchant"
-                  ? service.demoMerchant()
-                  : service.demo();
+                  ? service.demoMerchant(ctx)
+                  : service.demo(ctx);
         // Password OK but the account has 2FA: no cookie until /api/login/totp succeeds.
         if (result.needsTotp)
           return send(200, { needsTotp: true, challenge: result.challenge });
@@ -335,6 +339,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminTransactionDetail(user, path.split("/")[4]));
         if (path === "/api/admin/team") return send(200, { team: service.team(user) });
         if (path === "/api/account/totp") return send(200, service.totpStatus(user));
+        if (path === "/api/account/sessions")
+          return send(200, service.listSessions(user, token));
         if (path === "/api/admin/reports/sales") {
           const report = service.salesReport(user, {
             from: url.searchParams.get("from") ?? undefined,
@@ -432,6 +438,19 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           );
         return send(404, { error: "ไม่พบหน้าที่ร้องขอ" });
       } else if (request.method === "DELETE") {
+        if (/^\/api\/account\/sessions\/[^/]+$/.test(path)) {
+          const result = service.revokeSession(user, token, path.split("/")[4]);
+          // Signing out the device making the request also clears its cookie.
+          return send(
+            200,
+            result,
+            result.current
+              ? {
+                  "Set-Cookie": `astra_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${url.protocol === "https:" ? "; Secure" : ""}`,
+                }
+              : {},
+          );
+        }
         if (/^\/api\/admin\/product-images\/[^/]+$/.test(path))
           return send(
             200,
@@ -525,6 +544,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             channel: service.setPaymentChannel(user, input),
           });
         }
+        if (path === "/api/account/sessions/revoke-others")
+          return send(200, service.revokeOtherSessions(user, token));
         if (path === "/api/account/totp/setup")
           return send(200, service.totpSetup(user, input));
         if (path === "/api/account/totp/enable")

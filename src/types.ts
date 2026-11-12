@@ -54,6 +54,8 @@ export type Order = {
   /** FR-F6: set once the shop refunded part or all of the order. */
   refundStatus?: "REFUNDED" | "PARTIALLY_REFUNDED" | null;
   refundedTotal?: number;
+  /** Set when an unpaid order was cancelled because the payment window ran out. */
+  expired_at?: string | null;
 };
 export type Ledger = {
   id: string;
@@ -64,7 +66,7 @@ export type Ledger = {
   type?: "TOPUP" | "PURCHASE" | "REFUND" | "ADJUSTMENT";
   balanceAfter?: number;
 };
-export type ShopSettings={shopName:string;description:string;announcement:string;line:string;email:string;phone:string;facebook:string;discord:string;policy:string;stockOrder:string;shopOpen:boolean;requireTerms:boolean};
+export type ShopSettings={shopName:string;description:string;announcement:string;line:string;email:string;phone:string;facebook:string;discord:string;policy:string;stockOrder:string;shopOpen:boolean;requireTerms:boolean;pendingExpiryMinutes?:number};
 export type Overview = {
   shop?:ShopSettings;
   customers: number;

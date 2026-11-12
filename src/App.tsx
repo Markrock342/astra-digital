@@ -49,7 +49,7 @@ import {
   Upload,
   RotateCcw,
 } from "lucide-react";
-import { t, getLang, setLang, setMerchantScope, type Lang } from "./i18n";
+import { t, getLang, locale, setLang, setMerchantScope, type Lang } from "./i18n";
 import {
   BrandLogo,
   LanguageToggle,
@@ -75,6 +75,7 @@ import Stores, { MerchantHeader } from "./Stores";
 import { CustomerChat, NotificationBell } from "./Ops";
 import { CountUp, useRouteMotion } from "./motion";
 import { WarrantyStatus } from "./Warranty";
+import { SessionsCard } from "./Sessions";
 import {
   ReferenceCatalog,
   ReferenceCatalogPage,
@@ -215,6 +216,7 @@ export function Status({ status }: { status: string }) {
     PENDING_PAYMENT: t("รอชำระเงิน"),
     FAILED: t("ชำระเงินไม่สำเร็จ"),
     CANCELLED: t("ยกเลิกแล้ว"),
+    EXPIRED: t("หมดเวลาชำระเงิน"),
     OUT_OF_STOCK: t("สินค้าหมด"),
     PREORDER: t("รอส่งสินค้าสั่งจอง"),
     REFUNDED: t("คืนเงินแล้ว"),
@@ -226,6 +228,9 @@ export function Status({ status }: { status: string }) {
     </span>
   );
 }
+/** Unpaid order cancelled by the payment window: shown as its own status to the customer. */
+const shownStatus = (o: Order) =>
+  o.refundStatus ?? (o.status === "CANCELLED" && o.expired_at ? "EXPIRED" : o.status);
 export function Empty({
   icon,
   heading,
@@ -1390,6 +1395,10 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
       }
     } catch (e) {
       setError((e as Error).message);
+      // e.g. the payment window ran out: show the order's real state.
+      api<Order>("/orders/" + id)
+        .then(setOrder)
+        .catch(() => {});
     } finally {
       setBusy(false);
     }
@@ -1441,6 +1450,8 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                     ? t("บันทึกคำสั่งซื้อแล้ว")
                     : order.status === "FAILED"
                       ? t("การชำระเงินไม่สำเร็จ")
+                      : order.status === "CANCELLED" && order.expired_at
+                        ? t("หมดเวลาชำระเงิน")
                       : order.status === "CANCELLED"
                         ? t("คำสั่งซื้อถูกยกเลิก")
                         : t("สินค้าหมดก่อนทำรายการ")}
@@ -1452,7 +1463,9 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                   ? t("ชำระเงินเพื่อรับสินค้า")
                   : order.status === "PREORDER"
                     ? t("ร้านจะส่งสินค้าให้ตามลำดับคิว และแจ้งเตือนในเว็บเมื่อส่งแล้ว")
-                    : t("รายการนี้ไม่มีการส่งสินค้า")}
+                    : order.status === "CANCELLED" && order.expired_at
+                      ? t("ระบบยกเลิกคำสั่งซื้อนี้แล้ว ไม่มีการตัดเงิน")
+                      : t("รายการนี้ไม่มีการส่งสินค้า")}
             </p>
           </div>
           <section className="panel delivery-panel">
@@ -1466,7 +1479,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                   {order.label}{" "}{t("· จำนวน")}{" "}{order.quantity}{" "}{t("ชิ้น")}
                 </p>
               </div>
-              <Status status={order.refundStatus ?? order.status} />
+              <Status status={shownStatus(order)} />
             </div>
             {!!order.refundedTotal && (
               <div className="note-box refund-note">
@@ -1485,7 +1498,19 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               <span>{dateTime(order.created_at)}</span>
             </div>
             {order.status === "DELIVERED" && <WarrantyStatus until={order.warranty_until} />}
-            {order.status === "PREORDER" ? (
+            {order.status === "CANCELLED" && order.expired_at ? (
+              <div className="note-box expired-note" role="status">
+                <Clock size={20} />
+                <div>
+                  <strong>{t("หมดเวลาชำระเงิน · สั่งใหม่ได้")}</strong>
+                  <p>{t("คำสั่งซื้อที่ยังไม่ชำระจะถูกยกเลิกอัตโนมัติเมื่อเกินเวลา สินค้าในร้านยังสั่งซื้อใหม่ได้ตามปกติ")}</p>
+                  <Link to="/products" className="button primary">
+                    {t("สั่งซื้อใหม่")}
+                    <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            ) : order.status === "PREORDER" ? (
               <div className="note-box">
                 <Clock size={20} />
                 <div>
@@ -1553,6 +1578,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                     <Clock size={20} />
                     <div>
                       <strong>{t("ยอดคำสั่งซื้อ")}{" "}{money(order.total)}</strong>
+                      <PayDeadline createdAt={order.created_at} />
                       {testPayments ? (
                         <>
                           <p>
@@ -1617,6 +1643,19 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
         </>
       )}
     </main>
+  );
+}
+/** "Pay by HH:MM": unpaid orders are cancelled after the shop's payment window. */
+function PayDeadline({ createdAt }: { createdAt: string }) {
+  const { overview } = useStore();
+  const minutes = Number(overview?.shop?.pendingExpiryMinutes) || 30;
+  const deadline = new Date(new Date(createdAt.replace(" ", "T") + "Z").getTime() + minutes * 60000);
+  if (Number.isNaN(deadline.getTime())) return null;
+  const time = deadline.toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" });
+  return (
+    <p className="pay-deadline">
+      {t("กรุณาชำระภายใน {time} หากเกินเวลา ระบบจะยกเลิกคำสั่งซื้ออัตโนมัติ", { time })}
+    </p>
   );
 }
 function HistoryPage() {
@@ -1684,7 +1723,7 @@ function HistoryPage() {
                       #{o.id.slice(0, 8).toUpperCase()}{" "}
                       <small>{dateTime(o.created_at)}</small>
                     </span>
-                    <Status status={o.refundStatus ?? o.status} />
+                    <Status status={shownStatus(o)} />
                   </div>
                   <div className="history-card-body">
                     <div className="history-art">
@@ -2167,6 +2206,7 @@ function Account() {
               {t("บันทึกการเปลี่ยนแปลง")}
             </button>
           </form>
+          <SessionsCard variant="store" />
         </>
       )}
     </main>

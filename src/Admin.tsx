@@ -1118,7 +1118,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
       </div>
       <form
         className="reference-settings-form"
-        key={shop?.shopName + "|" + shop?.line + "|" + shop?.email}
+        key={shop?.shopName + "|" + shop?.line + "|" + shop?.email + "|" + shop?.pendingExpiryMinutes}
         onSubmit={save}
       >
         <ErrorMessage message={error} />
@@ -1224,6 +1224,27 @@ function ReferenceSettings({ sub }: { sub: string }) {
               <option value="random">สุ่ม · หยิบชิ้นไหนก็ได้ในสต็อก</option>
             </select>
           </label>
+        </section>
+        <section className="reference-admin-card editor-panel">
+          <h2>เวลารอชำระเงิน</h2>
+          <p>
+            ออเดอร์และพรีออเดอร์ที่ยังไม่ชำระเกินเวลานี้ ระบบยกเลิกให้อัตโนมัติ
+            (เหตุผล “หมดเวลาชำระเงิน”) ออเดอร์ที่ชำระแล้วไม่ถูกแตะต้อง
+          </p>
+          <label className="field">
+            ยกเลิกออเดอร์ที่ยังไม่ชำระหลัง (นาที)
+            <input
+              name="pendingExpiryMinutes"
+              type="number"
+              inputMode="numeric"
+              min={5}
+              max={1440}
+              step={1}
+              required
+              defaultValue={shop?.pendingExpiryMinutes ?? 30}
+            />
+          </label>
+          <p className="field-help">ตั้งได้ 5–1440 นาที (สูงสุด 24 ชั่วโมง) · ค่าเริ่มต้น 30 นาที</p>
         </section>
         <div className="editor-save-bar">
           <span>
