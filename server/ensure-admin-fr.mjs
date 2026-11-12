@@ -305,3 +305,25 @@ export function ensureEmailAndReset(db) {
   )`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id)");
 }
+
+/**
+ * Announcements to customers (broadcast.mjs). One row per send; the notifications themselves
+ * live in `notifications` (kind 'broadcast'). created_ms drives the 5-per-24h limit.
+ */
+export function ensureBroadcasts(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS broadcasts (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_ms INTEGER NOT NULL,
+    sender_id TEXT,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    link TEXT,
+    audience TEXT NOT NULL,
+    audience_label TEXT NOT NULL,
+    recipients INTEGER NOT NULL DEFAULT 0,
+    email_requested INTEGER NOT NULL DEFAULT 0,
+    emails_queued INTEGER NOT NULL DEFAULT 0
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_broadcasts_created ON broadcasts(created_ms)");
+}

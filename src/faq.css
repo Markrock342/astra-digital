@@ -1,0 +1,317 @@
+/* FAQ: product page section, storefront /faq and the admin form (ตั้งค่า › คำถามที่พบบ่อย).
+   Accordion and search follow the shadcn/ui Accordion + Input pattern (MIT). Storefront parts
+   use the theme tokens from brand.css so all 8 themes (4 accents × light/dark) work; the admin
+   reuses the legal-pages form classes (legal.css) with --brand. */
+
+/* ---------- Answer blocks (paragraphs + bullets) ---------- */
+.reference-faq summary > span {
+  min-width: 0;
+  padding-right: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.reference-faq summary svg {
+  flex: none;
+}
+.reference-faq summary::-webkit-details-marker {
+  display: none;
+}
+.reference-faq details .faq-answer {
+  padding: 0 16px 16px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.75;
+}
+.reference-faq details .faq-answer p {
+  margin: 0;
+  padding: 0;
+  white-space: pre-line;
+  color: inherit;
+}
+.reference-faq details .faq-answer p + p,
+.reference-faq details .faq-answer p + ul,
+.reference-faq details .faq-answer ul + p {
+  margin-top: 10px;
+}
+.reference-faq details .faq-answer ul {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+}
+.reference-faq details .faq-answer li {
+  padding-left: 2px;
+}
+.reference-faq details .faq-answer li::marker {
+  color: var(--accent-text, var(--brand, #1534ff));
+}
+.reference-faq .faq-more {
+  display: inline-flex;
+  margin-top: 16px;
+  color: var(--accent-text, var(--brand, #1534ff));
+  font-size: 14px;
+  font-weight: 600;
+}
+.reference-faq .faq-more:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Storefront /faq ---------- */
+.faq-page .faq-search {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 20px;
+}
+.faq-page .faq-search .search-field {
+  width: 100%;
+  max-width: none;
+}
+.faq-page .faq-search input {
+  font-size: 15px;
+}
+.faq-page .faq-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.faq-page .reference-faq.faq-group {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.faq-page .faq-group + .faq-group {
+  margin-top: 24px;
+}
+.faq-page .faq-group h2 {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+.faq-skeleton {
+  display: grid;
+  gap: 10px;
+}
+.faq-skeleton .skeleton-line {
+  height: 52px;
+  border-radius: var(--radius-sm, 10px);
+}
+.faq-contact {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 14px);
+  background: var(--surface);
+  box-shadow: var(--shadow, 0 1px 2px rgba(16, 24, 40, 0.06));
+}
+.faq-contact > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent-text, var(--brand, #1534ff));
+}
+.faq-contact strong {
+  display: block;
+  font-size: 15px;
+}
+.faq-contact p {
+  margin: 4px 0 10px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.faq-contact-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.faq-contact-links a {
+  color: var(--accent-text, var(--brand, #1534ff));
+}
+.faq-contact-links a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Admin ---------- */
+.faq-item-card.is-hidden {
+  background: var(--raised);
+}
+.faq-item-card.is-hidden .legal-section-head input,
+.faq-item-card.is-hidden textarea {
+  color: var(--muted);
+}
+.faq-badge-hidden {
+  background: #eef0f4;
+  color: #475467;
+}
+.faq-admin .legal-section-card textarea {
+  min-height: 96px;
+}
+.faq-scope-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-top: 10px;
+}
+.faq-scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.faq-scope select,
+.faq-preview-select select {
+  min-height: 36px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.faq-hide-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.faq-hide-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand);
+}
+.faq-product-picker {
+  margin: 10px 0 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--raised);
+  min-width: 0;
+}
+.faq-product-picker legend {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.faq-product-picker legend small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.faq-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.faq-picker-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 34px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.faq-picker-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 4px 12px;
+  max-height: 220px;
+  overflow: auto;
+}
+.faq-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 34px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.faq-picker-option input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand);
+}
+.faq-picker-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.faq-picker-option small {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 11px;
+}
+.faq-picker-option small.is-off {
+  background: #eef0f4;
+  color: #475467;
+}
+.faq-picker-empty {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.faq-preview-select {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+.faq-preview-select select {
+  width: 100%;
+}
+.faq-preview-body .reference-faq {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  --accent-text: var(--brand);
+}
+.faq-preview-body .reference-faq + .reference-faq {
+  margin-top: 18px;
+}
+.faq-preview-group {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+@media (max-width: 640px) {
+  .faq-contact {
+    padding: 16px;
+  }
+  .faq-picker-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .faq-scope {
+    flex-wrap: wrap;
+  }
+}
+
+/* One clear button only (ours), not the browser's search cancel icon as well. */
+.faq-page .faq-search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}

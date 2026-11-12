@@ -1,0 +1,91 @@
+/* "ซื้อซ้ำ" / "ใกล้หมดอายุ? ต่ออายุ" on the order history cards and the order page.
+   Storefront theme tokens only (8 themes); buttons reuse the shop's .button styles. */
+.rebuy-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  min-width: 0;
+}
+.rebuy-actions .button.small {
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 13px;
+  gap: 6px;
+}
+.rebuy-actions.is-renew {
+  padding: 6px 6px 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent, #1534ff) 35%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent, #1534ff) 8%, var(--surface));
+}
+.rebuy-renew-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-text, var(--brand, #1534ff));
+  font-size: 13px;
+  font-weight: 600;
+}
+.rebuy-out {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 13px;
+}
+.rebuy-out-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fef2f2;
+  color: #b42318;
+  font-weight: 600;
+  font-size: 12px;
+}
+:root[data-theme="dark"] .rebuy-out-badge {
+  background: rgb(240 68 56 / 0.16);
+  color: #fda29b;
+}
+.rebuy-out-badge.is-gone {
+  background: var(--raised);
+  color: var(--muted);
+}
+.rebuy-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  color: var(--accent-text, var(--brand, #1534ff));
+  font-weight: 600;
+}
+.rebuy-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.storefront-shell .history-item-actions:has(.rebuy-actions) {
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 6px 0;
+}
+.storefront-shell .history-item-actions .rebuy-actions:only-child {
+  margin-right: auto;
+}
+.result-actions .rebuy-actions {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.result-actions .rebuy-actions.is-renew {
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+}
+
+/* Shop announcements in the bell keep their line breaks. */
+.notice-item.is-broadcast small {
+  white-space: pre-line;
+}

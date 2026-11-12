@@ -32,6 +32,7 @@ import {
   ensureSmallUxB,
   ensureAlertsBackup,
   ensureEmailAndReset,
+  ensureBroadcasts,
 } from "./ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "./auth-hardening.mjs";
 import { createEmailSender } from "./email.mjs";
@@ -91,6 +92,7 @@ export function createCommerce(options = {}) {
   ensureOrderExtras(db);
   ensureCoupons(db);
   ensureEmailAndReset(db);
+  ensureBroadcasts(db);
   ensureLiveVersions(db);
   ensureAppendOnlyMoney(db);
   ensureAlertsBackup(db);

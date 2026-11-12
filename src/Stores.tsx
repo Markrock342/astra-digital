@@ -161,7 +161,9 @@ export function MerchantHeader() {
                     ? ["orders", "preorders"].includes(tab)
                     : key === "payments"
                       ? ["payments", "ledger", "top-ups"].includes(tab)
-                      : key === tab;
+                      : key === "customers"
+                        ? ["customers", "broadcasts"].includes(tab)
+                        : key === tab;
             return (
               <Link
                 key={key}

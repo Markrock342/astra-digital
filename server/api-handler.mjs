@@ -368,6 +368,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         }
         if (path === "/api/overview") return send(200, service.overview());
         if (path === "/api/legal") return send(200, service.legal());
+        if (path === "/api/faq") return send(200, service.faq());
         if (path === "/api/reviews")
           return send(200, { reviews: service.reviews() });
         if (path === "/api/orders")
@@ -471,6 +472,12 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             });
           return send(200, report);
         }
+        if (path === "/api/admin/broadcasts") return send(200, service.broadcastStatus(user));
+        if (path === "/api/admin/broadcasts/preview")
+          return send(
+            200,
+            service.broadcastPreview(user, Object.fromEntries(url.searchParams)),
+          );
         if (path === "/api/admin/coupons")
           return send(200, service.adminCoupons(user, {
             q: url.searchParams.get("q") ?? undefined,
@@ -615,6 +622,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             assertCouponRate(request, env, user);
           return send(201, service.createOrder(user, input));
         }
+        if (path === "/api/admin/broadcasts")
+          return send(201, service.sendBroadcast(user, input, { origin: url.origin }));
         if (path === "/api/admin/coupons")
           return send(201, service.adminCreateCoupon(user, input));
         if (/^\/api\/admin\/coupons\/[^/]+\/disable$/.test(path))

@@ -45,6 +45,8 @@ export type User = {
 };
 export type Order = {
   id: string;
+  /** The option bought (buy again prefills the basket with it). */
+  variant_id?: string;
   name: string;
   art: string;
   label: string;

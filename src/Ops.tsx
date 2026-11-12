@@ -101,9 +101,11 @@ function noticeText(n: Notice) {
   };
 }
 
-function noticeTarget(n: Notice, admin: boolean) {
+function noticeTarget(n: Notice, admin: boolean): string | null {
   // Only same-site paths; anything else falls back to the kind-based page.
   if (n.link && /^\/(?!\/)/.test(n.link)) return n.link;
+  // Shop announcements (ลูกค้า › ประกาศถึงลูกค้า) may link to an https page, or nowhere.
+  if (n.kind === "broadcast") return n.link && /^https:\/\//.test(n.link) ? n.link : null;
   if (admin)
     return (
       {
@@ -193,16 +195,23 @@ export function NotificationBell({ admin = false }: { admin?: boolean }) {
           {items.length ? (
             <ul className="notice-list">
               {items.slice(0, 30).map((n) => {
-                const text = admin ? { title: n.title, body: n.body } : noticeText(n);
+                const text =
+                  admin || n.kind === "broadcast" ? { title: n.title, body: n.body } : noticeText(n);
                 return (
                   <li key={n.id}>
                     <button
-                      className={n.read_at ? "notice-item" : "notice-item unread"}
+                      className={
+                        (n.read_at ? "notice-item" : "notice-item unread") +
+                        (n.kind === "broadcast" ? " is-broadcast" : "")
+                      }
                       onClick={() => {
                         void read(n);
-                        setOpen(false);
                         const to = noticeTarget(n, admin);
+                        // An announcement without a link just gets marked as read.
+                        if (!to) return;
+                        setOpen(false);
                         if (to === "#chat") dispatchEvent(new Event("open-chat"));
+                        else if (/^https:\/\//.test(to)) window.open(to, "_blank", "noopener,noreferrer");
                         else go(to);
                       }}
                     >

@@ -76,6 +76,8 @@ import { AdminAlerts, AdminBackup } from "./AdminAlerts";
 import { AdminCoupons } from "./AdminCoupons";
 import { AdminIntegrations } from "./AdminIntegrations";
 import { LegalSettings } from "./Legal";
+import { FaqSettingsPanel } from "./FaqAdmin";
+import { AdminBroadcasts } from "./AdminBroadcasts";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -89,10 +91,15 @@ const orderTabs = [
   ["orders", "ออเดอร์ทั้งหมด"],
   ["preorders", "คิวพรีออเดอร์"],
 ];
+const customerTabs = [
+  ["customers", "ลูกค้าทั้งหมด"],
+  ["broadcasts", "ประกาศถึงลูกค้า"],
+];
 const settingTabs = [
   ["settings", "ร้าน"],
   ["settings/payment", "รับเงิน"],
   ["settings/legal", "ข้อกำหนดและนโยบาย"],
+  ["settings/faq", "คำถามที่พบบ่อย"],
   ["settings/account", "บัญชีแอดมิน"],
   ["settings/alerts", "แจ้งเตือนนอกเว็บ"],
   ["settings/backup", "สำรองข้อมูล"],
@@ -155,6 +162,7 @@ export default function Admin() {
   const sub = path.split("/").slice(2).join("/");
   const productGroup = productTabs.some(([key]) => key === tab);
   const orderGroup = orderTabs.some(([key]) => key === tab);
+  const customerGroup = customerTabs.some(([key]) => key === tab);
   const productId = path.split("/")[3];
   const detailId = ["orders", "customers"].includes(tab) ? productId : undefined;
   const editingProduct = data?.products.find(
@@ -363,6 +371,7 @@ export default function Admin() {
     <>
       {productGroup && <Subnav items={productTabs} current={tab} />}{" "}
       {orderGroup && <Subnav items={orderTabs} current={tab} />}{" "}
+      {customerGroup && <Subnav items={customerTabs} current={tab} />}{" "}
       {tab === "settings" && <Subnav items={settingTabs} current={sub} />}
       <main
         className={
@@ -859,6 +868,7 @@ export default function Admin() {
           ) : (
             <AdminCustomers />
           ))}
+        {tab === "broadcasts" && <AdminBroadcasts />}
         {["payments", "top-ups", "ledger"].includes(tab) && <AdminFinance />}
         {tab === "settings" &&
           (sub === "settings/payment" ? (
@@ -875,6 +885,8 @@ export default function Admin() {
             <AdminBackup />
           ) : sub === "settings/legal" ? (
             <LegalSettings />
+          ) : sub === "settings/faq" ? (
+            <FaqSettingsPanel products={data.products} />
           ) : (
             <ReferenceSettings sub={sub} />
           ))}
@@ -914,6 +926,7 @@ export default function Admin() {
           "preorders",
           "coupons",
           "customers",
+          "broadcasts",
           "payments",
           "top-ups",
           "ledger",
