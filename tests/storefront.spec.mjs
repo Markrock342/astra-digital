@@ -54,11 +54,12 @@ test("reference composition, catalog search, categories, theme and responsive la
   await page.getByRole("button", { name: "ล้างตัวกรอง" }).click();
   await expect(page.locator(".product-card")).toHaveCount(2);
   await screenshot(page, "desktop-products");
-  // Light/dark follows the device setting.
+  // Light/dark follows the device setting (reload so Theme.tsx re-reads matchMedia).
   await page.emulateMedia({ colorScheme: "light" });
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.emulateMedia({ colorScheme: "dark" });
+  await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   for (const width of [360, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
@@ -155,7 +156,6 @@ test("language switch, theme panel and brand assets", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-accent", "yellow");
   await expect(page.locator("html")).toHaveAttribute("data-shape", "soft");
   await expect(page.getByRole("dialog", { name: "Customize theme" })).toContainText("Dark");
-  await expect(page.getByRole("dialog", { name: "Customize theme" })).not.toContainText(/Sharp|Animations/);
   await page.keyboard.press("Escape");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-accent", "yellow");

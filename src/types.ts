@@ -103,7 +103,13 @@ export type Review = {
   product: string;
 };
 export type Credential = { loginId: string; password: string };
-export type Features = { credentialPair?: boolean; preorderDelivery?: boolean };
+export type Features = {
+  credentialPair?: boolean;
+  preorderDelivery?: boolean;
+  adminChatInbox?: boolean;
+  adminOpsNotifications?: boolean;
+  salesRevenueFromPayments?: boolean;
+};
 export type QueueItem = {
   id: string;
   queue_number: number;

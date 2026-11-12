@@ -22,6 +22,48 @@
 | คำสั่งซื้อ แชท คิวของตน ข้อความในเว็บ | ไม่ได้ | เฉพาะของตน | ของตน และงานที่ได้รับมอบ | ได้ตามสิทธิผู้ดูแล |
 | คลังสินค้า ตั้งค่าร้าน นำเข้ารหัสสินค้า | ไม่ได้ | ไม่ได้ | ไม่ได้ | ได้ |
 | อันดับผู้ซื้อ `GET /api/rankings/buyers` | ไม่ได้ | ไม่ได้ | ไม่ได้ | ได้ |
+| แชทหลังบ้าน (ทุกห้อง / ปิดห้อง) | ไม่ได้ | ของตน | ได้ | ได้ |
+| แจ้งเตือนในเว็บ | ไม่ได้ | ของตน | ของตน (รวมออเดอร์/คิว/สต็อก) | ของตน |
+| สรุปยอดขาย `adminOverview.revenue` / การเงิน | ไม่ได้ | ไม่ได้ | ไม่ได้ | ได้ |
+
+### แชทฝั่งแอดมิน / พนักงาน (FR-M1)
+
+`GET /api/chat/threads` (STAFF หรือ ADMIN)
+
+- คืนทุกห้องเรียง `lastMessageAt` (ข้อความล่าสุด · ถ้าไม่มีข้อความใช้เวลาเปิดห้อง) จากใหม่ไปเก่า
+- แต่ละแถวมีอย่างน้อย: `id`, `status`, `customer`, `customer_email`, `messages`, `lastMessageAt`, `unreadCount`
+- `unreadCount` = จำนวนข้อความ `sender_type=USER` ที่ใหม่กว่าเวลาที่ staff คนนั้นอ่านห้องล่าสุด (อ่านเมื่อเรียก `GET /api/chat/threads/:id/messages`)
+- ลูกค้าเรียก endpoint เดียวกันได้เฉพาะห้องของตน · `unreadCount` เป็น 0
+
+ตอบ / ปิดห้อง (มีอยู่แล้ว)
+
+- `POST /api/chat/threads/:id/messages` — body `{ "body": "…" }`
+- `POST /api/chat/threads/:id/close` — ปิดห้อง · ส่งซ้ำบนห้องปิดได้ 409
+
+### แจ้งเตือนฝั่งแอดมิน (FR-M3)
+
+`GET /api/notifications` · `POST /api/notifications/:id/read`
+
+ชนิดที่ระบบสร้างให้ STAFF/ADMIN นอกจาก `chat`:
+
+| kind | เมื่อไหร่ |
+|------|----------|
+| `order_new` | ออเดอร์พร้อมส่งชำระสำเร็จและส่งของแล้ว |
+| `preorder_queue_admin` | พรีออเดอร์จ่ายแล้วได้เลขคิว |
+| `stock_low` | สต็อกตัวเลือกเหลือ ≤ 3 (throttle ~5 นาทีต่อ variant) |
+
+ลูกค้ายังได้ `code_delivery` / `preorder_queue` / `chat` / `order` ตามเดิม
+
+### ยอดขายแดชบอร์ด (FR-F10)
+
+- `GET /api/admin` → `revenue` คิดจากสูตรเดียว: `SUM(payments.amount WHERE status='SUCCEEDED') − SUM(|ledger.amount| WHERE kind='REFUND')`
+- คืนเงินยังไม่มีในระบบ → ส่วนลบเป็น 0 จนกว่างานเงิน (FR-F6)
+- ห้ามนับจากสถานะออเดอร์ `DELIVERED`/`PREORDER` คนละสูตรกับหน้าการเงิน
+
+### Features ให้หน้าจอรู้ว่าพร้อม
+
+- `GET /api/health` และ `GET /api/me` ส่ง `features` ชุดเดียวกัน
+- หลังงาน 1 มีอย่างน้อย: `credentialPair`, `preorderDelivery`, `adminChatInbox`, `adminOpsNotifications`, `salesRevenueFromPayments` (boolean)
 
 ### สต็อกที่หน้าร้านเห็น
 
@@ -38,7 +80,7 @@
 
 ### สัญญา DB-005 ที่หน้าหลังบ้านรอใช้ (issue #18)
 
-หน้าหลังบ้านทำเสร็จแล้ว ซ่อนหลัง flag ใน `GET /api/health` → `features: { credentialPair, preorderDelivery }` ตอนนี้ทั้งคู่เป็น `false` น็อตเปิด flag ใน `server/domain.mjs` เมื่อ API ส่วนนั้นพร้อม
+หน้าหลังบ้านใช้ flag ใน `GET /api/health` และ `GET /api/me` → `features` · หลังงาน ISSUE-18 + Admin FR งาน 1 ทั้ง `credentialPair` และ `preorderDelivery` เป็น `true` (พร้อม flags งาน 1 ตามหมวด Features ด้านบน)
 
 **นำเข้า ID + รหัสผ่าน** — `POST /api/admin/inventory` (ADMIN)
 

@@ -619,10 +619,9 @@ test("ISSUE-18 DB-005: import pairs, deliver, owner credentials, queue, index", 
     (e) => e.status === 404,
   );
 
-  assert.deepEqual(s.features, {
-    credentialPair: true,
-    preorderDelivery: true,
-  });
+  assert.equal(s.features.credentialPair, true);
+  assert.equal(s.features.preorderDelivery, true);
+  assert.equal(s.features.adminChatInbox, true);
   const cols = s.db
     .prepare("PRAGMA index_info(inventory_available)")
     .all()
@@ -675,4 +674,120 @@ test("owner signs in as 'admin' with the configured password", () => {
   } finally {
     s.db.close();
   }
+});
+
+test("ADMIN-FR-W1: chat inbox sorts by last message and tracks unread", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  const older = s.openChatThread(user, { body: "ห้องเก่า" });
+  const newerBuyer = s.register({
+    name: "Chat Buyer 2",
+    email: "chat2@example.invalid",
+    password: "Chat-buyer-Password-123",
+  });
+  const buyer2 = s.session(newerBuyer.token);
+  const newer = s.openChatThread(buyer2, { body: "ห้องใหม่กว่า" });
+  s.postChatMessage(user, older.thread.id, { body: "ข้อความล่าสุดในห้องเก่า" });
+  s.db
+    .prepare(
+      "UPDATE chat_messages SET created_at=datetime('now','+2 seconds') WHERE thread_id=? AND body=?",
+    )
+    .run(older.thread.id, "ข้อความล่าสุดในห้องเก่า");
+  const inbox = s.chatThreads(staff);
+  assert.ok(inbox.length >= 2);
+  assert.equal(inbox[0].id, older.thread.id, "thread with newest message first");
+  for (let i = 1; i < inbox.length; i++)
+    assert.ok(inbox[i - 1].lastMessageAt >= inbox[i].lastMessageAt);
+  const unreadRow = inbox.find((r) => r.id === older.thread.id);
+  assert.ok(unreadRow.unreadCount >= 1);
+  s.chatMessages(staff, older.thread.id);
+  const afterRead = s.chatThreads(staff).find((r) => r.id === older.thread.id);
+  assert.equal(afterRead.unreadCount, 0);
+  assert.ok(s.chatThreads(merchant).some((r) => r.id === newer.thread.id));
+});
+
+test("ADMIN-FR-W1: admin gets order/preorder/stock notifications; me exposes features", async (t) => {
+  const { s, user, staff, merchant, token, merchantToken } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const handle = createAPIHandler(s);
+  const me = await handle(
+    new Request("http://local.test/api/me", {
+      headers: { Cookie: "astra_session=" + token },
+    }),
+  );
+  const meBody = await me.json();
+  assert.equal(me.status, 200);
+  assert.equal(meBody.features.adminChatInbox, true);
+  assert.equal(meBody.features.salesRevenueFromPayments, true);
+
+  s.db
+    .prepare(
+      "DELETE FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL AND id NOT IN (SELECT id FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL LIMIT 3)",
+    )
+    .run("stream-plus-30", "stream-plus-30");
+
+  const order = s.createOrder(user, {
+    variantId: "stream-plus-30",
+    quantity: 1,
+    requestKey: "w1-order-notify",
+  });
+  s.pay(user, order.id, {
+    paymentToken: order.paymentToken,
+    outcome: "success",
+  });
+  assert.ok(
+    s.notifications(staff).some((n) => n.kind === "order_new"),
+    "staff notified of new paid order",
+  );
+  assert.ok(
+    s.notifications(merchant).some((n) => n.kind === "order_new"),
+    "admin notified of new paid order",
+  );
+  assert.ok(
+    s.notifications(staff).some((n) => n.kind === "stock_low"),
+    "staff notified when stock is low after sale",
+  );
+
+  const pre = s.createOrder(user, {
+    variantId: "cinema-max-90",
+    quantity: 1,
+    requestKey: "w1-preorder-notify",
+  });
+  s.pay(user, pre.id, {
+    paymentToken: pre.paymentToken,
+    outcome: "success",
+  });
+  assert.ok(
+    s.notifications(merchant).some((n) => n.kind === "preorder_queue_admin"),
+  );
+
+  const adminMe = await handle(
+    new Request("http://local.test/api/me", {
+      headers: { Cookie: "astra_session=" + merchantToken },
+    }),
+  );
+  assert.equal((await adminMe.json()).features.adminOpsNotifications, true);
+});
+
+test("ADMIN-FR-W1: revenue uses payments SUCCEEDED not delivered orders only (FR-F10)", (t) => {
+  const { s, user, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const before = s.adminOverview(merchant).revenue;
+  const order = s.createOrder(user, {
+    variantId: "stream-plus-30",
+    quantity: 1,
+    requestKey: "w1-revenue-f10",
+  });
+  const paid = s.pay(user, order.id, {
+    paymentToken: order.paymentToken,
+    outcome: "success",
+  });
+  const after = s.adminOverview(merchant).revenue;
+  const succeeded = s.db
+    .prepare(
+      "SELECT COALESCE(SUM(amount),0) AS n FROM payments WHERE status='SUCCEEDED'",
+    )
+    .get().n;
+  assert.equal(after, succeeded);
+  assert.equal(after, before + paid.total);
+  assert.equal(s.salesRevenueSatang(), after);
 });
