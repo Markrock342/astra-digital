@@ -200,6 +200,44 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           });
         if (path === "/api/admin")
           return send(200, service.adminOverview(user));
+        if (path === "/api/admin/orders")
+          return send(200, service.adminOrders(user, {
+            status: url.searchParams.get("status") ?? undefined,
+            from: url.searchParams.get("from") ?? undefined,
+            to: url.searchParams.get("to") ?? undefined,
+            product: url.searchParams.get("product") ?? undefined,
+            customer: url.searchParams.get("customer") ?? undefined,
+            type: url.searchParams.get("type") ?? undefined,
+            q: url.searchParams.get("q") ?? undefined,
+            cursor: url.searchParams.get("cursor") ?? undefined,
+            limit: url.searchParams.get("limit") ?? undefined,
+          }));
+        if (/^\/api\/admin\/orders\/[^/]+$/.test(path))
+          return send(200, service.adminOrderDetail(user, path.split("/")[4]));
+        if (path === "/api/admin/customers")
+          return send(200, service.adminCustomers(user, {
+            q: url.searchParams.get("q") ?? undefined,
+            status: url.searchParams.get("status") ?? undefined,
+            from: url.searchParams.get("from") ?? undefined,
+            to: url.searchParams.get("to") ?? undefined,
+            minSpent: url.searchParams.get("minSpent") ?? undefined,
+            maxSpent: url.searchParams.get("maxSpent") ?? undefined,
+            hasOrders: url.searchParams.get("hasOrders") ?? undefined,
+            sort: url.searchParams.get("sort") ?? undefined,
+            cursor: url.searchParams.get("cursor") ?? undefined,
+            limit: url.searchParams.get("limit") ?? undefined,
+          }));
+        if (path === "/api/admin/products")
+          return send(200, service.adminProducts(user, {
+            q: url.searchParams.get("q") ?? undefined,
+            category: url.searchParams.get("category") ?? undefined,
+            status: url.searchParams.get("status") ?? undefined,
+            type: url.searchParams.get("type") ?? undefined,
+            stock: url.searchParams.get("stock") ?? undefined,
+            sort: url.searchParams.get("sort") ?? undefined,
+            cursor: url.searchParams.get("cursor") ?? undefined,
+            limit: url.searchParams.get("limit") ?? undefined,
+          }));
       } else {
         if (path === "/api/logout") {
           service.logout(token);
@@ -239,6 +277,11 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           });
         if (/^\/api\/notifications\/[^/]+\/read$/.test(path))
           return send(200, service.markNotificationRead(user, path.split("/")[3]));
+        if (/^\/api\/admin\/orders\/[^/]+\/reveal$/.test(path))
+          return send(
+            200,
+            service.adminRevealOrderCredentials(user, path.split("/")[4]),
+          );
         if (path === "/api/admin/payment-channel")
           return send(200, {
             channel: service.setPaymentChannel(user, input),

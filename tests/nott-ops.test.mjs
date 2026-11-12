@@ -791,3 +791,130 @@ test("ADMIN-FR-W1: revenue uses payments SUCCEEDED not delivered orders only (FR
   assert.equal(after, before + paid.total);
   assert.equal(s.salesRevenueSatang(), after);
 });
+test("ADMIN-FR-W2: admin orders list filters, cursor, RBAC", async (t) => {
+  const { s, user, staff, merchant, token, staffToken, merchantToken } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const ready = s.createOrder(user, {
+    variantId: "stream-plus-30",
+    quantity: 1,
+    requestKey: "w2-orders-ready",
+  });
+  s.pay(user, ready.id, { paymentToken: ready.paymentToken, outcome: "success" });
+  const pre = s.createOrder(user, {
+    variantId: "cinema-max-90",
+    quantity: 1,
+    requestKey: "w2-orders-pre",
+  });
+  s.pay(user, pre.id, { paymentToken: pre.paymentToken, outcome: "success" });
+
+  assert.throws(() => s.adminOrders(user), (e) => e.status === 403);
+  const listed = s.adminOrders(staff, { type: "preorder", limit: 10 });
+  assert.ok(listed.orders.every((o) => o.type === "preorder"));
+  assert.ok(listed.orders.some((o) => o.id === pre.id));
+  assert.ok(!listed.orders.some((o) => o.id === ready.id));
+
+  const byStatus = s.adminOrders(merchant, { status: "DELIVERED" });
+  assert.ok(byStatus.orders.some((o) => o.id === ready.id));
+
+  const page1 = s.adminOrders(staff, { limit: 1 });
+  assert.equal(page1.orders.length, 1);
+  assert.ok(page1.nextCursor);
+  const page2 = s.adminOrders(staff, { limit: 1, cursor: page1.nextCursor });
+  assert.equal(page2.orders.length, 1);
+  assert.notEqual(page1.orders[0].id, page2.orders[0].id);
+
+  const handle = createAPIHandler(s);
+  const denied = await handle(
+    new Request("http://local.test/api/admin/orders", {
+      headers: { Cookie: "astra_session=" + token },
+    }),
+  );
+  assert.equal(denied.status, 403);
+  const ok = await handle(
+    new Request("http://local.test/api/admin/orders?type=ready", {
+      headers: { Cookie: "astra_session=" + staffToken },
+    }),
+  );
+  assert.equal(ok.status, 200);
+  const body = await ok.json();
+  assert.ok(body.orders.some((o) => o.id === ready.id));
+
+  const me = await handle(
+    new Request("http://local.test/api/me", {
+      headers: { Cookie: "astra_session=" + merchantToken },
+    }),
+  );
+  const features = (await me.json()).features;
+  assert.equal(features.adminOrdersApi, true);
+  assert.equal(features.adminCustomersApi, true);
+  assert.equal(features.adminProductsApi, true);
+});
+
+test("ADMIN-FR-W2: order detail masks credentials; reveal audits", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const order = s.createOrder(user, {
+    variantId: "stream-plus-30",
+    quantity: 1,
+    requestKey: "w2-reveal",
+  });
+  const paid = s.pay(user, order.id, {
+    paymentToken: order.paymentToken,
+    outcome: "success",
+  });
+  assert.ok(paid.codes.length >= 1 || paid.credentials?.length >= 1);
+
+  const detail = s.adminOrderDetail(staff, order.id);
+  assert.equal(detail.credentialsMasked, true);
+  assert.ok(detail.customer.email);
+  assert.ok(detail.product.name);
+  assert.ok(detail.payments.some((p) => p.status === "SUCCEEDED"));
+  assert.ok(detail.timeline.some((e) => e.event === "paid"));
+  assert.ok(detail.timeline.some((e) => e.event === "delivered"));
+  const blob = JSON.stringify(detail);
+  for (const code of paid.codes ?? []) assert.ok(!blob.includes(code));
+  for (const cred of paid.credentials ?? []) {
+    assert.ok(!blob.includes(cred.password));
+  }
+
+  assert.throws(() => s.adminRevealOrderCredentials(user, order.id), (e) => e.status === 403);
+  const revealed = s.adminRevealOrderCredentials(staff, order.id);
+  assert.equal(revealed.credentialsMasked, false);
+  if (paid.codes?.length) assert.deepEqual(revealed.codes, paid.codes);
+  const audit = s.db
+    .prepare(
+      "SELECT action,entity_id,user_id FROM audit WHERE action=? AND entity_id=? ORDER BY id DESC LIMIT 1",
+    )
+    .get("REVEAL_ORDER_CREDENTIALS", order.id);
+  assert.equal(audit.user_id, staff.id);
+});
+
+test("ADMIN-FR-W2: customers and products list filters + RBAC", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const order = s.createOrder(user, {
+    variantId: "stream-plus-30",
+    quantity: 1,
+    requestKey: "w2-cust-prod",
+  });
+  s.pay(user, order.id, {
+    paymentToken: order.paymentToken,
+    outcome: "success",
+  });
+
+  assert.throws(() => s.adminCustomers(user), (e) => e.status === 403);
+  const customers = s.adminCustomers(staff, { q: "QA Buyer", hasOrders: "true" });
+  assert.ok(customers.customers.some((c) => c.id === user.id));
+  assert.ok(customers.customers.every((c) => c.status === "ACTIVE"));
+  assert.equal(s.adminCustomers(staff, { status: "BANNED" }).customers.length, 0);
+
+  const spent = customers.customers.find((c) => c.id === user.id).spentSatang;
+  assert.ok(spent > 0);
+
+  assert.throws(() => s.adminProducts(user), (e) => e.status === 403);
+  const products = s.adminProducts(staff, { q: "DISNEY", type: "ready", status: "active" });
+  assert.ok(products.products.some((p) => p.id === "stream-plus"));
+  assert.ok(products.products.every((p) => p.type === "ready" && p.status === "active"));
+  const pre = s.adminProducts(merchant, { type: "preorder" });
+  assert.ok(pre.products.every((p) => p.preorder === true));
+});

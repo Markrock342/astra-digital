@@ -17,6 +17,7 @@ import {
   isStaff,
 } from "./auth-policy.mjs";
 import { credentialFingerprint } from "./migrate-005.mjs";
+import { createAdminListApis } from "./admin-list-apis.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
@@ -1685,6 +1686,24 @@ export function createCommerceCore({
     if (period === "week") start -= ((local.getUTCDay() + 6) % 7) * 86400000;
     return new Date(start - offset).toISOString().slice(0, 19).replace("T", " ");
   }
+  const {
+    adminOrders,
+    adminOrderDetail,
+    adminRevealOrderCredentials,
+    adminCustomers,
+    adminProducts,
+  } = createAdminListApis({
+    requireStaff,
+    one,
+    all,
+    tx,
+    fail,
+    clean,
+    audit,
+    readDeliveredItems,
+    inventoryAvailableAliased,
+    LOW_STOCK_AT,
+  });
   function buyerRanking(user, query = {}) {
     requireAdmin(user);
     const rawLimit = query.limit ?? null;
@@ -1734,6 +1753,11 @@ export function createCommerceCore({
     createOrder,
     orderDetail,
     staffOrders,
+    adminOrders,
+    adminOrderDetail,
+    adminRevealOrderCredentials,
+    adminCustomers,
+    adminProducts,
     getPaymentChannel,
     setPaymentChannel,
     pay,
@@ -1762,6 +1786,9 @@ export function createCommerceCore({
       adminChatInbox: true,
       adminOpsNotifications: true,
       salesRevenueFromPayments: true,
+      adminOrdersApi: true,
+      adminCustomersApi: true,
+      adminProductsApi: true,
     }),
     salesRevenueSatang,
     logout: (token) =>
