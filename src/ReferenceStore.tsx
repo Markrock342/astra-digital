@@ -30,6 +30,7 @@ import {
 } from "./App";
 import { t } from "./i18n";
 import { BrandLogo, shopName } from "./Theme";
+import { WarrantyDays } from "./Warranty";
 import { api, dateTime, money } from "./api";
 import type { Order, Product, Review } from "./types";
 export function ReferenceCatalog() {
@@ -431,6 +432,7 @@ export function ReferenceProduct({ id }: { id: string }) {
                           ? t("มีสินค้า")
                           : t("สินค้าหมด")}
                   </small>
+                  <WarrantyDays days={v.warranty_days} />
                 </span>
                 <strong>{money(v.price)}</strong>
               </button>

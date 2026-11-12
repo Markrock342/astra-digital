@@ -124,8 +124,11 @@ export function createAdminProductImageApis({
     const imageId = clean(imageIdRaw, 1, 80, "รหัสรูป");
     const row = one("SELECT * FROM product_images WHERE id=?", imageId);
     if (!row) fail(404, "ไม่พบรูปสินค้า");
+    let shared = false;
     tx(() => {
       run("DELETE FROM product_images WHERE id=?", imageId);
+      // A duplicated product shares the file by key: keep it while any row still uses it.
+      shared = !!one("SELECT 1 AS n FROM product_images WHERE file_key=? LIMIT 1", row.file_key);
       const rest = all(
         "SELECT id FROM product_images WHERE product_id=? ORDER BY sort_order ASC, id ASC",
         row.product_id,
@@ -135,11 +138,12 @@ export function createAdminProductImageApis({
       });
       audit(user, "PRODUCT_IMAGE_REMOVE", imageId);
     });
-    try {
-      await fileStore.delete(row.file_key);
-    } catch (error) {
-      console.error("Failed to delete product image file", row.file_key, error.message);
-    }
+    if (!shared)
+      try {
+        await fileStore.delete(row.file_key);
+      } catch (error) {
+        console.error("Failed to delete product image file", row.file_key, error.message);
+      }
     return { id: imageId, deleted: true };
   }
 

@@ -25,7 +25,13 @@ import { createAdminCustomerApis } from "./admin-customers.mjs";
 import { withLive } from "./live.mjs";
 import { createTeamApis } from "./admin-team.mjs";
 import { createReportApis } from "./admin-reports.mjs";
-import { createAdminVariantStockApis } from "./admin-variant-stock-apis.mjs";
+import {
+  createAdminVariantStockApis,
+  maskCode,
+  maskSecret,
+  parseImportEntries,
+} from "./admin-variant-stock-apis.mjs";
+import { createAdminProductBulkApis } from "./admin-product-bulk.mjs";
 import { createAdminOrderReplaceApis } from "./admin-order-replace.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createFileStore } from "./file-store.mjs";
@@ -101,6 +107,19 @@ export function createCommerceCore({
   };
   const inventoryFingerprint = (loginId, password) =>
     credentialFingerprint(key, loginId, password);
+  // Duplicate check key: the same account (loginId, any case, any password) or the
+  // same single code text. Keyed, so the database never holds a plain loginId.
+  const inventoryLoginKey = (legacy, loginId) =>
+    createHmac("sha256", key)
+      .update(
+        JSON.stringify({
+          v: 1,
+          kind: legacy ? "code" : "login",
+          value: legacy ? String(loginId).trim() : String(loginId).trim().toLowerCase(),
+        }),
+        "utf8",
+      )
+      .digest("hex");
   const insertInventoryCredential = (
     variantId,
     loginId,
@@ -109,15 +128,30 @@ export function createCommerceCore({
   ) => {
     run(
       `INSERT INTO inventory(
-        id, variant_id, fingerprint, login_id_enc, password_enc, legacy_single_secret
-      ) VALUES(?,?,?,?,?,?)`,
+        id, variant_id, fingerprint, login_id_enc, password_enc, legacy_single_secret, login_key
+      ) VALUES(?,?,?,?,?,?,?)`,
       randomUUID(),
       variantId,
       inventoryFingerprint(loginId, password),
       encrypt(loginId),
       encrypt(password),
       legacy ? 1 : 0,
+      inventoryLoginKey(legacy, loginId),
     );
+  };
+  /** Rows from before login_key existed (or written by migrations) get their key on first use. */
+  const backfillLoginKeys = () => {
+    for (const row of all(
+      "SELECT id,login_id_enc,legacy_single_secret FROM inventory WHERE login_key IS NULL LIMIT 5000",
+    )) {
+      let value = "";
+      try {
+        value = inventoryLoginKey(row.legacy_single_secret, decrypt(row.login_id_enc));
+      } catch {
+        // Unreadable row: mark it so it is not retried; '' never matches a real key.
+      }
+      run("UPDATE inventory SET login_key=? WHERE id=?", value, row.id);
+    }
   };
   const inventoryAvailableSql =
     "order_id IS NULL AND reservation_id IS NULL AND COALESCE(defective,0)=0";
@@ -972,7 +1006,7 @@ export function createCommerceCore({
         id = randomUUID();
       const price = variant.id === "cinema-max-30" ? 0 : variant.price;
       run(
-        "INSERT INTO reservations(id,user_id,variant_id,quantity,total,request_key,payment_hash) VALUES(?,?,?,?,?,?,?)",
+        "INSERT INTO reservations(id,user_id,variant_id,quantity,total,request_key,payment_hash,warranty_days) VALUES(?,?,?,?,?,?,?,?)",
         id,
         user.id,
         variantId,
@@ -980,6 +1014,8 @@ export function createCommerceCore({
         price * quantity,
         requestKey,
         hash(token),
+        // Warranty is what the customer saw when buying; the end date is set at delivery.
+        variant.warranty_days ?? 0,
       );
       audit(user, "CREATE_PREORDER", id);
       return { ...orderDetail(user, id), paymentToken: token };
@@ -995,7 +1031,7 @@ export function createCommerceCore({
     const token = randomBytes(32).toString("hex"),
       id = randomUUID();
     run(
-      "INSERT INTO orders(id,user_id,variant_id,quantity,total,request_key,payment_hash) VALUES(?,?,?,?,?,?,?)",
+      "INSERT INTO orders(id,user_id,variant_id,quantity,total,request_key,payment_hash,warranty_days) VALUES(?,?,?,?,?,?,?,?)",
       id,
       user.id,
       variantId,
@@ -1003,6 +1039,7 @@ export function createCommerceCore({
       variant.price * quantity,
       requestKey,
       hash(token),
+      variant.warranty_days ?? 0,
     );
     audit(user, "CREATE_ORDER", id);
     return { ...orderDetail(user, id), paymentToken: token };
@@ -1303,7 +1340,14 @@ export function createCommerceCore({
           id,
           item.id,
         );
-      run("UPDATE orders SET status='DELIVERED' WHERE id=?", id);
+      // Warranty runs from delivery, using the days snapshotted when the order was placed.
+      run(
+        `UPDATE orders SET status='DELIVERED',
+           warranty_until=CASE WHEN COALESCE(warranty_days,0)>0
+             THEN datetime('now','+'||warranty_days||' days') END
+         WHERE id=?`,
+        id,
+      );
       const paymentId = randomUUID();
       run(
         `INSERT OR IGNORE INTO payments(
@@ -1482,69 +1526,130 @@ export function createCommerceCore({
       preorderQueue: one("SELECT COUNT(*) AS n FROM reservations WHERE status='PREORDER'").n,
     };
   }
-  function importCodes(user, input) {
+  const importStatusText = {
+    duplicate_batch: { pair: "มีคู่ซ้ำในรายการ", code: "มีโค้ดซ้ำในรายการ" },
+    existing: { pair: "คู่นี้มีอยู่ในคลังแล้ว", code: "โค้ดนี้มีอยู่ในคลังแล้ว" },
+  };
+  /**
+   * Stock import, one line at a time (Sellix-style "remove duplicates").
+   * - dryRun: report each line (ok / duplicate_batch / existing / invalid), write nothing.
+   * - skipDuplicates: add only the ok lines, report how many were skipped.
+   * - otherwise: all or nothing, as before (any bad line rejects the batch).
+   * A line is a duplicate when its loginId (trimmed, any case) or code text is
+   * already in the batch or anywhere in inventory (available, sold or defective).
+   * Results never carry a password; loginIds are shown, codes are masked.
+   */
+  function importCodes(user, input = {}) {
     requireAdmin(user);
     const variantId = clean(input.variantId, 1, 80, "ตัวเลือกสินค้า");
     if (!one("SELECT id FROM variants WHERE id=?", variantId))
       fail(404, "ไม่พบตัวเลือกสินค้า");
-    const hasCodes = input.codes !== undefined && input.codes !== null;
-    const hasItems = input.items !== undefined && input.items !== null;
-    if (hasCodes && hasItems)
-      fail(400, "ส่งได้แค่ codes หรือ items อย่างใดอย่างหนึ่ง");
-    if (hasItems) {
-      if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 100)
-        fail(400, "รายการคู่ต้องเป็น array 1–100 รายการ");
-      const pairs = [];
-      for (const item of input.items) {
-        if (!item || typeof item !== "object")
-          fail(400, "รายการคู่ไม่ถูกต้อง");
-        if (typeof item.loginId !== "string" || typeof item.password !== "string")
-          fail(400, "loginId และ password ต้องเป็นข้อความ");
-        const loginId = item.loginId.trim();
-        const password = item.password;
-        if (!loginId || loginId.length > 160)
-          fail(400, "loginId ไม่ถูกต้อง");
-        if (password.length > 500)
-          fail(400, "password ยาวเกินกำหนด");
-        pairs.push({ loginId, password });
-      }
-      if (new Set(pairs.map((p) => inventoryFingerprint(p.loginId, p.password))).size !== pairs.length)
-        fail(409, "มีคู่ซ้ำในรายการ");
-      return tx(() => {
-        for (const { loginId, password } of pairs) {
-          const fingerprint = inventoryFingerprint(loginId, password);
-          if (one("SELECT id FROM inventory WHERE fingerprint=?", fingerprint))
-            fail(409, "คู่นี้มีอยู่ในคลังแล้ว");
-          insertInventoryCredential(variantId, loginId, password, { legacy: 0 });
-        }
-        audit(user, "IMPORT_CODES", variantId);
-        return { imported: pairs.length };
+    const entries = parseImportEntries(input, fail);
+    const dryRun = input.dryRun === true;
+    const skipDuplicates = input.skipDuplicates === true;
+    const classify = () => {
+      backfillLoginKeys();
+      const seen = new Map();
+      return entries.map((entry) => {
+        const legacy = entry.kind === "code";
+        const secret = legacy ? entry.code : entry.loginId;
+        const shown = entry.error
+          ? { display: maskSecret(entry.raw ?? secret ?? "") }
+          : legacy
+            ? { display: maskCode(entry.code) }
+            : { display: entry.loginId.slice(0, 120), passwordMasked: "••••••••" };
+        const base = { line: entry.line, kind: entry.kind, ...shown };
+        if (entry.error) return { ...base, status: "invalid", reason: entry.error };
+        const loginKey = inventoryLoginKey(legacy, secret);
+        if (seen.has(loginKey))
+          return {
+            ...base,
+            status: "duplicate_batch",
+            duplicateOf: seen.get(loginKey),
+            reason: "ซ้ำกับบรรทัด " + seen.get(loginKey),
+          };
+        seen.set(loginKey, entry.line);
+        const fingerprint = inventoryFingerprint(secret, legacy ? "" : entry.password);
+        const existing = one(
+          `SELECT CASE WHEN COALESCE(defective,0)=1 THEN 'defective'
+                       WHEN order_id IS NOT NULL OR reservation_id IS NOT NULL THEN 'sold'
+                       ELSE 'available' END AS status,
+                  variant_id
+           FROM inventory WHERE login_key=? OR fingerprint=? LIMIT 1`,
+          loginKey,
+          fingerprint,
+        );
+        if (existing)
+          return {
+            ...base,
+            status: "existing",
+            existingStatus: existing.status,
+            reason:
+              existing.status === "sold"
+                ? "มีในระบบแล้ว (ขายไปแล้ว)"
+                : existing.status === "defective"
+                  ? "มีในระบบแล้ว (ถูกแจ้งเสีย)"
+                  : existing.variant_id === variantId
+                    ? "มีในสต็อกตัวเลือกนี้แล้ว"
+                    : "มีในสต็อกตัวเลือกอื่นแล้ว",
+          };
+        return { ...base, status: "ok", entry };
       });
-    }
-    const text = clean(input.codes, 1, 20000, "รายการโค้ด");
-    const codes = text
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (
-      codes.length > 100 ||
-      codes.some((c) => !/^[A-Za-z0-9][A-Za-z0-9._:@+/=-]{3,159}$/.test(c))
-    )
-      fail(
-        400,
-        "รหัสสินค้าใช้ตัวอักษร ตัวเลข และเครื่องหมายที่กำหนดได้ ไม่เกิน 100 รายการต่อครั้ง",
-      );
-    if (new Set(codes).size !== codes.length) fail(409, "มีโค้ดซ้ำในรายการ");
-    return tx(() => {
-      for (const code of codes) {
-        const fingerprint = inventoryFingerprint(code, "");
-        if (one("SELECT id FROM inventory WHERE fingerprint=?", fingerprint))
-          fail(409, "โค้ดนี้มีอยู่ในคลังแล้ว");
-        insertInventoryCredential(variantId, code, "", { legacy: 1 });
-      }
-      audit(user, "IMPORT_CODES", variantId);
-      return { imported: codes.length };
+    };
+    const summarize = (lines) => ({
+      total: lines.length,
+      ok: lines.filter((l) => l.status === "ok").length,
+      duplicateInBatch: lines.filter((l) => l.status === "duplicate_batch").length,
+      existing: lines.filter((l) => l.status === "existing").length,
+      invalid: lines.filter((l) => l.status === "invalid").length,
     });
+    const publicLines = (lines) => lines.map(({ entry, ...line }) => line);
+    if (dryRun) {
+      const lines = tx(classify);
+      return { dryRun: true, variantId, lines: publicLines(lines), counts: summarize(lines) };
+    }
+    return tx(() => {
+      const lines = classify();
+      const counts = summarize(lines);
+      if (!skipDuplicates) {
+        const invalid = lines.find((l) => l.status === "invalid");
+        if (invalid) fail(400, "บรรทัด " + invalid.line + ": " + invalid.reason);
+        const duplicate = lines.find((l) => l.status !== "ok");
+        if (duplicate)
+          fail(
+            409,
+            "บรรทัด " + duplicate.line + ": " + importStatusText[duplicate.status][duplicate.kind],
+          );
+      }
+      const ok = lines.filter((l) => l.status === "ok");
+      for (const { entry } of ok) {
+        if (entry.kind === "code") insertInventoryCredential(variantId, entry.code, "", { legacy: 1 });
+        else insertInventoryCredential(variantId, entry.loginId, entry.password, { legacy: 0 });
+      }
+      const result = {
+        imported: ok.length,
+        skipped: counts.total - ok.length,
+        skippedDuplicates: counts.duplicateInBatch + counts.existing,
+        skippedInvalid: counts.invalid,
+      };
+      run(
+        "INSERT INTO audit(user_id,action,entity_id,detail) VALUES(?,?,?,?)",
+        user.id,
+        "IMPORT_CODES",
+        variantId,
+        JSON.stringify({
+          total: counts.total,
+          imported: result.imported,
+          skippedDuplicates: result.skippedDuplicates,
+          skippedInvalid: result.skippedInvalid,
+          skipDuplicates,
+        }),
+      );
+      return { ...result, lines: publicLines(lines), counts };
+    });
+  }
+  function previewImportCodes(user, input = {}) {
+    return importCodes(user, { ...input, dryRun: true });
   }
   function deliverReservation(user, id) {
     requireStaff(user);
@@ -1585,9 +1690,13 @@ export function createCommerceCore({
         if (!updated.changes) fail(409, "สต็อกไม่พอสำหรับส่งของ");
       }
       run(
-        "UPDATE reservations SET status='DELIVERED', delivered_at=?, delivered_by=? WHERE id=? AND status='PREORDER'",
+        `UPDATE reservations SET status='DELIVERED', delivered_at=?, delivered_by=?,
+           warranty_until=CASE WHEN COALESCE(warranty_days,0)>0
+             THEN datetime(?,'+'||warranty_days||' days') END
+         WHERE id=? AND status='PREORDER'`,
         now,
         user.id,
+        now,
         reservationId,
       );
       notify(
@@ -2034,7 +2143,6 @@ export function createCommerceCore({
     adminVariantInventory,
     markInventoryDefect,
     deleteInventoryUnit,
-    importInventory,
   } = createAdminVariantStockApis({
     requireStaff,
     requireAdmin,
@@ -2049,8 +2157,17 @@ export function createCommerceCore({
     inventoryAvailableSql,
     inventoryAvailableAliased,
     decrypt,
-    importCodes,
     getLowStockAt,
+    randomUUID,
+  });
+  const { bulkUpdateProducts, duplicateProduct } = createAdminProductBulkApis({
+    requireAdmin,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
     randomUUID,
   });
   const { salesReport } = createReportApis({ requireAdmin, all, one, fail, bangkokDayRange });
@@ -2151,7 +2268,10 @@ export function createCommerceCore({
     topup,
     adminOverview,
     adminSummary,
-    importCodes: importInventory,
+    importCodes,
+    previewImportCodes,
+    bulkUpdateProducts,
+    duplicateProduct,
     deliverReservation,
     saveProduct,
     addProductImage,

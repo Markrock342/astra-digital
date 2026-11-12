@@ -305,6 +305,8 @@ export function createAdminListApis({
       queue_number: row.queue_number ?? null,
       delivered_at: row.delivered_at ?? null,
       delivered_by: row.delivered_by ?? null,
+      // Snapshot set at delivery; later variant edits never move it.
+      warranty_until: row.warranty_until ?? null,
       note: row.admin_note ?? null,
       product: {
         id: row.product_id,
@@ -664,7 +666,37 @@ export function createAdminListApis({
       sold: row.sold,
       type: row.preorder ? "preorder" : "ready",
       status: row.active ? "active" : "inactive",
+      variants: [],
     }));
+    // Stock per variant, so one empty option is not hidden inside the product total.
+    if (page.length) {
+      const byProduct = new Map(page.map((p) => [p.id, p]));
+      for (const v of all(
+        `SELECT v.id,v.product_id,v.label,v.price,COALESCE(v.active,1) AS active,v.warranty_days,
+                (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) AS stock
+         FROM variants v
+         WHERE v.product_id IN (${page.map(() => "?").join(",")})
+         ORDER BY v.sort_order ASC, v.id ASC`,
+        ...page.map((p) => p.id),
+      )) {
+        const product = byProduct.get(v.product_id);
+        product.variants.push({
+          id: v.id,
+          label: v.label,
+          price: v.price,
+          active: !!v.active,
+          warranty_days: v.warranty_days ?? 0,
+          stock: product.preorder ? 0 : v.stock,
+          stockStatus: product.preorder
+            ? null
+            : v.stock <= 0
+              ? "out"
+              : v.stock <= lowAt
+                ? "low"
+                : "in",
+        });
+      }
+    }
     const nextCursor =
       rows.length > lim
         ? encodeCursor([

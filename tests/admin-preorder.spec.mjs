@@ -101,35 +101,28 @@ test("admin confirms and deliver API fulfills once; queue clears", async ({ page
   ).toBe(1);
 });
 
-test("ID + password import sends pairs, accepts a spreadsheet paste and rejects half rows", async ({
+test("ID + password import checks each line, accepts a spreadsheet paste and flags half rows", async ({
   page,
 }) => {
   await loginAdmin(page, "/admin/inventory");
   await page.getByRole("button", { name: "นำเข้าโค้ด", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("ไอดีและรหัสผ่าน")).toBeVisible();
+  const box = dialog.getByLabel("ไอดีและรหัสผ่าน (บรรทัดละ 1 บัญชี)");
+  await expect(box).toBeVisible();
 
-  await dialog.getByLabel("ไอดี 1").fill("only-id@example.invalid");
-  await dialog.getByRole("button", { name: "นำเข้าโค้ด", exact: true }).click();
-  await expect(dialog.getByRole("alert")).toContainText("ทุกแถวต้องมีทั้งไอดีและรหัสผ่าน");
+  await box.fill("only-id@example.invalid");
+  await expect(dialog).toContainText("1 บรรทัดไม่มีรหัสผ่าน");
+  await dialog.getByRole("button", { name: /ตรวจ 1 รายการ/ }).click();
+  await expect(dialog.locator(".stock-import-table")).toContainText("ไม่มีรหัสผ่าน");
+  await expect(dialog.getByRole("button", { name: "ไม่มีบัญชีใหม่ให้เพิ่ม" })).toBeDisabled();
 
-  await dialog.getByLabel("ไอดี 1").fill("");
-  await dialog.getByLabel("ไอดี 1").evaluate((el) => {
-    const data = new DataTransfer();
-    data.setData(
-      "text",
-      "first@example.invalid\tPa:ss|1 \nsecond@example.invalid\tp\tw2\n",
-    );
-    el.dispatchEvent(
-      new ClipboardEvent("paste", {
-        clipboardData: data,
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
-  });
-  await expect(dialog.getByLabel("ไอดี 2")).toHaveValue("second@example.invalid");
-  await dialog.getByRole("button", { name: "นำเข้าโค้ด", exact: true }).click();
+  await dialog.getByRole("button", { name: "แก้รายการ" }).click();
+  // Two columns copied from Sheets: tab separated, the password may hold ":" "|" or a tab.
+  await box.fill("first@example.invalid\tPa:ss|1 \nsecond@example.invalid\tp\tw2\n");
+  await dialog.getByRole("button", { name: /ตรวจ 2 รายการ/ }).click();
+  await expect(dialog.locator(".stock-import-table")).toContainText("second@example.invalid");
+  await expect(dialog.locator(".stock-import-table")).not.toContainText("Pa:ss");
+  await dialog.getByRole("button", { name: "เพิ่ม 2 บัญชี" }).click();
   await expect(page.getByRole("status")).toContainText("นำเข้า 2 บัญชีสำเร็จ");
 });
 

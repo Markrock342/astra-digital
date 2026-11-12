@@ -101,15 +101,16 @@ test("admin creates a product, prices it, opens it and imports codes", async ({
     await expect(singleCode).toBeVisible({ timeout: 15000 });
     await singleCode.check();
     await page.getByLabel("โค้ด (หนึ่งโค้ดต่อบรรทัด)").fill(text);
-    await page
-      .getByRole("button", { name: "นำเข้าโค้ด", exact: true })
-      .last()
-      .click();
+    await page.getByRole("dialog").getByRole("button", { name: /^ตรวจ \d+ รายการ/ }).click();
   };
   await importCodes(codes.join("\n"));
+  await page.getByRole("dialog").getByRole("button", { name: "เพิ่ม 2 โค้ด" }).click();
   await expect(page.getByRole("status")).toContainText("นำเข้า 2 โค้ดสำเร็จ");
+  // The same code again is caught in the preview, before anything is saved.
   await importCodes(codes[0]);
-  await expect(page.getByRole("alert")).toContainText("โค้ดนี้มีอยู่ในคลังแล้ว");
+  await expect(page.getByRole("dialog").locator(".stock-import-table")).toContainText("มีในระบบแล้ว");
+  await expect(page.getByRole("dialog")).not.toContainText(codes[0]);
+  await expect(page.getByRole("button", { name: "ไม่มีโค้ดใหม่ให้เพิ่ม" })).toBeDisabled();
   await page.getByRole("button", { name: "ยกเลิก", exact: true }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });

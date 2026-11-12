@@ -291,3 +291,172 @@ test("admin gives a customer who already signed up staff rights, then takes them
   await expect(page.locator(".settings-row", { hasText: "quiet-window@example.invalid" })).toHaveCount(0);
   assert.equal(service.session(login.token).role, "CUSTOMER");
 });
+
+// ---------------------------------------------------------------- Products + stock round
+
+function makeProduct(name, labels) {
+  const admin = service.session(adminToken);
+  const product = service.saveProduct(admin, {
+    name,
+    description: "สินค้าทดสอบรายการสินค้า",
+    category: "streaming",
+    price: 5000,
+    active: true,
+  });
+  const first = service.adminProductVariants(admin, product.id).variants[0];
+  service.updateVariant(admin, first.id, { label: labels[0] });
+  const variants = [first.id];
+  for (const label of labels.slice(1))
+    variants.push(service.createVariant(admin, product.id, { label, price: 9900 }).id);
+  return { id: product.id, variants };
+}
+
+test("products list shows stock per option, bulk actions ask first, duplicate opens the draft", async ({ page }) => {
+  const admin = service.session(adminToken);
+  const alpha = makeProduct("Bulk Alpha", ["Alpha 30 วัน", "Alpha 90 วัน"]);
+  const beta = makeProduct("Bulk Beta", ["Beta 30 วัน"]);
+  service.importCodes(admin, {
+    variantId: alpha.variants[0],
+    items: [1, 2, 3, 4, 5].map((n) => ({ loginId: "alpha-" + n + "@list.test", password: "Pw-" + n })),
+  });
+  await as(page, adminToken);
+  await page.goto(base + "/admin/products");
+  await page.getByLabel("ค้นชื่อสินค้า").fill("Bulk");
+  const table = page.locator(".admin-list-table tbody");
+  await expect(table.locator("tr")).toHaveCount(2);
+  // The empty 90-day option is visible even though the product total is 5.
+  const alphaRow = table.locator("tr", { hasText: "Bulk Alpha" });
+  await expect(alphaRow.locator(".variant-stock-line", { hasText: "Alpha 30 วัน" })).toContainText("5");
+  await expect(alphaRow.locator(".variant-stock-line", { hasText: "Alpha 90 วัน" })).toContainText("หมด");
+
+  await page.getByLabel("เลือก Bulk Alpha").check();
+  await page.getByLabel("เลือก Bulk Beta").check();
+  const bar = page.getByRole("region", { name: "จัดการสินค้าที่เลือก" });
+  await expect(bar).toContainText("เลือก 2 สินค้า");
+  await bar.getByRole("button", { name: "ตั้งเป็นสินค้าแนะนำ", exact: true }).click();
+  // Nothing changes until the confirm button.
+  expect(service.db.prepare("SELECT featured FROM products WHERE id=?").get(alpha.id).featured).toBe(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await noSideScroll(page)).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await bar.getByRole("button", { name: "ยืนยันตั้งเป็นสินค้าแนะนำ 2 สินค้า" }).click();
+  await expect(page.getByRole("status")).toContainText("ตั้งเป็นสินค้าแนะนำแล้ว 2 สินค้า");
+  for (const id of [alpha.id, beta.id])
+    expect(service.db.prepare("SELECT featured FROM products WHERE id=?").get(id).featured).toBe(1);
+  await expect(alphaRow).toContainText("แนะนำ");
+
+  await page.getByLabel("เลือก Bulk Beta").check();
+  await bar.getByRole("button", { name: "ปิดขาย", exact: true }).click();
+  await bar.getByRole("button", { name: "ยกเลิก", exact: true }).click();
+  expect(service.db.prepare("SELECT active FROM products WHERE id=?").get(beta.id).active).toBe(1);
+  await bar.getByRole("button", { name: "ปิดขาย", exact: true }).click();
+  await bar.getByRole("button", { name: "ยืนยันปิดขาย 1 สินค้า" }).click();
+  await expect(page.getByRole("status")).toContainText("ปิดขายแล้ว 1 สินค้า");
+  expect(service.db.prepare("SELECT active FROM products WHERE id=?").get(beta.id).active).toBe(0);
+  expect(
+    service.db.prepare("SELECT COUNT(*) AS n FROM audit WHERE action='PRODUCT_BULK_DEACTIVATE' AND entity_id=?").get(beta.id).n,
+  ).toBe(1);
+
+  await page.getByLabel("เลือก Bulk Alpha").check();
+  await bar.getByRole("button", { name: "คัดลอกสินค้า", exact: true }).click();
+  await bar.getByRole("button", { name: "ยืนยันคัดลอกเป็นฉบับร่าง" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Bulk Alpha (สำเนา)" })).toBeVisible();
+  const copyId = page.url().split("/").pop();
+  expect(copyId).not.toBe(alpha.id);
+  const copy = service.db.prepare("SELECT active,featured FROM products WHERE id=?").get(copyId);
+  expect({ ...copy }).toEqual({ active: 0, featured: 0 });
+  await expect(page.locator(".variant-manager")).toContainText("Alpha 90 วัน");
+  await expect(page.locator(".variant-manager").getByRole("button", { name: /สต็อก 0/ })).toHaveCount(2);
+});
+
+test("stock import previews each line, skips duplicates and sends long pastes in batches of 100", async ({ page }) => {
+  const admin = service.session(adminToken);
+  const product = makeProduct("Import Preview", ["Import 30 วัน"]);
+  service.importCodes(admin, { variantId: product.variants[0], items: [{ loginId: "already@import.test", password: "Old-pw" }] });
+  const lines = Array.from({ length: 148 }, (_, i) => `bulk-${i + 1}@import.test\tPw-${i + 1}`);
+  lines.push("BULK-7@import.test\tanother-pw"); // repeat of line 7 (case differs)
+  lines.push("already@import.test\tNew-pw"); // already in stock
+  lines.push("no-password@import.test"); // invalid
+  await as(page, adminToken);
+  await page.goto(base + "/admin/products/" + product.id);
+  const manager = page.locator(".variant-manager");
+  await manager.getByRole("button", { name: /สต็อก 1/ }).click();
+  await manager.getByLabel("เติมสต็อก Import 30 วัน").fill(lines.join("\n"));
+  await expect(manager).toContainText("พร้อมเติม 151 บัญชี");
+  await expect(manager).toContainText("แบ่งส่ง 2 ชุด");
+  await manager.getByRole("button", { name: /ตรวจ 151 รายการ/ }).click();
+  const summary = manager.getByLabel("สรุปผลตรวจ");
+  await expect(summary).toContainText("พร้อมเพิ่ม 148");
+  await expect(summary).toContainText("ซ้ำในรายการ 1");
+  await expect(summary).toContainText("มีในระบบแล้ว 1");
+  await expect(summary).toContainText("รูปแบบผิด 1");
+  await manager.getByRole("button", { name: "มีปัญหา 3" }).click();
+  const preview = manager.locator(".stock-import-table");
+  await expect(preview).toContainText("ซ้ำกับบรรทัด 7");
+  await expect(preview).toContainText("มีในสต็อกตัวเลือกนี้แล้ว");
+  await expect(preview).toContainText("ไม่มีรหัสผ่าน");
+  // Passwords are never sent back; only the masked marker.
+  await expect(manager).not.toContainText("New-pw");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await noSideScroll(page)).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
+  // Turning the skip off blocks the whole batch while problems remain.
+  await manager.getByLabel("ข้ามบัญชีซ้ำ").uncheck();
+  await expect(manager.getByRole("button", { name: "เพิ่ม 148 บัญชี" })).toBeDisabled();
+  await manager.getByLabel("ข้ามบัญชีซ้ำ").check();
+  const audits = service.db.prepare("SELECT COUNT(*) AS n FROM audit WHERE action='IMPORT_CODES' AND entity_id=?");
+  const before = audits.get(product.variants[0]).n;
+  await manager.getByRole("button", { name: "เพิ่ม 148 บัญชี" }).click();
+  await expect(page.getByRole("status")).toContainText("นำเข้า 148 บัญชีสำเร็จ · ข้าม 3 รายการ");
+  expect(
+    service.db.prepare("SELECT COUNT(*) AS n FROM inventory WHERE variant_id=?").get(product.variants[0]).n,
+  ).toBe(149);
+  expect(audits.get(product.variants[0]).n).toBe(before + 2);
+  await expect(manager.getByRole("button", { name: /สต็อก 149/ })).toBeVisible();
+});
+
+test("warranty per option shows on the storefront and on the order for the customer and the admin", async ({ page }) => {
+  const admin = service.session(adminToken);
+  const product = makeProduct("Warranty Stream", ["Warranty 30 วัน"]);
+  service.importCodes(admin, { variantId: product.variants[0], items: [{ loginId: "warranty@stream.test", password: "Pw-W" }] });
+  await as(page, adminToken);
+  await page.goto(base + "/admin/products/" + product.id);
+  const manager = page.locator(".variant-manager");
+  await expect(manager).toContainText("ไม่มีประกัน");
+  await manager.getByRole("button", { name: "แก้" }).first().click();
+  await manager.getByLabel("วันรับประกัน", { exact: true }).fill("30");
+  await manager.getByRole("button", { name: "บันทึก" }).click();
+  await expect(manager).toContainText("รับประกัน 30 วัน");
+
+  await page.goto(base + "/products/" + product.id);
+  await expect(page.locator(".reference-variants")).toContainText("รับประกัน 30 วัน");
+
+  // Its own customer: the earlier ban test signs "Lists Buyer" out.
+  const auth = service.register({
+    name: "Warranty Buyer",
+    email: "warranty-buyer@example.invalid",
+    password: "Warranty-buyer-Password-123",
+  });
+  const customer = service.session(auth.token);
+  const customerToken = auth.token;
+  service.topup(customer, { amount: 300, requestKey: "lists-warranty-topup" });
+  const order = service.createOrder(customer, { variantId: product.variants[0], quantity: 1, requestKey: "lists-warranty-01" });
+  service.pay(customer, order.id, { paymentToken: order.paymentToken, outcome: "success" });
+  // Changing the option afterwards does not move the sold order's warranty.
+  service.updateVariant(admin, product.variants[0], { warranty_days: 0 });
+
+  await as(page, customerToken);
+  await page.goto(base + "/orders/" + order.id);
+  await expect(page.locator(".warranty-status")).toContainText("รับประกันถึง");
+  await as(page, adminToken);
+  await page.goto(base + "/admin/orders/" + order.id);
+  await expect(page.locator(".warranty-status")).toContainText("รับประกันถึง");
+
+  service.db.prepare("UPDATE orders SET warranty_until=datetime('now','-1 day') WHERE id=?").run(order.id);
+  await page.reload();
+  await expect(page.locator(".warranty-status")).toContainText("หมดประกันแล้ว");
+  await as(page, customerToken);
+  await page.goto(base + "/orders/" + order.id);
+  await expect(page.locator(".warranty-status")).toContainText("หมดประกันแล้ว");
+});

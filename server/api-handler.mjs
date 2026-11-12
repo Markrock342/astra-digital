@@ -483,7 +483,17 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             channel: service.setPaymentChannel(user, input),
           });
         if (path === "/api/admin/inventory")
-          return send(200, service.importCodes(user, input));
+          // dryRun only reads, so it skips the live "catalog changed" signal.
+          return send(
+            200,
+            input?.dryRun === true
+              ? service.previewImportCodes(user, input)
+              : service.importCodes(user, input),
+          );
+        if (path === "/api/admin/products/bulk")
+          return send(200, service.bulkUpdateProducts(user, input));
+        if (/^\/api\/admin\/products\/[^/]+\/duplicate$/.test(path))
+          return send(201, service.duplicateProduct(user, path.split("/")[4]));
         if (/^\/api\/admin\/inventory\/[^/]+\/defect$/.test(path))
           return send(
             200,

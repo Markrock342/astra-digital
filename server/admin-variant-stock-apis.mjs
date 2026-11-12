@@ -24,35 +24,86 @@ function decodeCursor(cursor, fail) {
   }
 }
 
-function maskSecret(value) {
+export function maskSecret(value) {
   const s = String(value ?? "");
   if (!s) return "";
   if (s.length <= 2) return "*".repeat(s.length);
   return s.slice(0, 2) + "***";
 }
 
-function parseCsvInventory(csv, fail) {
-  const lines = String(csv)
+const CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@+/=-]{3,159}$/;
+const MAX_IMPORT_LINES = 100;
+
+/** Code text is the secret itself: keep a few characters so the admin can tell lines apart. */
+export function maskCode(value) {
+  const s = String(value ?? "");
+  if (s.length >= 8) return s.slice(0, 3) + "••••" + s.slice(-2);
+  return s.slice(0, 1) + "••••";
+}
+
+function textLines(text) {
+  // Keep the pasted line numbers (blank lines count) so the preview can point at them.
+  return String(text)
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  if (lines.length < 1 || lines.length > 100)
-    fail(400, "CSV ต้องมี 1–100 บรรทัด");
-  const looksPair = lines.some((line) => line.includes(","));
-  if (looksPair) {
-    const items = [];
-    for (const line of lines) {
-      const comma = line.indexOf(",");
-      if (comma < 1) fail(400, "รูปแบบ CSV คู่ต้องเป็น loginId,password");
-      const loginId = line.slice(0, comma).trim();
-      const password = line.slice(comma + 1);
-      if (!loginId || loginId.length > 160) fail(400, "loginId ไม่ถูกต้อง");
-      if (password.length > 500) fail(400, "password ยาวเกินกำหนด");
-      items.push({ loginId, password });
-    }
-    return { items };
+    .map((raw, index) => ({ raw: raw.trim(), line: index + 1 }))
+    .filter((entry) => entry.raw);
+}
+
+function pairEntry(line, loginIdRaw, password) {
+  const loginId = typeof loginIdRaw === "string" ? loginIdRaw.trim() : "";
+  const entry = { line, kind: "pair", loginId, password };
+  if (typeof loginIdRaw !== "string" || typeof password !== "string")
+    return { ...entry, password: "", error: "ไอดีและรหัสผ่านต้องเป็นข้อความ" };
+  if (!loginId) return { ...entry, error: "ไม่มีไอดี" };
+  if (loginId.length > 160) return { ...entry, error: "ไอดียาวเกิน 160 ตัวอักษร" };
+  if (!password) return { ...entry, error: "ไม่มีรหัสผ่าน" };
+  if (password.length > 500) return { ...entry, error: "รหัสผ่านยาวเกินกำหนด" };
+  return entry;
+}
+
+function codeEntry(line, code) {
+  if (!CODE_PATTERN.test(code))
+    return { line, kind: "code", code, error: "รูปแบบโค้ดไม่ถูกต้อง" };
+  return { line, kind: "code", code };
+}
+
+/**
+ * Turns an import request (items[], codes text or csv text) into one entry per line.
+ * Request-shape problems (wrong type, 0 or >100 lines) fail the whole request;
+ * a bad line only marks that entry with `error` so the preview can show it.
+ */
+export function parseImportEntries(input, fail) {
+  const has = (key) => input[key] !== undefined && input[key] !== null;
+  const csv = has("csv") && String(input.csv).trim() !== "";
+  if (csv) {
+    const lines = textLines(input.csv);
+    if (lines.length < 1 || lines.length > MAX_IMPORT_LINES)
+      fail(400, "CSV ต้องมี 1–100 บรรทัด");
+    if (!lines.some(({ raw }) => raw.includes(",")))
+      return lines.map(({ raw, line }) => codeEntry(line, raw));
+    return lines.map(({ raw, line }) => {
+      const comma = raw.indexOf(",");
+      if (comma < 1) return { line, kind: "pair", loginId: "", password: "", raw, error: "ต้องเป็น ไอดี,รหัสผ่าน" };
+      return pairEntry(line, raw.slice(0, comma), raw.slice(comma + 1));
+    });
   }
-  return { codes: lines.join("\n") };
+  if (has("codes") && has("items"))
+    fail(400, "ส่งได้แค่ codes หรือ items อย่างใดอย่างหนึ่ง");
+  if (has("items")) {
+    if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > MAX_IMPORT_LINES)
+      fail(400, "รายการคู่ต้องเป็น array 1–100 รายการ");
+    return input.items.map((item, index) =>
+      item && typeof item === "object"
+        ? pairEntry(index + 1, item.loginId, item.password)
+        : { line: index + 1, kind: "pair", loginId: "", password: "", error: "รายการคู่ไม่ถูกต้อง" },
+    );
+  }
+  if (typeof input.codes !== "string" || !input.codes.trim() || input.codes.length > 20000)
+    fail(400, "รายการโค้ดไม่ถูกต้อง");
+  const lines = textLines(input.codes);
+  if (lines.length > MAX_IMPORT_LINES)
+    fail(400, "รหัสสินค้าใช้ตัวอักษร ตัวเลข และเครื่องหมายที่กำหนดได้ ไม่เกิน 100 รายการต่อครั้ง");
+  return lines.map(({ raw, line }) => codeEntry(line, raw));
 }
 
 export function createAdminVariantStockApis({
@@ -69,10 +120,15 @@ export function createAdminVariantStockApis({
   inventoryAvailableSql,
   inventoryAvailableAliased,
   decrypt,
-  importCodes,
   getLowStockAt,
   randomUUID,
 }) {
+  /** Warranty in whole days, 0 (none) to 365. */
+  function warrantyInput(value, fallback) {
+    if (value === undefined || value === null || String(value).trim() === "") return fallback;
+    return integer(value, 0, 365, "วันรับประกัน");
+  }
+
   function stockCount(variantId) {
     return one(
       `SELECT COUNT(*) AS n FROM inventory i WHERE i.variant_id=? AND ${inventoryAvailableAliased}`,
@@ -95,7 +151,7 @@ export function createAdminVariantStockApis({
       fail(404, "ไม่พบสินค้า");
     const lowAt = getLowStockAt();
     const variants = all(
-      `SELECT v.id,v.product_id,v.label,v.price,v.active,v.sort_order,
+      `SELECT v.id,v.product_id,v.label,v.price,v.active,v.sort_order,v.warranty_days,
               (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) AS stock
        FROM variants v WHERE v.product_id=?
        ORDER BY v.sort_order ASC, v.id ASC`,
@@ -107,6 +163,7 @@ export function createAdminVariantStockApis({
       price: v.price,
       active: !!v.active,
       sort_order: v.sort_order,
+      warranty_days: v.warranty_days ?? 0,
       stock: v.stock,
       stockStatus:
         v.stock <= 0 ? "out" : v.stock <= lowAt ? "low" : "in",
@@ -121,6 +178,7 @@ export function createAdminVariantStockApis({
       fail(404, "ไม่พบสินค้า");
     const label = clean(input.label, 1, 80, "ชื่อตัวเลือก");
     const price = integer(input.price, 100, 10000000, "ราคา");
+    const warrantyDays = warrantyInput(input.warranty_days, 0);
     const sortOrder =
       input.sort_order == null || String(input.sort_order).trim() === ""
         ? (one(
@@ -136,12 +194,13 @@ export function createAdminVariantStockApis({
       if (one("SELECT id FROM variants WHERE id=?", id))
         fail(409, "รหัสตัวเลือกซ้ำ");
       run(
-        "INSERT INTO variants(id,product_id,label,price,active,sort_order) VALUES(?,?,?,?,1,?)",
+        "INSERT INTO variants(id,product_id,label,price,active,sort_order,warranty_days) VALUES(?,?,?,?,1,?,?)",
         id,
         productId,
         label,
         price,
         sortOrder,
+        warrantyDays,
       );
       audit(user, "CREATE_VARIANT", id);
       return {
@@ -151,6 +210,7 @@ export function createAdminVariantStockApis({
         price,
         active: true,
         sort_order: sortOrder,
+        warranty_days: warrantyDays,
         stock: 0,
       };
     });
@@ -188,12 +248,15 @@ export function createAdminVariantStockApis({
         input.sort_order !== undefined
           ? integer(input.sort_order, 0, 100000, "ลำดับ")
           : existing.sort_order;
+      // Sold orders keep their own snapshot (orders.warranty_until), so this only affects new sales.
+      const warrantyDays = warrantyInput(input.warranty_days, existing.warranty_days ?? 0);
       run(
-        "UPDATE variants SET label=?,price=?,active=?,sort_order=? WHERE id=?",
+        "UPDATE variants SET label=?,price=?,active=?,sort_order=?,warranty_days=? WHERE id=?",
         label,
         price,
         active,
         sortOrder,
+        warrantyDays,
         variantId,
       );
       audit(user, "UPDATE_VARIANT", variantId);
@@ -204,6 +267,7 @@ export function createAdminVariantStockApis({
         price,
         active: !!active,
         sort_order: sortOrder,
+        warranty_days: warrantyDays,
         stock: stockCount(variantId),
       };
     });
@@ -361,18 +425,6 @@ export function createAdminVariantStockApis({
     });
   }
 
-  function importInventory(user, input = {}) {
-    if (input.csv != null && String(input.csv).trim() !== "") {
-      const parsed = parseCsvInventory(input.csv, fail);
-      const body = {
-        variantId: input.variantId,
-        ...parsed,
-      };
-      return importCodes(user, body);
-    }
-    return importCodes(user, input);
-  }
-
   return {
     adminProductVariants,
     createVariant,
@@ -381,6 +433,5 @@ export function createAdminVariantStockApis({
     adminVariantInventory,
     markInventoryDefect,
     deleteInventoryUnit,
-    importInventory,
   };
 }

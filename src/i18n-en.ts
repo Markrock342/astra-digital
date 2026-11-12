@@ -444,4 +444,7 @@ export const EN_STRINGS: Record<string, string> = {
   "ลืมรหัสผ่าน? ติดต่อร้านผ่านช่องทางในหน้า": "Forgot your password? Reach the shop through",
   "ติดต่อเรา": "Contact us",
   "ร้านจะตั้งรหัสผ่านชั่วคราวให้หลังยืนยันตัวตน": "and the shop will set a temporary password after verifying you.",
+  "รับประกันถึง {date}": "Warranty until {date}",
+  "หมดประกันแล้ว": "Warranty expired",
+  "รับประกัน {n} วัน": "{n}-day warranty",
 };

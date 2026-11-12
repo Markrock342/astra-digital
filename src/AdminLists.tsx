@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   ArrowLeft,
+  Copy,
   Download,
   Eye,
+  LoaderCircle,
   LogOut,
   Package,
   Plus,
@@ -19,6 +21,8 @@ import { AdminChat as AdminChatLazy, BuyerRankingCard as BuyerRankingInline } fr
 import { Art, ErrorMessage, Link, Status, useStore } from "./App";
 import { api, dateTime, money } from "./api";
 import { checkSource, toWebp, uploadImage } from "./image-upload";
+import { StockImport } from "./StockImport";
+import { WarrantyStatus } from "./Warranty";
 
 type Filters = Record<string, string>;
 
@@ -357,6 +361,7 @@ type OrderDetail = {
   credentials: { loginId: string; password: string }[];
   units?: { id: string; kind: "pair" | "code" }[];
   note?: string | null;
+  warranty_until?: string | null;
 };
 
 function OrderNote({ id, note }: { id: string; note: string | null }) {
@@ -546,6 +551,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
                 </div>
                 <strong className="num">{money(order.total)}</strong>
               </div>
+              <WarrantyStatus until={order.warranty_until} />
               <h2>บัญชีที่ส่งให้ลูกค้า</h2>
               {order.status !== "DELIVERED" ? (
                 <p className="muted">ยังไม่ได้ส่งของ</p>
@@ -1130,34 +1136,131 @@ export function AdminCustomerDetail({ id }: { id: string }) {
 
 // ---------------------------------------------------------------- Products
 
+type ProductVariantStock = {
+  id: string;
+  label: string;
+  active: boolean;
+  stock: number;
+  stockStatus: "out" | "low" | "in" | null;
+};
 type ProductRow = {
   id: string;
   name: string;
   category: string;
   art: string;
   active: boolean;
+  featured: boolean;
   preorder: boolean;
   stock: number;
   stockStatus: "out" | "low" | "in";
   sold: number;
+  imageUrl?: string | null;
+  variants?: ProductVariantStock[];
 };
 const emptyProductFilters = { q: "", category: "", status: "", type: "", stock: "", sort: "name" };
 const stockText = { out: "หมด", low: "ใกล้หมด", in: "มีสต็อก" };
+type BulkAction = "activate" | "deactivate" | "feature" | "unfeature";
+const bulkText: Record<BulkAction, [string, string]> = {
+  activate: ["เปิดขาย", "เปิดขายแล้ว"],
+  deactivate: ["ปิดขาย", "ปิดขายแล้ว"],
+  feature: ["ตั้งเป็นสินค้าแนะนำ", "ตั้งเป็นสินค้าแนะนำแล้ว"],
+  unfeature: ["เลิกแนะนำ", "เลิกแนะนำแล้ว"],
+};
+
+/** Stock per option, so one empty option is not hidden inside the product total. */
+function VariantStockList({ product, onStock }: { product: ProductRow; onStock: () => void }) {
+  if (product.preorder) return <span className="muted">ส่งตามคิว</span>;
+  const variants = (product.variants ?? []).filter((v) => v.active);
+  if (!variants.length) return <span className="muted">ยังไม่มีตัวเลือก</span>;
+  return (
+    <button
+      type="button"
+      className="variant-stock-summary"
+      aria-label={"ดูสต็อก " + product.name}
+      onClick={(e) => {
+        e.stopPropagation();
+        onStock();
+      }}
+    >
+      {variants.map((v) => (
+        <span key={v.id} className={"variant-stock-line stock-" + v.stockStatus}>
+          <span className="variant-stock-label">{v.label}</span>
+          <strong>{v.stock}</strong>
+          {v.stockStatus && v.stockStatus !== "in" && (
+            <em className={"stock-badge stock-badge-" + v.stockStatus}>{stockText[v.stockStatus]}</em>
+          )}
+        </span>
+      ))}
+    </button>
+  );
+}
 
 export function AdminProducts({
   categories,
   priceOf,
   onStock,
+  onDuplicate,
 }: {
   categories: { id: string; name: string }[];
   priceOf: (id: string) => string;
   onStock: (name: string) => void;
+  onDuplicate: (id: string) => Promise<void>;
 }) {
-  const { go } = useStore();
+  const { go, toast } = useStore();
   const [filters, setFilters] = useState<Filters>(emptyProductFilters);
   const list = useCursorList<ProductRow>("/admin/products", "products", { ...filters, limit: "50" }, ["catalog", "orders"]);
-  const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  // Bulk changes touch many products at once, so each one asks again before running.
+  const [confirming, setConfirming] = useState<BulkAction | "duplicate" | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const set = (patch: Filters) => {
+    setFilters((f) => ({ ...f, ...patch }));
+    setPicked(new Set());
+    setConfirming(null);
+  };
   const active = Object.entries(filters).some(([k, v]) => v && !(k === "sort" && v === "name"));
+  const rows = list.rows ?? [];
+  const pickedIds = rows.filter((p) => picked.has(p.id)).map((p) => p.id);
+  const allPicked = rows.length > 0 && rows.every((p) => picked.has(p.id));
+  const toggle = (id: string) => {
+    setPicked((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setConfirming(null);
+  };
+  async function runBulk(action: BulkAction) {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ updated: number }>("/admin/products/bulk", { action, ids: pickedIds });
+      toast(
+        `${bulkText[action][1]} ${pickedIds.length} สินค้า` +
+          (result.updated < pickedIds.length ? ` (เปลี่ยนจริง ${result.updated})` : ""),
+      );
+      setPicked(new Set());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      setConfirming(null);
+    }
+  }
+  async function duplicate() {
+    if (pickedIds.length !== 1) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onDuplicate(pickedIds[0]);
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+      setConfirming(null);
+    }
+  }
   return (
     <>
       <div className="reference-admin-heading">
@@ -1174,7 +1277,7 @@ export function AdminProducts({
         search={filters.q}
         placeholder="ค้นชื่อสินค้า"
         onSearch={(q) => set({ q })}
-        onReset={() => setFilters(emptyProductFilters)}
+        onReset={() => set(emptyProductFilters)}
         active={active}
       >
         <Select
@@ -1225,49 +1328,122 @@ export function AdminProducts({
           ]}
         />
       </FilterBar>
-      <ErrorMessage message={list.error} />
-      <div className="table-scroll reference-table admin-list-table">
+      {pickedIds.length > 0 && (
+        <div className="bulk-action-bar" role="region" aria-label="จัดการสินค้าที่เลือก">
+          <strong>เลือก {pickedIds.length} สินค้า</strong>
+          {confirming ? (
+            <span className="queue-confirm">
+              <button
+                type="button"
+                className="button primary"
+                disabled={busy}
+                onClick={() => void (confirming === "duplicate" ? duplicate() : runBulk(confirming))}
+              >
+                {busy && <LoaderCircle className="spin" size={15} />}
+                {confirming === "duplicate"
+                  ? "ยืนยันคัดลอกเป็นฉบับร่าง"
+                  : `ยืนยัน${bulkText[confirming][0]} ${pickedIds.length} สินค้า`}
+              </button>
+              <button type="button" className="button secondary" disabled={busy} onClick={() => setConfirming(null)}>
+                ยกเลิก
+              </button>
+            </span>
+          ) : (
+            <span className="bulk-action-buttons">
+              {(Object.keys(bulkText) as BulkAction[]).map((action) => (
+                <button key={action} type="button" className="button secondary" onClick={() => setConfirming(action)}>
+                  {bulkText[action][0]}
+                </button>
+              ))}
+              {pickedIds.length === 1 && (
+                <button type="button" className="button secondary" onClick={() => setConfirming("duplicate")}>
+                  <Copy size={14} />
+                  คัดลอกสินค้า
+                </button>
+              )}
+              <button type="button" className="button ghost" onClick={() => setPicked(new Set())}>
+                ล้างที่เลือก
+              </button>
+            </span>
+          )}
+        </div>
+      )}
+      <ErrorMessage message={list.error || error} />
+      {rows.length > 0 && (
+        // Phones hide the table header (rows become cards), so select-all lives here.
+        <label className="product-select-all checkbox-label">
+          <input
+            type="checkbox"
+            checked={allPicked}
+            disabled={busy}
+            onChange={() => {
+              setPicked(allPicked ? new Set() : new Set(rows.map((p) => p.id)));
+              setConfirming(null);
+            }}
+          />
+          เลือกทั้งหมด {rows.length} รายการ
+        </label>
+      )}
+      <div className="table-scroll reference-table admin-list-table product-list-table">
         <table>
           <thead>
             <tr>
+              <th className="select-col">
+                <input
+                  type="checkbox"
+                  aria-label="เลือกสินค้าทั้งหมดที่แสดง"
+                  checked={allPicked}
+                  disabled={busy || !rows.length}
+                  onChange={() => {
+                    setPicked(allPicked ? new Set() : new Set(rows.map((p) => p.id)));
+                    setConfirming(null);
+                  }}
+                />
+              </th>
               <th>สินค้า</th>
               <th>ราคา</th>
-              <th className="num">สต็อก</th>
+              <th>สต็อกต่อตัวเลือก</th>
               <th className="num">ขายแล้ว</th>
             </tr>
           </thead>
           <tbody>
             {list.rows?.map((p) => (
-              <tr key={p.id} className="admin-row-link" onClick={() => go("/admin/products/" + p.id)}>
+              <tr
+                key={p.id}
+                className={"admin-row-link" + (picked.has(p.id) ? " is-picked" : "")}
+                onClick={() => go("/admin/products/" + p.id)}
+              >
+                <td className="select-col" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    aria-label={"เลือก " + p.name}
+                    checked={picked.has(p.id)}
+                    disabled={busy}
+                    onChange={() => toggle(p.id)}
+                  />
+                </td>
                 <td>
                   <div className="merchant-product-cell">
                     <div className="merchant-product-art">
-                      <Art small type={p.art} name={p.name} />
+                      {p.imageUrl ? (
+                        <img src={p.imageUrl} alt="" loading="lazy" />
+                      ) : (
+                        <Art small type={p.art} name={p.name} />
+                      )}
                     </div>
                     <div>
                       <Link to={"/admin/products/" + p.id}>{p.name}</Link>
                       <span className="product-state">
                         <span>{p.active ? "เปิดขาย" : "ฉบับร่าง"}</span>
                         {p.preorder && <span>พรีออเดอร์</span>}
+                        {p.featured && <span className="featured-tag">แนะนำ</span>}
                       </span>
                     </div>
                   </div>
                 </td>
                 <td className="nowrap">{priceOf(p.id)}</td>
-                <td className="num">
-                  {p.preorder ? (
-                    <span className="muted">ส่งตามคิว</span>
-                  ) : (
-                    <button
-                      className={"stock-link stock-" + p.stockStatus}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onStock(p.name);
-                      }}
-                    >
-                      {p.stock} · {stockText[p.stockStatus]}
-                    </button>
-                  )}
+                <td>
+                  <VariantStockList product={p} onStock={() => onStock(p.name)} />
                 </td>
                 <td className="num">{p.sold}</td>
               </tr>
@@ -1568,6 +1744,11 @@ const actionText: Record<string, string> = {
   PRODUCT_SET_PREORDER: "ตั้งสินค้าเป็นพรีออเดอร์",
   PRODUCT_SET_READY: "ตั้งสินค้าเป็นพร้อมส่ง",
   IMPORT_CODES: "เติมสต็อก",
+  PRODUCT_BULK_ACTIVATE: "เปิดขาย (หลายรายการ)",
+  PRODUCT_BULK_DEACTIVATE: "ปิดขาย (หลายรายการ)",
+  PRODUCT_BULK_FEATURE: "ตั้งเป็นสินค้าแนะนำ (หลายรายการ)",
+  PRODUCT_BULK_UNFEATURE: "เลิกแนะนำ (หลายรายการ)",
+  DUPLICATE_PRODUCT: "คัดลอกสินค้า",
   DELIVER_RESERVATION: "ส่งของพรีออเดอร์",
   REVEAL_ORDER_CREDENTIALS: "เปิดดูรหัสในออเดอร์",
   SAVE_SETTINGS: "แก้ตั้งค่าร้าน",
@@ -1602,6 +1783,18 @@ const actionText: Record<string, string> = {
 };
 const roleText: Record<string, string> = { ADMIN: "แอดมิน", STAFF: "ทีมงาน", CUSTOMER: "ลูกค้า" };
 /** Readable one-liner for the audit detail JSON instead of raw braces. */
+// Stock import / bulk / duplicate audit details.
+const detailLabel: Record<string, string> = {
+  total: "ทั้งหมด",
+  imported: "เพิ่ม",
+  skippedDuplicates: "ข้ามซ้ำ",
+  skippedInvalid: "ข้ามรูปแบบผิด",
+  skipDuplicates: "ข้ามบัญชีซ้ำ:",
+  batch: "ในชุด",
+  updated: "เปลี่ยนจริง:",
+  variants: "ตัวเลือก",
+  images: "รูป",
+};
 function auditDetailText(detail: Record<string, unknown>) {
   const parts: string[] = [];
   for (const [key, value] of Object.entries(detail)) {
@@ -1611,6 +1804,8 @@ function auditDetailText(detail: Record<string, unknown>) {
     else if (key === "to" && typeof value === "string") parts.push("เป็น " + (roleText[value] ?? value));
     else if (key === "role" && typeof value === "string") parts.push("สิทธิ์ " + (roleText[value] ?? value));
     else if (key === "limit") parts.push("โควตา " + value + " ครั้ง/ชม.");
+    else if (key in detailLabel)
+      parts.push(detailLabel[key] + " " + (typeof value === "boolean" ? (value ? "ใช่" : "ไม่") : String(value)));
     else if (key === "changed" && value && typeof value === "object")
       for (const [field, diff] of Object.entries(value as Record<string, { from: unknown; to: unknown }>))
         parts.push(field + ": " + String(diff.from ?? "—") + " → " + String(diff.to ?? "—"));
@@ -2211,6 +2406,7 @@ type Variant = {
   price: number;
   active: boolean;
   sort_order: number;
+  warranty_days?: number;
   stock: number;
   stockStatus: "out" | "low" | "in";
 };
@@ -2229,41 +2425,13 @@ type StockUnit = {
 function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () => void }) {
   const { toast } = useStore();
   const [status, setStatus] = useState("available");
-  const [text, setText] = useState("");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
   const list = useCursorList<StockUnit>(
     "/admin/variants/" + variant.id + "/inventory",
     "inventory",
     { status, limit: "50" },
     ["catalog", "orders"],
   );
-  // Excel/Sheets paste uses tabs; "id:password" and "id password" also accepted.
-  const rows = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const match = line.match(/^([^\t,:\s]+)[\t,:\s]+(.+)$/);
-      return match ? { loginId: match[1], password: match[2].trim() } : null;
-    });
-  const bad = rows.filter((r) => !r).length;
-  async function add(e: FormEvent) {
-    e.preventDefault();
-    if (!rows.length || bad) return;
-    setBusy(true);
-    setError("");
-    try {
-      await api("/admin/inventory", { variantId: variant.id, items: rows });
-      toast("เติมสต็อก " + rows.length + " บัญชีแล้ว");
-      setText("");
-      onChanged();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
   async function defect(unit: StockUnit) {
     const reason = prompt("เหตุผลที่บัญชีนี้ใช้ไม่ได้");
     if (!reason) return;
@@ -2288,28 +2456,15 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
   return (
     <div className="variant-stock">
       <TestModeStockWarning />
-      <form onSubmit={add} className="variant-stock-add">
-        <label className="field">
-          เติมสต็อก: ID และรหัสผ่าน บรรทัดละ 1 บัญชี
-          <textarea
-            aria-label={"เติมสต็อก " + variant.label}
-            rows={4}
-            placeholder={"user1@mail.com,password1\nuser2@mail.com,password2"}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-        </label>
-        <p className="field-help">
-          วางจาก Excel ได้ (2 คอลัมน์) · คั่นด้วย , หรือ : ก็ได้ · รหัสผ่านเก็บแบบเข้ารหัส ลูกค้าเห็นหลังจ่ายเงินเท่านั้น
-          {rows.length > 0 && !bad && ` · พร้อมเติม ${rows.length} บัญชี`}
-          {bad > 0 && <strong className="danger-text"> · {bad} บรรทัดไม่มีรหัสผ่าน</strong>}
-        </p>
+      <div className="variant-stock-add">
+        <StockImport
+          variantId={variant.id}
+          kind="pair"
+          label={"เติมสต็อก " + variant.label}
+          onDone={onChanged}
+        />
         <ErrorMessage message={error} />
-        <button className="button primary" disabled={busy || !rows.length || bad > 0}>
-          <Plus size={15} />
-          เติม {rows.length || ""} บัญชี
-        </button>
-      </form>
+      </div>
       <div className="variant-stock-list">
         <div className="reference-status-tabs" role="group" aria-label="สถานะสต็อก">
           {[
@@ -2367,6 +2522,26 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
   );
 }
 
+/** Warranty in days per option (0 = none). Sold orders keep the warranty they were sold with. */
+function WarrantyInput({ defaultValue = 0, label = "วันรับประกัน" }: { defaultValue?: number; label?: string }) {
+  return (
+    <label className="variant-warranty">
+      <span>ประกัน</span>
+      <input
+        name="warranty_days"
+        aria-label={label}
+        type="number"
+        min="0"
+        max="365"
+        step="1"
+        inputMode="numeric"
+        defaultValue={defaultValue}
+      />
+      <span>วัน</span>
+    </label>
+  );
+}
+
 export function VariantManager({ productId, preorder }: { productId: string; preorder: boolean }) {
   const { toast } = useStore();
   const [variants, setVariants] = useState<Variant[] | null>(null);
@@ -2383,12 +2558,17 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
   }, [productId]);
   useLive(["catalog", "orders"], () => void load());
   const baht = (value: FormDataEntryValue | null) => Math.round(Number(value ?? 0) * 100);
+  const days = (value: FormDataEntryValue | null) => Math.max(0, Math.min(365, Math.round(Number(value || 0))));
   async function create(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const data = new FormData(form);
     try {
-      await api("/admin/products/" + productId + "/variants", { label: data.get("label"), price: baht(data.get("price")) });
+      await api("/admin/products/" + productId + "/variants", {
+        label: data.get("label"),
+        price: baht(data.get("price")),
+        warranty_days: days(data.get("warranty_days")),
+      });
       toast("เพิ่มตัวเลือกแล้ว");
       form.reset();
       await load();
@@ -2423,6 +2603,7 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
         {preorder
           ? "สินค้าพรีออเดอร์: ลูกค้าจ่ายแล้วได้คิว เติมสต็อกเมื่อของพร้อม แล้วกดส่งในคิวพรีออเดอร์"
           : "ลูกค้าจ่ายแล้วได้ ID และรหัสผ่านจากสต็อกของตัวเลือกนั้นทันที สต็อกหมดหน้าร้านขึ้นว่าหมดเอง"}
+        {" · ประกัน 0 วัน = ไม่มีประกัน แก้ภายหลังไม่กระทบออเดอร์ที่ขายไปแล้ว"}
       </p>
       <ErrorMessage message={error} />
       {variants?.map((v) => (
@@ -2433,11 +2614,16 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
               onSubmit={(e) => {
                 e.preventDefault();
                 const data = new FormData(e.currentTarget);
-                void update(v, { label: String(data.get("label")), price: baht(data.get("price")) });
+                void update(v, {
+                  label: String(data.get("label")),
+                  price: baht(data.get("price")),
+                  warranty_days: days(data.get("warranty_days")),
+                });
               }}
             >
               <input name="label" aria-label="ชื่อตัวเลือก" defaultValue={v.label} required maxLength={80} />
               <input name="price" aria-label="ราคา (บาท)" type="number" min="1" step="0.01" defaultValue={v.price / 100} required />
+              <WarrantyInput defaultValue={v.warranty_days ?? 0} />
               <button className="button primary">บันทึก</button>
               <button type="button" className="button ghost" onClick={() => setEditing(null)}>
                 ยกเลิก
@@ -2449,6 +2635,7 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
                 <strong>{v.label}</strong>
                 <small>
                   {money(v.price)} · {v.active ? "เปิดขาย" : "ปิดอยู่"}
+                  {(v.warranty_days ?? 0) > 0 ? " · รับประกัน " + v.warranty_days + " วัน" : " · ไม่มีประกัน"}
                 </small>
               </span>
               <button
@@ -2478,6 +2665,7 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
       <form className="variant-edit variant-new" onSubmit={create}>
         <input name="label" aria-label="ชื่อตัวเลือกใหม่" placeholder="ชื่อตัวเลือก เช่น 30 วัน จอส่วนตัว" required maxLength={80} />
         <input name="price" aria-label="ราคาตัวเลือกใหม่ (บาท)" type="number" min="1" step="0.01" placeholder="ราคา (บาท)" required />
+        <WarrantyInput label="วันรับประกันตัวเลือกใหม่" />
         <button className="button secondary">
           <Plus size={15} />
           เพิ่มตัวเลือก
