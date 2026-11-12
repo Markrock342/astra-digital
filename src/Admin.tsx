@@ -72,6 +72,7 @@ import { useUnsavedChangesGuard } from "./navigation";
 import { ImageLibraryDialog, useLibrary } from "./ImageLibrary";
 import { libraryBlob, suggestFromName, type LibraryItem } from "./image-library";
 import { uploadImage } from "./image-upload";
+import { AdminAlerts, AdminBackup } from "./AdminAlerts";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -88,6 +89,8 @@ const settingTabs = [
   ["settings", "ร้าน"],
   ["settings/payment", "รับเงิน"],
   ["settings/account", "บัญชีแอดมิน"],
+  ["settings/alerts", "แจ้งเตือนนอกเว็บ"],
+  ["settings/backup", "สำรองข้อมูล"],
   ["settings/audit", "ประวัติการทำงาน"],
 ];
 function Subnav({ items, current }: { items: string[][]; current: string }) {
@@ -860,6 +863,10 @@ export default function Admin() {
             <AdminAccount />
           ) : sub === "settings/audit" ? (
             <AdminAudit />
+          ) : sub === "settings/alerts" ? (
+            <AdminAlerts />
+          ) : sub === "settings/backup" ? (
+            <AdminBackup />
           ) : (
             <ReferenceSettings sub={sub} />
           ))}

@@ -75,6 +75,13 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         headers: { ...securityHeaders, "Cache-Control": "no-store", ...extra },
       });
     try {
+      // Daily alert summary, triggered lazily (at most once a minute, once a day after 21:00
+      // Bangkok). The Durable Object also has an alarm for quiet evenings.
+      try {
+        service.alertsTick?.();
+      } catch {
+        // never block a request on the summary
+      }
       if (!["GET", "POST", "PATCH", "DELETE"].includes(request.method))
         return send(405, { error: "Method not allowed" });
       const mutating = ["POST", "PATCH", "DELETE"].includes(request.method);
@@ -340,6 +347,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (/^\/api\/admin\/transactions\/[^/]+$/.test(path))
           return send(200, service.adminTransactionDetail(user, path.split("/")[4]));
         if (path === "/api/admin/team") return send(200, { team: service.team(user) });
+        if (path === "/api/admin/alerts") return send(200, service.alertSettings(user));
+        if (path === "/api/admin/backup") return send(200, service.backupStatus(user));
         if (path === "/api/account/totp") return send(200, service.totpStatus(user));
         if (path === "/api/account/sessions")
           return send(200, service.listSessions(user, token));
@@ -552,6 +561,26 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         }
         if (path === "/api/account/sessions/revoke-others")
           return send(200, service.revokeOtherSessions(user, token));
+        // Alert secrets: password again; links in messages use this request's origin.
+        if (path === "/api/admin/alerts")
+          return send(200, service.saveAlertSettings(user, input, { origin: url.origin }));
+        if (path === "/api/admin/alerts/test")
+          return send(200, await service.testAlert(user, input));
+        if (path === "/api/admin/backup/run")
+          return send(200, await service.runBackupNow(user, input));
+        if (path === "/api/admin/backup/export") {
+          // Password again + BACKUP_EXPORT audit row, then a gzip stream (backup.mjs).
+          const backup = service.exportBackup(user, input);
+          return new Response(backup.stream, {
+            status: 200,
+            headers: {
+              ...securityHeaders,
+              "Content-Type": "application/gzip",
+              "Cache-Control": "no-store",
+              "Content-Disposition": `attachment; filename="${backup.filename}"`,
+            },
+          });
+        }
         if (path === "/api/account/totp/setup")
           return send(200, service.totpSetup(user, input));
         if (path === "/api/account/totp/enable")

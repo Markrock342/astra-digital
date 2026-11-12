@@ -61,6 +61,8 @@ import {
   dropAppendOnlyMoney,
   ensureAppendOnlyMoney,
 } from "./ensure-admin-fr.mjs";
+import { createAlerts, DAILY_SUMMARY_HOUR, nextBangkokHour } from "./alerts.mjs";
+import { BACKUP_HOUR_BANGKOK, createBackupApis } from "./backup.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
@@ -95,6 +97,13 @@ export function createCommerceCore({
   uploads,
   // Injected clock for session / lockout / TOTP tests.
   clock = () => Date.now(),
+  // Outside-the-website alerts (alerts.mjs): fetch is injectable for tests, waitUntil keeps a
+  // Durable Object alive for the send, alertRedirect is a loopback-only test hook.
+  alertFetch,
+  alertRedirect,
+  waitUntil,
+  // R2 bucket binding BACKUPS for the automatic daily backup (absent = off).
+  backups,
 } = {}) {
   const one = (sql, ...params) => db.prepare(sql).get(...params);
   const all = (sql, ...params) => db.prepare(sql).all(...params);
@@ -419,6 +428,7 @@ export function createCommerceCore({
     const last = staffChatCooldown.get(threadId) ?? 0;
     if (now - last < 60000) return;
     staffChatCooldown.set(threadId, now);
+    alerts.emit("chat_message", { threadId });
     for (const staff of all(
       "SELECT id FROM users WHERE role IN ('STAFF','ADMIN')",
     ))
@@ -477,6 +487,50 @@ export function createCommerceCore({
     clock,
     hash,
     requireUser,
+  });
+  const alerts = createAlerts({
+    one,
+    all,
+    run,
+    encrypt,
+    decrypt,
+    fail,
+    requireAdmin,
+    reauthAdmin: auth.reauthAdmin,
+    clock,
+    fetch: alertFetch,
+    waitUntil,
+    redirect: alertRedirect,
+    shopName: () => settings().shopName,
+    summaryFor: (day) => salesMoney(bangkokDayRange(day, day)),
+    stockInfo: (variantId) => {
+      const row = one(
+        `SELECT v.id,v.label,p.id AS product_id,p.name,
+                (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) AS stock
+         FROM variants v JOIN products p ON p.id=v.product_id
+         WHERE v.id=? AND p.preorder=0`,
+        variantId,
+      );
+      if (!row) return null;
+      const level = row.stock <= 0 ? "out" : row.stock <= getLowStockAt() ? "low" : "ok";
+      return { level, stock: row.stock, name: row.name, label: row.label, productId: row.product_id };
+    },
+  });
+  const backupApis = createBackupApis({
+    db,
+    one,
+    run,
+    requireAdmin,
+    reauthAdmin: auth.reauthAdmin,
+    fail,
+    clock,
+    backups,
+    state: alerts.state,
+    meta: () => ({
+      shop: settings().shopName,
+      mode: allowSandbox ? "sandbox" : "live",
+      storage: publicService.storageKind ?? "local-sqlite",
+    }),
   });
   function seedData() {
     if (one("SELECT id FROM products LIMIT 1")) return;
@@ -1364,6 +1418,13 @@ export function createCommerceCore({
           "คิว #" + queueNumber + " · " + id.slice(0, 8),
           "/admin/orders/" + id,
         );
+        alerts.emit("preorder_paid", {
+          id,
+          queueNumber,
+          variantId: o.variant_id,
+          quantity: o.quantity,
+          total: o.total,
+        });
         audit(user, "PREORDER_PAID", id);
         return orderDetail(user, id);
       });
@@ -1473,6 +1534,13 @@ export function createCommerceCore({
         "/admin/orders/" + id,
       );
       maybeNotifyStockLow(order.variant_id);
+      alerts.emit("order_paid", {
+        id,
+        variantId: order.variant_id,
+        quantity: order.quantity,
+        total: order.total,
+      });
+      alerts.stockAfterSale(order.variant_id);
       audit(user, "PAYMENT_AND_DELIVERY", id);
       return orderDetail(user, id);
     });
@@ -2233,7 +2301,7 @@ export function createCommerceCore({
   }
   const {
     adminOrderPaymentSummary,
-    refundOrder,
+    refundOrder: refundOrderCore,
     adjustCustomerCredit,
     paymentSummaryFor,
     orderRefundState,
@@ -2250,6 +2318,17 @@ export function createCommerceCore({
     notify,
     allowSandbox,
   });
+  function refundOrder(user, id, input = {}) {
+    const result = refundOrderCore(user, id, input);
+    if (!result?.replayed)
+      alerts.emit("refund", {
+        orderId: id,
+        amount: input.amount,
+        destination: input.destination,
+        by: user.name,
+      });
+    return result;
+  }
   const orderHistory = createOrderHistoryApis({
     requireStaff,
     one,
@@ -2333,7 +2412,19 @@ export function createCommerceCore({
     clean,
     moneyScope,
   });
-  const { team, saveStaff, setMemberRole, setStaffActive, assignChatThread } = createTeamApis({
+  function assignChatThread(user, threadId, input = {}) {
+    const thread = assignChatThreadCore(user, threadId, input);
+    if (thread?.assigned_to)
+      alerts.emit("chat_assigned", { threadId: thread.id, assignee: thread.assignee, by: user.name });
+    return thread;
+  }
+  const {
+    team,
+    saveStaff,
+    setMemberRole,
+    setStaffActive,
+    assignChatThread: assignChatThreadCore,
+  } = createTeamApis({
     passwordHash,
     requireAdmin,
     requireStaff,
@@ -2541,6 +2632,29 @@ export function createCommerceCore({
     listSessions: accountSessions.listSessions,
     revokeSession: accountSessions.revokeSession,
     revokeOtherSessions: accountSessions.revokeOtherSessions,
+    // Outside-the-website alerts + backup (alerts.mjs, backup.mjs).
+    alertSettings: alerts.alertSettings,
+    saveAlertSettings: alerts.saveAlertSettings,
+    testAlert: alerts.testAlert,
+    alertsTick: (now) => alerts.tick(now),
+    alertsIdle: alerts.idle,
+    backupStatus: backupApis.backupStatus,
+    exportBackup: backupApis.exportBackup,
+    runBackupNow: backupApis.runBackupNow,
+    /** Next Durable Object alarm time (ms) or null when nothing is scheduled. */
+    nextScheduledRun: (now = clock()) => {
+      const times = [];
+      if (alerts.wantsSchedule()) times.push(nextBangkokHour(now, DAILY_SUMMARY_HOUR));
+      if (backupApis.hasBackups) times.push(nextBangkokHour(now, BACKUP_HOUR_BANGKOK));
+      return times.length ? Math.min(...times) : null;
+    },
+    /** Durable Object alarm: daily summary (21:00) and R2 backup (from 04:00), both once a day. */
+    runScheduledJobs: async (now = clock()) => {
+      const summary = alerts.tick(now, { force: true });
+      const backup = backupApis.backupDue(now) ? await backupApis.runBackup(now) : null;
+      if (summary) await summary;
+      return { backup };
+    },
     mode: allowSandbox ? "sandbox" : "live",
     features: Object.freeze({
       credentialPair: true,
@@ -2569,6 +2683,8 @@ export function createCommerceCore({
       creditAdjust: true,
       pendingExpiry: true,
       accountSessions: true,
+      outsideAlerts: true,
+      backupExport: true,
     }),
     salesRevenueSatang,
     logout: (token) =>
@@ -2628,5 +2744,6 @@ export function createCommerceCore({
     };
   }
   live.sweepPendingOrders = expiry.sweep;
-  return live;
+  // Alerts wrap outermost: queued alerts go out only after the whole call succeeded.
+  return alerts.wrap(live);
 }
