@@ -30,6 +30,17 @@ import { createAdminOrderReplaceApis } from "./admin-order-replace.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createFileStore } from "./file-store.mjs";
 import { createAuthHardening } from "./auth-hardening.mjs";
+import { createAdminMoneyApis } from "./admin-money.mjs";
+import {
+  createMoneyScope,
+  walletBalanceSql,
+  walletHistory,
+  walletRowSql,
+} from "./money.mjs";
+import {
+  dropAppendOnlyMoney,
+  ensureAppendOnlyMoney,
+} from "./ensure-admin-fr.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
@@ -151,10 +162,8 @@ export function createCommerceCore({
           email: user.email,
           name: user.name,
           role: user.role,
-          balance: one(
-            "SELECT COALESCE(SUM(amount),0) AS value FROM ledger WHERE user_id=? AND kind='DEMO_CREDIT'",
-            user.id,
-          ).value,
+          // S4: one balance formula (signed net over wallet rows), see money.mjs.
+          balance: one(walletBalanceSql, user.id).value,
         }
       : null;
   const audit = (user, action, entity) =>
@@ -275,7 +284,10 @@ export function createCommerceCore({
       row.name + " / " + row.label + " เหลือ " + row.stock,
     );
   };
-  const salesRevenueSatang = (range = null) => {
+  // S2: test money (sandbox payments, DEMO_CREDIT) counts only while the shop is in test mode.
+  const moneyScope = createMoneyScope(allowSandbox);
+  /** FR-F10 parts: gross paid (payments SUCCEEDED) and refunds, in one Bangkok range. */
+  const salesMoney = (range = null) => {
     const bounds = range
       ? " AND COALESCE(finalized_at, created_at) >= ? AND COALESCE(finalized_at, created_at) <= ?"
       : "";
@@ -283,18 +295,22 @@ export function createCommerceCore({
       ? " AND created_at >= ? AND created_at <= ?"
       : "";
     const params = range ? [range.fromUtc, range.toUtc] : [];
-    const succeeded = one(
-      "SELECT COALESCE(SUM(amount),0) AS n FROM payments WHERE status='SUCCEEDED'" +
+    const paid = one(
+      `SELECT COALESCE(SUM(amount),0) AS n, COUNT(*) AS count FROM payments WHERE status='SUCCEEDED' AND ${moneyScope.payment()}` +
         bounds,
       ...params,
-    ).n;
-    // Refunds land in Work 3 / FR-F6; until then nothing to subtract.
-    const refunded = one(
-      "SELECT COALESCE(SUM(ABS(amount)),0) AS n FROM ledger WHERE kind='REFUND'" +
+    );
+    const refunds = one(
+      `SELECT COALESCE(SUM(ABS(amount)),0) AS n FROM ledger WHERE kind='REFUND' AND ${moneyScope.ledger()}` +
         refundBounds,
       ...params,
     ).n;
-    return succeeded - refunded;
+    return { gross: paid.n, paidCount: paid.count, refunds };
+  };
+  /** FR-F10: one revenue formula — payments SUCCEEDED minus refunds. */
+  const salesRevenueSatang = (range = null) => {
+    const m = salesMoney(range);
+    return m.gross - m.refunds;
   };
   /** Interpret YYYY-MM-DD as Asia/Bangkok calendar days → UTC SQL timestamps. */
   const bangkokDayRange = (from, to) => {
@@ -556,6 +572,8 @@ export function createCommerceCore({
     const demoIds = catalog.map((p) => p.id);
     const marks = demoIds.map(() => "?").join(",");
     tx(() => {
+      // S9: ledger/audit are append-only; this one-time cleanup is the only delete.
+      dropAppendOnlyMoney(db);
       const demoUsers = all(
         // Launch cleanup removes only accounts the demo buttons created. Real customers who
         // signed up during testing (with or without an email) are never selected by pattern.
@@ -607,6 +625,14 @@ export function createCommerceCore({
         run(`DELETE FROM payments WHERE user_id IN (${users})`, ...demoUsers);
         run(`DELETE FROM ledger WHERE user_id IN (${users})`, ...demoUsers);
         run(`DELETE FROM reviews WHERE user_id IN (${users})`, ...demoUsers);
+        // Accounts a demo visitor bought from real products during testing still point at
+        // their orders; those units were handed out, so they go with the orders (unsold
+        // stock is untouched).
+        run(
+          `DELETE FROM inventory WHERE order_id IN (SELECT id FROM orders WHERE user_id IN (${users})) OR reservation_id IN (SELECT id FROM reservations WHERE user_id IN (${users}))`,
+          ...demoUsers,
+          ...demoUsers,
+        );
         run(
           `DELETE FROM reservations WHERE user_id IN (${users})`,
           ...demoUsers,
@@ -634,6 +660,7 @@ export function createCommerceCore({
       run(
         "INSERT INTO runtime_flags(key,value) VALUES('template-ready','1')",
       );
+      ensureAppendOnlyMoney(db);
     });
   }
   if (adminPassword) {
@@ -1039,6 +1066,7 @@ export function createCommerceCore({
         preorder: true,
         reviewed: true,
         ...delivered,
+        ...orderRefundState(orderId, true),
         queueNumber: reservation.queue_number ?? null,
       };
     }
@@ -1052,6 +1080,7 @@ export function createCommerceCore({
       ...safe,
       reviewed: !!one("SELECT id FROM reviews WHERE order_id=?", orderId),
       ...delivered,
+      ...orderRefundState(orderId, false),
     };
   }
   function staffOrders(user, { limit = 50, cursor } = {}) {
@@ -1425,18 +1454,71 @@ export function createCommerceCore({
       ...params,
       ...params,
     ).n;
+    // Payment success rate: orders created in the range that got a successful payment.
+    const paidCreated = one(
+      `SELECT (
+         (SELECT COUNT(*) FROM orders o WHERE 1=1${timeFilter.replaceAll("created_at", "o.created_at")}
+            AND EXISTS (SELECT 1 FROM payments p WHERE p.order_id=o.id AND p.status='SUCCEEDED' AND ${moneyScope.payment("p.")}))
+         + (SELECT COUNT(*) FROM reservations o WHERE 1=1${timeFilter.replaceAll("created_at", "o.created_at")}
+            AND EXISTS (SELECT 1 FROM payments p WHERE p.reservation_id=o.id AND p.status='SUCCEEDED' AND ${moneyScope.payment("p.")}))
+       ) AS n`,
+      ...params,
+      ...params,
+    ).n;
     const newCustomers = one(
       `SELECT COUNT(*) AS n FROM users WHERE role='CUSTOMER'${timeFilter}`,
       ...params,
     ).n;
+    const money = salesMoney(range);
+    const revenue = money.gross - money.refunds;
+    // Revenue per Bangkok day with the same formula as the revenue card (FR-F10).
+    const paidAt = "COALESCE(finalized_at, created_at)";
+    const dayOf = (col) => `substr(datetime(${col}, '+7 hours'), 1, 10)`;
+    const daily = new Map();
+    for (const row of all(
+      `SELECT ${dayOf(paidAt)} AS day, SUM(amount) AS n FROM payments
+       WHERE status='SUCCEEDED' AND ${moneyScope.payment()}${range ? ` AND ${paidAt} >= ? AND ${paidAt} <= ?` : ""}
+       GROUP BY day`,
+      ...params,
+    ))
+      daily.set(row.day, { day: row.day, gross: row.n, refunds: 0 });
+    for (const row of all(
+      `SELECT ${dayOf("created_at")} AS day, SUM(ABS(amount)) AS n FROM ledger
+       WHERE kind='REFUND' AND ${moneyScope.ledger()}${timeFilter}
+       GROUP BY day`,
+      ...params,
+    )) {
+      const entry = daily.get(row.day) ?? { day: row.day, gross: 0, refunds: 0 };
+      entry.refunds = row.n;
+      daily.set(row.day, entry);
+    }
     return {
       from: range?.from ?? null,
       to: range?.to ?? null,
       timezone: "Asia/Bangkok",
-      revenue: salesRevenueSatang(range),
+      mode: moneyScope.mode,
+      revenue,
+      gross: money.gross,
+      refunds: money.refunds,
       orderCount,
+      paidOrders: money.paidCount,
+      // AOV = revenue ÷ paid orders (not all created orders).
+      aov: money.paidCount ? Math.round(revenue / money.paidCount) : 0,
+      paymentSuccessRate: orderCount ? paidCreated / orderCount : null,
+      paidCreated,
       newCustomers,
+      customerCredit: outstandingCredit(),
+      daily: [...daily.values()]
+        .map((d) => ({ ...d, revenue: d.gross - d.refunds }))
+        .sort((a, b) => a.day.localeCompare(b.day)),
     };
+  }
+  /** Customer credit still owed by the shop (a liability, not revenue). */
+  function outstandingCredit() {
+    return one(
+      `SELECT COALESCE(SUM(net),0) AS n FROM ledger l
+       WHERE ${walletRowSql("l.")} AND ${moneyScope.ledger("l.")}`,
+    ).n;
   }
   function adminOverview(user) {
     requireAdmin(user);
@@ -1940,6 +2022,25 @@ export function createCommerceCore({
     if (period === "week") start -= ((local.getUTCDay() + 6) % 7) * 86400000;
     return new Date(start - offset).toISOString().slice(0, 19).replace("T", " ");
   }
+  const {
+    adminOrderPaymentSummary,
+    refundOrder,
+    adjustCustomerCredit,
+    paymentSummaryFor,
+    orderRefundState,
+  } = createAdminMoneyApis({
+    requireAdmin,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    integer,
+    insertLedgerEntry,
+    notify,
+    allowSandbox,
+  });
   const listApis = createAdminListApis({
     requireStaff,
     one,
@@ -1955,6 +2056,7 @@ export function createCommerceCore({
     getLowStockAt,
     bangkokDayRange,
     isAdmin,
+    paymentSummaryFor,
   });
   const { adminOrders, adminRevealOrderCredentials, adminCustomers } = listApis;
   // NFR-3: team members handle orders but never see money movement (payment rows,
@@ -1978,13 +2080,15 @@ export function createCommerceCore({
       })),
     };
   }
-  const { adminTransactions } = createAdminFinanceApis({
+  const { adminTransactions, adminTransactionDetail } = createAdminFinanceApis({
     requireAdmin,
     one,
     all,
     fail,
     clean,
     bangkokDayRange,
+    moneyScope,
+    outstandingCredit,
   });
   const {
     adminCustomerDetail,
@@ -2005,6 +2109,7 @@ export function createCommerceCore({
     tx,
     fail,
     clean,
+    moneyScope,
   });
   const { team, saveStaff, setMemberRole, setStaffActive, assignChatThread } = createTeamApis({
     passwordHash,
@@ -2046,7 +2151,14 @@ export function createCommerceCore({
     getLowStockAt,
     randomUUID,
   });
-  const { salesReport } = createReportApis({ requireAdmin, all, one, fail, bangkokDayRange });
+  const { salesReport } = createReportApis({
+    requireAdmin,
+    all,
+    one,
+    fail,
+    bangkokDayRange,
+    moneyScope,
+  });
   const { replaceOrderCredential } = createAdminOrderReplaceApis({
     requireAdmin,
     one,
@@ -2060,6 +2172,11 @@ export function createCommerceCore({
     notify,
     maybeNotifyStockLow,
   });
+  /** S2: in live mode an order paid with sandbox money is not real spend. */
+  const liveOnlySql = (idCol, payCol) =>
+    moneyScope.live
+      ? ` AND NOT EXISTS (SELECT 1 FROM payments sp WHERE sp.${payCol}=${idCol} AND sp.provider='sandbox')`
+      : "";
   function buyerRanking(user, query = {}) {
     requireAdmin(user);
     const rawLimit = query.limit ?? null;
@@ -2072,9 +2189,9 @@ export function createCommerceCore({
     return all(
       `SELECT u.name,u.email,COUNT(*) AS orders,SUM(x.total) AS spent_satang
        FROM (
-         SELECT user_id,total,created_at FROM orders WHERE status='DELIVERED'
+         SELECT user_id,total,created_at FROM orders o WHERE status='DELIVERED'${liveOnlySql("o.id", "order_id")}
          UNION ALL
-         SELECT user_id,total,created_at FROM reservations WHERE status IN ('PREORDER','DELIVERED')
+         SELECT user_id,total,created_at FROM reservations o WHERE status IN ('PREORDER','DELIVERED')${liveOnlySql("o.id", "reservation_id")}
        ) x
        JOIN users u ON u.id=x.user_id
        WHERE u.role='CUSTOMER' AND (? IS NULL OR x.created_at >= ?)
@@ -2115,6 +2232,10 @@ export function createCommerceCore({
     adminCustomers,
     adminProducts,
     adminTransactions,
+    adminTransactionDetail,
+    adminOrderPaymentSummary,
+    refundOrder,
+    adjustCustomerCredit,
     adminCustomerDetail,
     adminUpdateCustomer,
     adminSetCustomerStatus,
@@ -2191,6 +2312,9 @@ export function createCommerceCore({
       adminStockApi: true,
       adminReplaceCredential: true,
       uploads: true,
+      livemodeFinance: true,
+      adminRefunds: true,
+      creditAdjust: true,
     }),
     salesRevenueSatang,
     logout: (token) =>
@@ -2212,11 +2336,8 @@ export function createCommerceCore({
     },
     ledger: (user) => {
       requireUser(user);
-      return all(
-        // Wallet shows the customer's credit only; PAYMENT_IN/FEE/WITHDRAWAL are shop-side money.
-        "SELECT id,amount,label,created_at FROM ledger WHERE user_id=? AND kind IN ('DEMO_CREDIT','TOPUP','PURCHASE','REFUND','ADJUSTMENT') ORDER BY created_at DESC,rowid DESC",
-        user.id,
-      );
+      // Wallet rows only (money.mjs); `amount` is signed, with the balance after each row.
+      return walletHistory(all, user.id, 500);
     },
   };
   return withLive(service, { run, all });

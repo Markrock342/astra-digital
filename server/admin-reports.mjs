@@ -1,5 +1,10 @@
 /** FR-R reports: paid sales grouped by product/variant and by Bangkok day (ADMIN only). */
-export function createReportApis({ requireAdmin, all, one, fail, bangkokDayRange }) {
+import { csvLine } from "./money.mjs";
+
+export function createReportApis({ requireAdmin, all, one, fail, bangkokDayRange, moneyScope }) {
+  // S2: live mode leaves sandbox payments and their refunds out of every report number.
+  const paymentScope = moneyScope ? " AND " + moneyScope.payment("pay.") : "";
+  const ledgerScope = moneyScope ? " AND " + moneyScope.ledger() : "";
   function salesReport(user, query = {}) {
     requireAdmin(user);
     const hasFrom = query.from != null && String(query.from).trim() !== "";
@@ -20,7 +25,7 @@ export function createReportApis({ requireAdmin, all, one, fail, bangkokDayRange
       ) x ON x.id = COALESCE(pay.order_id, pay.reservation_id)
       JOIN variants v ON v.id = x.variant_id
       JOIN products p ON p.id = v.product_id
-      WHERE pay.status = 'SUCCEEDED'${filter}`;
+      WHERE pay.status = 'SUCCEEDED'${paymentScope}${filter}`;
     const byProduct = all(
       `SELECT product_id, product, variant_id, variant, MAX(preorder) AS preorder,
               COUNT(*) AS orders, SUM(quantity) AS units, SUM(amount) AS revenue
@@ -40,17 +45,37 @@ export function createReportApis({ requireAdmin, all, one, fail, bangkokDayRange
       ...params,
     );
     const refunds = one(
-      `SELECT COALESCE(SUM(ABS(amount)),0) AS n FROM ledger WHERE kind='REFUND'${range ? " AND created_at >= ? AND created_at <= ?" : ""}`,
+      `SELECT COALESCE(SUM(ABS(amount)),0) AS n FROM ledger WHERE kind='REFUND'${ledgerScope}${range ? " AND created_at >= ? AND created_at <= ?" : ""}`,
       ...params,
     ).n;
-    return {
+    const report = {
       from: range?.from ?? null,
       to: range?.to ?? null,
       timezone: "Asia/Bangkok",
+      mode: moneyScope?.mode ?? "sandbox",
       totals: { ...totals, refunds, net: totals.revenue - refunds },
       byProduct,
       byDay,
     };
+    if (String(query.format || "").toLowerCase() === "csv") return { ...report, csv: salesCsv(report) };
+    return report;
+  }
+  /** S5: server CSV with the same formula-injection escaping as the admin UI. */
+  function salesCsv(report) {
+    const baht = (satang) => (satang / 100).toFixed(2);
+    const lines = [
+      csvLine(["สินค้า", "ตัวเลือก", "ประเภท", "ออเดอร์", "ชิ้น", "ยอดขาย (บาท)"]),
+      ...report.byProduct.map((r) =>
+        csvLine([r.product, r.variant, r.preorder ? "พรีออเดอร์" : "พร้อมส่ง", r.orders, r.units, baht(r.revenue)]),
+      ),
+      "",
+      csvLine(["วัน", "ออเดอร์", "ชิ้น", "ผู้ซื้อ", "ยอดขาย (บาท)"]),
+      ...report.byDay.map((d) => csvLine([d.day, d.orders, d.units, d.buyers, baht(d.revenue)])),
+      "",
+      csvLine(["ยอดขาย (บาท)", "คืนเงิน (บาท)", "สุทธิ (บาท)"]),
+      csvLine([baht(report.totals.revenue), baht(report.totals.refunds), baht(report.totals.net)]),
+    ];
+    return "\ufeff" + lines.join("\r\n") + "\r\n";
   }
   return { salesReport };
 }

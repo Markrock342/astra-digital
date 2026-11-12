@@ -47,12 +47,18 @@ export type Order = {
   reviewed: boolean;
   preorder?:boolean;
   paymentToken?: string | null;
+  /** FR-F6: set once the shop refunded part or all of the order. */
+  refundStatus?: "REFUNDED" | "PARTIALLY_REFUNDED" | null;
+  refundedTotal?: number;
 };
 export type Ledger = {
   id: string;
+  /** Signed: + credit in, − credit out. */
   amount: number;
   label: string;
   created_at: string;
+  type?: "TOPUP" | "PURCHASE" | "REFUND" | "ADJUSTMENT";
+  balanceAfter?: number;
 };
 export type ShopSettings={shopName:string;description:string;announcement:string;line:string;email:string;phone:string;facebook:string;discord:string;policy:string;stockOrder:string;shopOpen:boolean;requireTerms:boolean};
 export type Overview = {

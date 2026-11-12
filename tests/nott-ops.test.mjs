@@ -1921,3 +1921,30 @@ test("saving a product never overwrites a variant price set in the option editor
   s.saveProduct(merchant, { id: product.id, name: "Price keep", description: "แก้แค่รายละเอียด", category: "streaming", price: 100 });
   assert.equal(s.adminProductVariants(merchant, product.id).variants[0].price, 14900);
 });
+
+test("going live still works when a demo visitor bought a real product during testing", () => {
+  const dir = mkdtempSync(join(tmpdir(), "astra-golive-fk-"));
+  const path = join(dir, "shop.db");
+  const key = randomBytes(32);
+  const testing = createCommerce({ path, key, allowSandbox: true, allowDemoAdmin: true, seed: false, adminPassword: "golive-admin-pass-123" });
+  const boss = testing.session(testing.login({ email: "admin@astra.local", password: "golive-admin-pass-123" }).token);
+  testing.setPaymentChannel(boss, { provider: "sandbox", active: true });
+  const product = testing.saveProduct(boss, { name: "Real product", description: "สินค้าจริงของร้าน", category: "streaming", price: 9900, active: true });
+  const variant = testing.adminProductVariants(boss, product.id).variants[0];
+  testing.importCodes(boss, { variantId: variant.id, items: [{ loginId: "a@x.invalid", password: "p1" }, { loginId: "b@x.invalid", password: "p2" }] });
+  const visitor = testing.session(testing.demo().token);
+  const order = testing.createOrder(visitor, { variantId: variant.id, quantity: 1, requestKey: "golive-fk-order" });
+  testing.pay(visitor, order.id, { paymentToken: order.paymentToken, outcome: "success" });
+  testing.db.close();
+
+  const live = createCommerce({ path, key, allowSandbox: false, allowDemoAdmin: false, seed: false, adminPassword: "golive-admin-pass-123" });
+  try {
+    assert.equal(live.db.prepare("SELECT COUNT(*) AS n FROM users WHERE id=?").get(visitor.id).n, 0);
+    assert.ok(live.db.prepare("SELECT id FROM products WHERE id=?").get(product.id), "real product kept");
+    // The unsold account is still for sale.
+    assert.equal(live.db.prepare("SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL").get(variant.id).n, 1);
+  } finally {
+    live.db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -1,10 +1,10 @@
 /** FR-C3 detail, FR-C4 edit, FR-C5 suspend/ban, FR-C6 force sign-out. */
 
 const STATUSES = ["ACTIVE", "SUSPENDED", "BANNED"];
-/** Customer credit; PAYMENT_IN / FEE / WITHDRAWAL are shop-side money. */
-const CREDIT_KINDS = "('DEMO_CREDIT','TOPUP','PURCHASE','REFUND','ADJUSTMENT')";
 
 import { randomBytes } from "node:crypto";
+// Customer credit uses the same formula as the customer's own wallet (S4).
+import { walletBalanceSql, walletHistory } from "./money.mjs";
 
 export function createAdminCustomerApis({
   passwordHash,
@@ -16,6 +16,7 @@ export function createAdminCustomerApis({
   tx,
   fail,
   clean,
+  moneyScope,
 }) {
   const auditDetail = (user, action, entity, detail) =>
     run(
@@ -83,24 +84,19 @@ export function createAdminCustomerApis({
     const history = all(
       `SELECT a.id,a.action,a.detail,a.created_at,u.name AS actor
        FROM audit a LEFT JOIN users u ON u.id=a.user_id
-       WHERE a.entity_id=? AND a.action LIKE 'CUSTOMER_%'
+       WHERE a.entity_id=? AND (a.action LIKE 'CUSTOMER_%' OR (? AND a.action='CREDIT_ADJUST'))
        ORDER BY a.id DESC LIMIT 50`,
       row.id,
+      seesMoney ? 1 : 0,
     ).map((a) => ({ ...a, detail: a.detail ? JSON.parse(a.detail) : null }));
     const money = seesMoney
       ? {
           spentSatang: one(
-            "SELECT COALESCE(SUM(amount),0) AS n FROM payments WHERE user_id=? AND status='SUCCEEDED'",
+            `SELECT COALESCE(SUM(amount),0) AS n FROM payments WHERE user_id=? AND status='SUCCEEDED' AND ${moneyScope ? moneyScope.payment() : "1=1"}`,
             row.id,
           ).n,
-          creditSatang: one(
-            `SELECT COALESCE(SUM(amount),0) AS n FROM ledger WHERE user_id=? AND kind IN ${CREDIT_KINDS}`,
-            row.id,
-          ).n,
-          ledger: all(
-            `SELECT id,amount,label,reference,created_at FROM ledger WHERE user_id=? AND kind IN ${CREDIT_KINDS} ORDER BY created_at DESC, id DESC LIMIT 50`,
-            row.id,
-          ),
+          creditSatang: one(walletBalanceSql, row.id).value,
+          ledger: walletHistory(all, row.id, 50),
         }
       : {};
     return {
