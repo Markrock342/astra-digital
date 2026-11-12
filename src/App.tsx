@@ -83,6 +83,10 @@ import {
   ReferenceProduct,
 } from "./ReferenceStore";
 const Admin = lazy(() => import("./Admin"));
+const LegalPage = lazy(() =>
+  import("./Legal").then((m) => ({ default: m.LegalPage })),
+);
+import "./footer-credit.css";
 type Basket = { variantId: string; quantity: number };
 type Store = {
   user: User | null;
@@ -453,11 +457,17 @@ function Footer() {
             {shopName(overview?.shop?.shopName)}
           </span>
           <div className="footer-legal">
-            <Link to="/terms">{t("ข้อกำหนดร้าน")}</Link>
-            <Link to="/privacy">{t("ความเป็นส่วนตัว")}</Link>
+            <Link to="/terms">{t("ข้อกำหนดการใช้บริการ")}</Link>
+            <Link to="/privacy">{t("นโยบายความเป็นส่วนตัว")}</Link>
             <ThemeSwitch />
           </div>
         </div>
+        <p className="container footer-credit">
+          Theme By{" "}
+          <a href="https://limitcode.shop" target="_blank" rel="noopener">
+            limitcode studio
+          </a>
+        </p>
       </div>
     </footer>
   );
@@ -1076,8 +1086,8 @@ function Auth({ register = false }: { register?: boolean }) {
           {register && (
             <label className="checkbox-label consent">
               <input type="checkbox" required />
-              {t("ยอมรับ")}<Link to="/terms">{t("ข้อกำหนด")}</Link>{t("และ")}
-              <Link to="/privacy">{t("ความเป็นส่วนตัว")}</Link>
+              {t("ยอมรับ")}<Link to="/terms">{t("ข้อกำหนดการใช้บริการ")}</Link>{t("และ")}
+              <Link to="/privacy">{t("นโยบายความเป็นส่วนตัว")}</Link>
             </label>
           )}
           <button className="button primary full" disabled={busy}>
@@ -2178,11 +2188,7 @@ function InfoPage({ kind }: { kind: string }) {
   const title =
     kind === "credits"
       ? t("เครดิตร้าน")
-      : kind === "support"
-        ? t("ติดต่อร้าน")
-        : kind === "privacy"
-          ? t("ความเป็นส่วนตัว")
-          : t("ข้อกำหนดร้าน");
+      : t("ติดต่อร้าน");
   return (
     <main className="container page-main narrow-main reference-info-page">
       <div className="page-heading">
@@ -2257,30 +2263,7 @@ function InfoPage({ kind }: { kind: string }) {
               {t("เลขคำสั่งซื้อ ชื่อสินค้า และรายละเอียดปัญหา กรุณาอย่าส่งรหัสผ่านหรือข้อมูลส่วนตัวที่ไม่เกี่ยวข้อง")}
             </p>
           </>
-        ) : kind === "privacy" ? (
-          <>
-            <h2>{t("ข้อมูลที่ระบบจัดเก็บ")}</h2>
-            <p>
-              {t("ระบบจัดเก็บชื่อ อีเมล รหัสผ่านที่ผ่านการแฮช และประวัติคำสั่งซื้อ เพื่อให้เปิดดูรายการของตนเองได้")}
-            </p>
-            <h3>{t("การเข้าถึงข้อมูล")}</h3>
-            <p>
-              {t("ลูกค้าเห็นเฉพาะคำสั่งซื้อของตนเอง ผู้ดูแลเห็นข้อมูลการขายและคลังสินค้า คุกกี้ใช้เพื่อรักษาการเข้าสู่ระบบ")}
-            </p>
-          </>
-        ) : (
-          <>
-            <h2>{t("ข้อกำหนดร้าน")}</h2>
-            <p>
-              {overview?.shop?.policy ||
-                t("สินค้าในร้านนี้เป็นสินค้าดิจิทัล การสั่งซื้อถือว่าคุณยอมรับข้อกำหนดของร้าน")}
-            </p>
-            <h3>{t("คำสั่งซื้อและการส่งมอบ")}</h3>
-            <p>
-              {t("ระบบตรวจสต็อกก่อนรับคำสั่งซื้อ โค้ดจะถูกส่งหลังยืนยันการชำระเงินเท่านั้น")}
-            </p>
-          </>
-        )}
+        ) : null}
       </div>
     </main>
   );
@@ -2343,8 +2326,8 @@ function Router() {
     "/reviews": t("เครดิตร้าน"),
     "/credits": t("เครดิตร้าน"),
     "/support": t("ติดต่อร้าน"),
-    "/terms": t("ข้อกำหนดร้าน"),
-    "/privacy": t("ความเป็นส่วนตัว"),
+    "/terms": t("ข้อกำหนดการใช้บริการ"),
+    "/privacy": t("นโยบายความเป็นส่วนตัว"),
     "/stores": t("ร้านค้า"),
     "/admin": t("แดชบอร์ด"),
   };
@@ -2360,8 +2343,8 @@ function Router() {
     "/reviews": t("รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์"),
     "/credits": t("รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์"),
     "/support": t("เราพร้อมช่วยเหลือคุณ"),
-    "/terms": t("สินค้าในร้านนี้เป็นสินค้าดิจิทัล การสั่งซื้อถือว่าคุณยอมรับข้อกำหนดของร้าน"),
-    "/privacy": t("ระบบจัดเก็บชื่อ อีเมล รหัสผ่านที่ผ่านการแฮช และประวัติคำสั่งซื้อ เพื่อให้เปิดดูรายการของตนเองได้"),
+    "/terms": t("ข้อกำหนดการใช้บริการ การสั่งซื้อ การรับประกัน และการคืนเงินของร้าน"),
+    "/privacy": t("วิธีที่ร้านเก็บรวบรวม ใช้ และคุ้มครองข้อมูลส่วนบุคคลตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562"),
   };
   const dynamic =
     path.startsWith("/products/") ||
@@ -2418,8 +2401,22 @@ function Router() {
         <Admin />
       </Suspense>
     );
-  if (["/support", "/terms", "/privacy"].includes(path))
-    return <InfoPage kind={path.slice(1)} />;
+  if (path === "/terms" || path === "/privacy")
+    return (
+      <Suspense
+        fallback={
+          <main className="container page-main narrow-main">
+            <div className="loading-row">
+              <LoaderCircle className="spin" size={18} />
+              {t("กำลังโหลด")}
+            </div>
+          </main>
+        }
+      >
+        <LegalPage kind={path === "/terms" ? "terms" : "privacy"} />
+      </Suspense>
+    );
+  if (path === "/support") return <InfoPage kind="support" />;
   return <NotFound />;
 }
 export default function App() {

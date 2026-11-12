@@ -322,7 +322,7 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
           <label className="checkbox-label consent-check">
             <input type="checkbox" name="acceptTerms" required />
             <span>
-              {t("ฉันยอมรับ")} <Link to="/terms">{t("ข้อกำหนดร้าน")}</Link> {t("และ")}{" "}
+              {t("ฉันยอมรับ")} <Link to="/terms">{t("ข้อกำหนดการใช้บริการ")}</Link> {t("และ")}{" "}
               <Link to="/privacy">{t("นโยบายความเป็นส่วนตัว")}</Link>
             </span>
           </label>

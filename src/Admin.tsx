@@ -62,6 +62,7 @@ import {
   AdminProducts,
 } from "./AdminLists";
 import { StockImport } from "./StockImport";
+import { LegalSettings } from "./Legal";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 const productTabs = [
   ["products", "สินค้าทั้งหมด"],
@@ -75,6 +76,7 @@ const orderTabs = [
 const settingTabs = [
   ["settings", "ร้าน"],
   ["settings/payment", "รับเงิน"],
+  ["settings/legal", "ข้อกำหนดและนโยบาย"],
   ["settings/account", "บัญชีแอดมิน"],
   ["settings/audit", "ประวัติการทำงาน"],
 ];
@@ -738,6 +740,8 @@ export default function Admin() {
             <AdminAccount />
           ) : sub === "settings/audit" ? (
             <AdminAudit />
+          ) : sub === "settings/legal" ? (
+            <LegalSettings />
           ) : (
             <ReferenceSettings sub={sub} />
           ))}
@@ -1189,15 +1193,10 @@ function ReferenceSettings({ sub }: { sub: string }) {
         </section>
         <section className="reference-admin-card editor-panel">
           <h2>ข้อกำหนดร้าน</h2>
-          <p>ลูกค้าอ่านได้ที่ท้ายหน้าร้าน</p>
-          <label className="field">
-            ข้อกำหนด
-            <textarea
-              name="policy"
-              maxLength={10000}
-              defaultValue={shop?.policy ?? ""}
-            />
-          </label>
+          <p>
+            ข้อกำหนดการใช้บริการและนโยบายความเป็นส่วนตัวแก้ไขได้ที่{" "}
+            <Link to="/admin/settings/legal">ข้อกำหนดและนโยบาย</Link>
+          </p>
           <label className="checkbox-label">
             <input
               name="requireTerms"

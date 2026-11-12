@@ -1,0 +1,23 @@
+/* "Theme By limitcode studio" line at the very bottom of the storefront footer.
+   Uses the theme tokens, so it reads in all 8 themes (light/dark × 4 accents). */
+.footer-credit {
+  padding: 0 0 14px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+  text-align: center;
+}
+.footer-credit a {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
+}
+.footer-credit a:hover {
+  border-bottom-color: var(--text);
+}
+.footer-credit a:focus-visible {
+  outline: 2px solid var(--accent, #1534ff);
+  outline-offset: 2px;
+  border-radius: 3px;
+}

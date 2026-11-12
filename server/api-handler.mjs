@@ -26,6 +26,8 @@ function sameLocalOrigin(origin, pageOrigin) {
   }
 }
 const MAX_JSON_BYTES = 32768;
+// Shop settings carry the legal pages text (Thai is 3 bytes per character in UTF-8).
+const MAX_SETTINGS_BYTES = 262144;
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 function isImageUploadPath(method, path) {
   if (method !== "POST") return false;
@@ -119,9 +121,13 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
       const user = service.session(token);
       let input = {};
       let uploadBytes = null;
+      const jsonLimit =
+        path === "/api/admin/settings" && user?.role === "ADMIN"
+          ? MAX_SETTINGS_BYTES
+          : MAX_JSON_BYTES;
       if (mutating) {
         const length = Number(request.headers.get("Content-Length") ?? 0);
-        const maxBytes = imageUpload ? MAX_UPLOAD_BYTES : MAX_JSON_BYTES;
+        const maxBytes = imageUpload ? MAX_UPLOAD_BYTES : jsonLimit;
         if (Number.isFinite(length) && length > maxBytes)
           throw new ApiError(413, "ข้อมูลมีขนาดใหญ่เกินไป");
         if (imageUpload) {
@@ -171,7 +177,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
               const { done, value } = await reader.read();
               if (done) break;
               bytes += value.byteLength;
-              if (bytes > MAX_JSON_BYTES) {
+              if (bytes > jsonLimit) {
                 await reader.cancel();
                 throw new ApiError(413, "ข้อมูลมีขนาดใหญ่เกินไป");
               }
@@ -258,6 +264,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           });
         }
         if (path === "/api/overview") return send(200, service.overview());
+        if (path === "/api/legal") return send(200, service.legal());
         if (path === "/api/reviews")
           return send(200, { reviews: service.reviews() });
         if (path === "/api/orders")
