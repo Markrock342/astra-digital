@@ -28,7 +28,7 @@ import {
   useStore,
 } from "./App";
 import { t } from "./i18n";
-import { shopName } from "./Theme";
+import { BrandLogo, shopName } from "./Theme";
 import { api, dateTime, money } from "./api";
 import type { Order, Product, Review } from "./types";
 export function ReferenceCatalog() {
@@ -106,7 +106,7 @@ export function ReferenceCatalog() {
           description={
             query
               ? t("ลองค้นหาด้วยคำอื่น")
-              : t("เพิ่มสินค้าได้จากหลังบ้าน เมื่อพร้อมขาย")
+              : t("สินค้ากำลังมาเร็วๆ นี้")
           }
           action={
             query ? (
@@ -163,6 +163,9 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
   return (
     <main className="reference-auth-main">
       <div className="reference-auth-heading">
+        <Link to="/" className="reference-auth-brand" aria-label={t("หน้าแรก")}>
+          <BrandLogo />
+        </Link>
         <h1>{register ? t("สมัครสมาชิก") : t("เข้าสู่ระบบ")}</h1>
         <p>{shopName(overview?.shop?.shopName)}</p>
       </div>
@@ -365,10 +368,6 @@ export function ReferenceProduct({ id }: { id: string }) {
             </div>
           )}
           <div className="reference-price">{money(variant.price)}</div>
-          <p className="reference-guarantee">
-            <ShieldCheck size={16} />
-            {t("เคลมได้ตลอดอายุการใช้งาน")}
-          </p>
           {!!product.preorder && (
             <div className="preorder-dates">
               <div>
@@ -536,6 +535,7 @@ export function ReferenceReviews() {
   const [filter, setFilter] = useState(0);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [ready, setReady] = useState(false);
   async function load() {
     try {
       setReviews((await api<{ reviews: Review[] }>("/reviews")).reviews);
@@ -550,6 +550,8 @@ export function ReferenceReviews() {
         );
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setReady(true);
     }
   }
   useEffect(() => {
@@ -593,17 +595,20 @@ export function ReferenceReviews() {
             <p>
               {t("ทุกรีวิวมาจากลูกค้าที่ซื้อจริง และเขียนได้ภายใน 7 วันหลังซื้อเท่านั้น ร้านแก้ไขหรือซ่อนรีวิวไม่ได้")}
             </p>
-            <div className="credit-trust-badges">
-              <span>
-                <ShieldCheck size={14} />
-                {reviews.length}{" "}{t("รีวิวยืนยันแล้ว")}
-              </span>
-              <span>
-                <Star size={14} />
-                {good}{t("% ให้ 4 ดาวขึ้นไป")}
-              </span>
-            </div>
+            {ready && reviews.length > 0 && (
+              <div className="credit-trust-badges">
+                <span>
+                  <ShieldCheck size={14} />
+                  {reviews.length}{" "}{t("รีวิวยืนยันแล้ว")}
+                </span>
+                <span>
+                  <Star size={14} />
+                  {good}{t("% ให้ 4 ดาวขึ้นไป")}
+                </span>
+              </div>
+            )}
           </div>
+          {ready && reviews.length > 0 && (
           <div className="credit-summary">
             <div className="credit-score-ring">
               <strong>{average.toFixed(1)}</strong>
@@ -629,11 +634,9 @@ export function ReferenceReviews() {
                     <b
                       style={{
                         width:
-                          (reviews.length
-                            ? (100 *
-                                reviews.filter((r) => r.rating === n).length) /
-                              reviews.length
-                            : 0) + "%",
+                          (100 * reviews.filter((r) => r.rating === n).length) /
+                            reviews.length +
+                          "%",
                       }}
                     />
                   </i>
@@ -642,7 +645,9 @@ export function ReferenceReviews() {
               ))}
             </div>
           </div>
+          )}
         </section>
+        {ready && reviews.length > 0 && (
         <div className="credit-filter-bar">
           {[0, 5, 4, 3, 2, 1].map((n) => (
             <button
@@ -664,6 +669,7 @@ export function ReferenceReviews() {
             </button>
           ))}
         </div>
+        )}
         <ErrorMessage message={error} />
         {orders.length > 0 && (
           <form className="panel review-form" onSubmit={submit}>
@@ -714,59 +720,67 @@ export function ReferenceReviews() {
             </button>
           </form>
         )}
-        <div className="credit-review-grid">
-          {reviews
-            .filter((r) => !filter || r.rating === filter)
-            .map((r) => (
-              <article className="review-card credit-review-card" key={r.id}>
-                <div className="review-stars">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <Star
-                      size={14}
-                      key={n}
-                      fill={n <= r.rating ? "currentColor" : "none"}
+        {ready && reviews.length === 0 ? (
+          <Empty
+            icon={<Star />}
+            heading={t("ยังไม่มีรีวิว")}
+            description={t("รีวิวจากลูกค้าที่ซื้อจริงจะแสดงที่นี่")}
+          />
+        ) : (
+          <div className="credit-review-grid">
+            {reviews
+              .filter((r) => !filter || r.rating === filter)
+              .map((r) => (
+                <article className="review-card credit-review-card" key={r.id}>
+                  <div className="review-stars">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star
+                        size={14}
+                        key={n}
+                        fill={n <= r.rating ? "currentColor" : "none"}
+                      />
+                    ))}
+                    <time>{dateTime(r.created_at).split(" ").slice(0, 3).join(" ")}</time>
+                  </div>
+                  <p>
+                    {r.comment ||
+                      t("ให้คะแนน ") + r.rating + t(" ดาว โดยไม่ได้เขียนความเห็น")}
+                  </p>
+                  <div className="credit-review-owner">
+                    <span className="avatar">{r.name.slice(0, 2)}</span>
+                    <div>
+                      <strong>{r.name}</strong>
+                      <small>
+                        <ShieldCheck size={12} />
+                        {t("ผู้ซื้อจริง")}
+                      </small>
+                    </div>
+                  </div>
+                  <div className="credit-review-product">
+                    <Art
+                      small
+                      name={r.product}
+                      type={
+                        r.product === "DISNEY+"
+                          ? "stream"
+                          : r.product === "MONOMAX"
+                            ? "cinema"
+                            : "gift"
+                      }
                     />
-                  ))}
-                  <time>{dateTime(r.created_at).split(" ").slice(0,3).join(" ")}</time>
-                </div>
-                <p>
-                  {r.comment ||
-                    t("ให้คะแนน ") + r.rating + t(" ดาว โดยไม่ได้เขียนความเห็น")}
-                </p>
-                <div className="credit-review-owner">
-                  <span className="avatar">{r.name.slice(0, 2)}</span>
-                  <div>
-                    <strong>{r.name}</strong>
-                    <small>
-                      <ShieldCheck size={12} />
-                      {t("ผู้ซื้อจริง")}
-                    </small>
+                    <div>
+                      {r.product}
+                      <small>
+                        {r.product === "DISNEY+"
+                          ? t("DISNEY+ 30 DAYS หาร")
+                          : t("โค้ดดิจิทัล")}
+                      </small>
+                    </div>
                   </div>
-                </div>
-                <div className="credit-review-product">
-                  <Art
-                    small
-                    name={r.product}
-                    type={
-                      r.product === "DISNEY+"
-                        ? "stream"
-                        : r.product === "MONOMAX"
-                          ? "cinema"
-                          : "gift"
-                    }
-                  />
-                  <div>
-                    {r.product}
-                    <small>
-                      {r.product === "DISNEY+"
-                        ? t("DISNEY+ 30 DAYS หาร")
-                        : t("โค้ดดิจิทัล")}
-                    </small>
-                  </div>
-                </div>
-              </article>
-            ))}
-        </div>
+                </article>
+              ))}
+          </div>
+        )}
         {!!reviews.length &&
           !reviews.some((r) => !filter || r.rating === filter) && (
             <p className="empty-inline">{t("ยังไม่มีรีวิวในคะแนนนี้")}</p>
