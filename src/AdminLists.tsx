@@ -353,6 +353,7 @@ type OrderDetail = {
   timeline: { at: string; event: string }[];
   codes: string[];
   credentials: { loginId: string; password: string }[];
+  units?: { id: string; kind: "pair" | "code" }[];
 };
 
 const eventText: Record<string, string> = {
@@ -389,6 +390,30 @@ export function AdminOrderDetail({ id }: { id: string }) {
       .then(setOrder)
       .catch((e) => setError((e as Error).message));
   }, [id]);
+  const [replacing, setReplacing] = useState<string | null>(null);
+  const [replaceReason, setReplaceReason] = useState("");
+  const pairUnits = (order?.units ?? []).filter((u) => u.kind === "pair");
+  const codeUnits = (order?.units ?? []).filter((u) => u.kind === "code");
+  async function replace(e: FormEvent) {
+    e.preventDefault();
+    if (!replacing) return;
+    try {
+      await api("/admin/orders/" + id + "/replace", { inventoryId: replacing, reason: replaceReason });
+      toast("ส่งบัญชีใหม่ให้ลูกค้าแล้ว ลูกค้าได้แจ้งเตือน");
+      setReplacing(null);
+      setReplaceReason("");
+      setRevealed(null);
+      setOrder(await api<OrderDetail>("/admin/orders/" + id));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  const replaceButton = (unitId?: string) =>
+    user?.role === "ADMIN" && unitId ? (
+      <button type="button" className="button ghost admin-replace-btn" onClick={() => setReplacing(unitId)}>
+        บัญชีเสีย · เปลี่ยนให้ลูกค้า
+      </button>
+    ) : null;
   async function reveal() {
     try {
       setRevealed(await api("/admin/orders/" + id + "/reveal", {}));
@@ -469,15 +494,41 @@ export function AdminOrderDetail({ id }: { id: string }) {
                         <code>{c.loginId}</code>
                         <span>รหัสผ่าน</span>
                         <code>{c.password}</code>
+                        {replaceButton(pairUnits[i]?.id)}
                       </li>
                     ))}
                     {shown!.codes.map((c, i) => (
                       <li key={"k" + i}>
                         <span>โค้ด</span>
                         <code>{c}</code>
+                        {replaceButton(codeUnits[i]?.id)}
                       </li>
                     ))}
                   </ul>
+                  {replacing && (
+                    <form className="admin-reason-form" onSubmit={replace}>
+                      <label className="field">
+                        บัญชีนี้มีปัญหาอะไร (บันทึกภายใน)
+                        <input
+                          required
+                          minLength={2}
+                          maxLength={500}
+                          value={replaceReason}
+                          onChange={(e) => setReplaceReason(e.target.value)}
+                          autoFocus
+                        />
+                      </label>
+                      <p className="field-help">
+                        ระบบทำเครื่องหมายบัญชีเดิมว่าเสีย ดึงบัญชีใหม่จากสต็อกตัวเลือกเดียวกันส่งให้ลูกค้าทันที และแจ้งเตือนลูกค้า
+                      </p>
+                      <div className="admin-action-row">
+                        <button type="button" className="button secondary" onClick={() => setReplacing(null)}>
+                          ยกเลิก
+                        </button>
+                        <button className="button primary">ส่งบัญชีใหม่</button>
+                      </div>
+                    </form>
+                  )}
                   {!revealed && (
                     <button className="button secondary" onClick={reveal}>
                       <Eye size={15} />

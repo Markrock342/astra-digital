@@ -278,11 +278,11 @@ export function createAdminListApis({
     const units =
       row.status === "DELIVERED"
         ? all(
-            `SELECT id FROM inventory
+            `SELECT id, legacy_single_secret FROM inventory
              WHERE ${bind}=? AND COALESCE(defective,0)=0
              ORDER BY rowid`,
             orderId,
-          ).map((u) => ({ id: u.id }))
+          ).map((u) => ({ id: u.id, kind: u.legacy_single_secret ? "code" : "pair" }))
         : [];
     return {
       id: row.id,

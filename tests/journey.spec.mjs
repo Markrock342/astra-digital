@@ -231,3 +231,23 @@ test("7. reports and audit reflect everything that happened", async ({ page }) =
   await page.goto(base + "/admin/reports");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+test("8. broken account: admin swaps it from the order page and the customer gets the new one", async ({ page, browser }) => {
+  const admin = service.session(adminToken);
+  const variantId = service.adminProductVariants(admin, productId).variants.find((v) => v.label === "30 วัน").id;
+  service.importCodes(admin, { variantId, items: [{ loginId: "journey-new@stream.test", password: "Pw-NEW-555" }] });
+  await as(page.context(), adminToken);
+  await page.goto(base + "/admin/orders/" + firstOrderId);
+  await page.getByRole("button", { name: "บัญชีเสีย · เปลี่ยนให้ลูกค้า" }).first().click();
+  await page.getByLabel(/บัญชีนี้มีปัญหาอะไร/).fill("รหัสผ่านถูกเปลี่ยน เข้าไม่ได้");
+  await page.getByRole("button", { name: "ส่งบัญชีใหม่" }).click();
+  await expect(page.getByText(/ส่งบัญชีใหม่ให้ลูกค้าแล้ว/)).toBeVisible();
+
+  const customer = await browser.newContext();
+  await as(customer, buyerToken);
+  const mine = await customer.newPage();
+  await mine.goto(base + "/orders/" + firstOrderId);
+  await mine.getByRole("button", { name: /แสดงโค้ด/ }).click();
+  await expect(mine.locator(".delivered-codes")).toContainText("journey-new@stream.test");
+  await customer.close();
+});
