@@ -51,6 +51,9 @@ import {
   createOrderExtras,
   normalizeUsageInstructions,
 } from "./order-extras.mjs";
+import { createCouponApis, normalizeCouponCode } from "./coupons.mjs";
+import { createAccountEmail } from "./account-email.mjs";
+import { normalizeLegal } from "./legal.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -61,6 +64,8 @@ import {
   dropAppendOnlyMoney,
   ensureAppendOnlyMoney,
 } from "./ensure-admin-fr.mjs";
+import { createAlerts, DAILY_SUMMARY_HOUR, nextBangkokHour } from "./alerts.mjs";
+import { BACKUP_HOUR_BANGKOK, createBackupApis } from "./backup.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
@@ -95,6 +100,17 @@ export function createCommerceCore({
   uploads,
   // Injected clock for session / lockout / TOTP tests.
   clock = () => Date.now(),
+  // Outside-the-website alerts (alerts.mjs): fetch is injectable for tests, waitUntil keeps a
+  // Durable Object alive for the send, alertRedirect is a loopback-only test hook.
+  alertFetch,
+  alertRedirect,
+  waitUntil,
+  // R2 bucket binding BACKUPS for the automatic daily backup (absent = off).
+  backups,
+  // Email + Turnstile (server/email.mjs, server/turnstile.mjs). Both off when omitted.
+  email: mailer = null,
+  turnstile = null,
+  publicBaseUrl = "",
 } = {}) {
   const one = (sql, ...params) => db.prepare(sql).get(...params);
   const all = (sql, ...params) => db.prepare(sql).all(...params);
@@ -419,6 +435,7 @@ export function createCommerceCore({
     const last = staffChatCooldown.get(threadId) ?? 0;
     if (now - last < 60000) return;
     staffChatCooldown.set(threadId, now);
+    alerts.emit("chat_message", { threadId });
     for (const staff of all(
       "SELECT id FROM users WHERE role IN ('STAFF','ADMIN')",
     ))
@@ -434,6 +451,20 @@ export function createCommerceCore({
       fail(400, label + "ไม่ถูกต้อง");
     return v.trim();
   };
+  const coupons = createCouponApis({
+    requireAdmin,
+    requireUser,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    randomUUID,
+    clock,
+    moneyScope,
+  });
+  const { releaseCouponForOrder } = coupons;
   // ctx: { ip, userAgent } from the request. Only a coarse device label and the IP
   // cut to /24 (IPv6 /48) are stored, for the "my devices" list (account-sessions.mjs).
   const issueSession = (user, ctx = {}) => {
@@ -477,6 +508,50 @@ export function createCommerceCore({
     clock,
     hash,
     requireUser,
+  });
+  const alerts = createAlerts({
+    one,
+    all,
+    run,
+    encrypt,
+    decrypt,
+    fail,
+    requireAdmin,
+    reauthAdmin: auth.reauthAdmin,
+    clock,
+    fetch: alertFetch,
+    waitUntil,
+    redirect: alertRedirect,
+    shopName: () => settings().shopName,
+    summaryFor: (day) => salesMoney(bangkokDayRange(day, day)),
+    stockInfo: (variantId) => {
+      const row = one(
+        `SELECT v.id,v.label,p.id AS product_id,p.name,
+                (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) AS stock
+         FROM variants v JOIN products p ON p.id=v.product_id
+         WHERE v.id=? AND p.preorder=0`,
+        variantId,
+      );
+      if (!row) return null;
+      const level = row.stock <= 0 ? "out" : row.stock <= getLowStockAt() ? "low" : "ok";
+      return { level, stock: row.stock, name: row.name, label: row.label, productId: row.product_id };
+    },
+  });
+  const backupApis = createBackupApis({
+    db,
+    one,
+    run,
+    requireAdmin,
+    reauthAdmin: auth.reauthAdmin,
+    fail,
+    clock,
+    backups,
+    state: alerts.state,
+    meta: () => ({
+      shop: settings().shopName,
+      mode: allowSandbox ? "sandbox" : "live",
+      storage: publicService.storageKind ?? "local-sqlite",
+    }),
   });
   function seedData() {
     if (one("SELECT id FROM products LIMIT 1")) return;
@@ -739,6 +814,13 @@ export function createCommerceCore({
         )
           run("DELETE FROM runtime_flags WHERE key='shop-settings'");
       }
+      // Coupon uses taken by demo orders deleted above must not count after launch.
+      if (one("SELECT name FROM sqlite_master WHERE type='table' AND name='coupon_redemptions'"))
+        run(
+          `DELETE FROM coupon_redemptions
+           WHERE (order_id IS NOT NULL AND order_id NOT IN (SELECT id FROM orders))
+              OR (reservation_id IS NOT NULL AND reservation_id NOT IN (SELECT id FROM reservations))`,
+        );
       run(
         "INSERT INTO runtime_flags(key,value) VALUES('template-ready','1')",
       );
@@ -1008,6 +1090,8 @@ export function createCommerceCore({
         fail(400, `เวลารอชำระเงินต้องอยู่ระหว่าง ${PENDING_EXPIRY_MIN}–${PENDING_EXPIRY_MAX} นาที`);
       current.pendingExpiryMinutes = value;
     }
+    // Legal pages form (ตั้งค่า › ข้อกำหนดและนโยบาย). Plain text only; escaped when rendered.
+    if (input.legal !== undefined) current.legal = normalizeLegal(input.legal, fail);
     run(
       "INSERT INTO runtime_flags(key,value) VALUES('shop-settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
       JSON.stringify(current),
@@ -1017,6 +1101,16 @@ export function createCommerceCore({
     for (const [field, value] of Object.entries(current)) {
       if (JSON.stringify(before[field]) === JSON.stringify(value)) continue;
       const short = (v) => (typeof v === "string" && v.length > 80 ? v.slice(0, 80) + "…" : v);
+      if (value && typeof value === "object") {
+        // Nested settings (legal pages): list which parts changed instead of copying long text.
+        const from = before[field] ?? {};
+        changed[field] = {
+          fields: [...new Set([...Object.keys(from), ...Object.keys(value)])].filter(
+            (key) => JSON.stringify(from[key]) !== JSON.stringify(value[key]),
+          ),
+        };
+        continue;
+      }
       changed[field] = { from: short(before[field] ?? null), to: short(value) };
     }
     run(
@@ -1028,9 +1122,16 @@ export function createCommerceCore({
     );
     return { shop: current };
   }
+  /** Public legal pages data: the saved form (or nothing → built-in defaults) + the old policy text. */
+  function legal() {
+    const shop = settings();
+    return { legal: shop.legal ?? null, policy: shop.policy ?? "" };
+  }
   function overview() {
+    // The legal text can be long; storefront pages fetch it from /api/legal when needed.
+    const { legal: _legal, ...shop } = settings();
     return {
-      shop: settings(),
+      shop,
       customers: one("SELECT COUNT(*) AS n FROM users WHERE role='CUSTOMER'").n,
       products: one(
         `SELECT COUNT(*) AS n FROM inventory i JOIN variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE p.active=1 AND p.hidden_seed=0 AND p.preorder=0 AND ${inventoryAvailableAliased}`,
@@ -1046,82 +1147,127 @@ export function createCommerceCore({
       })),
     };
   }
+  /** Variant a customer may buy, with the price the shop charges (never the client's). */
+  const buyableVariant = (variantId) => {
+    const variant = one(
+      "SELECT v.*,p.preorder FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.active=1 AND p.hidden_seed=0 AND COALESCE(v.active,1)=1",
+      variantId,
+    );
+    if (!variant) fail(404, "ไม่พบสินค้า");
+    const unitPrice =
+      variant.preorder && variant.id === "cinema-max-30" ? 0 : variant.price;
+    return { ...variant, unitPrice };
+  };
+  /**
+   * POST /api/coupons/check — discount preview for one line. Same rules as
+   * createOrder; nothing is written. An unusable code answers { valid:false, reason }.
+   */
+  function checkCoupon(user, input = {}) {
+    requireUser(user);
+    const variantId = clean(input.variantId, 1, 80, "สินค้า");
+    const quantity = integer(input.quantity, 1, 10, "จำนวน");
+    const variant = buyableVariant(variantId);
+    try {
+      const result = coupons.evaluate(user, input.code, {
+        productId: variant.product_id,
+        subtotal: variant.unitPrice * quantity,
+      });
+      return {
+        valid: true,
+        code: result.code,
+        subtotal: result.subtotal,
+        discount: result.discount,
+        total: result.total,
+      };
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 400)
+        return { valid: false, reason: error.message };
+      throw error;
+    }
+  }
   function createOrder(user, input) {
     requireUser(user);
     if (!settings().shopOpen) fail(409, "ร้านปิดให้บริการชั่วคราว");
     const variantId = clean(input.variantId, 1, 80, "สินค้า");
     const quantity = integer(input.quantity, 1, 10, "จำนวน");
     const requestKey = clean(input.requestKey, 8, 128, "รหัสคำขอ");
-    const reservation = one(
-      "SELECT * FROM reservations WHERE user_id=? AND request_key=?",
-      user.id,
-      requestKey,
-    );
-    if (reservation) {
+    if (input.couponCode != null && typeof input.couponCode !== "string")
+      fail(400, "โค้ดส่วนลดไม่ถูกต้อง");
+    const couponCode = normalizeCouponCode(input.couponCode) || null;
+    // Check, count and insert in one transaction so a coupon's last use is taken once.
+    return tx(() => {
+      const reservation = one(
+        "SELECT * FROM reservations WHERE user_id=? AND request_key=?",
+        user.id,
+        requestKey,
+      );
+      if (reservation) {
+        if (
+          reservation.variant_id !== variantId ||
+          reservation.quantity !== quantity ||
+          (reservation.coupon_code ?? null) !== couponCode
+        )
+          fail(409, "รหัสคำขอถูกใช้กับคำสั่งซื้ออื่นแล้ว");
+        return { ...orderDetail(user, reservation.id), paymentToken: null };
+      }
+      const prior = one(
+        "SELECT * FROM orders WHERE user_id=? AND request_key=?",
+        user.id,
+        requestKey,
+      );
+      if (prior) {
+        if (
+          prior.variant_id !== variantId ||
+          prior.quantity !== quantity ||
+          (prior.coupon_code ?? null) !== couponCode
+        )
+          fail(409, "รหัสคำขอถูกใช้กับคำสั่งซื้ออื่นแล้ว");
+        return { ...orderDetail(user, prior.id), paymentToken: null };
+      }
+      const variant = buyableVariant(variantId);
+      const subtotal = variant.unitPrice * quantity;
       if (
-        reservation.variant_id !== variantId ||
-        reservation.quantity !== quantity
+        !variant.preorder &&
+        one(
+          `SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql}`,
+          variantId,
+        ).n < quantity
       )
-        fail(409, "รหัสคำขอถูกใช้กับคำสั่งซื้ออื่นแล้ว");
-      return { ...orderDetail(user, reservation.id), paymentToken: null };
-    }
-    const prior = one(
-      "SELECT * FROM orders WHERE user_id=? AND request_key=?",
-      user.id,
-      requestKey,
-    );
-    if (prior) {
-      if (prior.variant_id !== variantId || prior.quantity !== quantity)
-        fail(409, "รหัสคำขอถูกใช้กับคำสั่งซื้ออื่นแล้ว");
-      return { ...orderDetail(user, prior.id), paymentToken: null };
-    }
-    const variant = one(
-      "SELECT v.*,p.preorder FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.active=1 AND p.hidden_seed=0 AND COALESCE(v.active,1)=1",
-      variantId,
-    );
-    if (!variant) fail(404, "ไม่พบสินค้า");
-    if (variant.preorder) {
+        fail(409, "สินค้าคงเหลือไม่เพียงพอ กรุณาเลือกจำนวนใหม่");
+      // Discount from the coupon row and the database price only (never the client's).
+      const applied = couponCode
+        ? coupons.evaluate(user, couponCode, { productId: variant.product_id, subtotal })
+        : null;
+      const discount = applied?.discount ?? 0;
       const token = randomBytes(32).toString("hex"),
         id = randomUUID();
-      const price = variant.id === "cinema-max-30" ? 0 : variant.price;
       run(
-        "INSERT INTO reservations(id,user_id,variant_id,quantity,total,request_key,payment_hash,warranty_days) VALUES(?,?,?,?,?,?,?,?)",
+        // created_at comes from the service clock (same clock the unpaid-order expiry uses).
+        `INSERT INTO ${variant.preorder ? "reservations" : "orders"}(id,user_id,variant_id,quantity,total,request_key,payment_hash,warranty_days,discount,coupon_code,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
         id,
         user.id,
         variantId,
         quantity,
-        price * quantity,
+        subtotal - discount,
         requestKey,
         hash(token),
         // Warranty is what the customer saw when buying; the end date is set at delivery.
         variant.warranty_days ?? 0,
+        discount,
+        applied ? applied.code : null,
+        new Date(clock()).toISOString().slice(0, 19).replace("T", " "),
       );
-      audit(user, "CREATE_PREORDER", id);
+      if (applied)
+        coupons.redeem({
+          coupon: applied.coupon,
+          userId: user.id,
+          orderId: variant.preorder ? null : id,
+          reservationId: variant.preorder ? id : null,
+          amount: discount,
+        });
+      audit(user, variant.preorder ? "CREATE_PREORDER" : "CREATE_ORDER", id);
       return { ...orderDetail(user, id), paymentToken: token };
-    }
-
-    if (
-      one(
-        `SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql}`,
-        variantId,
-      ).n < quantity
-    )
-      fail(409, "สินค้าคงเหลือไม่เพียงพอ กรุณาเลือกจำนวนใหม่");
-    const token = randomBytes(32).toString("hex"),
-      id = randomUUID();
-    run(
-      "INSERT INTO orders(id,user_id,variant_id,quantity,total,request_key,payment_hash,warranty_days) VALUES(?,?,?,?,?,?,?,?)",
-      id,
-      user.id,
-      variantId,
-      quantity,
-      variant.price * quantity,
-      requestKey,
-      hash(token),
-      variant.warranty_days ?? 0,
-    );
-    audit(user, "CREATE_ORDER", id);
-    return { ...orderDetail(user, id), paymentToken: token };
+    });
   }
   function orderDetail(user, id) {
     requireUser(user);
@@ -1165,6 +1311,8 @@ export function createCommerceCore({
         ...delivered,
         ...orderExtras.customerOrderExtras(orderId, ownerView),
         ...orderRefundState(orderId, true),
+        discount: reservation.discount ?? 0,
+        subtotal: reservation.total + (reservation.discount ?? 0),
         queueNumber: reservation.queue_number ?? null,
       };
     }
@@ -1180,6 +1328,8 @@ export function createCommerceCore({
       ...delivered,
       ...orderExtras.customerOrderExtras(orderId, ownerView),
       ...orderRefundState(orderId, false),
+      discount: order.discount ?? 0,
+      subtotal: order.total + (order.discount ?? 0),
     };
   }
   function staffOrders(user, { limit = 50, cursor } = {}) {
@@ -1306,6 +1456,7 @@ export function createCommerceCore({
           fail(400, "ผลการทดลองไม่ถูกต้อง");
         if (input.outcome === "failure") {
           run("UPDATE reservations SET status='FAILED' WHERE id=?", id);
+          releaseCouponForOrder(id, "PAYMENT_FAILED");
           return orderDetail(user, id);
         }
         if (publicUser(user).balance < o.total)
@@ -1364,6 +1515,13 @@ export function createCommerceCore({
           "คิว #" + queueNumber + " · " + id.slice(0, 8),
           "/admin/orders/" + id,
         );
+        alerts.emit("preorder_paid", {
+          id,
+          queueNumber,
+          variantId: o.variant_id,
+          quantity: o.quantity,
+          total: o.total,
+        });
         audit(user, "PREORDER_PAID", id);
         return orderDetail(user, id);
       });
@@ -1390,6 +1548,7 @@ export function createCommerceCore({
         fail(400, "ผลการทดลองไม่ถูกต้อง");
       if (input.outcome === "failure") {
         run("UPDATE orders SET status='FAILED' WHERE id=?", id);
+        releaseCouponForOrder(id, "PAYMENT_FAILED");
         audit(user, "PAYMENT_FAILED", id);
         return orderDetail(user, id);
       }
@@ -1406,6 +1565,7 @@ export function createCommerceCore({
       );
       if (available.length !== order.quantity) {
         run("UPDATE orders SET status='OUT_OF_STOCK' WHERE id=?", id);
+        releaseCouponForOrder(id, "OUT_OF_STOCK");
         audit(user, "OUT_OF_STOCK", id);
         return orderDetail(user, id);
       }
@@ -1473,6 +1633,13 @@ export function createCommerceCore({
         "/admin/orders/" + id,
       );
       maybeNotifyStockLow(order.variant_id);
+      alerts.emit("order_paid", {
+        id,
+        variantId: order.variant_id,
+        quantity: order.quantity,
+        total: order.total,
+      });
+      alerts.stockAfterSale(order.variant_id);
       audit(user, "PAYMENT_AND_DELIVERY", id);
       return orderDetail(user, id);
     });
@@ -2233,7 +2400,7 @@ export function createCommerceCore({
   }
   const {
     adminOrderPaymentSummary,
-    refundOrder,
+    refundOrder: refundOrderCore,
     adjustCustomerCredit,
     paymentSummaryFor,
     orderRefundState,
@@ -2250,6 +2417,17 @@ export function createCommerceCore({
     notify,
     allowSandbox,
   });
+  function refundOrder(user, id, input = {}) {
+    const result = refundOrderCore(user, id, input);
+    if (!result?.replayed)
+      alerts.emit("refund", {
+        orderId: id,
+        amount: input.amount,
+        destination: input.destination,
+        by: user.name,
+      });
+    return result;
+  }
   const orderHistory = createOrderHistoryApis({
     requireStaff,
     one,
@@ -2332,8 +2510,21 @@ export function createCommerceCore({
     fail,
     clean,
     moneyScope,
+    releaseCouponForOrder,
   });
-  const { team, saveStaff, setMemberRole, setStaffActive, assignChatThread } = createTeamApis({
+  function assignChatThread(user, threadId, input = {}) {
+    const thread = assignChatThreadCore(user, threadId, input);
+    if (thread?.assigned_to)
+      alerts.emit("chat_assigned", { threadId: thread.id, assignee: thread.assignee, by: user.name });
+    return thread;
+  }
+  const {
+    team,
+    saveStaff,
+    setMemberRole,
+    setStaffActive,
+    assignChatThread: assignChatThreadCore,
+  } = createTeamApis({
     passwordHash,
     requireAdmin,
     requireStaff,
@@ -2450,11 +2641,28 @@ export function createCommerceCore({
       spentSatang: row.spent_satang,
     }));
   }
+  const accountEmail = createAccountEmail({
+    one,
+    all,
+    run,
+    fail,
+    key,
+    clock,
+    passwordHash,
+    settings,
+    requireAdmin,
+    clearLockout: auth.clearLockout,
+    mailer,
+    turnstile,
+    publicBaseUrl,
+    waitUntil,
+  });
   const service = {
     db,
     reviews,
     settings,
     saveSettings,
+    legal,
     addReview,
     register,
     login,
@@ -2465,6 +2673,16 @@ export function createCommerceCore({
     productDetail,
     overview,
     createOrder,
+    checkCoupon,
+    adminCoupons: coupons.adminCoupons,
+    adminCoupon: coupons.adminCoupon,
+    adminCreateCoupon: coupons.adminCreateCoupon,
+    adminUpdateCoupon: coupons.adminUpdateCoupon,
+    adminDisableCoupon: coupons.adminDisableCoupon,
+    adminDuplicateCoupon: coupons.adminDuplicateCoupon,
+    adminCouponRedemptions: coupons.adminCouponRedemptions,
+    // For code that ends an unpaid order (e.g. auto-expiry); see server/coupons.mjs.
+    releaseCouponForOrder,
     orderDetail,
     staffOrders,
     adminOrders,
@@ -2541,6 +2759,29 @@ export function createCommerceCore({
     listSessions: accountSessions.listSessions,
     revokeSession: accountSessions.revokeSession,
     revokeOtherSessions: accountSessions.revokeOtherSessions,
+    // Outside-the-website alerts + backup (alerts.mjs, backup.mjs).
+    alertSettings: alerts.alertSettings,
+    saveAlertSettings: alerts.saveAlertSettings,
+    testAlert: alerts.testAlert,
+    alertsTick: (now) => alerts.tick(now),
+    alertsIdle: alerts.idle,
+    backupStatus: backupApis.backupStatus,
+    exportBackup: backupApis.exportBackup,
+    runBackupNow: backupApis.runBackupNow,
+    /** Next Durable Object alarm time (ms) or null when nothing is scheduled. */
+    nextScheduledRun: (now = clock()) => {
+      const times = [];
+      if (alerts.wantsSchedule()) times.push(nextBangkokHour(now, DAILY_SUMMARY_HOUR));
+      if (backupApis.hasBackups) times.push(nextBangkokHour(now, BACKUP_HOUR_BANGKOK));
+      return times.length ? Math.min(...times) : null;
+    },
+    /** Durable Object alarm: daily summary (21:00) and R2 backup (from 04:00), both once a day. */
+    runScheduledJobs: async (now = clock()) => {
+      const summary = alerts.tick(now, { force: true });
+      const backup = backupApis.backupDue(now) ? await backupApis.runBackup(now) : null;
+      if (summary) await summary;
+      return { backup };
+    },
     mode: allowSandbox ? "sandbox" : "live",
     features: Object.freeze({
       credentialPair: true,
@@ -2569,7 +2810,20 @@ export function createCommerceCore({
       creditAdjust: true,
       pendingExpiry: true,
       accountSessions: true,
+      outsideAlerts: true,
+      backupExport: true,
+      coupons: true,
+      // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
+      email: accountEmail.enabled,
+      passwordReset: accountEmail.enabled,
+      turnstile: !!turnstile?.enabled,
     }),
+    turnstile: turnstile?.enabled ? turnstile : null,
+    requestPasswordReset: accountEmail.requestPasswordReset,
+    resetPassword: accountEmail.resetPassword,
+    sendOrderConfirmation: accountEmail.sendOrderConfirmation,
+    adminIntegrations: accountEmail.integrationsStatus,
+    emailIdle: accountEmail.idle,
     salesRevenueSatang,
     logout: (token) =>
       run("DELETE FROM sessions WHERE token_hash=?", hash(token ?? "")),
@@ -2594,6 +2848,8 @@ export function createCommerceCore({
       return walletHistory(all, user.id, 500);
     },
   };
+  // Order emails run after pay / deliverReservation returned; money logic is untouched.
+  accountEmail.hookOrderEmails(service);
   const live = withLive(service, { run, all });
   // Unpaid-order expiry runs lazily on these calls (pending-expiry.mjs). The bump goes
   // through live.mjs so listeners hear "orders changed" only when something expired.
@@ -2628,5 +2884,7 @@ export function createCommerceCore({
     };
   }
   live.sweepPendingOrders = expiry.sweep;
-  return live;
+  // Alerts wrap outermost: queued alerts go out only after the whole call succeeded.
+  const publicService = alerts.wrap(live);
+  return publicService;
 }

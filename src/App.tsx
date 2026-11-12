@@ -49,6 +49,7 @@ import {
   Clock,
   Upload,
   RotateCcw,
+  TicketPercent,
 } from "lucide-react";
 import { t, getLang, locale, setLang, setMerchantScope, type Lang } from "./i18n";
 import {
@@ -71,6 +72,8 @@ import type {
   Overview,
   Ledger,
   Review,
+  CouponCheck,
+  CouponPreview,
 } from "./types";
 import { MAX_PER_ORDER } from "./types";
 import { NAVIGATE_EVENT, confirmLeave } from "./navigation";
@@ -80,6 +83,7 @@ import { CountUp, useRouteMotion } from "./motion";
 import { WarrantyStatus } from "./Warranty";
 import { SessionsCard } from "./Sessions";
 import { DeliveredExtras, hasReceipt, ReceiptLink, ReceiptPage, receiptRoute } from "./OrderExtras";
+import { ResetPasswordPage } from "./AccountRecovery";
 import {
   ReferenceCatalog,
   ReferenceCatalogPage,
@@ -88,6 +92,10 @@ import {
   ReferenceProduct,
 } from "./ReferenceStore";
 const Admin = lazy(() => import("./Admin"));
+const LegalPage = lazy(() =>
+  import("./Legal").then((m) => ({ default: m.LegalPage })),
+);
+import "./footer-credit.css";
 type Basket = { variantId: string; quantity: number };
 type Store = {
   user: User | null;
@@ -462,11 +470,17 @@ function Footer() {
             {shopName(overview?.shop?.shopName)}
           </span>
           <div className="footer-legal">
-            <Link to="/terms">{t("ข้อกำหนดร้าน")}</Link>
-            <Link to="/privacy">{t("ความเป็นส่วนตัว")}</Link>
+            <Link to="/terms">{t("ข้อกำหนดการใช้บริการ")}</Link>
+            <Link to="/privacy">{t("นโยบายความเป็นส่วนตัว")}</Link>
             <ThemeSwitch />
           </div>
         </div>
+        <p className="container footer-credit">
+          Theme By{" "}
+          <a href="https://limitcode.shop" target="_blank" rel="noopener">
+            limitcode studio
+          </a>
+        </p>
       </div>
     </footer>
   );
@@ -1085,8 +1099,8 @@ function Auth({ register = false }: { register?: boolean }) {
           {register && (
             <label className="checkbox-label consent">
               <input type="checkbox" required />
-              {t("ยอมรับ")}<Link to="/terms">{t("ข้อกำหนด")}</Link>{t("และ")}
-              <Link to="/privacy">{t("ความเป็นส่วนตัว")}</Link>
+              {t("ยอมรับ")}<Link to="/terms">{t("ข้อกำหนดการใช้บริการ")}</Link>{t("และ")}
+              <Link to="/privacy">{t("นโยบายความเป็นส่วนตัว")}</Link>
             </label>
           )}
           <button className="button primary full" disabled={busy}>
@@ -1157,6 +1171,41 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
     p.variants.some((v) => v.id === basket?.variantId),
   );
   const variant = p?.variants.find((v) => v.id === basket?.variantId);
+  // Discount code (checkout only). The server works out the discount; this is a preview.
+  const [code, setCode] = useState("");
+  const [coupon, setCoupon] = useState<CouponPreview | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [checking, setChecking] = useState(false);
+  async function checkCode(raw: string) {
+    if (!variant || !basket) return;
+    setChecking(true);
+    setCouponError("");
+    try {
+      const result = await api<CouponCheck>("/coupons/check", {
+        code: raw.trim(),
+        variantId: variant.id,
+        quantity: basket.quantity,
+      });
+      if (result.valid) {
+        setCoupon(result);
+        setCode("");
+      } else {
+        setCoupon(null);
+        setCouponError(result.reason);
+      }
+    } catch (e) {
+      setCoupon(null);
+      setCouponError((e as Error).message);
+    } finally {
+      setChecking(false);
+    }
+  }
+  // Quantity or option changed: the discount depends on the subtotal, so check again.
+  useEffect(() => {
+    if (coupon && variant && basket && coupon.subtotal !== variant.price * basket.quantity)
+      void checkCode(coupon.code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [basket?.quantity, basket?.variantId]);
   async function order() {
     if (!user) return go("/login?next=%2Fcheckout");
     setBusy(true);
@@ -1167,6 +1216,7 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
         variantId: variant!.id,
         quantity: basket!.quantity,
         requestKey: key,
+        ...(coupon ? { couponCode: coupon.code } : {}),
       });
       sessionStorage.setItem("astra-pay-" + o.id, o.paymentToken!);
       go("/checkout/" + o.id);
@@ -1176,6 +1226,8 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
       setBusy(false);
     }
   }
+  const subtotal = variant && basket ? variant.price * basket.quantity : 0;
+  const payable = coupon ? coupon.total : subtotal;
   return (
     <main className="container page-main reference-cart-page">
       {loading ? (
@@ -1243,15 +1295,78 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
             <h2>{t("สรุปคำสั่งซื้อ")}</h2>
             <div>
               <span>{t("สินค้า (")}{basket.quantity}{" "}{t("ชิ้น)")}</span>
-              <span>{money(variant.price * basket.quantity)}</span>
+              <span>{money(subtotal)}</span>
             </div>
             <div>
               <span>{t("ค่าจัดส่งดิจิทัล")}</span>
               <span>{t("ฟรี")}</span>
             </div>
+            {checkout && coupon && (
+              <div className="summary-discount">
+                <span>{t("ส่วนลด")} ({coupon.code})</span>
+                <span>−{money(coupon.discount)}</span>
+              </div>
+            )}
+            {checkout && (
+              <section className="coupon-box" aria-label={t("โค้ดส่วนลด")}>
+                {coupon ? (
+                  <div className="coupon-applied">
+                    <TicketPercent size={18} />
+                    <span>
+                      <strong>{coupon.code}</strong>
+                      <small>{t("ใช้โค้ดแล้ว ลด {amount}", { amount: money(coupon.discount) })}</small>
+                    </span>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => {
+                        setCoupon(null);
+                        setCouponError("");
+                      }}
+                    >
+                      {t("ลบโค้ด")}
+                    </button>
+                  </div>
+                ) : !user ? (
+                  <p className="coupon-login">
+                    <TicketPercent size={16} />
+                    <Link to="/login?next=%2Fcheckout">{t("เข้าสู่ระบบเพื่อใช้โค้ดส่วนลด")}</Link>
+                  </p>
+                ) : (
+                  <form
+                    className="coupon-form"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (code.trim()) void checkCode(code);
+                    }}
+                  >
+                    <label htmlFor="coupon-code">{t("โค้ดส่วนลด")}</label>
+                    <div>
+                      <input
+                        id="coupon-code"
+                        value={code}
+                        maxLength={32}
+                        autoCapitalize="characters"
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder={t("เช่น WELCOME10")}
+                        onChange={(e) => {
+                          setCode(e.target.value.toUpperCase());
+                          setCouponError("");
+                        }}
+                      />
+                      <button className="button secondary" disabled={checking || !code.trim()}>
+                        {checking ? <LoaderCircle className="spin" size={16} /> : t("ใช้โค้ด")}
+                      </button>
+                    </div>
+                  </form>
+                )}
+                <ErrorMessage message={couponError} />
+              </section>
+            )}
             <div className="summary-total">
               <strong>{t("ยอดรวม")}</strong>
-              <strong>{money(variant.price * basket.quantity)}</strong>
+              <strong>{money(checkout ? payable : subtotal)}</strong>
             </div>
             <ErrorMessage message={error} />
             <button
@@ -1502,6 +1617,26 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               <span>{dateTime(order.created_at)}</span>
               {hasReceipt(order) && <ReceiptLink id={order.id} />}
             </div>
+            {!!order.discount && (
+              <dl className="order-price-breakdown" aria-label={t("สรุปยอด")}>
+                <div>
+                  <dt>{t("ราคาสินค้า")}</dt>
+                  <dd>{money(order.subtotal ?? order.total + order.discount)}</dd>
+                </div>
+                <div className="is-discount">
+                  <dt>
+                    <TicketPercent size={15} />
+                    {t("ส่วนลด")}
+                    {order.coupon_code ? " (" + order.coupon_code + ")" : ""}
+                  </dt>
+                  <dd>−{money(order.discount)}</dd>
+                </div>
+                <div className="is-total">
+                  <dt>{t("ยอดชำระ")}</dt>
+                  <dd>{money(order.total)}</dd>
+                </div>
+              </dl>
+            )}
             {order.status === "DELIVERED" && <WarrantyStatus until={order.warranty_until} />}
             {order.status === "CANCELLED" && order.expired_at ? (
               <div className="note-box expired-note" role="status">
@@ -2232,11 +2367,7 @@ function InfoPage({ kind }: { kind: string }) {
   const title =
     kind === "credits"
       ? t("เครดิตร้าน")
-      : kind === "support"
-        ? t("ติดต่อร้าน")
-        : kind === "privacy"
-          ? t("ความเป็นส่วนตัว")
-          : t("ข้อกำหนดร้าน");
+      : t("ติดต่อร้าน");
   return (
     <main className="container page-main narrow-main reference-info-page">
       <div className="page-heading">
@@ -2311,30 +2442,7 @@ function InfoPage({ kind }: { kind: string }) {
               {t("เลขคำสั่งซื้อ ชื่อสินค้า และรายละเอียดปัญหา กรุณาอย่าส่งรหัสผ่านหรือข้อมูลส่วนตัวที่ไม่เกี่ยวข้อง")}
             </p>
           </>
-        ) : kind === "privacy" ? (
-          <>
-            <h2>{t("ข้อมูลที่ระบบจัดเก็บ")}</h2>
-            <p>
-              {t("ระบบจัดเก็บชื่อ อีเมล รหัสผ่านที่ผ่านการแฮช และประวัติคำสั่งซื้อ เพื่อให้เปิดดูรายการของตนเองได้")}
-            </p>
-            <h3>{t("การเข้าถึงข้อมูล")}</h3>
-            <p>
-              {t("ลูกค้าเห็นเฉพาะคำสั่งซื้อของตนเอง ผู้ดูแลเห็นข้อมูลการขายและคลังสินค้า คุกกี้ใช้เพื่อรักษาการเข้าสู่ระบบ")}
-            </p>
-          </>
-        ) : (
-          <>
-            <h2>{t("ข้อกำหนดร้าน")}</h2>
-            <p>
-              {overview?.shop?.policy ||
-                t("สินค้าในร้านนี้เป็นสินค้าดิจิทัล การสั่งซื้อถือว่าคุณยอมรับข้อกำหนดของร้าน")}
-            </p>
-            <h3>{t("คำสั่งซื้อและการส่งมอบ")}</h3>
-            <p>
-              {t("ระบบตรวจสต็อกก่อนรับคำสั่งซื้อ โค้ดจะถูกส่งหลังยืนยันการชำระเงินเท่านั้น")}
-            </p>
-          </>
-        )}
+        ) : null}
       </div>
     </main>
   );
@@ -2388,6 +2496,7 @@ function Router() {
     "/products": t("สินค้าทั้งหมด"),
     "/login": t("เข้าสู่ระบบ"),
     "/register": t("สมัครสมาชิก"),
+    "/reset-password": t("ตั้งรหัสผ่านใหม่"),
     "/orders": t("ประวัติการซื้อ"),
     "/cart": t("ตะกร้าสินค้า"),
     "/checkout": t("ตรวจสอบคำสั่งซื้อ"),
@@ -2397,8 +2506,8 @@ function Router() {
     "/reviews": t("เครดิตร้าน"),
     "/credits": t("เครดิตร้าน"),
     "/support": t("ติดต่อร้าน"),
-    "/terms": t("ข้อกำหนดร้าน"),
-    "/privacy": t("ความเป็นส่วนตัว"),
+    "/terms": t("ข้อกำหนดการใช้บริการ"),
+    "/privacy": t("นโยบายความเป็นส่วนตัว"),
     "/stores": t("ร้านค้า"),
     "/admin": t("แดชบอร์ด"),
   };
@@ -2406,6 +2515,7 @@ function Router() {
     "/": t("ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที"),
     "/products": t("สินค้าดิจิทัลทั้งหมดของร้าน"),
     "/cart": t("สินค้าที่คุณเลือกไว้ พร้อมเมื่อคุณพร้อม"),
+    "/reset-password": t("ตั้งรหัสผ่านใหม่สำหรับบัญชีของคุณ"),
     "/checkout": t("ตรวจสอบข้อมูลให้ครบ ระบบจะบันทึกคำสั่งซื้อไว้ก่อน"),
     "/orders": t("ติดตามคำสั่งซื้อและเปิดดูโค้ดสินค้าของคุณ"),
     "/account": t("ข้อมูลและการตั้งค่าบัญชีของคุณ"),
@@ -2414,8 +2524,8 @@ function Router() {
     "/reviews": t("รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์"),
     "/credits": t("รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์"),
     "/support": t("เราพร้อมช่วยเหลือคุณ"),
-    "/terms": t("สินค้าในร้านนี้เป็นสินค้าดิจิทัล การสั่งซื้อถือว่าคุณยอมรับข้อกำหนดของร้าน"),
-    "/privacy": t("ระบบจัดเก็บชื่อ อีเมล รหัสผ่านที่ผ่านการแฮช และประวัติคำสั่งซื้อ เพื่อให้เปิดดูรายการของตนเองได้"),
+    "/terms": t("ข้อกำหนดการใช้บริการ การสั่งซื้อ การรับประกัน และการคืนเงินของร้าน"),
+    "/privacy": t("วิธีที่ร้านเก็บรวบรวม ใช้ และคุ้มครองข้อมูลส่วนบุคคลตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562"),
   };
   const dynamic =
     path.startsWith("/products/") ||
@@ -2445,6 +2555,7 @@ function Router() {
     );
   if (path === "/login" || path === "/register")
     return <ReferenceAuth key={path} register={path === "/register"} />;
+  if (path === "/reset-password") return <ResetPasswordPage />;
   if (path === "/cart" || path === "/checkout")
     return <Cart checkout={path === "/checkout"} />;
   if (path.startsWith("/orders/") || path.startsWith("/checkout/"))
@@ -2472,8 +2583,22 @@ function Router() {
         <Admin />
       </Suspense>
     );
-  if (["/support", "/terms", "/privacy"].includes(path))
-    return <InfoPage kind={path.slice(1)} />;
+  if (path === "/terms" || path === "/privacy")
+    return (
+      <Suspense
+        fallback={
+          <main className="container page-main narrow-main">
+            <div className="loading-row">
+              <LoaderCircle className="spin" size={18} />
+              {t("กำลังโหลด")}
+            </div>
+          </main>
+        }
+      >
+        <LegalPage kind={path === "/terms" ? "terms" : "privacy"} />
+      </Suspense>
+    );
+  if (path === "/support") return <InfoPage kind="support" />;
   return <NotFound />;
 }
 export default function App() {

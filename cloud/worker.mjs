@@ -24,19 +24,26 @@ import {
 import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
+  ensureCoupons,
   ensureCustomerAdmin,
   ensureOrderExtras,
   ensureOrderHistory,
   ensureProductsStock,
   ensureNotificationLinks,
   ensureSmallUxB,
+  ensureAlertsBackup,
+  ensureEmailAndReset,
 } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
 import {
   createAPIHandler,
   securityHeaders,
   authenticationPaths,
+  accountRecoveryPaths,
+  pageSecurityHeaders,
 } from "../server/api-handler.mjs";
+import { createEmailSender } from "../server/email.mjs";
+import { createTurnstile } from "../server/turnstile.mjs";
 import initial from "../server/migrations/001_initial.sql";
 import reviews from "../server/migrations/002_reviews.sql";
 import referenceLayout from "../server/migrations/003_reference_layout.sql";
@@ -103,8 +110,11 @@ export class Commerce extends DurableObject {
       ensureNotificationLinks(db);
       ensureSmallUxB(db);
       ensureOrderExtras(db);
+      ensureCoupons(db);
+      ensureEmailAndReset(db);
       ensureLiveVersions(db);
       ensureAppendOnlyMoney(db);
+      ensureAlertsBackup(db);
     });
     this.db = db;
     const adminPassword =
@@ -123,10 +133,23 @@ export class Commerce extends DurableObject {
       seed: false,
       // R2 binding UPLOADS when Mark creates the bucket; otherwise SQLite files BLOB.
       uploads: env.UPLOADS,
+      // Automatic daily backup only when Mark binds the BACKUPS bucket (wrangler.jsonc).
+      backups: env.BACKUPS,
+      // Outbound alerts: fire-and-forget fetch, kept alive with waitUntil.
+      alertFetch: (url, init) => fetch(url, init),
+      waitUntil: (promise) => ctx.waitUntil?.(promise),
+      // Local wrangler tests only: loopback URL that replaces the provider host.
+      alertRedirect: env.ASTRA_ALERT_REDIRECT,
       adminPassword:
         typeof adminPassword === "string" && adminPassword.length >= 8
           ? adminPassword
           : undefined,
+      // Email: `send_email` binding EMAIL (or RESEND_API_KEY) + EMAIL_FROM. Turnstile:
+      // TURNSTILE_SITE_KEY + TURNSTILE_SECRET. Each stays off until its config is present.
+      email: createEmailSender(env),
+      turnstile: createTurnstile(env),
+      publicBaseUrl: env.PUBLIC_BASE_URL,
+      waitUntil: (promise) => ctx.waitUntil?.(promise),
     });
     this.service.storageKind = "cloudflare-durable-sqlite";
     this.service.onLive((topics) => {
@@ -177,7 +200,44 @@ export class Commerce extends DurableObject {
       this.ctx.acceptWebSocket(pair[1]);
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
-    return this.handle(request);
+    const response = await this.handle(request);
+    // Saving alert settings can switch the daily summary on/off: re-check the alarm now.
+    await this.ensureAlarm(
+      request.method === "POST" && url.pathname === "/api/admin/alerts" && response.ok,
+    );
+    return response;
+  }
+  /**
+   * One Durable Object alarm drives the scheduled work (daily summary at 21:00 Bangkok,
+   * R2 backup from 04:00 Bangkok when BACKUPS is bound). No alarm when neither is on.
+   * Checked at most every 5 minutes on requests, and again after each alarm.
+   */
+  async ensureAlarm(force = false) {
+    const now = Date.now();
+    if (!force && now - (this.alarmCheckedAt ?? 0) < 300000) return;
+    this.alarmCheckedAt = now;
+    try {
+      const next = this.service.nextScheduledRun(now);
+      const current = await this.ctx.storage.getAlarm();
+      if (next == null) {
+        if (current != null) await this.ctx.storage.deleteAlarm();
+      } else if (current == null || current > next || current <= now) {
+        await this.ctx.storage.setAlarm(next);
+      }
+    } catch (error) {
+      console.error("Alarm check failed", error?.message);
+    }
+  }
+  async alarm() {
+    try {
+      const result = await this.service.runScheduledJobs(Date.now());
+      if (result?.backup && !result.backup.ok)
+        console.error("Scheduled backup failed", result.backup.error);
+    } catch (error) {
+      console.error("Scheduled jobs failed", error?.message);
+    } finally {
+      await this.ensureAlarm(true);
+    }
   }
   webSocketMessage(ws, message) {
     if (message === "ping") ws.send("pong");
@@ -199,7 +259,8 @@ export default {
         const shop = env.COMMERCE.getByName("shop");
         if (
           request.method === "POST" &&
-          authenticationPaths.includes(url.pathname)
+          (authenticationPaths.includes(url.pathname) ||
+            accountRecoveryPaths.includes(url.pathname))
         ) {
           const origin = request.headers.get("Origin");
           if (
@@ -233,7 +294,13 @@ export default {
           });
         response = await env.ASSETS.fetch(request);
         response = new Response(response.body, response);
-        for (const [key, value] of Object.entries(securityHeaders))
+        // Storefront pages allow the Turnstile script/frame only when Turnstile is configured.
+        for (const [key, value] of Object.entries(
+          pageSecurityHeaders(
+            url.pathname,
+            !!(env.TURNSTILE_SITE_KEY && env.TURNSTILE_SECRET),
+          ),
+        ))
           response.headers.set(key, value);
       }
       response = new Response(response.body, response);

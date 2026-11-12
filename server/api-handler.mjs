@@ -1,4 +1,11 @@
+import { createHash } from "node:crypto";
 import { ApiError } from "./domain.mjs";
+/**
+ * Coupon guessing guard: every coupon check and every order placed with a code counts,
+ * per signed-in account and per client IP, in a 10-minute window.
+ */
+export const COUPON_RATE_LIMIT = { perUser: 15, perIp: 40, windowMs: 600000 };
+import { TURNSTILE_ORIGIN, TURNSTILE_REJECTED, turnstileTokenFrom } from "./turnstile.mjs";
 export const securityHeaders = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -7,6 +14,18 @@ export const securityHeaders = {
   "Content-Security-Policy":
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
 };
+/** Storefront pages when Turnstile is on: only its script + iframe origin is added. */
+export const turnstileSecurityHeaders = {
+  ...securityHeaders,
+  "Content-Security-Policy": `default-src 'self'; script-src 'self' ${TURNSTILE_ORIGIN}; frame-src 'self' ${TURNSTILE_ORIGIN}; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'`,
+};
+/** Headers for an HTML page / static asset. The back office (/admin) never gets the wider CSP. */
+export function pageSecurityHeaders(pathname, turnstileOn) {
+  const admin = pathname === "/admin" || String(pathname).startsWith("/admin/");
+  return turnstileOn && !admin ? turnstileSecurityHeaders : securityHeaders;
+}
+/** Public, no-session POSTs (Origin check + global per-IP limit on the Worker). */
+export const accountRecoveryPaths = ["/api/password/forgot", "/api/password/reset"];
 export const authenticationPaths = [
   "/api/login",
   "/api/login/totp",
@@ -26,6 +45,8 @@ function sameLocalOrigin(origin, pageOrigin) {
   }
 }
 const MAX_JSON_BYTES = 32768;
+// Shop settings carry the legal pages text (Thai is 3 bytes per character in UTF-8).
+const MAX_SETTINGS_BYTES = 262144;
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 function isImageUploadPath(method, path) {
   if (method !== "POST") return false;
@@ -47,6 +68,25 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
     attempts.set(key, hit);
     return ++hit.n <= 20;
   }
+  const generic = new Map();
+  /** Named limit: Durable Object storage on Cloudflare, memory locally. */
+  function limit(key, max, windowMs) {
+    if (rateLimit) return rateLimit(key, max, windowMs);
+    const now = Date.now();
+    if (generic.size > 1000)
+      for (const [k, v] of generic) if (v.expires < now) generic.delete(k);
+    let hit = generic.get(key);
+    if (!hit || hit.expires < now) hit = { n: 0, expires: now + windowMs };
+    generic.set(key, hit);
+    return ++hit.n <= max;
+  }
+  /** Turnstile gate (no-op while Turnstile is not configured). */
+  async function requireHuman(input, request, env) {
+    const turnstile = service.turnstile;
+    if (!turnstile?.enabled) return;
+    const ok = await turnstile.verify(turnstileTokenFrom(input), clientIp(request, env));
+    if (!ok) throw new ApiError(403, TURNSTILE_REJECTED);
+  }
   function localUploadLimit(key) {
     const now = Date.now();
     if (uploadAttempts.size > 1000)
@@ -56,6 +96,36 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
     if (!hit || hit.expires < now) hit = { n: 0, expires: now + 600000 };
     uploadAttempts.set(key, hit);
     return ++hit.n <= 30;
+  }
+  const windowAttempts = new Map();
+  function localWindowLimit(key, max, windowMs) {
+    const now = Date.now();
+    if (windowAttempts.size > 5000)
+      for (const [k, v] of windowAttempts) if (v.expires < now) windowAttempts.delete(k);
+    let hit = windowAttempts.get(key);
+    if (!hit || hit.expires < now) hit = { n: 0, expires: now + windowMs };
+    windowAttempts.set(key, hit);
+    return ++hit.n <= max;
+  }
+  function assertCouponRate(request, env, user) {
+    const ip = createHash("sha256")
+      .update(clientIp(request, env) ?? "local")
+      .digest("hex")
+      .slice(0, 32);
+    const { perUser, perIp, windowMs } = COUPON_RATE_LIMIT;
+    for (const [key, max] of [
+      ["coupon:user:" + user.id, perUser],
+      ["coupon:ip:" + ip, perIp],
+    ]) {
+      const allowed = rateLimit
+        ? rateLimit(key, max, windowMs)
+        : localWindowLimit(key, max, windowMs);
+      if (!allowed)
+        throw new ApiError(
+          429,
+          "ลองโค้ดส่วนลดบ่อยเกินไป กรุณารอ 10 นาทีแล้วลองใหม่",
+        );
+    }
   }
   /** Client IP for the audit trail: Cloudflare header, then proxy header, then the socket. */
   function clientIp(request, env) {
@@ -75,6 +145,13 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         headers: { ...securityHeaders, "Cache-Control": "no-store", ...extra },
       });
     try {
+      // Daily alert summary, triggered lazily (at most once a minute, once a day after 21:00
+      // Bangkok). The Durable Object also has an alarm for quiet evenings.
+      try {
+        service.alertsTick?.();
+      } catch {
+        // never block a request on the summary
+      }
       if (!["GET", "POST", "PATCH", "DELETE"].includes(request.method))
         return send(405, { error: "Method not allowed" });
       const mutating = ["POST", "PATCH", "DELETE"].includes(request.method);
@@ -119,9 +196,13 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
       const user = service.session(token);
       let input = {};
       let uploadBytes = null;
+      const jsonLimit =
+        path === "/api/admin/settings" && user?.role === "ADMIN"
+          ? MAX_SETTINGS_BYTES
+          : MAX_JSON_BYTES;
       if (mutating) {
         const length = Number(request.headers.get("Content-Length") ?? 0);
-        const maxBytes = imageUpload ? MAX_UPLOAD_BYTES : MAX_JSON_BYTES;
+        const maxBytes = imageUpload ? MAX_UPLOAD_BYTES : jsonLimit;
         if (Number.isFinite(length) && length > maxBytes)
           throw new ApiError(413, "ข้อมูลมีขนาดใหญ่เกินไป");
         if (imageUpload) {
@@ -171,7 +252,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
               const { done, value } = await reader.read();
               if (done) break;
               bytes += value.byteLength;
-              if (bytes > MAX_JSON_BYTES) {
+              if (bytes > jsonLimit) {
                 await reader.cancel();
                 throw new ApiError(413, "ข้อมูลมีขนาดใหญ่เกินไป");
               }
@@ -199,6 +280,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           ip: clientIp(request, env),
           userAgent: request.headers.get("User-Agent") ?? "",
         };
+        // Turnstile: register and every password login (not the 2FA step, not demo).
+        if (path === "/api/login" || path === "/api/register")
+          await requireHuman(input, request, env);
         const result =
           path === "/api/login"
             ? service.login(input, ctx)
@@ -220,6 +304,25 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           },
         );
       }
+      if (request.method === "POST" && accountRecoveryPaths.includes(path)) {
+        const ip = clientIp(request, env);
+        const ctx = { ip, origin: url.origin };
+        const bucket = createHash("sha256")
+          .update(String(request.headers.get("CF-Connecting-IP") ?? env?.ip ?? "local"))
+          .digest("hex")
+          .slice(0, 32);
+        if (path === "/api/password/forgot") {
+          if (!limit("pw-forgot:" + bucket, 5, 900000))
+            throw new ApiError(429, "ขอลิงก์บ่อยเกินไป กรุณาลองอีกครั้งในอีก 15 นาที");
+          if (!service.features?.passwordReset)
+            throw new ApiError(404, "ระบบตั้งรหัสผ่านใหม่ทางอีเมลยังไม่เปิดใช้งาน กรุณาติดต่อร้าน");
+          await requireHuman(input, request, env);
+          return send(200, service.requestPasswordReset(input, ctx));
+        }
+        if (!limit("pw-reset:" + bucket, 10, 900000))
+          throw new ApiError(429, "มีคำขอมากเกินไป กรุณาลองอีกครั้งในอีก 15 นาที");
+        return send(200, service.resetPassword(input, ctx));
+      }
       if (request.method === "GET") {
         if (/^\/api\/files\/[^/]+$/.test(path)) {
           const file = await service.getFile(path.split("/")[3]);
@@ -240,6 +343,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             mode: service.mode ?? "sandbox",
             storage: service.storageKind ?? "local-sqlite",
             features: service.features ?? {},
+            // Public by design (it is embedded in the page); null while Turnstile is off.
+            turnstileSiteKey: service.turnstile?.siteKey ?? null,
           });
         if (path === "/api/live" && service.liveVersions)
           return send(200, { versions: service.liveVersions() });
@@ -262,6 +367,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           });
         }
         if (path === "/api/overview") return send(200, service.overview());
+        if (path === "/api/legal") return send(200, service.legal());
         if (path === "/api/reviews")
           return send(200, { reviews: service.reviews() });
         if (path === "/api/orders")
@@ -340,6 +446,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (/^\/api\/admin\/transactions\/[^/]+$/.test(path))
           return send(200, service.adminTransactionDetail(user, path.split("/")[4]));
         if (path === "/api/admin/team") return send(200, { team: service.team(user) });
+        if (path === "/api/admin/alerts") return send(200, service.alertSettings(user));
+        if (path === "/api/admin/backup") return send(200, service.backupStatus(user));
+        if (path === "/api/admin/integrations")
+          return send(200, service.adminIntegrations(user));
         if (path === "/api/account/totp") return send(200, service.totpStatus(user));
         if (path === "/api/account/sessions")
           return send(200, service.listSessions(user, token));
@@ -361,6 +471,15 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             });
           return send(200, report);
         }
+        if (path === "/api/admin/coupons")
+          return send(200, service.adminCoupons(user, {
+            q: url.searchParams.get("q") ?? undefined,
+            status: url.searchParams.get("status") ?? undefined,
+          }));
+        if (/^\/api\/admin\/coupons\/[^/]+\/redemptions$/.test(path))
+          return send(200, service.adminCouponRedemptions(user, path.split("/")[4]));
+        if (/^\/api\/admin\/coupons\/[^/]+$/.test(path))
+          return send(200, service.adminCoupon(user, path.split("/")[4]));
         if (/^\/api\/admin\/orders\/[^/]+\/payment-summary$/.test(path))
           return send(200, service.adminOrderPaymentSummary(user, path.split("/")[4]));
         if (path === "/api/admin/audit")
@@ -430,6 +549,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             }),
           );
       } else if (request.method === "PATCH") {
+        if (/^\/api\/admin\/coupons\/[^/]+$/.test(path))
+          return send(200, service.adminUpdateCoupon(user, path.split("/")[4], input));
         if (/^\/api\/admin\/products\/[^/]+\/images$/.test(path))
           return send(
             200,
@@ -479,10 +600,28 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             },
           );
         }
-        if (path === "/api/orders")
+        if (path === "/api/coupons/check") {
+          if (!user) throw new ApiError(401, "กรุณาเข้าสู่ระบบเพื่อใช้โค้ดส่วนลด");
+          assertCouponRate(request, env, user);
+          return send(200, service.checkCoupon(user, input));
+        }
+        if (path === "/api/orders") {
+          // A code sent with the order is a guess too: same budget as /coupons/check.
+          if (user && typeof input.couponCode === "string" && input.couponCode.trim())
+            assertCouponRate(request, env, user);
           return send(201, service.createOrder(user, input));
+        }
+        if (path === "/api/admin/coupons")
+          return send(201, service.adminCreateCoupon(user, input));
+        if (/^\/api\/admin\/coupons\/[^/]+\/disable$/.test(path))
+          return send(200, service.adminDisableCoupon(user, path.split("/")[4]));
+        if (/^\/api\/admin\/coupons\/[^/]+\/duplicate$/.test(path))
+          return send(201, service.adminDuplicateCoupon(user, path.split("/")[4]));
         if (/^\/api\/orders\/[^/]+\/pay$/.test(path))
-          return send(200, service.pay(user, path.split("/")[3], input));
+          return send(
+            200,
+            service.pay(user, path.split("/")[3], input, { origin: url.origin }),
+          );
         if (/^\/api\/orders\/[^/]+\/retry$/.test(path))
           return send(200, service.retry(user, path.split("/")[3]));
         if (path === "/api/topup")
@@ -552,6 +691,26 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         }
         if (path === "/api/account/sessions/revoke-others")
           return send(200, service.revokeOtherSessions(user, token));
+        // Alert secrets: password again; links in messages use this request's origin.
+        if (path === "/api/admin/alerts")
+          return send(200, service.saveAlertSettings(user, input, { origin: url.origin }));
+        if (path === "/api/admin/alerts/test")
+          return send(200, await service.testAlert(user, input));
+        if (path === "/api/admin/backup/run")
+          return send(200, await service.runBackupNow(user, input));
+        if (path === "/api/admin/backup/export") {
+          // Password again + BACKUP_EXPORT audit row, then a gzip stream (backup.mjs).
+          const backup = service.exportBackup(user, input);
+          return new Response(backup.stream, {
+            status: 200,
+            headers: {
+              ...securityHeaders,
+              "Content-Type": "application/gzip",
+              "Cache-Control": "no-store",
+              "Content-Disposition": `attachment; filename="${backup.filename}"`,
+            },
+          });
+        }
         if (path === "/api/account/totp/setup")
           return send(200, service.totpSetup(user, input));
         if (path === "/api/account/totp/enable")
@@ -583,7 +742,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (/^\/api\/admin\/reservations\/[^/]+\/deliver$/.test(path))
           return send(
             200,
-            service.deliverReservation(user, path.split("/")[4]),
+            service.deliverReservation(user, path.split("/")[4], {
+              origin: url.origin,
+            }),
           );
         if (path === "/api/admin/settings")
           return send(200, service.saveSettings(user, input));

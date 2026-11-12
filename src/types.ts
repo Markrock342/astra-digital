@@ -66,7 +66,15 @@ export type Order = {
   refundedTotal?: number;
   /** Set when an unpaid order was cancelled because the payment window ran out. */
   expired_at?: string | null;
+  /** Coupon discount in satang (0 = none); `total` is already after it. */
+  discount?: number;
+  /** Price before the discount (total + discount). */
+  subtotal?: number;
+  coupon_code?: string | null;
 };
+/** POST /api/coupons/check: a preview only; the order is priced again on the server. */
+export type CouponPreview = { valid: true; code: string; subtotal: number; discount: number; total: number };
+export type CouponCheck = CouponPreview | { valid: false; reason: string };
 export type Ledger = {
   id: string;
   /** Signed: + credit in, − credit out. */

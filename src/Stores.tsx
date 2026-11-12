@@ -155,6 +155,7 @@ export function MerchantHeader() {
                       "products",
                       "inventory",
                       "categories",
+                      "coupons",
                     ].includes(tab)
                   : key === "orders"
                     ? ["orders", "preorders"].includes(tab)

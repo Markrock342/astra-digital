@@ -1,0 +1,475 @@
+{
+  "version": 1,
+  "note": "Logos are trademarks of their owners, used only to identify products the shop is entitled to sell.",
+  "items": [
+    {
+      "slug": "netflix",
+      "name": "Netflix",
+      "category": "streaming",
+      "keywords": [
+        "netflix",
+        "เน็ตฟลิกซ์",
+        "เน็ตฟลิก",
+        "เน็ตฟิก"
+      ],
+      "file": "/library/netflix.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Netflix_2015_logo.svg",
+      "license": "Public domain (PD-textlogo)"
+    },
+    {
+      "slug": "disney-plus",
+      "name": "Disney+",
+      "category": "streaming",
+      "keywords": [
+        "disney",
+        "disney+",
+        "disney plus",
+        "disneyplus",
+        "hotstar",
+        "ดิสนีย์",
+        "ดิสนีย์พลัส"
+      ],
+      "file": "/library/disney-plus.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Disney+_logo.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "youtube-premium",
+      "name": "YouTube Premium",
+      "category": "streaming",
+      "keywords": [
+        "youtube",
+        "youtube premium",
+        "yt premium",
+        "ยูทูป",
+        "ยูทูบ",
+        "ยูทูปพรีเมียม",
+        "ยูทูบพรีเมียม"
+      ],
+      "file": "/library/youtube-premium.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:YouTube_Premium_logo_2024.svg",
+      "license": "Public domain (PD-shape, PD-simple); trademark of its owner"
+    },
+    {
+      "slug": "prime-video",
+      "name": "Prime Video",
+      "category": "streaming",
+      "keywords": [
+        "prime video",
+        "primevideo",
+        "amazon prime",
+        "amazon",
+        "ไพรม์วิดีโอ",
+        "ไพร์มวิดีโอ",
+        "อเมซอน"
+      ],
+      "file": "/library/prime-video.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Prime_Video_logo_(2024).svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "hbo-max",
+      "name": "HBO Max",
+      "category": "streaming",
+      "keywords": [
+        "hbo",
+        "hbo max",
+        "hbomax",
+        "เอชบีโอ"
+      ],
+      "file": "/library/hbo-max.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:HBO_Max_(2025).svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "viu",
+      "name": "Viu",
+      "category": "streaming",
+      "keywords": [
+        "viu",
+        "วิวพรีเมียม",
+        "viu premium"
+      ],
+      "file": "/library/viu.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Viu_logo.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "iqiyi",
+      "name": "iQIYI",
+      "category": "streaming",
+      "keywords": [
+        "iqiyi",
+        "iq",
+        "aiqiyi",
+        "อ้ายฉีอี้",
+        "ไอฉีอี้",
+        "ไอคิวยี่"
+      ],
+      "file": "/library/iqiyi.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:IQIYI_logo_(2022).svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "apple-tv",
+      "name": "Apple TV+",
+      "category": "streaming",
+      "keywords": [
+        "apple tv",
+        "appletv",
+        "apple tv+",
+        "แอปเปิ้ลทีวี",
+        "แอปเปิลทีวี"
+      ],
+      "file": "/library/apple-tv.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Apple_TV_Plus_Logo.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "wetv",
+      "name": "WeTV",
+      "category": "streaming",
+      "keywords": [
+        "wetv",
+        "we tv",
+        "วีทีวี",
+        "tencent video"
+      ],
+      "file": "/library/wetv.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Wetv-july-2024-logo.svg",
+      "license": "CC0 1.0 (public domain dedication); trademark of its owner"
+    },
+    {
+      "slug": "bilibili",
+      "name": "Bilibili",
+      "category": "streaming",
+      "keywords": [
+        "bilibili",
+        "bstation",
+        "บิลิบิลิ",
+        "บิลิ"
+      ],
+      "file": "/library/bilibili.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Bilibili_2023.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "crunchyroll",
+      "name": "Crunchyroll",
+      "category": "streaming",
+      "keywords": [
+        "crunchyroll",
+        "ครันชีโรล",
+        "ครันชี่โรล"
+      ],
+      "file": "/library/crunchyroll.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Crunchyroll_2024.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "spotify",
+      "name": "Spotify",
+      "category": "music",
+      "keywords": [
+        "spotify",
+        "สปอติฟาย",
+        "สปอตติฟาย"
+      ],
+      "file": "/library/spotify.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Spotify_logo_with_text.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "youtube-music",
+      "name": "YouTube Music",
+      "category": "music",
+      "keywords": [
+        "youtube music",
+        "youtubemusic",
+        "yt music",
+        "ยูทูปมิวสิค",
+        "ยูทูบมิวสิค"
+      ],
+      "file": "/library/youtube-music.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:YouTube_Music_2024.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "apple-music",
+      "name": "Apple Music",
+      "category": "music",
+      "keywords": [
+        "apple music",
+        "applemusic",
+        "แอปเปิ้ลมิวสิค",
+        "แอปเปิลมิวสิค"
+      ],
+      "file": "/library/apple-music.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Apple_Music_Logo_(2026).svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "joox",
+      "name": "JOOX",
+      "category": "music",
+      "keywords": [
+        "joox",
+        "จูกซ์",
+        "จู๊กซ์",
+        "joox vip"
+      ],
+      "file": "/library/joox.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:JOOX_font_logo.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "tidal",
+      "name": "TIDAL",
+      "category": "music",
+      "keywords": [
+        "tidal",
+        "ไทดัล"
+      ],
+      "file": "/library/tidal.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Tidal_(service)_logo.svg",
+      "license": "Public domain (PD-textlogo)"
+    },
+    {
+      "slug": "chatgpt",
+      "name": "ChatGPT",
+      "category": "ai",
+      "keywords": [
+        "chatgpt",
+        "chat gpt",
+        "gpt",
+        "openai",
+        "แชทจีพีที",
+        "แชท gpt"
+      ],
+      "file": "/library/chatgpt.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:ChatGPT-Logo.svg",
+      "license": "Public domain (PD-shape, PD-simple); trademark of its owner"
+    },
+    {
+      "slug": "canva",
+      "name": "Canva",
+      "category": "productivity",
+      "keywords": [
+        "canva",
+        "canva pro",
+        "แคนวา",
+        "แคนว่า"
+      ],
+      "file": "/library/canva.webp",
+      "source": "https://en.wikipedia.org/wiki/File:Canva_Logo.svg",
+      "license": "Public domain in the US (PD-ineligible-USonly, en.wikipedia); trademark of its owner"
+    },
+    {
+      "slug": "microsoft-365",
+      "name": "Microsoft 365",
+      "category": "productivity",
+      "keywords": [
+        "microsoft 365",
+        "microsoft",
+        "office 365",
+        "office",
+        "m365",
+        "ไมโครซอฟท์",
+        "ออฟฟิศ"
+      ],
+      "file": "/library/microsoft-365.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Microsoft_365_(2022).svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "notion",
+      "name": "Notion",
+      "category": "productivity",
+      "keywords": [
+        "notion",
+        "โนชั่น",
+        "โน้ตชั่น"
+      ],
+      "file": "/library/notion.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Notion-logo.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "grammarly",
+      "name": "Grammarly",
+      "category": "productivity",
+      "keywords": [
+        "grammarly",
+        "แกรมมาร์ลี่",
+        "แกรมม่าลี่"
+      ],
+      "file": "/library/grammarly.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Grammarly_logo_2024.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "duolingo",
+      "name": "Duolingo",
+      "category": "productivity",
+      "keywords": [
+        "duolingo",
+        "super duolingo",
+        "ดูโอลิงโก",
+        "ดูโอ้ลิงโก้"
+      ],
+      "file": "/library/duolingo.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Duolingo_logo_(2019).svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "capcut",
+      "name": "CapCut",
+      "category": "productivity",
+      "keywords": [
+        "capcut",
+        "capcut pro",
+        "แคปคัท",
+        "แคปคัต"
+      ],
+      "file": "/library/capcut.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Capcut-icon.svg",
+      "license": "Public domain (PD-shape); trademark of its owner"
+    },
+    {
+      "slug": "adobe-creative-cloud",
+      "name": "Adobe Creative Cloud",
+      "category": "productivity",
+      "keywords": [
+        "adobe",
+        "creative cloud",
+        "adobe cc",
+        "photoshop",
+        "illustrator",
+        "premiere",
+        "อะโดบี",
+        "โฟโต้ชอป"
+      ],
+      "file": "/library/adobe-creative-cloud.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Adobe_Creative_Cloud_rainbow_icon.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "google-one",
+      "name": "Google One",
+      "category": "storage",
+      "keywords": [
+        "google one",
+        "googleone",
+        "google drive",
+        "กูเกิลวัน",
+        "กูเกิ้ลวัน",
+        "กูเกิลไดรฟ์"
+      ],
+      "file": "/library/google-one.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Google_One_logo.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "icloud",
+      "name": "iCloud+",
+      "category": "storage",
+      "keywords": [
+        "icloud",
+        "icloud+",
+        "ไอคลาวด์"
+      ],
+      "file": "/library/icloud.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:ICloud_logo.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "nordvpn",
+      "name": "NordVPN",
+      "category": "vpn",
+      "keywords": [
+        "nordvpn",
+        "nord vpn",
+        "nord",
+        "นอร์ดวีพีเอ็น"
+      ],
+      "file": "/library/nordvpn.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:NordVPN_logo.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "expressvpn",
+      "name": "ExpressVPN",
+      "category": "vpn",
+      "keywords": [
+        "expressvpn",
+        "express vpn",
+        "เอ็กซ์เพรสวีพีเอ็น"
+      ],
+      "file": "/library/expressvpn.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:ExpressVPN_wordmark.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "discord-nitro",
+      "name": "Discord Nitro",
+      "category": "games",
+      "keywords": [
+        "discord",
+        "discord nitro",
+        "nitro",
+        "ดิสคอร์ด",
+        "ดิสคอด"
+      ],
+      "file": "/library/discord-nitro.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Discord_colour_textlogo_(2021).svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    },
+    {
+      "slug": "steam",
+      "name": "Steam",
+      "category": "games",
+      "keywords": [
+        "steam",
+        "steam wallet",
+        "สตีม",
+        "สตรีม วอลเล็ท"
+      ],
+      "file": "/library/steam.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Steam_icon_logo.svg",
+      "license": "Public domain (PD-shape); trademark of its owner"
+    },
+    {
+      "slug": "playstation-plus",
+      "name": "PlayStation Plus",
+      "category": "games",
+      "keywords": [
+        "playstation",
+        "playstation plus",
+        "ps plus",
+        "ps+",
+        "psn",
+        "เพลย์สเตชั่น",
+        "เพลสเตชั่น"
+      ],
+      "file": "/library/playstation-plus.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:PlayStation_Plus_second_logo_and_wordmark.svg",
+      "license": "Public domain (PD-ineligible); trademark of its owner"
+    },
+    {
+      "slug": "xbox-game-pass",
+      "name": "Xbox Game Pass",
+      "category": "games",
+      "keywords": [
+        "xbox",
+        "game pass",
+        "gamepass",
+        "xbox game pass",
+        "เอ็กซ์บ็อกซ์",
+        "เกมพาส"
+      ],
+      "file": "/library/xbox-game-pass.webp",
+      "source": "https://commons.wikimedia.org/wiki/File:Xbox_Game_Pass_new_logo_-_colored_version.svg",
+      "license": "Public domain (PD-textlogo); trademark of its owner"
+    }
+  ]
+}

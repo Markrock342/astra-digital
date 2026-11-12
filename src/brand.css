@@ -2007,3 +2007,140 @@ html.lang-swap .storefront-shell .main-nav {
   from { background-position: 100% 0; }
   to { background-position: -100% 0; }
 }
+
+/* ---- Coupons (checkout + order page). Pattern: Medusa Next.js storefront
+   "Add promotion code" (MIT) — collapsed field in the summary, applied code as a
+   removable row, discount as its own summary line. ---- */
+.storefront-shell .order-summary > .summary-discount {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.storefront-shell .coupon-box {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+}
+.storefront-shell .coupon-form {
+  display: grid;
+  gap: 8px;
+}
+.storefront-shell .coupon-form label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.storefront-shell .coupon-form > div {
+  display: flex;
+  gap: 8px;
+}
+.storefront-shell .coupon-form input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.storefront-shell .coupon-form input::placeholder {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.storefront-shell .coupon-form input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.storefront-shell .coupon-form .button {
+  min-height: 44px;
+  min-width: 84px;
+  flex: none;
+}
+.storefront-shell .coupon-applied {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  color: var(--accent-text);
+}
+.storefront-shell .coupon-applied > span {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.storefront-shell .coupon-applied strong {
+  color: var(--text);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+.storefront-shell .coupon-applied small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.storefront-shell .coupon-applied .text-button {
+  min-height: 44px;
+  padding: 0 4px;
+}
+.storefront-shell .coupon-login {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.storefront-shell .coupon-login a {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.storefront-shell .order-price-breakdown {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--raised);
+  font-size: 14px;
+}
+.storefront-shell .order-price-breakdown > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.storefront-shell .order-price-breakdown dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.storefront-shell .order-price-breakdown dd {
+  margin: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.storefront-shell .order-price-breakdown .is-discount dt,
+.storefront-shell .order-price-breakdown .is-discount dd {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.storefront-shell .order-price-breakdown .is-total {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-weight: 700;
+}
+.storefront-shell .order-price-breakdown .is-total dt {
+  color: var(--text);
+}

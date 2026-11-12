@@ -1,0 +1,331 @@
+/* Admin › ตั้งค่า › แจ้งเตือนนอกเว็บ / สำรองข้อมูล.
+   Reference: shadcn/ui (MIT) Card, Switch, Checkbox and the Notifications settings form,
+   on the admin brand pass (white cards, cool-grey background, --brand blue, soft elevation). */
+.merchant-shell .alerts-page {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.merchant-shell .alerts-page .reference-admin-heading {
+  margin-bottom: 4px;
+}
+.merchant-shell .alerts-form {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.merchant-shell .alerts-channels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.merchant-shell .alert-channel-card {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  min-width: 0;
+  overflow: visible;
+}
+.merchant-shell .alert-channel-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.merchant-shell .alert-channel-card header > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.merchant-shell .alert-channel-card h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.merchant-shell .alert-channel-card .field-help {
+  margin: 10px 0 0;
+  line-height: 1.6;
+}
+.merchant-shell .alert-channel-card .field {
+  margin-top: 14px;
+}
+.merchant-shell .alert-channel-card .field input {
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
+}
+.merchant-shell .alert-channel-card .field input:not(:placeholder-shown) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.merchant-shell .alert-test-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 16px;
+}
+.merchant-shell .alert-test-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.merchant-shell .alert-test-result.ok {
+  color: #15803d;
+}
+.merchant-shell .alert-test-result.fail {
+  color: #b91c1c;
+}
+.merchant-shell .alert-test-result svg {
+  flex: none;
+}
+
+/* Switch (shadcn/ui pattern): 36×20 track, white thumb, brand colour when on. */
+.merchant-shell .alert-switch {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  border: 0;
+  padding: 0;
+  background: #d4d4d8;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.merchant-shell .alert-switch span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.2);
+  transition: transform 0.15s ease;
+}
+.merchant-shell .alert-switch[aria-checked="true"] {
+  background: var(--brand);
+}
+.merchant-shell .alert-switch[aria-checked="true"] span {
+  transform: translateX(18px);
+}
+.merchant-shell .alert-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+@media (prefers-reduced-motion: reduce) {
+  .merchant-shell .alert-switch,
+  .merchant-shell .alert-switch span {
+    transition: none;
+  }
+}
+
+/* Badges: green on, grey off / not set, red failed. */
+.merchant-shell .alert-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.6;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.merchant-shell .alert-badge.on {
+  color: #15803d;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.merchant-shell .alert-badge.off,
+.merchant-shell .alert-badge.unset {
+  color: #52525b;
+  background: #f4f4f5;
+  border-color: #e4e4e7;
+}
+.merchant-shell .alert-badge.fail {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.merchant-shell .alert-events-card > p {
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+.merchant-shell .alert-event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+.merchant-shell .alert-event-list label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.merchant-shell .alert-event-list label:has(input:checked) {
+  border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  background: var(--brand-soft);
+}
+.merchant-shell .alert-event-list input {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand);
+  flex: none;
+}
+.merchant-shell .alert-event-list span {
+  display: grid;
+  gap: 2px;
+}
+.merchant-shell .alert-event-list strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.merchant-shell .alert-event-list small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.merchant-shell .alert-save-card {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+.merchant-shell .alert-save-card .field {
+  margin: 0;
+  flex: 1 1 260px;
+  max-width: 380px;
+}
+.merchant-shell .alert-save-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.merchant-shell .alert-save-actions small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.merchant-shell .alert-log-card .reference-card-heading h2 {
+  font-size: 16px;
+}
+.merchant-shell .alert-log-card .reference-card-heading small {
+  color: var(--muted);
+}
+.merchant-shell .alert-log-table {
+  width: 100%;
+  border: 0;
+  box-shadow: none;
+}
+.merchant-shell .alert-log-detail {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  max-width: 360px;
+}
+.merchant-shell .alert-log-empty {
+  padding: 0 20px 20px;
+}
+
+.merchant-shell .backup-card > p {
+  line-height: 1.7;
+  margin: 8px 0 16px;
+}
+.merchant-shell .backup-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--brand);
+}
+.merchant-shell .backup-card[data-r2="off"] .backup-card-title {
+  color: #71717a;
+}
+.merchant-shell .backup-card-title h2 {
+  color: var(--text);
+  font-size: 16px;
+}
+.merchant-shell .alert-inline-form {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.merchant-shell .alert-inline-form .field {
+  margin: 0;
+  flex: 1 1 240px;
+  max-width: 340px;
+}
+.merchant-shell .backup-run-form {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.merchant-shell .backup-card .field-help {
+  margin-top: 12px;
+  line-height: 1.6;
+}
+.merchant-shell .backup-card code {
+  font-size: 12px;
+  background: #f4f4f5;
+  border: 1px solid #e4e4e7;
+  border-radius: 4px;
+  padding: 1px 5px;
+  overflow-wrap: anywhere;
+}
+.merchant-shell .backup-unset {
+  margin: 8px 0 4px;
+  color: #b91c1c;
+}
+.merchant-shell .backup-steps {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+  .merchant-shell .alerts-channels {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .merchant-shell .alert-event-list {
+    grid-template-columns: 1fr;
+  }
+  .merchant-shell .alert-channel-card {
+    padding: 16px;
+  }
+  .merchant-shell .alert-save-card .field,
+  .merchant-shell .alert-inline-form .field {
+    max-width: none;
+    flex-basis: 100%;
+  }
+  .merchant-shell .alert-save-actions,
+  .merchant-shell .alert-save-actions .button,
+  .merchant-shell .alert-inline-form .button {
+    width: 100%;
+  }
+  .merchant-shell .alert-save-actions .button,
+  .merchant-shell .alert-inline-form .button {
+    justify-content: center;
+  }
+}

@@ -48,12 +48,29 @@ export function createReportApis({ requireAdmin, all, one, fail, bangkokDayRange
       `SELECT COALESCE(SUM(ABS(amount)),0) AS n FROM ledger WHERE kind='REFUND'${ledgerScope}${range ? " AND created_at >= ? AND created_at <= ?" : ""}`,
       ...params,
     ).n;
+    // Coupon discounts on paid orders, as a separate figure. Revenue above is already
+    // what was actually paid (the discounted total), so this is never subtracted again.
+    const discount = one(
+      `SELECT COALESCE(SUM(discount),0) AS n, COUNT(*) AS orders FROM (
+         SELECT DISTINCT x.id, x.discount
+         FROM payments pay
+         JOIN (SELECT id, discount FROM orders UNION ALL SELECT id, discount FROM reservations) x
+           ON x.id = COALESCE(pay.order_id, pay.reservation_id)
+         WHERE pay.status = 'SUCCEEDED' AND x.discount > 0${paymentScope}${filter})`,
+      ...params,
+    );
     const report = {
       from: range?.from ?? null,
       to: range?.to ?? null,
       timezone: "Asia/Bangkok",
       mode: moneyScope?.mode ?? "sandbox",
-      totals: { ...totals, refunds, net: totals.revenue - refunds },
+      totals: {
+        ...totals,
+        refunds,
+        net: totals.revenue - refunds,
+        discounts: discount.n,
+        discountedOrders: discount.orders,
+      },
       byProduct,
       byDay,
     };
@@ -72,8 +89,13 @@ export function createReportApis({ requireAdmin, all, one, fail, bangkokDayRange
       csvLine(["วัน", "ออเดอร์", "ชิ้น", "ผู้ซื้อ", "ยอดขาย (บาท)"]),
       ...report.byDay.map((d) => csvLine([d.day, d.orders, d.units, d.buyers, baht(d.revenue)])),
       "",
-      csvLine(["ยอดขาย (บาท)", "คืนเงิน (บาท)", "สุทธิ (บาท)"]),
-      csvLine([baht(report.totals.revenue), baht(report.totals.refunds), baht(report.totals.net)]),
+      csvLine(["ยอดขาย (บาท)", "คืนเงิน (บาท)", "สุทธิ (บาท)", "ส่วนลดคูปอง (บาท)"]),
+      csvLine([
+        baht(report.totals.revenue),
+        baht(report.totals.refunds),
+        baht(report.totals.net),
+        baht(report.totals.discounts),
+      ]),
     ];
     return "\ufeff" + lines.join("\r\n") + "\r\n";
   }

@@ -23,14 +23,19 @@ import { applyMigration008, MIGRATION_008_NAME } from "./migrate-008.mjs";
 import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
+  ensureCoupons,
   ensureCustomerAdmin,
   ensureOrderExtras,
   ensureOrderHistory,
   ensureProductsStock,
   ensureNotificationLinks,
   ensureSmallUxB,
+  ensureAlertsBackup,
+  ensureEmailAndReset,
 } from "./ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "./auth-hardening.mjs";
+import { createEmailSender } from "./email.mjs";
+import { createTurnstile } from "./turnstile.mjs";
 export { ApiError } from "./domain.mjs";
 
 export function createCommerce(options = {}) {
@@ -84,8 +89,11 @@ export function createCommerce(options = {}) {
   ensureNotificationLinks(db);
   ensureSmallUxB(db);
   ensureOrderExtras(db);
+  ensureCoupons(db);
+  ensureEmailAndReset(db);
   ensureLiveVersions(db);
   ensureAppendOnlyMoney(db);
+  ensureAlertsBackup(db);
   return createCommerceCore({ ...options, db, key });
 }
 export function openLocalCommerce({
@@ -105,5 +113,9 @@ export function openLocalCommerce({
     seed,
     allowSandbox,
     allowDemoAdmin,
+    // Off unless EMAIL_FROM + RESEND_API_KEY / TURNSTILE_SITE_KEY + TURNSTILE_SECRET are set.
+    email: createEmailSender(process.env),
+    turnstile: createTurnstile(process.env),
+    publicBaseUrl: process.env.PUBLIC_BASE_URL,
   });
 }

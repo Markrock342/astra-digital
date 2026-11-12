@@ -6,6 +6,7 @@ import {
   Copy,
   Download,
   Eye,
+  Images,
   LoaderCircle,
   LogOut,
   Minus,
@@ -25,6 +26,8 @@ import { SessionsCard } from "./Sessions";
 import { Change, TestMoneyBanner } from "./AdminDashboard";
 import { api, dateTime, money } from "./api";
 import { checkSource, toWebp, uploadImage } from "./image-upload";
+import { libraryBlob, type LibraryItem } from "./image-library";
+import { ImageLibraryDialog } from "./ImageLibrary";
 import {
   ORDER_TABS,
   OrderActivity,
@@ -422,6 +425,10 @@ type OrderDetail = {
 };
 
 type PaymentSummary = {
+  /** Coupon: price before the discount; the order total is already after it. */
+  subtotal?: number;
+  discount?: number;
+  couponCode?: string | null;
   paid: number;
   refunded: number;
   outstanding: number;
@@ -535,6 +542,21 @@ function OrderMoney({
         <h2>สรุปการเงิน</h2>
         {summary.refundStatus && <Status status={summary.refundStatus} />}
       </div>
+      {!!summary.discount && (
+        <dl className="money-summary money-summary-coupon">
+          <div>
+            <dt>ราคาก่อนส่วนลด</dt>
+            <dd>{money(summary.subtotal ?? 0)}</dd>
+          </div>
+          <div>
+            <dt>
+              ส่วนลดคูปอง
+              {summary.couponCode && <span className="admin-chip">{summary.couponCode}</span>}
+            </dt>
+            <dd className="negative">−{money(summary.discount)}</dd>
+          </div>
+        </dl>
+      )}
       <dl className="money-summary">
         <div>
           <dt>ชำระแล้ว</dt>
@@ -2730,6 +2752,9 @@ const actionText: Record<string, string> = {
   DELIVER_RESERVATION: "ส่งของพรีออเดอร์",
   REVEAL_ORDER_CREDENTIALS: "เปิดดูรหัสในออเดอร์",
   SAVE_SETTINGS: "แก้ตั้งค่าร้าน",
+  SAVE_ALERTS: "แก้การแจ้งเตือนนอกเว็บ",
+  BACKUP_EXPORT: "ดาวน์โหลดไฟล์สำรองข้อมูล",
+  BACKUP_R2_RUN: "สั่งสำรองข้อมูลไป R2",
   SET_PAYMENT_CHANNEL: "แก้ช่องทางรับเงิน",
   CUSTOMER_UPDATE: "แก้ข้อมูลลูกค้า",
   CUSTOMER_STATUS: "เปลี่ยนสถานะลูกค้า",
@@ -2755,6 +2780,9 @@ const actionText: Record<string, string> = {
   CHAT_ASSIGN: "มอบหมายแชท",
   ORDER_NOTE: "เขียนหมายเหตุออเดอร์",
   CANCEL_ORDER: "ยกเลิกออเดอร์",
+  COUPON_CREATE: "สร้างคูปอง",
+  COUPON_UPDATE: "แก้คูปอง",
+  COUPON_DISABLE: "ปิดใช้งานคูปอง",
   PRODUCT_IMAGE_ADD: "เพิ่มรูปสินค้า",
   PRODUCT_IMAGE_REMOVE: "ลบรูปสินค้า",
   PRODUCT_IMAGE_REORDER: "เรียงรูปสินค้า",
@@ -2787,6 +2815,9 @@ const detailLabel: Record<string, string> = {
   device: "อุปกรณ์",
   current: "เครื่องที่ใช้อยู่:",
   minutes: "ตั้งไว้ (นาที)",
+  code: "โค้ด",
+  duplicatedFrom: "คัดลอกจาก",
+  couponReleased: "คืนสิทธิ์คูปอง",
 };
 function auditDetailText(detail: Record<string, unknown>) {
   const parts: string[] = [];
@@ -2817,6 +2848,7 @@ export function AdminAudit() {
     if (["REVEAL_ORDER_CREDENTIALS", "REVEAL_LIMIT", "ORDER_NOTE", "CANCEL_ORDER", "ORDER_EXPIRED", "DELIVER_RESERVATION", "CREATE_ORDER", "CREATE_PREORDER", "PAYMENT_AND_DELIVERY", "PREORDER_PAID"].includes(e.action))
       return "/admin/orders/" + e.entity_id;
     if (e.action.startsWith("PRODUCT_") || e.action === "SAVE_PRODUCT") return "/admin/products/" + e.entity_id;
+    if (e.action.startsWith("COUPON_")) return "/admin/coupons/" + e.entity_id;
     return null;
   };
   return (
@@ -2847,9 +2879,12 @@ export function AdminAudit() {
             ["PRODUCT_", "เปลี่ยนวิธีส่งของ"],
             ["SAVE_PRODUCT", "บันทึกสินค้า"],
             ["IMPORT_CODES", "เติมสต็อก"],
+            ["COUPON_", "คูปอง"],
             ["DELIVER_RESERVATION", "ส่งของพรีออเดอร์"],
             ["REVEAL_ORDER_CREDENTIALS", "เปิดดูรหัส"],
             ["SAVE_SETTINGS", "ตั้งค่าร้าน"],
+            ["SAVE_ALERTS", "แจ้งเตือนนอกเว็บ"],
+            ["BACKUP_", "สำรองข้อมูล"],
             ["LOGIN_", "เข้าสู่ระบบไม่สำเร็จ / ถูกพัก"],
             ["TOTP_", "ยืนยันตัวตน 2 ขั้น"],
             ["RECOVERY_CODE_USED", "ใช้รหัสกู้คืน"],
@@ -3733,7 +3768,17 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
 type SalesRow = { product_id: string; product: string; variant_id: string; variant: string; preorder: boolean; orders: number; units: number; revenue: number };
 type DayRow = { day: string; orders: number; units: number; revenue: number; buyers: number };
 type SalesReport = {
-  totals: { orders: number; units: number; revenue: number; buyers: number; refunds: number; net: number };
+  totals: {
+    orders: number;
+    units: number;
+    revenue: number;
+    buyers: number;
+    refunds: number;
+    net: number;
+    /** Coupon discounts on paid orders; a separate figure, never subtracted from revenue. */
+    discounts?: number;
+    discountedOrders?: number;
+  };
   byProduct: SalesRow[];
   byDay: DayRow[];
 };
@@ -3765,7 +3810,7 @@ export function AdminReports() {
       <div className="reference-admin-heading">
         <div>
           <h1>รายงานยอดขาย</h1>
-          <p>นับเฉพาะออเดอร์ที่ชำระสำเร็จ · เวลาไทย · ยอดสุทธิหักคืนเงินแล้ว</p>
+          <p>นับเฉพาะออเดอร์ที่ชำระสำเร็จ · เวลาไทย · ยอดขายคือยอดที่ลูกค้าจ่ายจริงหลังหักส่วนลด · ยอดสุทธิหักคืนเงินแล้ว</p>
         </div>
         <a className="button secondary" href={"/api/admin/reports/sales" + query({ ...range, format: "csv" })}>
           <Download size={15} />
@@ -3789,6 +3834,7 @@ export function AdminReports() {
           ["ยอดขาย", report ? money(report.totals.revenue) : "–"],
           ["คืนเงิน", report ? money(report.totals.refunds) : "–"],
           ["ยอดสุทธิ (หักคืนเงิน)", report ? money(report.totals.net) : "–"],
+          ["ส่วนลดคูปองที่ให้ไป", report ? money(report.totals.discounts ?? 0) : "–"],
           ["ออเดอร์ที่ชำระ", report ? String(report.totals.orders) : "–"],
           ["ผู้ซื้อ", report ? String(report.totals.buyers) : "–"],
         ].map(([label, value]) => (
@@ -3931,17 +3977,50 @@ export function ProductPreview({ draft, categoryName }: { draft: ProductDraft; c
 type ProductImage = { id: string; url: string };
 
 /** Upload, reorder and remove product images; the first is the cover. Shown once the API exists. */
-export function ProductImages({ productId, images }: { productId: string; images: ProductImage[] }) {
+export function ProductImages({
+  productId,
+  images,
+  onChange,
+}: {
+  productId: string;
+  images: ProductImage[];
+  /** Called with the current list (first = cover) so the live preview can follow. */
+  onChange?: (images: ProductImage[]) => void;
+}) {
   const { toast } = useStore();
   const [list, setList] = useState<ProductImage[]>(images);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [over, setOver] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [picking, setPicking] = useState("");
+  const [pickError, setPickError] = useState("");
   const input = useRef<HTMLInputElement>(null);
   // Server list changes (live refresh) replace ours; compare ids, not the array object.
   const serverKey = images.map((x) => x.id).join(",");
   useEffect(() => setList(images), [serverKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => onChange?.(list), [list]); // eslint-disable-line react-hooks/exhaustive-deps
   const MAX = 8;
+  /** Library cover → same upload path as a file, so it becomes a normal product image. */
+  async function pickFromLibrary(item: LibraryItem) {
+    if (list.length >= MAX) return setPickError("สินค้าหนึ่งชิ้นมีรูปได้สูงสุด " + MAX + " รูป");
+    setPickError("");
+    setPicking(item.slug);
+    try {
+      const { image } = await uploadImage<{ image: ProductImage }>(
+        "/admin/products/" + productId + "/images",
+        await libraryBlob(item),
+      );
+      const wasEmpty = list.length === 0;
+      setList((current) => [...current, image]);
+      setLibraryOpen(false);
+      toast(wasEmpty ? "ตั้งรูป " + item.name + " เป็นรูปปกแล้ว" : "เพิ่มรูป " + item.name + " แล้ว");
+    } catch (e) {
+      setPickError((e as Error).message);
+    } finally {
+      setPicking("");
+    }
+  }
   async function add(files: FileList | File[]) {
     setError("");
     const picked = Array.from(files).slice(0, MAX - list.length);
@@ -3988,7 +4067,21 @@ export function ProductImages({ productId, images }: { productId: string; images
   }
   return (
     <section className="reference-admin-card editor-panel product-images">
-      <h2>รูปสินค้า</h2>
+      <div className="product-images-head">
+        <h2>รูปสินค้า</h2>
+        <button
+          type="button"
+          className="button secondary"
+          disabled={list.length >= MAX || !!busy}
+          onClick={() => {
+            setPickError("");
+            setLibraryOpen(true);
+          }}
+        >
+          <Images size={16} />
+          เลือกรูปจากคลัง
+        </button>
+      </div>
       <p className="field-help">รูปแรกเป็นรูปปกในหน้ารายการสินค้า · สูงสุด {MAX} รูป · JPG, PNG, WebP · ระบบย่อรูปให้อัตโนมัติ</p>
       <div className="product-image-grid">
         {list.map((image, i) => (
@@ -4049,6 +4142,14 @@ export function ProductImages({ productId, images }: { productId: string; images
         }}
       />
       <ErrorMessage message={error} />
+      <ImageLibraryDialog
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        onPick={(item) => void pickFromLibrary(item)}
+        busySlug={picking}
+        error={pickError}
+        hint={list.length ? "รูปที่เลือกจะต่อท้ายรูปที่มีอยู่ (เลื่อนเป็นรูปปกได้)" : "สินค้านี้ยังไม่มีรูป รูปที่เลือกจะเป็นรูปปก"}
+      />
     </section>
   );
 }

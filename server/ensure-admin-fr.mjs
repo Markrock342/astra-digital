@@ -179,3 +179,129 @@ export function ensureOrderExtras(db) {
     "CREATE INDEX IF NOT EXISTS idx_chat_messages_order ON chat_messages(order_id, created_at)",
   );
 }
+
+/**
+ * Outside-the-website alerts + backups (idempotent, no numbered migration):
+ * - alert_log: one row per outbound attempt (attempt=1) or per event held back by the
+ *   rate limit (attempt=0). Rows older than 30 days are pruned when new alerts go out.
+ * - alert_state: small key/value store (encrypted alert settings, stock level per variant
+ *   for "once per crossing", daily-summary day, last R2 backup result).
+ */
+export function ensureAlertsBackup(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS alert_log (
+    id TEXT PRIMARY KEY,
+    at_ms INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    event TEXT NOT NULL,
+    attempt INTEGER NOT NULL DEFAULT 1,
+    ok INTEGER NOT NULL DEFAULT 0,
+    status INTEGER,
+    error TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_alert_log_channel_time ON alert_log(channel, at_ms)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_alert_log_time ON alert_log(at_ms)");
+  db.exec(`CREATE TABLE IF NOT EXISTS alert_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )`);
+}
+
+/**
+ * Coupons / discount codes (idempotent, no numbered migration).
+ * - coupons: one row per code. `code` is stored upper-case and unique (NOCASE).
+ *   type PERCENT (value 1–90, optional max_discount cap in satang) or FIXED (value
+ *   in satang). starts_at / ends_at are UTC "YYYY-MM-DD HH:MM:SS" (the admin enters
+ *   Bangkok time). usage_limit / per_user_limit NULL = unlimited.
+ * - coupon_products: the chosen products when scope = 'PRODUCTS'.
+ * - coupon_redemptions: one row per order or preorder that used a code. A row whose
+ *   released_at is set no longer counts towards the limits (order cancelled, failed,
+ *   out of stock or expired before payment). No foreign keys, so the one-time demo
+ *   cleanup can delete orders without touching this table first.
+ * - orders / reservations get `discount` (satang, 0 = none) and `coupon_code`.
+ *   `total` stays the amount the customer pays (after the discount).
+ */
+export function ensureCoupons(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS coupons (
+    id TEXT PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    type TEXT NOT NULL CHECK (type IN ('PERCENT','FIXED')),
+    value INTEGER NOT NULL CHECK (value > 0),
+    max_discount INTEGER CHECK (max_discount IS NULL OR max_discount > 0),
+    min_total INTEGER NOT NULL DEFAULT 0 CHECK (min_total >= 0),
+    starts_at TEXT,
+    ends_at TEXT,
+    usage_limit INTEGER CHECK (usage_limit IS NULL OR usage_limit > 0),
+    per_user_limit INTEGER CHECK (per_user_limit IS NULL OR per_user_limit > 0),
+    scope TEXT NOT NULL DEFAULT 'ALL' CHECK (scope IN ('ALL','PRODUCTS')),
+    first_order_only INTEGER NOT NULL DEFAULT 0 CHECK (first_order_only IN (0,1)),
+    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS coupon_products (
+    coupon_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    PRIMARY KEY (coupon_id, product_id)
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS coupon_redemptions (
+    id TEXT PRIMARY KEY,
+    coupon_id TEXT NOT NULL,
+    code TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    order_id TEXT,
+    reservation_id TEXT,
+    amount INTEGER NOT NULL CHECK (amount > 0),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    released_at TEXT,
+    released_reason TEXT,
+    CHECK ((order_id IS NULL) <> (reservation_id IS NULL))
+  )`);
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_coupon ON coupon_redemptions(coupon_id, user_id)",
+  );
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_coupon_redemptions_order ON coupon_redemptions(order_id) WHERE order_id IS NOT NULL",
+  );
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_coupon_redemptions_reservation ON coupon_redemptions(reservation_id) WHERE reservation_id IS NOT NULL",
+  );
+  const has = (table, column) =>
+    db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  for (const table of ["orders", "reservations"]) {
+    if (!has(table, "discount"))
+      db.exec(`ALTER TABLE ${table} ADD COLUMN discount INTEGER NOT NULL DEFAULT 0`);
+    if (!has(table, "coupon_code")) db.exec(`ALTER TABLE ${table} ADD COLUMN coupon_code TEXT`);
+  }
+}
+
+/**
+ * Email + self-service password reset (idempotent, no numbered migration).
+ * - email_log: one row per outgoing email. The recipient is stored masked only. `ref` is
+ *   a unique dedupe key (e.g. "order-confirmed:<id>") so a repeated request never mails twice.
+ * - password_resets: single-use tokens; only the keyed hash is stored; 30-minute expiry.
+ */
+export function ensureEmailAndReset(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS email_log (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    kind TEXT NOT NULL,
+    recipient TEXT NOT NULL,
+    ref TEXT UNIQUE,
+    ok INTEGER,
+    provider TEXT,
+    provider_id TEXT,
+    error TEXT,
+    finished_at TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_email_log_created ON email_log(created_at)");
+  db.exec(`CREATE TABLE IF NOT EXISTS password_resets (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    used_at INTEGER,
+    created_at INTEGER NOT NULL
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id)");
+}

@@ -69,6 +69,13 @@ import {
 } from "./AdminLists";
 import { StockImport } from "./StockImport";
 import { useUnsavedChangesGuard } from "./navigation";
+import { ImageLibraryDialog, useLibrary } from "./ImageLibrary";
+import { libraryBlob, suggestFromName, type LibraryItem } from "./image-library";
+import { uploadImage } from "./image-upload";
+import { AdminAlerts, AdminBackup } from "./AdminAlerts";
+import { AdminCoupons } from "./AdminCoupons";
+import { AdminIntegrations } from "./AdminIntegrations";
+import { LegalSettings } from "./Legal";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -76,6 +83,7 @@ const productTabs = [
   ["products", "สินค้าทั้งหมด"],
   ["inventory", "บัญชีสต็อก"],
   ["categories", "หมวดหมู่"],
+  ["coupons", "คูปอง"],
 ];
 const orderTabs = [
   ["orders", "ออเดอร์ทั้งหมด"],
@@ -84,7 +92,10 @@ const orderTabs = [
 const settingTabs = [
   ["settings", "ร้าน"],
   ["settings/payment", "รับเงิน"],
+  ["settings/legal", "ข้อกำหนดและนโยบาย"],
   ["settings/account", "บัญชีแอดมิน"],
+  ["settings/alerts", "แจ้งเตือนนอกเว็บ"],
+  ["settings/backup", "สำรองข้อมูล"],
   ["settings/audit", "ประวัติการทำงาน"],
 ];
 function Subnav({ items, current }: { items: string[][]; current: string }) {
@@ -164,6 +175,23 @@ export default function Admin() {
   }, []);
   const formDirty = formOpen && formValues !== null && JSON.stringify(formValues) !== savedForm.current;
   const markFormClean = useUnsavedChangesGuard(formDirty);
+  // Images as ProductImages holds them right now, so the preview cover follows uploads at once.
+  const [liveImages, setLiveImages] = useState<{ id: string; url: string }[] | null>(null);
+  useEffect(() => setLiveImages(null), [editingProduct?.id]);
+  // New product: suggest a library cover from the typed name (FR: แนะนำรูปจากชื่อสินค้า).
+  const coverSuggest = newProduct && !!features.uploads;
+  const library = useLibrary(coverSuggest);
+  const [pickedCover, setPickedCover] = useState<LibraryItem | null>(null);
+  const [useCover, setUseCover] = useState(true);
+  const [coverPicker, setCoverPicker] = useState(false);
+  useEffect(() => {
+    setPickedCover(null);
+    setUseCover(true);
+    setCoverPicker(false);
+  }, [newProduct]);
+  const suggestedCover = coverSuggest
+    ? (pickedCover ?? (library.items ? suggestFromName(library.items, formValues?.name ?? "") : null))
+    : null;
   const realProducts = data?.products ?? [];
   const setupSteps: [string, string, boolean][] = [
     ["ใส่ชื่อร้านและช่องทางติดต่อ", "settings", !!overview?.shop?.shopName],
@@ -205,6 +233,7 @@ export default function Admin() {
     setError("");
     const { type, ...values } = Object.fromEntries(new FormData(form));
     try {
+      const cover = newProduct && useCover ? suggestedCover : null;
       const result = await api<{ id: string }>("/admin/products", {
         ...values,
         preorder: type === "preorder",
@@ -216,13 +245,23 @@ export default function Admin() {
         active: newProduct ? false : values.active === "on",
         ...(editingProduct ? { id: editingProduct.id } : {}),
       });
+      let coverNote = "";
+      if (cover) {
+        // Product exists now: upload the suggested cover through the normal image API.
+        try {
+          await uploadImage("/admin/products/" + result.id + "/images", await libraryBlob(cover));
+          coverNote = " · ใส่รูปปก " + cover.name + " แล้ว";
+        } catch (e) {
+          coverNote = " · เพิ่มรูปปกไม่สำเร็จ (" + (e as Error).message + ") เพิ่มเองได้ในส่วนรูปสินค้า";
+        }
+      }
       await load();
       await refresh();
       // Saved: the current values are the new baseline, and leaving is free.
       savedForm.current = formSnapshot(form);
       setFormValues(null);
       markFormClean();
-      toast(newProduct ? "สร้างฉบับร่างแล้ว" : "บันทึกสินค้าแล้ว");
+      toast((newProduct ? "สร้างฉบับร่างแล้ว" : "บันทึกสินค้าแล้ว") + coverNote);
       go("/admin/products/" + result.id);
     } catch (e) {
       setError((e as Error).message);
@@ -497,7 +536,13 @@ export default function Admin() {
                   active: formValues ? formValues.active === "on" : !!editingProduct?.active,
                   featured: formValues ? formValues.featured === "on" : !!editingProduct?.featured,
                   art: editingProduct?.art ?? "gift",
-                  imageUrl: editingProduct?.images?.[0]?.url ?? editingProduct?.imageUrl ?? null,
+                  imageUrl: newProduct
+                    ? useCover && suggestedCover
+                      ? suggestedCover.file
+                      : null
+                    : liveImages
+                      ? (liveImages[0]?.url ?? null)
+                      : (editingProduct?.images?.[0]?.url ?? editingProduct?.imageUrl ?? null),
                   variants: editingProduct
                     ? editingProduct.variants.map((v) => ({ id: v.id, label: v.label, price: v.price, stock: v.stock }))
                     : [
@@ -578,6 +623,42 @@ export default function Admin() {
                     defaultValue={editingProduct?.name}
                   />
                 </label>
+                {coverSuggest && (
+                  <div className={"library-suggest" + (suggestedCover ? "" : " empty")} aria-live="polite">
+                    {suggestedCover ? (
+                      <>
+                        <img src={suggestedCover.file} alt={"รูปปก " + suggestedCover.name} width={64} height={64} />
+                        <div className="library-suggest-text">
+                          <strong>แนะนำรูปจากชื่อสินค้า</strong>
+                          <small>
+                            {suggestedCover.name} · เพิ่มเป็นรูปปกให้อัตโนมัติหลังสร้างสินค้า
+                          </small>
+                          <label className="checkbox-label">
+                            <input
+                              type="checkbox"
+                              checked={useCover}
+                              onChange={(e) => setUseCover(e.target.checked)}
+                            />
+                            ใช้รูปนี้เป็นรูปปก
+                          </label>
+                        </div>
+                        <button type="button" className="button secondary" onClick={() => setCoverPicker(true)}>
+                          เปลี่ยนรูป
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="library-suggest-text">
+                          <strong>แนะนำรูปจากชื่อสินค้า</strong>
+                          <small>พิมพ์ชื่อแบรนด์ เช่น Netflix หรือ Spotify ระบบจะหารูปปกให้</small>
+                        </div>
+                        <button type="button" className="button secondary" onClick={() => setCoverPicker(true)}>
+                          เลือกรูปจากคลัง
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
                 {!newProduct && editingProduct && (
                   <div className="field">
                     ลิงก์สินค้า
@@ -674,8 +755,24 @@ export default function Admin() {
                 </button>
               </div>
             </form>
+            {coverSuggest && (
+              <ImageLibraryDialog
+                open={coverPicker}
+                onClose={() => setCoverPicker(false)}
+                hint="รูปที่เลือกจะใส่เป็นรูปปกหลังกดสร้างฉบับร่าง"
+                onPick={(item) => {
+                  setPickedCover(item);
+                  setUseCover(true);
+                  setCoverPicker(false);
+                }}
+              />
+            )}
             {editingProduct && !newProduct && features.uploads && (
-              <ProductImages productId={editingProduct.id} images={editingProduct.images ?? []} />
+              <ProductImages
+                productId={editingProduct.id}
+                images={editingProduct.images ?? []}
+                onChange={setLiveImages}
+              />
             )}
             {editingProduct && !newProduct && (
               <VariantManager productId={editingProduct.id} preorder={!!editingProduct.preorder} />
@@ -755,6 +852,7 @@ export default function Admin() {
         {tab === "orders" &&
           (detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />)}
         {tab === "preorders" && <PreorderQueue />}
+        {tab === "coupons" && <AdminCoupons id={productId} />}
         {tab === "customers" &&
           (detailId ? (
             <AdminCustomerDetail id={detailId} />
@@ -771,6 +869,12 @@ export default function Admin() {
             <AdminAccount />
           ) : sub === "settings/audit" ? (
             <AdminAudit />
+          ) : sub === "settings/alerts" ? (
+            <AdminAlerts />
+          ) : sub === "settings/backup" ? (
+            <AdminBackup />
+          ) : sub === "settings/legal" ? (
+            <LegalSettings />
           ) : (
             <ReferenceSettings sub={sub} />
           ))}
@@ -808,6 +912,7 @@ export default function Admin() {
           "inventory",
           "orders",
           "preorders",
+          "coupons",
           "customers",
           "payments",
           "top-ups",
@@ -1222,15 +1327,10 @@ function ReferenceSettings({ sub }: { sub: string }) {
         </section>
         <section className="reference-admin-card editor-panel">
           <h2>ข้อกำหนดร้าน</h2>
-          <p>ลูกค้าอ่านได้ที่ท้ายหน้าร้าน</p>
-          <label className="field">
-            ข้อกำหนด
-            <textarea
-              name="policy"
-              maxLength={10000}
-              defaultValue={shop?.policy ?? ""}
-            />
-          </label>
+          <p>
+            ข้อกำหนดการใช้บริการและนโยบายความเป็นส่วนตัวแก้ไขได้ที่{" "}
+            <Link to="/admin/settings/legal">ข้อกำหนดและนโยบาย</Link>
+          </p>
           <label className="checkbox-label">
             <input
               name="requireTerms"
@@ -1289,6 +1389,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
           <button className="button primary">บันทึก</button>
         </div>
       </form>
+      <AdminIntegrations />
     </>
   );
 }
