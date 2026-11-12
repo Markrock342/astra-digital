@@ -35,6 +35,8 @@ import {
   ensureAlertsBackup,
   ensureEmailAndReset,
   ensureBroadcasts,
+  ensureStockWatch,
+  ensureReviewModeration,
 } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
 import {
@@ -116,6 +118,8 @@ export class Commerce extends DurableObject {
       ensureCategories(db);
       ensureEmailAndReset(db);
       ensureBroadcasts(db);
+      ensureStockWatch(db);
+      ensureReviewModeration(db);
       ensureLiveVersions(db);
       ensureAppendOnlyMoney(db);
       ensureAlertsBackup(db);

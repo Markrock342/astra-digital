@@ -34,6 +34,8 @@ import {
   ensureAlertsBackup,
   ensureEmailAndReset,
   ensureBroadcasts,
+  ensureStockWatch,
+  ensureReviewModeration,
 } from "./ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "./auth-hardening.mjs";
 import { createEmailSender } from "./email.mjs";
@@ -95,6 +97,8 @@ export function createCommerce(options = {}) {
   ensureCategories(db);
   ensureEmailAndReset(db);
   ensureBroadcasts(db);
+  ensureStockWatch(db);
+  ensureReviewModeration(db);
   ensureLiveVersions(db);
   ensureAppendOnlyMoney(db);
   ensureAlertsBackup(db);

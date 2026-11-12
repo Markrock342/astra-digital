@@ -108,7 +108,9 @@ test("3. last unit sells, storefront shows sold out, admin restocks and the page
   await as(page.context(), buyerToken);
   await page.goto(base + "/products/" + productId);
   await expect(page.locator(".reference-variants")).toContainText("สินค้าหมด");
-  await expect(page.getByRole("button", { name: "ซื้อเลย", exact: true })).toBeDisabled();
+  // Sold out (ready stock): the buy buttons give way to "แจ้งเตือนเมื่อมีของ".
+  await expect(page.getByRole("button", { name: "ซื้อเลย", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "แจ้งเตือนเมื่อมีของ" })).toBeVisible();
 
   // Admin restocks in another window; the customer's open page flips to in stock without reload.
   const adminContext = await browser.newContext();

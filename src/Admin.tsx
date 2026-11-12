@@ -75,6 +75,7 @@ import { uploadImage } from "./image-upload";
 import { AdminAlerts, AdminBackup } from "./AdminAlerts";
 import { AdminCoupons } from "./AdminCoupons";
 import { AdminCategories } from "./AdminCategories";
+import { AdminReviews } from "./AdminReviews";
 import { AdminIntegrations } from "./AdminIntegrations";
 import { LegalSettings } from "./Legal";
 import { FaqSettingsPanel } from "./FaqAdmin";
@@ -87,6 +88,7 @@ const productTabs = [
   ["inventory", "บัญชีสต็อก"],
   ["categories", "หมวดหมู่"],
   ["coupons", "คูปอง"],
+  ["reviews", "รีวิว"],
 ];
 const orderTabs = [
   ["orders", "ออเดอร์ทั้งหมด"],
@@ -868,6 +870,7 @@ export default function Admin() {
           (detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />)}
         {tab === "preorders" && <PreorderQueue />}
         {tab === "coupons" && <AdminCoupons id={productId} />}
+        {tab === "reviews" && <AdminReviews />}
         {tab === "customers" &&
           (detailId ? (
             <AdminCustomerDetail id={detailId} />
@@ -932,6 +935,7 @@ export default function Admin() {
           "preorders",
           "coupons",
           "categories",
+          "reviews",
           "customers",
           "broadcasts",
           "payments",

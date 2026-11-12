@@ -149,6 +149,9 @@ export type Review = {
   created_at: string;
   name: string;
   product: string;
+  product_id?: string;
+  /** The shop's public reply ("ตอบกลับจากร้าน"); null when there is none. */
+  reply?: { text: string; at: string | null } | null;
 };
 export type Credential = { loginId: string; password: string };
 export type Features = {

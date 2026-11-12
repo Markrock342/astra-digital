@@ -373,3 +373,48 @@ export function ensureBroadcasts(db) {
   )`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_broadcasts_created ON broadcasts(created_ms)");
 }
+
+/**
+ * Back-in-stock notices ("แจ้งเตือนเมื่อสินค้าเข้า", server/stock-watch.mjs). Idempotent.
+ * - stock_watch: one row per customer and option while they wait. One-shot: notified_at is
+ *   set when the option comes back, and subscribing again starts a fresh row (new place in
+ *   the line). No foreign keys, so the one-time demo cleanup can delete freely; lookups
+ *   join variants/products, so a row for a deleted option is simply never shown.
+ */
+export function ensureStockWatch(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS stock_watch (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    variant_id TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    notified_at TEXT,
+    UNIQUE (user_id, variant_id)
+  )`);
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_stock_watch_waiting ON stock_watch(variant_id, notified_at, created_at)",
+  );
+}
+
+/**
+ * Review replies + moderation (server/review-moderation.mjs). Idempotent ALTERs.
+ * - One public shop reply per review (reply_text, editable; reply_at = first reply,
+ *   reply_updated_at = last edit, reply_by = who wrote the current text).
+ * - Hidden reviews keep their row: hidden_at / hidden_by / hidden_reason (SPAM, ABUSE,
+ *   OFF_TOPIC, OTHER) / hidden_note. Public lists and rating averages skip hidden_at IS NOT NULL.
+ */
+export function ensureReviewModeration(db) {
+  const has = (column) =>
+    db.prepare("PRAGMA table_info(reviews)").all().some((c) => c.name === column);
+  for (const column of [
+    "reply_text",
+    "reply_by",
+    "reply_at",
+    "reply_updated_at",
+    "hidden_at",
+    "hidden_by",
+    "hidden_reason",
+    "hidden_note",
+  ])
+    if (!has(column)) db.exec(`ALTER TABLE reviews ADD COLUMN ${column} TEXT`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_reviews_created ON reviews(created_at)");
+}

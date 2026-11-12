@@ -55,6 +55,9 @@ import {
 } from "./order-extras.mjs";
 import { createCouponApis, normalizeCouponCode } from "./coupons.mjs";
 import { createAccountEmail } from "./account-email.mjs";
+import { templates as emailTemplates } from "./email.mjs";
+import { createStockWatch } from "./stock-watch.mjs";
+import { createReviewModeration, maskReviewer } from "./review-moderation.mjs";
 import { normalizeLegal } from "./legal.mjs";
 import { normalizeFaq } from "./faq.mjs";
 import { createBroadcastApis } from "./broadcast.mjs";
@@ -529,18 +532,29 @@ export function createCommerceCore({
     waitUntil,
     redirect: alertRedirect,
     shopName: () => settings().shopName,
-    summaryFor: (day) => salesMoney(bangkokDayRange(day, day)),
+    summaryFor: (day) => ({
+      ...salesMoney(bangkokDayRange(day, day)),
+      // Most-waited options ("แจ้งเตือนเมื่อมีของ"), so the owner knows what to restock.
+      waiting: all(
+        `SELECT p.name, v.label, COUNT(*) AS waiting
+         FROM stock_watch w JOIN variants v ON v.id=w.variant_id JOIN products p ON p.id=v.product_id
+         WHERE w.notified_at IS NULL AND p.active=1
+         GROUP BY v.id ORDER BY waiting DESC, p.name, v.label LIMIT 5`,
+      ),
+    }),
     stockInfo: (variantId) => {
       const row = one(
         `SELECT v.id,v.label,p.id AS product_id,p.name,
-                (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) AS stock
+                (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) AS stock,
+                (SELECT COUNT(*) FROM stock_watch w WHERE w.variant_id=v.id AND w.notified_at IS NULL) AS waiting
          FROM variants v JOIN products p ON p.id=v.product_id
          WHERE v.id=? AND p.preorder=0`,
         variantId,
       );
       if (!row) return null;
       const level = row.stock <= 0 ? "out" : row.stock <= getLowStockAt() ? "low" : "ok";
-      return { level, stock: row.stock, name: row.name, label: row.label, productId: row.product_id };
+      // waiting = customers who asked "แจ้งเตือนเมื่อมีของ" (helps decide how much to restock).
+      return { level, stock: row.stock, name: row.name, label: row.label, productId: row.product_id, waiting: row.waiting };
     },
   });
   const backupApis = createBackupApis({
@@ -763,6 +777,10 @@ export function createCommerceCore({
         ...demoIds,
       );
       run(
+        `DELETE FROM stock_watch WHERE variant_id IN (SELECT id FROM variants WHERE product_id IN (${marks}))`,
+        ...demoIds,
+      );
+      run(
         `DELETE FROM variants WHERE product_id IN (${marks})`,
         ...demoIds,
       );
@@ -788,6 +806,7 @@ export function createCommerceCore({
         run(`DELETE FROM payments WHERE user_id IN (${users})`, ...demoUsers);
         run(`DELETE FROM ledger WHERE user_id IN (${users})`, ...demoUsers);
         run(`DELETE FROM reviews WHERE user_id IN (${users})`, ...demoUsers);
+        run(`DELETE FROM stock_watch WHERE user_id IN (${users})`, ...demoUsers);
         // Accounts a demo visitor bought from real products during testing still point at
         // their orders; those units were handed out, so they go with the orders (unsold
         // stock is untouched).
@@ -1024,8 +1043,9 @@ export function createCommerceCore({
         stockStatus: stock <= 0 ? "out" : stock <= lowAt ? "low" : "in",
         available: !!p.preorder || stock > 0,
       })),
+      // Hidden reviews (spam, abuse, off-topic) never count towards the public rating.
       rating: one(
-        "SELECT AVG(r.rating) AS average,COUNT(*) AS count FROM reviews r JOIN orders o ON o.id=r.order_id JOIN variants v ON v.id=o.variant_id WHERE v.product_id=?",
+        "SELECT AVG(r.rating) AS average,COUNT(*) AS count FROM reviews r JOIN orders o ON o.id=r.order_id JOIN variants v ON v.id=o.variant_id WHERE v.product_id=? AND r.hidden_at IS NULL",
         p.id,
       ),
       sold: one(
@@ -2196,12 +2216,16 @@ export function createCommerceCore({
     audit(user, "UPDATE_PROFILE", user.id);
     return publicUser(one("SELECT * FROM users WHERE id=?", user.id));
   }
+  /** Public reviews: hidden ones are left out; the shop's reply (if any) comes along. */
   function reviews() {
     return all(
-      "SELECT r.id,r.rating,r.comment,r.created_at,u.name,p.name AS product FROM reviews r JOIN users u ON u.id=r.user_id JOIN orders o ON o.id=r.order_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id ORDER BY r.created_at DESC,r.rowid DESC",
-    ).map((r) => ({
+      "SELECT r.id,r.rating,r.comment,r.created_at,u.name,p.id AS product_id,p.name AS product,r.reply_text,r.reply_at,r.reply_updated_at FROM reviews r JOIN users u ON u.id=r.user_id JOIN orders o ON o.id=r.order_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE r.hidden_at IS NULL ORDER BY r.created_at DESC,r.rowid DESC",
+    ).map(({ reply_text, reply_at, reply_updated_at, ...r }) => ({
       ...r,
-      name: r.name.slice(0, 2) + "***" + r.name.slice(-1),
+      name: maskReviewer(r.name),
+      reply: reply_text
+        ? { text: reply_text, at: reply_updated_at ?? reply_at }
+        : null,
     }));
   }
   function addReview(user, input) {
@@ -2765,14 +2789,54 @@ export function createCommerceCore({
     emailQueue: accountEmail.queue,
     emailEnabled: accountEmail.enabled,
     shopName: () => {
-      const name = String(settings().shopName ?? "").trim();
+      const name = String(settings()?.shopName ?? "").trim();
       return name && name !== "ร้านค้า" ? name : "ASIA EXTRA";
     },
     publicBaseUrl,
   });
+  // "แจ้งเตือนเมื่อสินค้าเข้า" (stock-watch.mjs) and review replies / moderation.
+  const stockWatch = createStockWatch({
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    requireUser,
+    notify,
+    randomUUID,
+    clock,
+    inventoryAvailableAliased,
+    email: accountEmail,
+    emailTemplate: emailTemplates.backInStock,
+    shopName: () => {
+      const name = String(settings()?.shopName ?? "").trim();
+      return name && name !== "ร้านค้า" ? name : "ASIA EXTRA";
+    },
+    publicBaseUrl,
+  });
+  const reviewModeration = createReviewModeration({
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    requireStaff,
+    requireAdmin,
+    notify,
+    clock,
+  });
   const service = {
     db,
     reviews,
+    myStockWatches: stockWatch.myStockWatches,
+    addStockWatch: stockWatch.addStockWatch,
+    removeStockWatch: stockWatch.removeStockWatch,
+    adminReviews: reviewModeration.adminReviews,
+    replyToReview: reviewModeration.replyToReview,
+    hideReview: reviewModeration.hideReview,
+    unhideReview: reviewModeration.unhideReview,
     settings,
     saveSettings,
     legal,
@@ -2944,6 +3008,8 @@ export function createCommerceCore({
       faq: true,
       broadcasts: true,
       categories: true,
+      stockWatch: true,
+      reviewModeration: true,
       // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
       email: accountEmail.enabled,
       passwordReset: accountEmail.enabled,
@@ -2981,6 +3047,8 @@ export function createCommerceCore({
   };
   // Order emails run after pay / deliverReservation returned; money logic is untouched.
   accountEmail.hookOrderEmails(service);
+  // Import / re-activation that brings a waited-for option back notifies the waiting customers.
+  stockWatch.hook(service);
   const live = withLive(service, { run, all });
   // Unpaid-order expiry runs lazily on these calls (pending-expiry.mjs). The bump goes
   // through live.mjs so listeners hear "orders changed" only when something expired.

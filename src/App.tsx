@@ -82,6 +82,7 @@ import { CustomerChat, NotificationBell } from "./Ops";
 import { CountUp, useRouteMotion } from "./motion";
 import { WarrantyStatus } from "./Warranty";
 import { SessionsCard } from "./Sessions";
+import { StockWatchList } from "./StockWatch";
 import { DeliveredExtras, hasReceipt, ReceiptLink, ReceiptPage, receiptRoute } from "./OrderExtras";
 import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
@@ -2319,6 +2320,7 @@ function Account() {
               </Link>
             )}
           </div>
+          <StockWatchList />
           <form className="panel profile-form" onSubmit={save}>
             <h2>{t("ข้อมูลส่วนตัว")}</h2>
             <ErrorMessage message={error} />
