@@ -2,13 +2,19 @@
 
 อัปเดตล่าสุด: 2026-11-12
 
-## Admin FR — งาน 5 FR-O5 พร้อม PR (ห้าม deploy)
-- PR #35 · branch `feat/admin-fr-work5-o5-replace-credential` จาก `main` @ `4a8c33f`
-- `POST /api/admin/orders/:id/replace` · flag `adminReplaceCredential` · 85/85 + e2e 30/30 · รายงาน [MARK_REPORT_ADMIN_FR_WORK5_O5](../database/MARK_REPORT_ADMIN_FR_WORK5_O5.md)
-- **ห้าม deploy**
+## Hotfix DO `run().changes` (ด่วน — ก่อน deploy)
+- PR #37 · branch `fix/do-sql-run-changes` · รวม FR-O5 (#35) + แก้ adapter + `units[]` ใน admin order detail
+- Root cause: DO cursor ไม่มี `.changes` → deliver/replace 409 บน Cloudflare
+- หลักฐาน: Miniflare deliver+replace · `wrangler dev --local` smoke 11/11 · `npm test` 86+
+- รายงาน [MARK_REPORT_DO_SQL_RUN_CHANGES](../database/MARK_REPORT_DO_SQL_RUN_CHANGES.md)
+- DoD บังคับเทส workerd + wrangler local เมื่อแตะ DO path
+- **ห้าม deploy** จนกว่ามาร์คสั่ง
 
-## Admin FR — งาน 4 + polish + round2 merge แล้ว
-- #31 / #32 / #34 ใน `4a8c33f` · รายงาน [MARK_REPORT_ADMIN_FR_WORK4](../database/MARK_REPORT_ADMIN_FR_WORK4.md)
+## Admin FR — งาน 5 FR-O5 (อยู่ใน hotfix ด้านบน)
+- รายงาน [MARK_REPORT_ADMIN_FR_WORK5_O5](../database/MARK_REPORT_ADMIN_FR_WORK5_O5.md)
+
+## Admin FR — งาน 4 + polish + round2 + bank merge แล้ว
+- #31 / #32 / #34 / #36 · `main` @ `3549674` · รายงาน [MARK_REPORT_ADMIN_FR_WORK4](../database/MARK_REPORT_ADMIN_FR_WORK4.md)
 
 
 ## Admin FR — งาน 3 + FR-P3 + หน้าจอ Mark merge แล้ว

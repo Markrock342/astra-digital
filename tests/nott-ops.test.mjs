@@ -873,6 +873,9 @@ test("ADMIN-FR-W2: order detail masks credentials; reveal audits", (t) => {
   assert.ok(detail.payments.some((p) => p.status === "SUCCEEDED"));
   assert.ok(detail.timeline.some((e) => e.event === "paid"));
   assert.ok(detail.timeline.some((e) => e.event === "delivered"));
+  assert.ok(Array.isArray(detail.units));
+  assert.equal(detail.units.length, order.quantity);
+  assert.ok(detail.units.every((u) => typeof u.id === "string" && u.id.length > 0));
   const blob = JSON.stringify(detail);
   for (const code of paid.codes ?? []) assert.ok(!blob.includes(code));
   for (const cred of paid.credentials ?? []) {

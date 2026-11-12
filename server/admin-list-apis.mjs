@@ -274,6 +274,16 @@ export function createAdminListApis({
       row.status === "DELIVERED"
         ? readDeliveredItems(bind, orderId)
         : { codes: [], credentials: [] };
+    // Inventory ids in rowid order — UI replace button + FR-O5 POST body.
+    const units =
+      row.status === "DELIVERED"
+        ? all(
+            `SELECT id, legacy_single_secret FROM inventory
+             WHERE ${bind}=? AND COALESCE(defective,0)=0
+             ORDER BY rowid`,
+            orderId,
+          ).map((u) => ({ id: u.id, kind: u.legacy_single_secret ? "code" : "pair" }))
+        : [];
     return {
       id: row.id,
       status: row.status,
@@ -299,11 +309,7 @@ export function createAdminListApis({
       },
       payments,
       timeline: buildTimeline(row, payments),
-      // FR-O5: stock unit ids in the same order as codes+credentials (rowid), for "replace".
-      units: all(
-        `SELECT id, legacy_single_secret FROM inventory WHERE ${bind}=? AND COALESCE(defective,0)=0 ORDER BY rowid`,
-        orderId,
-      ).map((u) => ({ id: u.id, kind: u.legacy_single_secret ? "code" : "pair" })),
+      units,
       codes: delivered.codes.map(maskCredential),
       credentials: delivered.credentials.map(maskCredential),
       credentialsMasked: true,
