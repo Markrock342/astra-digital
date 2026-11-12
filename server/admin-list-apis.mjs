@@ -295,6 +295,7 @@ export function createAdminListApis({
       queue_number: row.queue_number ?? null,
       delivered_at: row.delivered_at ?? null,
       delivered_by: row.delivered_by ?? null,
+      note: row.admin_note ?? null,
       product: {
         id: row.product_id,
         name: row.product,

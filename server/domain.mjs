@@ -992,7 +992,8 @@ export function createCommerceCore({
         );
       }
       if (!reservation) fail(404, "ไม่พบคำสั่งซื้อ");
-      const { payment_hash, request_key, ...safe } = reservation;
+      // admin_note is internal (FR-O7): never sent to the customer.
+      const { payment_hash, request_key, admin_note, ...safe } = reservation;
       const delivered =
         ownerView && reservation.status === "DELIVERED"
           ? readDeliveredItems("reservation_id", orderId)
@@ -1005,7 +1006,8 @@ export function createCommerceCore({
         queueNumber: reservation.queue_number ?? null,
       };
     }
-    const { payment_hash, request_key, ...safe } = order;
+    // admin_note is internal (FR-O7): never sent to the customer.
+      const { payment_hash, request_key, admin_note, ...safe } = order;
     const delivered =
       ownerView && order.status === "DELIVERED"
         ? readDeliveredItems("order_id", orderId)
@@ -1925,6 +1927,7 @@ export function createCommerceCore({
     adminResetCustomerPassword,
     adminAuditLog,
     adminCancelOrder,
+    adminSetOrderNote,
   } = createAdminCustomerApis({
     passwordHash,
     requireStaff,
@@ -2051,6 +2054,7 @@ export function createCommerceCore({
     adminResetCustomerPassword,
     adminAuditLog,
     adminCancelOrder,
+    adminSetOrderNote,
     replaceOrderCredential,
     team,
     saveStaff,

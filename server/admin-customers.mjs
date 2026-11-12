@@ -263,7 +263,26 @@ export function createAdminCustomerApis({
     });
   }
 
+  /** FR-O7: internal note on an order or preorder; customers never see it. */
+  function adminSetOrderNote(user, id, input = {}) {
+    requireStaff(user);
+    const orderId = clean(id, 1, 80, "คำสั่งซื้อ");
+    const note = optional(input.note, 2000, "หมายเหตุ");
+    return tx(() => {
+      const table = one("SELECT id FROM orders WHERE id=?", orderId)
+        ? "orders"
+        : one("SELECT id FROM reservations WHERE id=?", orderId)
+          ? "reservations"
+          : null;
+      if (!table) fail(404, "ไม่พบคำสั่งซื้อ");
+      run(`UPDATE ${table} SET admin_note=? WHERE id=?`, note, orderId);
+      auditDetail(user, "ORDER_NOTE", orderId, { length: note?.length ?? 0 });
+      return { id: orderId, note };
+    });
+  }
+
   return {
+    adminSetOrderNote,
     adminCancelOrder,
     adminAuditLog,
     adminResetCustomerPassword,

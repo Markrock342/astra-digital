@@ -9184,3 +9184,12 @@ a.reference-bestseller {
   font-size: 12px;
   color: #b91c1c;
 }
+.admin-note-form {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.admin-note-form .field,
+.admin-note-form textarea {
+  width: 100%;
+}

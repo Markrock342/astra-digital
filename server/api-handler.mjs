@@ -370,6 +370,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.setStaffActive(user, path.split("/")[4], input));
         if (/^\/api\/chat\/threads\/[^/]+\/assign$/.test(path))
           return send(200, { thread: service.assignChatThread(user, path.split("/")[4], input) });
+        if (/^\/api\/admin\/orders\/[^/]+\/note$/.test(path))
+          return send(200, service.adminSetOrderNote(user, path.split("/")[4], input));
         if (/^\/api\/admin\/orders\/[^/]+\/cancel$/.test(path))
           return send(200, service.adminCancelOrder(user, path.split("/")[4], input));
         if (/^\/api\/admin\/orders\/[^/]+\/replace$/.test(path))

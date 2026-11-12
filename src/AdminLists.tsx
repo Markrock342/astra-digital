@@ -6,6 +6,7 @@ import {
   Download,
   Eye,
   LogOut,
+  Package,
   Plus,
   RotateCcw,
   Search,
@@ -354,7 +355,51 @@ type OrderDetail = {
   codes: string[];
   credentials: { loginId: string; password: string }[];
   units?: { id: string; kind: "pair" | "code" }[];
+  note?: string | null;
 };
+
+function OrderNote({ id, note }: { id: string; note: string | null }) {
+  const { toast } = useStore();
+  const [text, setText] = useState(note ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => setText(note ?? ""), [note]);
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      await api("/admin/orders/" + id + "/note", { note: text });
+      toast("บันทึกหมายเหตุแล้ว");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <section className="reference-admin-card admin-detail-card">
+      <h2>หมายเหตุภายใน</h2>
+      <form onSubmit={save} className="admin-note-form">
+        <label className="field">
+          <span className="sr-only">หมายเหตุภายใน</span>
+          <textarea
+            aria-label="หมายเหตุภายใน"
+            maxLength={2000}
+            rows={3}
+            placeholder="เช่น ลูกค้าแจ้งทางแชทว่า… · ลูกค้าไม่เห็นข้อความนี้"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </label>
+        <ErrorMessage message={error} />
+        <button className="button secondary" disabled={saving || text === (note ?? "")}>
+          บันทึกหมายเหตุ
+        </button>
+      </form>
+    </section>
+  );
+}
 
 const eventText: Record<string, string> = {
   created: "สร้างออเดอร์",
@@ -467,6 +512,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
               )}
             </section>
           )}
+          <OrderNote id={order.id} note={order.note ?? null} />
           <div className="admin-detail-grid">
             <section className="reference-admin-card admin-detail-card">
               <h2>สินค้า</h2>
@@ -1687,11 +1733,17 @@ type QueueRow = {
   label: string;
 };
 
-function StaffQueue() {
+/** FR-O8: preorder queue for admin and team — filter by product, deliver one or many in queue order. */
+export function PreorderQueue() {
   const { toast } = useStore();
   const [queue, setQueue] = useState<QueueRow[] | null>(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [product, setProduct] = useState("");
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [progress, setProgress] = useState("");
+  // Delivery sends the account and cannot be undone, so every send asks once more.
+  const [confirming, setConfirming] = useState<string | null>(null);
   const load = () =>
     api<{ queue: QueueRow[] }>("/queue")
       .then((r) => setQueue(r.queue))
@@ -1699,46 +1751,123 @@ function StaffQueue() {
   useEffect(() => {
     void load();
   }, []);
-  useLive(["orders", "catalog"], () => void load());
-  async function deliver(item: QueueRow) {
-    setBusy(item.id);
+  useLive(["orders", "catalog"], () => {
+    if (!busy) void load();
+  });
+  const waiting = (queue ?? [])
+    .filter((q) => q.status === "PREORDER")
+    .sort((x, y) => x.queue_number - y.queue_number);
+  const products = Array.from(new Set(waiting.map((q) => q.product))).sort();
+  const shown = waiting.filter((q) => !product || q.product === product);
+  const toggle = (id: string) =>
+    setPicked((set) => {
+      const next = new Set(set);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const allPicked = shown.length > 0 && shown.every((q) => picked.has(q.id));
+  async function deliver(items: QueueRow[]) {
+    setBusy(true);
     setError("");
+    let done = 0;
     try {
-      await api("/admin/reservations/" + item.id + "/deliver", {});
-      toast("ส่งของคิว #" + item.queue_number + " แล้ว");
-      await load();
+      // In queue order; stop at the first failure (usually stock ran out) so nobody is skipped.
+      for (const item of items) {
+        setProgress(`กำลังส่งคิว #${item.queue_number} (${done + 1}/${items.length})`);
+        await api("/admin/reservations/" + item.id + "/deliver", {});
+        done++;
+      }
+      toast(items.length === 1 ? `ส่งของคิว #${items[0].queue_number} แล้ว` : `ส่งของแล้ว ${done} คิว`);
     } catch (e) {
-      setError((e as Error).message);
+      setError((done ? `ส่งแล้ว ${done} คิว แล้วหยุดที่คิว #${items[done].queue_number}: ` : "") + (e as Error).message);
     } finally {
-      setBusy("");
+      setBusy(false);
+      setProgress("");
+      setConfirming(null);
+      setPicked(new Set());
+      await load();
     }
   }
-  const waiting = (queue ?? []).filter((q) => q.status === "PREORDER");
   return (
     <>
       <div className="reference-admin-heading">
         <div>
           <h1>คิวพรีออเดอร์</h1>
-          <p>ส่งของตามลำดับคิว ระบบดึง ID และรหัสผ่านจากสต็อกให้อัตโนมัติ (แอดมินต้องเติมสต็อกก่อน)</p>
+          <p>เลขคิวออกเมื่อลูกค้าชำระเงิน ส่งของตามลำดับคิว ระบบดึง ID และรหัสผ่านจากสต็อกของตัวเลือกนั้นให้อัตโนมัติ</p>
         </div>
       </div>
+      <div className="admin-filters">
+        <Select
+          label="สินค้า"
+          value={product}
+          onChange={(value) => {
+            setProduct(value);
+            setPicked(new Set());
+          }}
+          options={[["", "ทุกสินค้า"], ...products.map((p) => [p, p] as [string, string])]}
+        />
+        <span className="muted">รอส่ง {shown.length} คิว</span>
+        {picked.size > 0 &&
+          (confirming === "batch" ? (
+            <span className="queue-confirm">
+              <button
+                className="button primary"
+                disabled={busy}
+                onClick={() => void deliver(shown.filter((q) => picked.has(q.id)))}
+              >
+                <Package size={15} />
+                ยืนยันส่ง {picked.size} คิว
+              </button>
+              <button className="button secondary" disabled={busy} onClick={() => setConfirming(null)}>
+                ยกเลิก
+              </button>
+            </span>
+          ) : (
+            <button className="button primary" disabled={busy} onClick={() => setConfirming("batch")}>
+              <Package size={15} />
+              ส่งที่เลือก {picked.size} คิว
+            </button>
+          ))}
+      </div>
+      {progress && <p className="admin-callout">{progress}</p>}
       <ErrorMessage message={error} />
       <div className="table-scroll reference-table admin-list-table">
         <table>
           <thead>
             <tr>
+              <th>
+                <input
+                  type="checkbox"
+                  aria-label="เลือกทุกคิวที่แสดง"
+                  checked={allPicked}
+                  disabled={busy || !shown.length}
+                  onChange={() => setPicked(allPicked ? new Set() : new Set(shown.map((q) => q.id)))}
+                />
+              </th>
               <th>คิว</th>
               <th>ลูกค้า</th>
               <th>สินค้า</th>
-              <th>วันที่</th>
+              <th>ชำระเมื่อ</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {waiting.map((q) => (
+            {shown.map((q) => (
               <tr key={q.id}>
                 <td>
-                  <strong>#{q.queue_number}</strong>
+                  <input
+                    type="checkbox"
+                    aria-label={"เลือกคิว #" + q.queue_number}
+                    checked={picked.has(q.id)}
+                    disabled={busy}
+                    onChange={() => toggle(q.id)}
+                  />
+                </td>
+                <td>
+                  <Link to={"/admin/orders/" + q.id} className="order-number">
+                    #{q.queue_number}
+                  </Link>
                 </td>
                 <td>{q.customer}</td>
                 <td>
@@ -1749,15 +1878,27 @@ function StaffQueue() {
                 </td>
                 <td className="nowrap">{dateTime(q.created_at)}</td>
                 <td>
-                  <button className="button primary" disabled={!!busy} onClick={() => void deliver(q)}>
-                    {busy === q.id ? "กำลังส่ง…" : "ส่งของ"}
-                  </button>
+                  {confirming === q.id ? (
+                    <span className="queue-confirm">
+                      <button className="button primary" disabled={busy} onClick={() => void deliver([q])}>
+                        ยืนยันส่งคิว #{q.queue_number}
+                      </button>
+                      <button className="button secondary" disabled={busy} onClick={() => setConfirming(null)}>
+                        ยกเลิก
+                      </button>
+                    </span>
+                  ) : (
+                    <button className="button secondary" disabled={busy} onClick={() => setConfirming(q.id)}>
+                      ส่งของ
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {queue && !waiting.length && <p className="reference-empty-text">ไม่มีคิวรอส่ง</p>}
+        {queue && !shown.length && <p className="reference-empty-text">ไม่มีคิวรอส่ง</p>}
+        {!queue && !error && <p className="reference-empty-text">กำลังโหลดคิว…</p>}
       </div>
     </>
   );
@@ -1767,7 +1908,7 @@ function StaffQueue() {
 export function StaffBackOffice({ tab, sub, detailId }: { tab: string; sub: string; detailId?: string }) {
   if (tab === "chat" || tab === "") return <AdminChatLazy />;
   if (tab === "orders") return detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />;
-  if (tab === "preorders") return <StaffQueue />;
+  if (tab === "preorders") return <PreorderQueue />;
   if (tab === "customers") return detailId ? <AdminCustomerDetail id={detailId} /> : <AdminCustomers />;
   if (sub === "settings/account") return <AdminAccount />;
   return (

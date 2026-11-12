@@ -1749,3 +1749,16 @@ test("ADMIN-FR-W5-O5: replace after preorder deliver; empty stock 409", (t) => {
     (e) => e.status === 409,
   );
 });
+
+test("FR-O7: staff keeps an internal order note that the customer never sees", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const o = s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: "note-0001" });
+  assert.throws(() => s.adminSetOrderNote(user, o.id, { note: "ลูกค้าแก้" }), (e) => e.status === 403);
+  s.adminSetOrderNote(staff, o.id, { note: "ลูกค้าขอให้ส่งก่อน 18:00" });
+  assert.equal(s.adminOrderDetail(merchant, o.id).note, "ลูกค้าขอให้ส่งก่อน 18:00");
+  assert.ok(!JSON.stringify(s.orderDetail(user, o.id)).includes("18:00"));
+  s.adminSetOrderNote(merchant, o.id, { note: "" });
+  assert.equal(s.adminOrderDetail(merchant, o.id).note, null);
+  assert.throws(() => s.adminSetOrderNote(merchant, "missing-order", { note: "x" }), (e) => e.status === 404);
+});

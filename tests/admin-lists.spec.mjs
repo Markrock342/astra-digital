@@ -180,3 +180,35 @@ test("dashboard reads server numbers, audit log lists admin actions, unpaid orde
   await page.goto(base + "/admin/settings/account");
   await expect(page.getByRole("heading", { name: "บัญชีแอดมิน" })).toBeVisible();
 });
+
+test("preorder queue filters by product and delivers several queues at once", async ({ page }) => {
+  const admin = service.session(adminToken);
+  const queued = [];
+  for (const key of ["lists-batch-01", "lists-batch-02"]) {
+    const r = service.createOrder(buyer, { variantId: "cinema-max-90", quantity: 1, requestKey: key });
+    service.topup(buyer, { amount: 300, requestKey: key + "-topup" });
+    queued.push(service.pay(buyer, r.id, { paymentToken: r.paymentToken, outcome: "success" }));
+  }
+  service.importCodes(admin, {
+    variantId: "cinema-max-90",
+    items: [
+      { loginId: "batch-a@stream.test", password: "Pw-BA" },
+      { loginId: "batch-b@stream.test", password: "Pw-BB" },
+    ],
+  });
+  await as(page, adminToken);
+  await page.goto(base + "/admin/preorders");
+  await page.getByLabel("สินค้า").selectOption({ index: 1 });
+  for (const q of queued) await page.getByLabel("เลือกคิว #" + q.queueNumber).check();
+  await page.getByRole("button", { name: "ส่งที่เลือก 2 คิว" }).click();
+  await page.getByRole("button", { name: "ยืนยันส่ง 2 คิว" }).click();
+  await expect(page.getByText("ส่งของแล้ว 2 คิว")).toBeVisible();
+  for (const q of queued) expect(service.orderDetail(buyer, q.id).status).toBe("DELIVERED");
+
+  // Internal note on the order: saved for staff, never shown to the customer.
+  await page.goto(base + "/admin/orders/" + queued[0].id);
+  await page.getByLabel("หมายเหตุภายใน").fill("ลูกค้าขอส่งด่วน");
+  await page.getByRole("button", { name: "บันทึกหมายเหตุ" }).click();
+  await expect(page.getByText("บันทึกหมายเหตุแล้ว")).toBeVisible();
+  expect(JSON.stringify(service.orderDetail(buyer, queued[0].id))).not.toContain("ส่งด่วน");
+});
