@@ -299,6 +299,11 @@ export function createAdminListApis({
       },
       payments,
       timeline: buildTimeline(row, payments),
+      // FR-O5: stock unit ids in the same order as codes+credentials (rowid), for "replace".
+      units: all(
+        `SELECT id, legacy_single_secret FROM inventory WHERE ${bind}=? AND COALESCE(defective,0)=0 ORDER BY rowid`,
+        orderId,
+      ).map((u) => ({ id: u.id, kind: u.legacy_single_secret ? "code" : "pair" })),
       codes: delivered.codes.map(maskCredential),
       credentials: delivered.credentials.map(maskCredential),
       credentialsMasked: true,

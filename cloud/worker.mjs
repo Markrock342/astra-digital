@@ -39,7 +39,12 @@ export class Commerce extends DurableObject {
       prepare: (s) => ({
         all: (...a) => sql.exec(s, ...a).toArray(),
         get: (...a) => sql.exec(s, ...a).toArray()[0],
-        run: (...a) => sql.exec(s, ...a),
+        // Match node:sqlite's { changes } so "UPDATE ... WHERE still available" guards work here too.
+        run: (...a) => {
+          const cursor = sql.exec(s, ...a);
+          for (const _row of cursor);
+          return { changes: cursor.rowsWritten };
+        },
       }),
     };
     if (!env.INVENTORY_KEY) throw Error("Inventory key is missing");
