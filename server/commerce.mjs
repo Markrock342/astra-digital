@@ -17,6 +17,7 @@ import {
   MIGRATION_005_NAME,
 } from "./migrate-005.mjs";
 import { applyMigration006, MIGRATION_006_NAME } from "./migrate-006.mjs";
+import { applyMigration007, MIGRATION_007_NAME } from "./migrate-007.mjs";
 import { ensureChatThreadReads, ensureCustomerAdmin } from "./ensure-admin-fr.mjs";
 export { ApiError } from "./domain.mjs";
 
@@ -43,6 +44,8 @@ export function createCommerce(options = {}) {
           applyMigration005(db, key);
         } else if (file === MIGRATION_006_NAME) {
           applyMigration006(db);
+        } else if (file === MIGRATION_007_NAME) {
+          applyMigration007(db);
         } else {
           const sql = readFileSync(
             new URL("./migrations/" + file, import.meta.url),

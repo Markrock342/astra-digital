@@ -81,7 +81,7 @@ export function createAdminListApis({
   audit,
   readDeliveredItems,
   inventoryAvailableAliased,
-  LOW_STOCK_AT,
+  getLowStockAt,
   bangkokDayRange,
   isAdmin,
 }) {
@@ -527,9 +527,10 @@ export function createAdminListApis({
       COALESCE((SELECT SUM(o.quantity) FROM orders o JOIN variants v ON v.id=o.variant_id WHERE v.product_id=p.id AND o.status='DELIVERED'),0)
       + COALESCE((SELECT SUM(r.quantity) FROM reservations r JOIN variants v ON v.id=r.variant_id WHERE v.product_id=p.id AND r.status IN ('PREORDER','DELIVERED')),0)
     )`;
+    const lowAt = getLowStockAt();
     const stockStatusExpr = `CASE
       WHEN (${stockExpr}) <= 0 THEN 'out'
-      WHEN (${stockExpr}) <= ${LOW_STOCK_AT} THEN 'low'
+      WHEN (${stockExpr}) <= ${lowAt} THEN 'low'
       ELSE 'in' END`;
 
     const where = ["p.hidden_seed = 0"];
