@@ -1884,3 +1884,12 @@ test("team members see the order but not its payment records", (t) => {
   assert.deepEqual(seen.payments, []);
   assert.equal(seen.status, "DELIVERED");
 });
+
+test("saving a product never overwrites a variant price set in the option editor", (t) => {
+  const { s, merchant } = fixture(t);
+  const product = s.saveProduct(merchant, { name: "Price keep", description: "ราคาอยู่ที่ตัวเลือก", category: "streaming", price: 9900 });
+  const variant = s.adminProductVariants(merchant, product.id).variants[0];
+  s.updateVariant(merchant, variant.id, { price: 14900 });
+  s.saveProduct(merchant, { id: product.id, name: "Price keep", description: "แก้แค่รายละเอียด", category: "streaming", price: 100 });
+  assert.equal(s.adminProductVariants(merchant, product.id).variants[0].price, 14900);
+});

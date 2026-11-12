@@ -423,7 +423,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
       setCancelling(false);
       setOrder(await api<OrderDetail>("/admin/orders/" + id));
     } catch (err) {
-      setError((err as Error).message);
+      failed(err);
     }
   }
   const [order, setOrder] = useState<OrderDetail | null>(null);
@@ -436,6 +436,17 @@ export function AdminOrderDetail({ id }: { id: string }) {
       .then(setOrder)
       .catch((e) => setError((e as Error).message));
   }, [id]);
+  // Another team member may deliver, cancel or replace this order while it is open.
+  const reload = () =>
+    api<OrderDetail>("/admin/orders/" + id)
+      .then(setOrder)
+      .catch(() => {});
+  useLive(["orders"], () => void reload());
+  /** Usually someone else changed the order first (409): show the error and the fresh state. */
+  function failed(err: unknown) {
+    setError((err as Error).message);
+    void reload();
+  }
   const [replacing, setReplacing] = useState<string | null>(null);
   const [replaceReason, setReplaceReason] = useState("");
   const pairUnits = (order?.units ?? []).filter((u) => u.kind === "pair");
@@ -451,7 +462,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
       setRevealed(null);
       setOrder(await api<OrderDetail>("/admin/orders/" + id));
     } catch (err) {
-      setError((err as Error).message);
+      failed(err);
     }
   }
   const replaceButton = (unitId?: string) =>
@@ -2338,10 +2349,11 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
                 </button>
               </span>
             )}
-            {u.status === "sold" && (
-              <button type="button" className="button ghost" onClick={() => void defect(u)}>
-                แจ้งเสีย
-              </button>
+            {u.status === "sold" && (u.order_id || u.reservation_id) && (
+              // A sold account is fixed from its order (replace + notify the customer), not here.
+              <Link className="button ghost" to={"/admin/orders/" + (u.order_id ?? u.reservation_id)}>
+                บัญชีเสีย? เปลี่ยนในออเดอร์
+              </Link>
             )}
           </div>
         ))}

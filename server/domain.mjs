@@ -1614,7 +1614,9 @@ export function createCommerceCore({
     const description = clean(input.description, 5, 1000, "รายละเอียด");
     if (!categories.some((c) => c.id === input.category))
       fail(400, "หมวดหมู่ไม่ถูกต้อง");
-    const price = integer(input.price, 100, 10000000, "ราคา");
+    // Price belongs to the variants once a product exists (VariantManager); only a new
+    // product takes it here, for its first variant. Updating never overwrites prices.
+    const price = input.id ? null : integer(input.price, 100, 10000000, "ราคา");
     const hasPreorder = Object.prototype.hasOwnProperty.call(input, "preorder");
     const preorderFlag =
       input.preorder === true || input.preorder === "on" || input.preorder === 1
@@ -1637,11 +1639,6 @@ export function createCommerceCore({
         );
         if (preorder !== existing.preorder)
           audit(user, preorder ? "PRODUCT_SET_PREORDER" : "PRODUCT_SET_READY", id);
-        run(
-          "UPDATE variants SET price=? WHERE id=(SELECT id FROM variants WHERE product_id=? ORDER BY price LIMIT 1)",
-          price,
-          id,
-        );
       } else {
         run(
           "INSERT INTO products(id,name,category,description,art,active,featured,preorder) VALUES(?,?,?,?,?,?,?,?)",

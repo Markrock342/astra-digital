@@ -574,27 +574,25 @@ export default function Admin() {
                     defaultValue={editingProduct?.name}
                   />
                 </label>
-                <label className="field">
-                  ลิงก์สินค้า
-                  <div className="slug-input">
-                    <span>/products/</span>
-                    <input
-                      name="slug"
-                      readOnly
-                      defaultValue={
-                        editingProduct?.id === "stream-plus"
-                          ? "disney"
-                          : editingProduct?.id === "cinema-max"
-                            ? "monomax"
-                            : (editingProduct?.id ??
-                              "กำหนดให้อัตโนมัติหลังสร้าง")
-                      }
-                    />
+                {!newProduct && editingProduct && (
+                  <div className="field">
+                    ลิงก์สินค้า
+                    <div className="slug-input">
+                      <span>{location.origin}/products/</span>
+                      <input readOnly aria-label="ลิงก์สินค้า" value={editingProduct.id} />
+                      <button
+                        type="button"
+                        className="button ghost"
+                        onClick={() => {
+                          void navigator.clipboard?.writeText(location.origin + "/products/" + editingProduct.id);
+                          toast("คัดลอกลิงก์แล้ว");
+                        }}
+                      >
+                        คัดลอก
+                      </button>
+                    </div>
                   </div>
-                  <small>
-                    ระบบกำหนดลิงก์ให้อัตโนมัติจากรหัสสินค้า
-                  </small>
-                </label>
+                )}
                 <label className="field">
                   รายละเอียด
                   <textarea
@@ -641,16 +639,6 @@ export default function Admin() {
               </section>
               {!newProduct && (
                 <>
-                  <input
-                    type="hidden"
-                    name="price"
-                    value={
-                      Math.max(
-                        100,
-                        Math.min(...editingProduct!.variants.map((v) => v.price).filter((p) => p > 0), 1e9),
-                      ) / 100
-                    }
-                  />
                   <section className="reference-admin-card editor-panel">
                     <h2>สถานะสินค้า</h2>
                     <label className="checkbox-label">
