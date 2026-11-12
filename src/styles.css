@@ -9316,3 +9316,14 @@ a.reference-bestseller {
   font-size: 13px;
   font-weight: 500;
 }
+
+/* Uploaded product photos fill the art frame. */
+.product-art.art-photo {
+  background: #e5e7eb;
+}
+.product-art.art-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

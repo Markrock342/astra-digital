@@ -340,8 +340,14 @@ export function ReferenceProduct({ id }: { id: string }) {
       go("/cart");
     }
   };
-  const imageCount =
-    product.art === "stream" ? 3 : product.art === "cinema" ? 2 : 1;
+  // Uploaded images (admin › รูปสินค้า) come first; the bundled artwork is the fallback.
+  const uploaded = product.images ?? [];
+  const imageCount = uploaded.length
+    ? uploaded.length
+    : product.art === "stream" ? 3 : product.art === "cinema" ? 2 : 1;
+  const bundled = (i: number) =>
+    "/products/" + (product.art === "stream" ? "disney" : "monomax") + (i ? "-" + i : "") + ".webp";
+  const current = Math.min(image, imageCount - 1);
   return (
     <main className="container page-main reference-product-page">
       <Link to="/products" className="back-link">
@@ -351,16 +357,10 @@ export function ReferenceProduct({ id }: { id: string }) {
       <div className="reference-product-grid">
         <div className="reference-gallery">
           <div className="reference-main-image">
-            {["stream", "cinema"].includes(product.art) ? (
-              <img
-                src={
-                  "/products/" +
-                  (product.art === "stream" ? "disney" : "monomax") +
-                  (image ? "-" + image : "") +
-                  ".webp"
-                }
-                alt={product.name}
-              />
+            {uploaded.length ? (
+              <img src={uploaded[current].url} alt={product.name} />
+            ) : ["stream", "cinema"].includes(product.art) ? (
+              <img src={bundled(current)} alt={product.name} />
             ) : (
               <Art type={product.art} name={product.name} />
             )}
@@ -369,20 +369,12 @@ export function ReferenceProduct({ id }: { id: string }) {
             <div className="reference-thumbnails">
               {Array.from({ length: imageCount }, (_, i) => (
                 <button
-                  className={image === i ? "selected" : ""}
+                  className={current === i ? "selected" : ""}
                   key={i}
                   onClick={() => setImage(i)}
                   aria-label={t("รูปสินค้า ") + (i + 1)}
                 >
-                  <img
-                    src={
-                      "/products/" +
-                      (product.art === "stream" ? "disney" : "monomax") +
-                      (i ? "-" + i : "") +
-                      ".webp"
-                    }
-                    alt=""
-                  />
+                  <img src={uploaded.length ? uploaded[i].url : bundled(i)} alt="" />
                 </button>
               ))}
             </div>
