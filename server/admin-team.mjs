@@ -4,7 +4,7 @@
  * an active admin, and the shop always keeps at least one active admin. */
 import { randomBytes, randomUUID } from "node:crypto";
 
-export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash, requireAdmin, requireStaff, one, all, run, tx, fail, clean, notify }) {
+export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash, requireAdmin, requireStaff, one, all, run, tx, fail, clean, notify, confirmPassword }) {
   const auditDetail = (user, action, entity, detail) =>
     run(
       "INSERT INTO audit(user_id,action,entity_id,detail) VALUES(?,?,?,?)",
@@ -50,6 +50,13 @@ export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash,
   function saveStaff(user, input = {}) {
     requireAdmin(user);
     const name = clean(input.name, 2, 60, "ชื่อ");
+    // Creating an admin or granting admin rights needs the acting admin's password again.
+    // Checked before the transaction so a wrong password still counts toward the lockout.
+    const existingRole = input.id
+      ? one("SELECT role FROM users WHERE id=? AND role IN ('ADMIN','STAFF')", String(input.id))?.role
+      : null;
+    const makesAdmin = pickRole(input.role, existingRole ?? "STAFF") === "ADMIN" && existingRole !== "ADMIN";
+    if (makesAdmin) confirmPassword(user, input.currentPassword);
     return tx(() => {
       if (input.id) {
         const row = one("SELECT * FROM users WHERE id=? AND role IN ('ADMIN','STAFF')", clean(input.id, 1, 80, "ทีมงาน"));
@@ -57,6 +64,7 @@ export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash,
         const role = pickRole(input.role, row.role);
         if (role !== row.role) {
           guardChange(user, row);
+          if (role === "ADMIN" && !makesAdmin) fail(409, "ข้อมูลทีมงานเปลี่ยนระหว่างทำรายการ กรุณาลองใหม่");
           if (row.role === "ADMIN" && (row.status ?? "ACTIVE") === "ACTIVE" && activeAdmins() <= 1)
             fail(409, "ต้องมีแอดมินที่ใช้งานอยู่อย่างน้อย 1 คน");
         }
@@ -69,6 +77,7 @@ export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash,
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, "อีเมลไม่ถูกต้อง");
       if (one("SELECT id FROM users WHERE email=?", email)) fail(409, "อีเมลนี้มีบัญชีแล้ว");
       const role = pickRole(input.role, "STAFF");
+      if (role === "ADMIN" && !makesAdmin) fail(409, "ข้อมูลทีมงานเปลี่ยนระหว่างทำรายการ กรุณาลองใหม่");
       const id = randomUUID();
       const password = temporaryPassword();
       run(
@@ -81,6 +90,34 @@ export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash,
       );
       auditDetail(user, "STAFF_CREATE", id, { email, role });
       return { member: member(one("SELECT * FROM users WHERE id=?", id)), temporaryPassword: password };
+    });
+  }
+
+  /** Grant or remove team rights on any existing account, including a customer who
+   * signed up on the storefront. CUSTOMER means "back to a normal customer". Orders,
+   * credit and chat history stay with the account. */
+  function setMemberRole(user, id, input = {}) {
+    requireAdmin(user);
+    const role = input.role;
+    if (!["ADMIN", "STAFF", "CUSTOMER"].includes(role)) fail(400, "สิทธิ์ไม่ถูกต้อง");
+    // Granting admin rights needs the acting admin's password again (outside the tx so a
+    // wrong password still counts toward the lockout).
+    const target = one("SELECT role FROM users WHERE id=?", String(id ?? ""));
+    if (role === "ADMIN" && target && target.role !== "ADMIN") confirmPassword(user, input.currentPassword);
+    return tx(() => {
+      const row = one("SELECT * FROM users WHERE id=?", clean(id, 1, 80, "บัญชี"));
+      if (!row) fail(404, "ไม่พบบัญชี");
+      if (row.role === role) return { member: member(row) };
+      guardChange(user, row);
+      if ((row.status ?? "ACTIVE") !== "ACTIVE") fail(409, "บัญชีนี้ถูกระงับอยู่ เปิดบัญชีก่อนจึงเปลี่ยนสิทธิ์ได้");
+      if (row.role === "ADMIN" && activeAdmins() <= 1) fail(409, "ต้องมีแอดมินที่ใช้งานอยู่อย่างน้อย 1 คน");
+      run("UPDATE users SET role=? WHERE id=?", role, row.id);
+      if (role === "CUSTOMER") run("UPDATE chat_threads SET assigned_to=NULL WHERE assigned_to=?", row.id);
+      auditDetail(user, "TEAM_ROLE", row.id, { from: row.role, to: role });
+      const label = { ADMIN: "แอดมิน", STAFF: "ทีมงาน" }[role];
+      if (label)
+        notify(row.id, "team", "คุณได้รับสิทธิ์" + label, user.name + " เพิ่มคุณเป็น" + label + " เข้าหลังบ้านได้ที่เมนูบัญชี");
+      return { member: member(one("SELECT * FROM users WHERE id=?", row.id)) };
     });
   }
 
@@ -130,5 +167,5 @@ export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash,
     });
   }
 
-  return { team, saveStaff, setStaffActive, assignChatThread };
+  return { team, saveStaff, setMemberRole, setStaffActive, assignChatThread };
 }

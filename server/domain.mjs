@@ -29,6 +29,7 @@ import { createAdminVariantStockApis } from "./admin-variant-stock-apis.mjs";
 import { createAdminOrderReplaceApis } from "./admin-order-replace.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createFileStore } from "./file-store.mjs";
+import { createAuthHardening } from "./auth-hardening.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
@@ -61,6 +62,8 @@ export function createCommerceCore({
   adminPassword,
   fileStore: fileStoreOption,
   uploads,
+  // Injected clock for session / lockout / TOTP tests.
+  clock = () => Date.now(),
 } = {}) {
   const one = (sql, ...params) => db.prepare(sql).get(...params);
   const all = (sql, ...params) => db.prepare(sql).all(...params);
@@ -351,15 +354,32 @@ export function createCommerceCore({
   };
   const issueSession = (user) => {
     const token = randomBytes(32).toString("hex");
-    run("DELETE FROM sessions WHERE expires_at<?", Date.now());
+    const now = clock();
+    // ADMIN/STAFF: 12h absolute + 2h idle; customers keep 7 days (auth-hardening.mjs).
+    const lifetime = auth.sessionLifetime(user);
+    run("DELETE FROM sessions WHERE expires_at<?", now);
     run(
-      "INSERT INTO sessions VALUES(?,?,?)",
+      "INSERT INTO sessions(token_hash,user_id,expires_at,created_at,last_seen) VALUES(?,?,?,?,?)",
       hash(token),
       user.id,
-      Date.now() + 7 * 86400000,
+      now + lifetime,
+      now,
+      now,
     );
-    return { user: publicUser(user), token };
+    return { user: publicUser(user), token, maxAge: Math.floor(lifetime / 1000) };
   };
+  const auth = createAuthHardening({
+    one,
+    run,
+    tx,
+    fail,
+    key,
+    clock,
+    encrypt,
+    decrypt,
+    passwordMatches,
+    issueSession: (user) => issueSession(user),
+  });
   function seedData() {
     if (one("SELECT id FROM products LIMIT 1")) return;
     tx(() => {
@@ -537,7 +557,9 @@ export function createCommerceCore({
     const marks = demoIds.map(() => "?").join(",");
     tx(() => {
       const demoUsers = all(
-        "SELECT id FROM users WHERE email LIKE '%@example.invalid' OR email LIKE '%@demo.astra.local' OR email LIKE '%@merchant.astra.local'",
+        // Launch cleanup removes only accounts the demo buttons created. Real customers who
+        // signed up during testing (with or without an email) are never selected by pattern.
+        "SELECT id FROM users WHERE is_demo=1",
       ).map((row) => row.id);
       run(
         `DELETE FROM inventory WHERE variant_id IN (SELECT id FROM variants WHERE product_id IN (${marks}))`,
@@ -594,6 +616,8 @@ export function createCommerceCore({
           `DELETE FROM users WHERE id IN (${users}) AND role<>'ADMIN'`,
           ...demoUsers,
         );
+        // Demo owner accounts stay for the audit trail but can never sign in again.
+        run(`UPDATE users SET status='SUSPENDED' WHERE id IN (${users}) AND role='ADMIN'`, ...demoUsers);
       }
       const saved = one(
         "SELECT value FROM runtime_flags WHERE key='shop-settings'",
@@ -622,14 +646,17 @@ export function createCommerceCore({
     // owner changed in the back office survives restarts. Rotating the secret still wins.
     const secretMark = createHmac("sha256", key).update("admin-secret:" + adminPassword).digest("hex");
     const appliedMark = one("SELECT value FROM runtime_flags WHERE key='admin-secret'")?.value;
-    if (existing && appliedMark !== secretMark)
+    if (existing && appliedMark !== secretMark) {
       run(
         "UPDATE users SET password_hash=?,role=? WHERE id=?",
         passwordHash(adminPassword),
         ROLES.ADMIN,
         existing.id,
       );
-    else if (existing) run("UPDATE users SET role=? WHERE id=?", ROLES.ADMIN, existing.id);
+      // Escape hatch: rotating the secret also clears the owner's 2FA and lockout,
+      // so an operator who lost the authenticator can always get back in.
+      auth.resetSecondFactor(existing.id, "admin-secret-rotated");
+    } else if (existing) run("UPDATE users SET role=? WHERE id=?", ROLES.ADMIN, existing.id);
     else
       run(
         "INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,?)",
@@ -662,7 +689,7 @@ export function createCommerceCore({
       fail(409, "ชื่อผู้ใช้นี้ถูกใช้แล้ว");
     const email = clean(
       input.email ||
-        (username ?? randomBytes(8).toString("hex")) + "@demo.astra.local",
+        (username ?? randomBytes(8).toString("hex")) + "@no-email.asiax.local",
       5,
       160,
       "อีเมล",
@@ -705,41 +732,18 @@ export function createCommerceCore({
     });
     return issueSession(one("SELECT * FROM users WHERE id=?", id));
   }
-  function login(rawInput) {
-    const input = withoutClientPrivileges(rawInput);
-    const email = clean(
-      input.email ?? input.username,
-      3,
-      160,
-      "ชื่อผู้ใช้หรืออีเมล",
-    );
-    const password = clean(input.password, 1, 128, "รหัสผ่าน");
-    const user = one(
-      "SELECT * FROM users WHERE email=? OR username=?",
-      email,
-      email,
-    );
-    if (
-      !passwordMatches(
-        password,
-        user?.password_hash ??
-          "00000000000000000000000000000000:" + "00".repeat(64),
-      )
-    )
-      fail(401, "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
-    if ((user.status ?? "ACTIVE") !== "ACTIVE")
-      fail(403, "บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อร้าน");
-    audit(user, "LOGIN", user.id);
-    return issueSession(user);
-  }
+  // Lockout, failed-login audit and the TOTP second step live in auth-hardening.mjs.
+  const login = (rawInput, ctx) => auth.login(rawInput, ctx);
   function demo() {
     if (!allowSandbox) fail(403, "ร้านนี้ไม่เปิดบัญชีทดลอง");
     const suffix = randomBytes(8).toString("hex");
-    return register({
+    const visitor = register({
       name: "ผู้เยี่ยมชม " + suffix.slice(0, 4),
       email: suffix + "@demo.astra.local",
       password: randomBytes(24).toString("hex"),
     });
+    run("UPDATE users SET is_demo=1 WHERE id=?", visitor.user.id);
+    return visitor;
   }
   function demoMerchant() {
     if (!allowDemoAdmin)
@@ -750,7 +754,7 @@ export function createCommerceCore({
       email: suffix + "@merchant.astra.local",
       password: randomBytes(24).toString("hex"),
     });
-    run("UPDATE users SET role=? WHERE id=?", ROLES.ADMIN, registered.user.id);
+    run("UPDATE users SET role=?,is_demo=1 WHERE id=?", ROLES.ADMIN, registered.user.id);
     run("DELETE FROM sessions WHERE token_hash=?", hash(registered.token));
     audit({ id: registered.user.id }, "DEMO_MERCHANT", registered.user.id);
     return issueSession(
@@ -759,13 +763,7 @@ export function createCommerceCore({
   }
   function session(token) {
     if (!token) return null;
-    return (
-      one(
-        "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND COALESCE(u.status,'ACTIVE')='ACTIVE'",
-        hash(token),
-        Date.now(),
-      ) ?? null
-    );
+    return auth.sessionUser(hash(token));
   }
   const PUBLIC_STOCK_CAP = 10;
   const getLowStockAt = () => {
@@ -854,6 +852,7 @@ export function createCommerceCore({
   function saveSettings(user, input) {
     requireAdmin(user);
     const current = settings();
+    const before = { ...current };
     for (const [field, max] of [
       ["shopName", 80],
       ["description", 1000],
@@ -892,7 +891,20 @@ export function createCommerceCore({
       "INSERT INTO runtime_flags(key,value) VALUES('shop-settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
       JSON.stringify(current),
     );
-    audit(user, "SAVE_SETTINGS", user.id);
+    // S10: keep what changed (short values only) so the audit log answers "who changed what".
+    const changed = {};
+    for (const [field, value] of Object.entries(current)) {
+      if (JSON.stringify(before[field]) === JSON.stringify(value)) continue;
+      const short = (v) => (typeof v === "string" && v.length > 80 ? v.slice(0, 80) + "…" : v);
+      changed[field] = { from: short(before[field] ?? null), to: short(value) };
+    }
+    run(
+      "INSERT INTO audit(user_id,action,entity_id,detail) VALUES(?,?,?,?)",
+      user.id,
+      "SAVE_SETTINGS",
+      user.id,
+      Object.keys(changed).length ? JSON.stringify({ changed }) : null,
+    );
     return { shop: current };
   }
   function overview() {
@@ -1350,6 +1362,7 @@ export function createCommerceCore({
     run("UPDATE orders SET payment_hash=? WHERE id=?", hash(token), id);
     return { ...orderDetail(user, id), paymentToken: token };
   }
+  const TEST_CREDIT_CAP = 10000 * 100;
   function topup(user, input) {
     requireUser(user);
     if (!allowSandbox) fail(501, "การเติมเครดิตทดลองปิดอยู่");
@@ -1362,6 +1375,19 @@ export function createCommerceCore({
       if (prior && prior.amount !== input.amount * 100)
         fail(409, "รหัสคำขอนี้ถูกใช้กับยอดเติมอื่นแล้ว");
       if (!prior) {
+        // Test credit buys real stock if someone loads it, so keep it small: a balance
+        // cap and a daily top-up count per account.
+        const balance = one(
+          "SELECT COALESCE(SUM(amount),0) AS n FROM ledger WHERE user_id=? AND kind='DEMO_CREDIT'",
+          user.id,
+        ).n;
+        if (balance + input.amount * 100 > TEST_CREDIT_CAP)
+          fail(409, "เครดิตทดลองมีได้สูงสุด " + TEST_CREDIT_CAP / 100 + " บาทต่อบัญชี");
+        const today = one(
+          "SELECT COUNT(*) AS n FROM audit WHERE user_id=? AND action='DEMO_TOPUP' AND created_at >= datetime('now','-1 day')",
+          user.id,
+        ).n;
+        if (today >= 10) fail(429, "เติมเครดิตทดลองได้วันละ 10 ครั้ง");
         insertLedgerEntry({
           userId: user.id,
           amount: input.amount * 100,
@@ -1437,14 +1463,15 @@ export function createCommerceCore({
           price: p.preorder && v.id === "cinema-max-30" ? 0 : v.price,
         })),
       })),
+      // S8: only what the dashboard shows — the latest orders and two counters.
+      // Full lists live behind the paged, filtered admin APIs.
       orders: all(
-        "SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product FROM orders o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id UNION ALL SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product FROM reservations o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id ORDER BY 5 DESC",
+        "SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product FROM orders o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id UNION ALL SELECT o.id,o.status,o.total,o.quantity,o.created_at,u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product FROM reservations o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id ORDER BY 5 DESC LIMIT 6",
       ),
-      customers: all("SELECT id,email,name,role,created_at FROM users"),
-      ledger: all(
-        "SELECT l.*,u.name FROM ledger l JOIN users u ON u.id=l.user_id ORDER BY l.created_at DESC",
-      ),
-      audit: all("SELECT * FROM audit ORDER BY id DESC LIMIT 50"),
+      pendingPayment: one(
+        "SELECT (SELECT COUNT(*) FROM orders WHERE status='PENDING_PAYMENT')+(SELECT COUNT(*) FROM reservations WHERE status='PENDING_PAYMENT') AS n",
+      ).n,
+      preorderQueue: one("SELECT COUNT(*) AS n FROM reservations WHERE status='PREORDER'").n,
     };
   }
   function importCodes(user, input) {
@@ -1579,7 +1606,9 @@ export function createCommerceCore({
     const description = clean(input.description, 5, 1000, "รายละเอียด");
     if (!categories.some((c) => c.id === input.category))
       fail(400, "หมวดหมู่ไม่ถูกต้อง");
-    const price = integer(input.price, 100, 10000000, "ราคา");
+    // Price belongs to the variants once a product exists (VariantManager); only a new
+    // product takes it here, for its first variant. Updating never overwrites prices.
+    const price = input.id ? null : integer(input.price, 100, 10000000, "ราคา");
     const hasPreorder = Object.prototype.hasOwnProperty.call(input, "preorder");
     const preorderFlag =
       input.preorder === true || input.preorder === "on" || input.preorder === 1
@@ -1602,11 +1631,6 @@ export function createCommerceCore({
         );
         if (preorder !== existing.preorder)
           audit(user, preorder ? "PRODUCT_SET_PREORDER" : "PRODUCT_SET_READY", id);
-        run(
-          "UPDATE variants SET price=? WHERE id=(SELECT id FROM variants WHERE product_id=? ORDER BY price LIMIT 1)",
-          price,
-          id,
-        );
       } else {
         run(
           "INSERT INTO products(id,name,category,description,art,active,featured,preorder) VALUES(?,?,?,?,?,?,?,?)",
@@ -1924,18 +1948,26 @@ export function createCommerceCore({
     fail,
     clean,
     audit,
+    run,
+    notify,
     readDeliveredItems,
     inventoryAvailableAliased,
     getLowStockAt,
     bangkokDayRange,
     isAdmin,
   });
-  const {
-    adminOrders,
-    adminOrderDetail,
-    adminRevealOrderCredentials,
-    adminCustomers,
-  } = listApis;
+  const { adminOrders, adminRevealOrderCredentials, adminCustomers } = listApis;
+  // NFR-3: team members handle orders but never see money movement (payment rows,
+  // provider refs, refunds, fees). Admins get the full record.
+  function adminOrderDetail(user, id) {
+    const detail = listApis.adminOrderDetail(user, id);
+    if (isAdmin(user)) return detail;
+    const safe = { ...detail, payments: [] };
+    for (const key of Object.keys(safe))
+      if (/^(payment|refund|fee|outstanding)/i.test(key) && key !== "payments") delete safe[key];
+    safe.timeline = (detail.timeline ?? []).filter((e) => !/refund|fee/i.test(String(e.event)));
+    return safe;
+  }
   function adminProducts(user, query) {
     const page = listApis.adminProducts(user, query);
     return {
@@ -1974,7 +2006,7 @@ export function createCommerceCore({
     fail,
     clean,
   });
-  const { team, saveStaff, setStaffActive, assignChatThread } = createTeamApis({
+  const { team, saveStaff, setMemberRole, setStaffActive, assignChatThread } = createTeamApis({
     passwordHash,
     requireAdmin,
     requireStaff,
@@ -1985,6 +2017,7 @@ export function createCommerceCore({
     fail,
     clean,
     notify,
+    confirmPassword: auth.confirmPassword,
   });
   const {
     adminProductVariants,
@@ -2091,8 +2124,16 @@ export function createCommerceCore({
     adminCancelOrder,
     adminSetOrderNote,
     replaceOrderCredential,
+    loginTotp: auth.loginTotp,
+    confirmPassword: auth.confirmPassword,
+    reauthAdmin: auth.reauthAdmin,
+    totpStatus: auth.totpStatus,
+    totpSetup: auth.totpSetup,
+    totpEnable: auth.totpEnable,
+    totpDisable: auth.totpDisable,
     team,
     saveStaff,
+    setMemberRole,
     setStaffActive,
     assignChatThread,
     salesReport,

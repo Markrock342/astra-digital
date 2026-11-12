@@ -79,12 +79,22 @@ export function createAdminListApis({
   fail,
   clean,
   audit,
+  run,
+  notify,
   readDeliveredItems,
   inventoryAvailableAliased,
   getLowStockAt,
   bangkokDayRange,
   isAdmin,
 }) {
+  const auditDetail = (user, action, entity, detail) =>
+    run(
+      "INSERT INTO audit(user_id,action,entity_id,detail) VALUES(?,?,?,?)",
+      user?.id ?? null,
+      action,
+      entity ?? null,
+      detail == null ? null : JSON.stringify(detail),
+    );
   function dayBounds(fromRaw, toRaw) {
     const hasFrom = fromRaw != null && String(fromRaw).trim() !== "";
     const hasTo = toRaw != null && String(toRaw).trim() !== "";
@@ -317,9 +327,44 @@ export function createAdminListApis({
     };
   }
 
-  function adminRevealOrderCredentials(user, id) {
+  // Every reveal needs a reason, and each person gets an hourly budget. Hitting it
+  // blocks further reveals and tells the admins once, so a leaving team member
+  // cannot quietly pull every sold account.
+  const REVEAL_LIMIT = { STAFF: 20, ADMIN: 60 };
+  function adminRevealOrderCredentials(user, id, input = {}) {
     requireStaff(user);
     const orderId = clean(id, 1, 80, "คำสั่งซื้อ");
+    const reason = clean(input.reason, 3, 200, "เหตุผลที่เปิดดู");
+    // The over-limit warning is written in its own transaction so the refusal
+    // (which throws) does not roll the alert back.
+    const limit = REVEAL_LIMIT[user.role] ?? REVEAL_LIMIT.STAFF;
+    const overLimit = tx(() => {
+      const recent = one(
+        "SELECT COUNT(*) AS n FROM audit WHERE user_id=? AND action='REVEAL_ORDER_CREDENTIALS' AND created_at >= datetime('now','-1 hour')",
+        user.id,
+      ).n;
+      if (recent < limit) return false;
+      const warned = one(
+        "SELECT 1 AS y FROM audit WHERE user_id=? AND action='REVEAL_LIMIT' AND created_at >= datetime('now','-1 hour')",
+        user.id,
+      );
+      if (!warned) {
+        auditDetail(user, "REVEAL_LIMIT", orderId, { limit });
+        for (const admin of all(
+          "SELECT id FROM users WHERE role='ADMIN' AND COALESCE(status,'ACTIVE')='ACTIVE' AND id<>?",
+          user.id,
+        ))
+          notify(
+            admin.id,
+            "security",
+            "มีการเปิดดูรหัสบ่อยผิดปกติ",
+            user.name + " เปิดดูรหัสครบ " + limit + " ครั้งในชั่วโมงเดียว ระบบระงับการเปิดดูของบัญชีนี้ชั่วคราว",
+          );
+      }
+      return true;
+    });
+    if (overLimit)
+      fail(429, "เปิดดูรหัสครบ " + limit + " ครั้งในชั่วโมงนี้แล้ว ระบบแจ้งแอดมินแล้ว ลองใหม่ภายหลัง");
     return tx(() => {
       const row = loadAdminOrderRow(orderId);
       if (!row) fail(404, "ไม่พบคำสั่งซื้อ");
@@ -327,7 +372,7 @@ export function createAdminListApis({
         fail(409, "ยังไม่มีบัญชีที่ส่งให้ดู");
       const bind = row.preorder ? "reservation_id" : "order_id";
       const delivered = readDeliveredItems(bind, orderId);
-      audit(user, "REVEAL_ORDER_CREDENTIALS", orderId);
+      auditDetail(user, "REVEAL_ORDER_CREDENTIALS", orderId, { reason });
       return {
         id: orderId,
         codes: delivered.codes,

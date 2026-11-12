@@ -5,8 +5,10 @@ import assert from "node:assert/strict";
 import { createCommerce } from "../server/commerce.mjs";
 import { createAPIHandler } from "../server/api-handler.mjs";
 import { ROLES } from "../server/auth-policy.mjs";
+import { randomBytes, scryptSync } from "node:crypto";
 
 const BASE = "http://127.0.0.1:4331";
+const BOSS_PASSWORD = "Use-case-Boss-Password-123";
 
 function shop(t, options = { allowDemoAdmin: true }) {
   const s = createCommerce(options);
@@ -48,7 +50,13 @@ function shop(t, options = { allowDemoAdmin: true }) {
   async function admin() {
     const r = await post("/api/demo-merchant", null, {});
     assert.equal(r.status, 200);
-    return { cookie: "astra_session=" + r.cookieOut };
+    // Demo merchants get a random password; give this one a known password so it can
+    // re-confirm sensitive actions (payment channel, new admins).
+    const salt = randomBytes(16).toString("hex");
+    s.db
+      .prepare("UPDATE users SET password_hash=? WHERE id=?")
+      .run(salt + ":" + scryptSync(BOSS_PASSWORD, salt, 64).toString("hex"), r.body.user.id);
+    return { id: r.body.user.id, cookie: "astra_session=" + r.cookieOut, password: BOSS_PASSWORD };
   }
   return { s, get, post, register, admin };
 }
@@ -60,6 +68,7 @@ async function enableSandbox(api, boss) {
   const r = await api.post("/api/admin/payment-channel", boss.cookie, {
     provider: "sandbox",
     active: true,
+    currentPassword: boss.password,
   });
   assert.equal(r.status, 200);
 }

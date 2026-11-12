@@ -8721,6 +8721,92 @@ a.reference-bestseller {
 .admin-account-card {
   max-width: 640px;
 }
+/* Settings › บัญชีแอดมิน › ยืนยันตัวตน 2 ขั้น and inline password re-confirm
+   (shadcn/ui-style form rows, reusing the admin tokens above). */
+.totp-card {
+  margin-top: 16px;
+  display: grid;
+  gap: 14px;
+}
+.totp-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.totp-head h2 {
+  margin: 0 0 4px;
+}
+.totp-head p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.totp-steps {
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.totp-steps p {
+  margin: 0;
+}
+.totp-secret {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.totp-secret code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  padding: 8px 12px;
+  border: 1px solid var(--border, #e4e4e7);
+  border-radius: 6px;
+  background: #f4f4f5;
+  user-select: all;
+  word-break: break-all;
+}
+.totp-recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+  margin: 0;
+  padding-left: 22px;
+}
+.totp-recovery-codes code {
+  font-size: 15px;
+}
+.totp-recovery .admin-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.admin-inline-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.admin-inline-confirm input {
+  min-height: 36px;
+  min-width: 180px;
+  padding: 6px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border, #e4e4e7);
+  border-radius: 6px;
+  background: #fff;
+}
+@media (max-width: 600px) {
+  .totp-recovery-codes {
+    grid-template-columns: 1fr;
+  }
+  .admin-inline-confirm input {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+}
 .audit-detail {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   word-break: break-all;
@@ -9279,4 +9365,51 @@ a.reference-bestseller {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* Second-row menus were easy to miss: white bar, larger type, outlined pills
+   so every section reads as a button, not just the active one. */
+.merchant-shell .reference-subnav {
+  background: #fff;
+  height: 56px;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.merchant-shell .reference-subnav a {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+}
+.merchant-shell .reference-subnav a:hover:not(.active) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.merchant-shell .admin-detail-grid > .span-2 {
+  grid-column: 1 / -1;
+}
+.merchant-shell .admin-test-warning {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #f59e0b;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Uploaded product photos fill the art frame. */
+.product-art.art-photo {
+  background: #e5e7eb;
+}
+.product-art.art-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }

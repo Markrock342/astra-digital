@@ -143,15 +143,23 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
   useEffect(() => {
     if (user) go(target);
   }, [user?.id]);
+  // Second step for ADMIN/STAFF accounts with 2FA: the password was right, no session yet.
+  const [challenge, setChallenge] = useState<string | null>(null);
+  const [useRecovery, setUseRecovery] = useState(false);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
-      await api(
+      const result = await api<{ needsTotp?: boolean; challenge?: string }>(
         register ? "/register" : "/login",
         Object.fromEntries(new FormData(e.currentTarget)),
       );
+      if (result.needsTotp && result.challenge) {
+        setChallenge(result.challenge);
+        setUseRecovery(false);
+        return;
+      }
       await refresh();
       go(target);
       toast(register ? t("สมัครสมาชิกสำเร็จ") : t("เข้าสู่ระบบสำเร็จ"));
@@ -161,6 +169,81 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
       setBusy(false);
     }
   }
+  async function submitCode(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const code = String(new FormData(e.currentTarget).get("code") ?? "");
+    setBusy(true);
+    setError("");
+    try {
+      await api("/login/totp", { challenge, code });
+      await refresh();
+      go(target);
+      toast(t("เข้าสู่ระบบสำเร็จ"));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (challenge)
+    return (
+      <main className="reference-auth-main">
+        <div className="reference-auth-heading">
+          <Link to="/" className="reference-auth-brand" aria-label={t("หน้าแรก")}>
+            <BrandLogo />
+          </Link>
+          <h1>{t("ยืนยันตัวตน 2 ขั้น")}</h1>
+          <p>
+            {useRecovery
+              ? t("กรอกรหัสกู้คืนที่บันทึกไว้ตอนเปิดใช้งาน รหัสแต่ละชุดใช้ได้ครั้งเดียว")
+              : t("เปิดแอปยืนยันตัวตนในโทรศัพท์ แล้วกรอกรหัส 6 หลักที่แสดงอยู่")}
+          </p>
+        </div>
+        <form onSubmit={submitCode} className="reference-auth-form" key={useRecovery ? "recovery" : "totp"}>
+          <ErrorMessage message={error} />
+          <label className="field">
+            {useRecovery ? t("รหัสกู้คืน") : t("รหัสยืนยัน 6 หลัก")}
+            <input
+              name="code"
+              autoComplete="one-time-code"
+              inputMode={useRecovery ? "text" : "numeric"}
+              pattern={useRecovery ? undefined : "[0-9]{6}"}
+              minLength={6}
+              maxLength={useRecovery ? 11 : 6}
+              placeholder={useRecovery ? "xxxxx-xxxxx" : "000000"}
+              autoFocus
+              required
+            />
+          </label>
+          <button className="button primary full" disabled={busy}>
+            {busy ? <LoaderCircle className="spin" size={17} /> : t("ยืนยันและเข้าสู่ระบบ")}
+          </button>
+        </form>
+        <p className="reference-auth-help">
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => {
+              setUseRecovery(!useRecovery);
+              setError("");
+            }}
+          >
+            {useRecovery ? t("ใช้รหัสจากแอปยืนยันตัวตนแทน") : t("ไม่มีโทรศัพท์? ใช้รหัสกู้คืน")}
+          </button>
+          {" · "}
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => {
+              setChallenge(null);
+              setError("");
+            }}
+          >
+            {t("กลับไปกรอกรหัสผ่าน")}
+          </button>
+        </p>
+      </main>
+    );
   return (
     <main className="reference-auth-main">
       <div className="reference-auth-heading">
@@ -340,8 +423,14 @@ export function ReferenceProduct({ id }: { id: string }) {
       go("/cart");
     }
   };
-  const imageCount =
-    product.art === "stream" ? 3 : product.art === "cinema" ? 2 : 1;
+  // Uploaded images (admin › รูปสินค้า) come first; the bundled artwork is the fallback.
+  const uploaded = product.images ?? [];
+  const imageCount = uploaded.length
+    ? uploaded.length
+    : product.art === "stream" ? 3 : product.art === "cinema" ? 2 : 1;
+  const bundled = (i: number) =>
+    "/products/" + (product.art === "stream" ? "disney" : "monomax") + (i ? "-" + i : "") + ".webp";
+  const current = Math.min(image, imageCount - 1);
   return (
     <main className="container page-main reference-product-page">
       <Link to="/products" className="back-link">
@@ -351,16 +440,10 @@ export function ReferenceProduct({ id }: { id: string }) {
       <div className="reference-product-grid">
         <div className="reference-gallery">
           <div className="reference-main-image">
-            {["stream", "cinema"].includes(product.art) ? (
-              <img
-                src={
-                  "/products/" +
-                  (product.art === "stream" ? "disney" : "monomax") +
-                  (image ? "-" + image : "") +
-                  ".webp"
-                }
-                alt={product.name}
-              />
+            {uploaded.length ? (
+              <img src={uploaded[current].url} alt={product.name} />
+            ) : ["stream", "cinema"].includes(product.art) ? (
+              <img src={bundled(current)} alt={product.name} />
             ) : (
               <Art type={product.art} name={product.name} />
             )}
@@ -369,20 +452,12 @@ export function ReferenceProduct({ id }: { id: string }) {
             <div className="reference-thumbnails">
               {Array.from({ length: imageCount }, (_, i) => (
                 <button
-                  className={image === i ? "selected" : ""}
+                  className={current === i ? "selected" : ""}
                   key={i}
                   onClick={() => setImage(i)}
                   aria-label={t("รูปสินค้า ") + (i + 1)}
                 >
-                  <img
-                    src={
-                      "/products/" +
-                      (product.art === "stream" ? "disney" : "monomax") +
-                      (i ? "-" + i : "") +
-                      ".webp"
-                    }
-                    alt=""
-                  />
+                  <img src={uploaded.length ? uploaded[i].url : bundled(i)} alt="" />
                 </button>
               ))}
             </div>

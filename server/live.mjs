@@ -36,6 +36,7 @@ const LIVE_METHODS = {
   adminSetCustomerStatus: ["customers"],
   saveSettings: ["catalog"],
   saveStaff: ["team"],
+  setMemberRole: ["team", "customers", "notify"],
   setStaffActive: ["team"],
 };
 

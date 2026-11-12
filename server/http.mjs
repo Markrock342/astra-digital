@@ -29,7 +29,7 @@ export function createApp(service, { production = false, d1Catalog } = {}) {
             ? { body: Readable.toWeb(req), duplex: "half" }
             : {}),
         });
-        const response = await handle(request);
+        const response = await handle(request, { ip: req.socket.remoteAddress });
         res.writeHead(response.status, Object.fromEntries(response.headers));
         res.end(Buffer.from(await response.arrayBuffer()));
         return;

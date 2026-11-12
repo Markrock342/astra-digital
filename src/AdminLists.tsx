@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   ArrowLeft,
+  Copy,
   Download,
   Eye,
   LogOut,
@@ -423,7 +424,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
       setCancelling(false);
       setOrder(await api<OrderDetail>("/admin/orders/" + id));
     } catch (err) {
-      setError((err as Error).message);
+      failed(err);
     }
   }
   const [order, setOrder] = useState<OrderDetail | null>(null);
@@ -436,6 +437,17 @@ export function AdminOrderDetail({ id }: { id: string }) {
       .then(setOrder)
       .catch((e) => setError((e as Error).message));
   }, [id]);
+  // Another team member may deliver, cancel or replace this order while it is open.
+  const reload = () =>
+    api<OrderDetail>("/admin/orders/" + id)
+      .then(setOrder)
+      .catch(() => {});
+  useLive(["orders"], () => void reload());
+  /** Usually someone else changed the order first (409): show the error and the fresh state. */
+  function failed(err: unknown) {
+    setError((err as Error).message);
+    void reload();
+  }
   const [replacing, setReplacing] = useState<string | null>(null);
   const [replaceReason, setReplaceReason] = useState("");
   const pairUnits = (order?.units ?? []).filter((u) => u.kind === "pair");
@@ -451,7 +463,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
       setRevealed(null);
       setOrder(await api<OrderDetail>("/admin/orders/" + id));
     } catch (err) {
-      setError((err as Error).message);
+      failed(err);
     }
   }
   const replaceButton = (unitId?: string) =>
@@ -460,12 +472,18 @@ export function AdminOrderDetail({ id }: { id: string }) {
         บัญชีเสีย · เปลี่ยนให้ลูกค้า
       </button>
     ) : null;
-  async function reveal() {
+  // Reveals need a reason (kept in the audit log) and are budgeted per hour on the server.
+  const [revealReason, setRevealReason] = useState<string | null>(null);
+  async function reveal(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const values = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
+    const reason = values.reason === "อื่นๆ" ? (values.other ?? "").trim() : values.reason;
     try {
-      setRevealed(await api("/admin/orders/" + id + "/reveal", {}));
+      setRevealed(await api("/admin/orders/" + id + "/reveal", { reason }));
+      setRevealReason(null);
       toast("บันทึกการเปิดดูรหัสแล้ว");
-    } catch (e) {
-      setError((e as Error).message);
+    } catch (err) {
+      setError((err as Error).message);
     }
   }
   const shown = revealed ?? order;
@@ -576,11 +594,43 @@ export function AdminOrderDetail({ id }: { id: string }) {
                       </div>
                     </form>
                   )}
-                  {!revealed && (
-                    <button className="button secondary" onClick={reveal}>
+                  {!revealed && revealReason === null && (
+                    <button className="button secondary" onClick={() => setRevealReason("")}>
                       <Eye size={15} />
                       แสดงรหัส (บันทึกว่าใครเปิดดู)
                     </button>
+                  )}
+                  {!revealed && revealReason !== null && (
+                    <form className="admin-reveal-form" onSubmit={reveal}>
+                      <label className="field">
+                        เหตุผลที่เปิดดูรหัส
+                        <select name="reason" required value={revealReason} onChange={(e) => setRevealReason(e.target.value)}>
+                          <option value="" disabled>
+                            เลือกเหตุผล
+                          </option>
+                          <option>ลูกค้าแจ้งว่าเข้าใช้งานไม่ได้</option>
+                          <option>ลูกค้าขอให้ส่งรหัสอีกครั้ง</option>
+                          <option>ตรวจสอบก่อนเปลี่ยนบัญชีให้ลูกค้า</option>
+                          <option>อื่นๆ</option>
+                        </select>
+                      </label>
+                      {revealReason === "อื่นๆ" && (
+                        <label className="field">
+                          ระบุเหตุผล
+                          <input name="other" required minLength={3} maxLength={200} />
+                        </label>
+                      )}
+                      <p className="field-help">ทุกครั้งที่เปิดดูจะบันทึกชื่อคนเปิดและเหตุผลไว้ในประวัติการทำงาน</p>
+                      <div className="admin-action-row">
+                        <button type="button" className="button ghost" onClick={() => setRevealReason(null)}>
+                          ยกเลิก
+                        </button>
+                        <button className="button primary" disabled={!revealReason}>
+                          <Eye size={15} />
+                          แสดงรหัส
+                        </button>
+                      </div>
+                    </form>
                   )}
                 </>
               )}
@@ -604,7 +654,8 @@ export function AdminOrderDetail({ id }: { id: string }) {
                 ))}
               </ol>
               <h2>การชำระเงิน</h2>
-              {order.payments.length === 0 && <p className="muted">ยังไม่มีรายการชำระ</p>}
+              {user?.role !== "ADMIN" && <p className="muted">รายละเอียดการชำระเงินดูได้เฉพาะแอดมิน</p>}
+              {user?.role === "ADMIN" && order.payments.length === 0 && <p className="muted">ยังไม่มีรายการชำระ</p>}
               {order.payments.map((p) => (
                 <div className="settings-row" key={p.id}>
                   <span>
@@ -816,7 +867,7 @@ const historyText = (h: CustomerDetail["history"][number]) => {
 };
 
 export function AdminCustomerDetail({ id }: { id: string }) {
-  const { toast, user } = useStore();
+  const { toast, user, go } = useStore();
   const admin = user?.role === "ADMIN";
   const [data, setData] = useState<CustomerDetail | null>(null);
   const [error, setError] = useState("");
@@ -1013,6 +1064,13 @@ export function AdminCustomerDetail({ id }: { id: string }) {
                       ตั้งรหัสผ่านชั่วคราว
                     </button>
                   )}
+                </>
+              )}
+              {admin && c.status === "ACTIVE" && (
+                <>
+                  <h2>สิทธิ์เข้าหลังบ้าน</h2>
+                  <p className="muted">ให้ลูกค้าคนนี้เป็นทีมงานหรือแอดมิน ใช้รหัสผ่านเดิมเข้าหลังบ้านได้ทันที</p>
+                  <GrantAccess userId={c.id} name={c.name} onDone={() => go("/admin/team")} />
                 </>
               )}
               <h2>ประวัติการแก้ไข</h2>
@@ -1493,7 +1551,228 @@ export function AdminAccount() {
           </button>
         </form>
       </section>
+      <TwoFactorCard />
     </>
+  );
+}
+
+type TotpStatus = { enabled: boolean; enabledAt: string | null; recoveryCodesLeft: number };
+type TotpSetup = { secret: string; otpauthUrl: string };
+
+/** Settings › บัญชีแอดมิน › ยืนยันตัวตน 2 ขั้น (TOTP). Optional per account; form layout
+ * follows shadcn/ui (MIT) form patterns with the existing admin classes. */
+function TwoFactorCard() {
+  const { toast } = useStore();
+  const [status, setStatus] = useState<TotpStatus | null>(null);
+  const [step, setStep] = useState<"idle" | "password" | "scan" | "codes" | "disable">("idle");
+  const [setup, setSetup] = useState<TotpSetup | null>(null);
+  const [codes, setCodes] = useState<string[]>([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = () =>
+    api<TotpStatus>("/account/totp")
+      .then(setStatus)
+      .catch((e) => setError((e as Error).message));
+  useEffect(() => {
+    void load();
+  }, []);
+  const values = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    return Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
+  };
+  async function attempt(work: () => Promise<void>) {
+    setBusy(true);
+    setError("");
+    try {
+      await work();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const start = (e: FormEvent<HTMLFormElement>) => {
+    const form = values(e);
+    void attempt(async () => {
+      setSetup(await api<TotpSetup>("/account/totp/setup", { currentPassword: form.currentPassword }));
+      setStep("scan");
+    });
+  };
+  const enable = (e: FormEvent<HTMLFormElement>) => {
+    const form = values(e);
+    void attempt(async () => {
+      const result = await api<{ recoveryCodes: string[] }>("/account/totp/enable", { code: form.code });
+      setCodes(result.recoveryCodes);
+      setSetup(null);
+      setStep("codes");
+      toast("เปิดยืนยันตัวตน 2 ขั้นแล้ว");
+      await load();
+    });
+  };
+  const disable = (e: FormEvent<HTMLFormElement>) => {
+    const form = values(e);
+    void attempt(async () => {
+      await api("/account/totp/disable", { currentPassword: form.currentPassword, code: form.code });
+      setStep("idle");
+      toast("ปิดยืนยันตัวตน 2 ขั้นแล้ว");
+      await load();
+    });
+  };
+  async function copy(text: string, what: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("คัดลอก" + what + "แล้ว");
+    } catch {
+      setError("คัดลอกอัตโนมัติไม่ได้ กรุณาเลือกข้อความแล้วคัดลอกเอง");
+    }
+  }
+  const cancel = () => {
+    setStep("idle");
+    setSetup(null);
+    setError("");
+  };
+  return (
+    <section className="reference-admin-card admin-detail-card admin-account-card totp-card" aria-labelledby="totp-title">
+      <div className="totp-head">
+        <div>
+          <h2 id="totp-title">ยืนยันตัวตน 2 ขั้น</h2>
+          <p className="muted">
+            เข้าสู่ระบบด้วยรหัสผ่านแล้วต้องกรอกรหัส 6 หลักจากแอปในโทรศัพท์ (เช่น Google Authenticator หรือ Microsoft
+            Authenticator) อีกชั้น ถึงรหัสผ่านหลุดก็เข้าบัญชีไม่ได้
+          </p>
+        </div>
+        {status && (
+          <span className={status.enabled ? "status status-delivered" : "status"}>
+            {status.enabled ? "เปิดอยู่" : "ปิดอยู่"}
+          </span>
+        )}
+      </div>
+      <ErrorMessage message={error} />
+      {!status ? (
+        <p className="muted">กำลังโหลด…</p>
+      ) : step === "codes" ? (
+        <div className="admin-temp-password totp-recovery">
+          <p>
+            <strong>รหัสกู้คืน (แสดงครั้งเดียว)</strong> เก็บไว้ในที่ปลอดภัย ถ้าโทรศัพท์หาย ใช้รหัสเหล่านี้แทนรหัสจากแอปได้
+            รหัสละครั้ง
+          </p>
+          <ol className="totp-recovery-codes" aria-label="รหัสกู้คืน">
+            {codes.map((c) => (
+              <li key={c}>
+                <code>{c}</code>
+              </li>
+            ))}
+          </ol>
+          <div className="admin-row-actions">
+            <button type="button" className="button secondary" onClick={() => void copy(codes.join("\n"), "รหัสกู้คืน")}>
+              <Copy size={15} /> คัดลอกทั้งหมด
+            </button>
+            <button
+              type="button"
+              className="button primary"
+              onClick={() => {
+                setCodes([]);
+                setStep("idle");
+              }}
+            >
+              บันทึกรหัสแล้ว
+            </button>
+          </div>
+        </div>
+      ) : status.enabled ? (
+        step === "disable" ? (
+          <form onSubmit={disable} className="admin-form-grid">
+            <label className="field span-2">
+              รหัสผ่านปัจจุบัน
+              <input name="currentPassword" type="password" autoComplete="current-password" required maxLength={128} />
+            </label>
+            <label className="field span-2">
+              รหัส 6 หลักจากแอป หรือรหัสกู้คืน
+              <input name="code" autoComplete="one-time-code" required minLength={6} maxLength={11} />
+            </label>
+            <p className="field-help span-2">ปิดแล้วการเข้าสู่ระบบจะใช้แค่รหัสผ่าน และรหัสกู้คืนเดิมทั้งหมดใช้ไม่ได้อีก</p>
+            <button className="button primary" disabled={busy}>
+              ยืนยันปิดการยืนยัน 2 ขั้น
+            </button>
+            <button type="button" className="button ghost" onClick={cancel}>
+              ยกเลิก
+            </button>
+          </form>
+        ) : (
+          <>
+            <div className="settings-row">
+              <span>
+                เปิดใช้งานเมื่อ
+                <small>{status.enabledAt ? dateTime(status.enabledAt) : "–"}</small>
+              </span>
+              <span>
+                รหัสกู้คืนเหลือ <strong>{status.recoveryCodesLeft}</strong> ชุด
+              </span>
+            </div>
+            <button type="button" className="button secondary" onClick={() => setStep("disable")}>
+              ปิดการยืนยัน 2 ขั้น
+            </button>
+          </>
+        )
+      ) : step === "password" ? (
+        <form onSubmit={start} className="admin-form-grid">
+          <label className="field span-2">
+            รหัสผ่านปัจจุบัน
+            <input name="currentPassword" type="password" autoComplete="current-password" required maxLength={128} autoFocus />
+          </label>
+          <p className="field-help span-2">ยืนยันรหัสผ่านก่อน ระบบจึงจะสร้างคีย์สำหรับแอปยืนยันตัวตน</p>
+          <button className="button primary" disabled={busy}>
+            เริ่มตั้งค่า
+          </button>
+          <button type="button" className="button ghost" onClick={cancel}>
+            ยกเลิก
+          </button>
+        </form>
+      ) : step === "scan" && setup ? (
+        <form onSubmit={enable} className="admin-form-grid">
+          <div className="span-2 totp-steps">
+            <p>
+              <strong>1.</strong> ในแอปยืนยันตัวตน เลือก “เพิ่มบัญชี” › “กรอกคีย์ตั้งค่า” แล้วใส่คีย์นี้ (ชนิด: ตามเวลา)
+            </p>
+            <div className="totp-secret">
+              <code aria-label="คีย์ตั้งค่า">{setup.secret.match(/.{1,4}/g)?.join(" ")}</code>
+              <button type="button" className="button secondary" onClick={() => void copy(setup.secret, "คีย์")}>
+                <Copy size={15} /> คัดลอกคีย์
+              </button>
+            </div>
+            <p className="field-help">
+              เปิดหน้านี้บนโทรศัพท์อยู่? <a href={setup.otpauthUrl}>แตะเพื่อเพิ่มบัญชีในแอปยืนยันตัวตน</a>
+            </p>
+            <p>
+              <strong>2.</strong> กรอกรหัส 6 หลักที่แอปแสดงเพื่อยืนยันว่าตั้งค่าถูกต้อง
+            </p>
+          </div>
+          <label className="field span-2">
+            รหัส 6 หลักจากแอป
+            <input
+              name="code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              minLength={6}
+              maxLength={6}
+              placeholder="000000"
+              required
+            />
+          </label>
+          <button className="button primary" disabled={busy}>
+            ยืนยันและเปิดใช้งาน
+          </button>
+          <button type="button" className="button ghost" onClick={cancel}>
+            ยกเลิก
+          </button>
+        </form>
+      ) : (
+        <button type="button" className="button primary" onClick={() => setStep("password")}>
+          <ShieldCheck size={15} /> เปิดใช้งาน
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -1530,7 +1809,45 @@ const actionText: Record<string, string> = {
   CHAT_MESSAGE: "ส่งข้อความแชท",
   CLOSE_CHAT: "ปิดแชท",
   DEMO_TOPUP: "เติมเครดิตทดลอง",
+  REVEAL_LIMIT: "เปิดดูรหัสครบโควตาต่อชั่วโมง",
+  TEAM_ROLE: "เปลี่ยนสิทธิ์ทีมงาน",
+  STAFF_CREATE: "เพิ่มบัญชีทีมงาน",
+  STAFF_UPDATE: "แก้ชื่อทีมงาน",
+  STAFF_ENABLE: "เปิดบัญชีทีมงาน",
+  STAFF_DISABLE: "ปิดบัญชีทีมงาน",
+  CHAT_ASSIGN: "มอบหมายแชท",
+  ORDER_NOTE: "เขียนหมายเหตุออเดอร์",
+  CANCEL_ORDER: "ยกเลิกออเดอร์",
+  PRODUCT_IMAGE_ADD: "เพิ่มรูปสินค้า",
+  PRODUCT_IMAGE_REMOVE: "ลบรูปสินค้า",
+  PRODUCT_IMAGE_REORDER: "เรียงรูปสินค้า",
+  LOGIN_FAILED: "เข้าสู่ระบบไม่สำเร็จ",
+  LOGIN_LOCKED: "พักการเข้าสู่ระบบ (ผิดหลายครั้ง)",
+  LOGIN_TOTP_FAILED: "รหัสยืนยัน 2 ขั้นไม่ถูกต้อง",
+  REAUTH_FAILED: "ยืนยันรหัสผ่านไม่สำเร็จ",
+  TOTP_ENABLE: "เปิดยืนยันตัวตน 2 ขั้น",
+  TOTP_DISABLE: "ปิดยืนยันตัวตน 2 ขั้น",
+  TOTP_RESET: "ล้างยืนยันตัวตน 2 ขั้น (เปลี่ยนรหัสลับระบบ)",
+  RECOVERY_CODE_USED: "ใช้รหัสกู้คืน",
 };
+const roleText: Record<string, string> = { ADMIN: "แอดมิน", STAFF: "ทีมงาน", CUSTOMER: "ลูกค้า" };
+/** Readable one-liner for the audit detail JSON instead of raw braces. */
+function auditDetailText(detail: Record<string, unknown>) {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(detail)) {
+    if (value == null || value === "") continue;
+    if (key === "reason") parts.push("เหตุผล: " + value);
+    else if (key === "from" && typeof value === "string") parts.push("จาก " + (roleText[value] ?? value));
+    else if (key === "to" && typeof value === "string") parts.push("เป็น " + (roleText[value] ?? value));
+    else if (key === "role" && typeof value === "string") parts.push("สิทธิ์ " + (roleText[value] ?? value));
+    else if (key === "limit") parts.push("โควตา " + value + " ครั้ง/ชม.");
+    else if (key === "changed" && value && typeof value === "object")
+      for (const [field, diff] of Object.entries(value as Record<string, { from: unknown; to: unknown }>))
+        parts.push(field + ": " + String(diff.from ?? "—") + " → " + String(diff.to ?? "—"));
+    else parts.push(key + ": " + (typeof value === "object" ? JSON.stringify(value) : String(value)));
+  }
+  return parts.join(" · ");
+}
 
 export function AdminAudit() {
   const [scope, setScope] = useState("staff");
@@ -1539,7 +1856,7 @@ export function AdminAudit() {
   const entityLink = (e: AuditEntry) => {
     if (!e.entity_id) return null;
     if (e.action.startsWith("CUSTOMER_")) return "/admin/customers/" + e.entity_id;
-    if (["REVEAL_ORDER_CREDENTIALS", "DELIVER_RESERVATION", "CREATE_ORDER", "CREATE_PREORDER", "PAYMENT_AND_DELIVERY", "PREORDER_PAID"].includes(e.action))
+    if (["REVEAL_ORDER_CREDENTIALS", "REVEAL_LIMIT", "ORDER_NOTE", "CANCEL_ORDER", "DELIVER_RESERVATION", "CREATE_ORDER", "CREATE_PREORDER", "PAYMENT_AND_DELIVERY", "PREORDER_PAID"].includes(e.action))
       return "/admin/orders/" + e.entity_id;
     if (e.action.startsWith("PRODUCT_") || e.action === "SAVE_PRODUCT") return "/admin/products/" + e.entity_id;
     return null;
@@ -1575,6 +1892,9 @@ export function AdminAudit() {
             ["DELIVER_RESERVATION", "ส่งของพรีออเดอร์"],
             ["REVEAL_ORDER_CREDENTIALS", "เปิดดูรหัส"],
             ["SAVE_SETTINGS", "ตั้งค่าร้าน"],
+            ["LOGIN_", "เข้าสู่ระบบไม่สำเร็จ / ถูกพัก"],
+            ["TOTP_", "ยืนยันตัวตน 2 ขั้น"],
+            ["RECOVERY_CODE_USED", "ใช้รหัสกู้คืน"],
           ]}
         />
       </div>
@@ -1596,13 +1916,13 @@ export function AdminAudit() {
                 <tr key={e.id}>
                   <td className="nowrap">{dateTime(e.created_at)}</td>
                   <td>
-                    {e.actor ?? "ระบบ"}
+                    {e.actor ?? (e.action.startsWith("LOGIN") ? "ไม่ทราบตัวตน" : "ระบบ")}
                     <small>{e.actor_role === "ADMIN" ? "แอดมิน" : e.actor_role === "STAFF" ? "ทีมงาน" : e.actor_role ? "ลูกค้า" : ""}</small>
                   </td>
                   <td>{actionText[e.action] ?? e.action}</td>
                   <td>
                     {link ? <Link to={link}>{shortId(e.entity_id!)}</Link> : e.entity_id ? shortId(e.entity_id) : "–"}
-                    {e.detail && <small className="audit-detail">{JSON.stringify(e.detail)}</small>}
+                    {e.detail && <small className="audit-detail">{auditDetailText(e.detail)}</small>}
                   </td>
                 </tr>
               );
@@ -1621,6 +1941,164 @@ export function AdminAudit() {
 
 type Member = { id: string; name: string; email: string; role: string; active: boolean; owner?: boolean; created_at: string };
 
+let healthMode: Promise<string> | null = null;
+/** While test payments are on, anyone can buy with free test credit, so real accounts must not go into stock. */
+export function TestModeStockWarning() {
+  const [sandbox, setSandbox] = useState(false);
+  useEffect(() => {
+    healthMode ??= api<{ mode?: string }>("/health")
+      .then((h) => h.mode ?? "")
+      .catch(() => "");
+    void healthMode.then((m) => setSandbox(m === "sandbox"));
+  }, []);
+  if (!sandbox) return null;
+  return (
+    <p className="admin-test-warning" role="note">
+      โหมดทดสอบเปิดอยู่: ใครสมัครก็ใช้เครดิตทดลองซื้อได้ ใส่เฉพาะบัญชีทดสอบ ห้ามใส่บัญชีจริงจนกว่าจะปิดโหมดทดสอบ
+    </p>
+  );
+}
+
+type TeamRole = "ADMIN" | "STAFF" | "CUSTOMER";
+const ROLE_ACTION: Record<TeamRole, string> = {
+  ADMIN: "ให้สิทธิ์แอดมิน",
+  STAFF: "ตั้งเป็นทีมงาน",
+  CUSTOMER: "เปลี่ยนกลับเป็นลูกค้า",
+};
+const ROLE_DONE: Record<TeamRole, string> = {
+  ADMIN: "เป็นแอดมินแล้ว",
+  STAFF: "เป็นทีมงานแล้ว",
+  CUSTOMER: "กลับเป็นลูกค้าแล้ว",
+};
+
+/** Grant back-office rights to an account that already exists (a customer who signed up).
+ * Two clicks: pick the role, then confirm. Used on the team page and on customer detail. */
+export function GrantAccess({ userId, name, onDone }: { userId: string; name: string; onDone?: () => void }) {
+  const { toast } = useStore();
+  const [pick, setPick] = useState<TeamRole | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function apply(role: TeamRole, currentPassword?: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/admin/team/" + userId + "/role", { role, ...(currentPassword ? { currentPassword } : {}) });
+      toast(name + " " + ROLE_DONE[role]);
+      setPick(null);
+      onDone?.();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <span className="admin-row-actions">
+      {pick === "ADMIN" ? (
+        <form
+          className="admin-inline-confirm"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void apply("ADMIN", String(new FormData(e.currentTarget).get("currentPassword") ?? ""));
+          }}
+        >
+          <input
+            name="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            aria-label="รหัสผ่านของคุณเพื่อยืนยัน"
+            placeholder="รหัสผ่านของคุณ"
+            required
+            maxLength={128}
+            autoFocus
+          />
+          <button className="button primary" disabled={busy}>
+            ยืนยันให้สิทธิ์แอดมิน
+          </button>
+          <button type="button" className="button ghost" onClick={() => setPick(null)}>
+            ยกเลิก
+          </button>
+        </form>
+      ) : pick ? (
+        <>
+          <button className="button primary" disabled={busy} onClick={() => void apply(pick)}>
+            ยืนยัน{ROLE_ACTION[pick]}
+          </button>
+          <button className="button ghost" onClick={() => setPick(null)}>
+            ยกเลิก
+          </button>
+        </>
+      ) : (
+        <>
+          <button className="button secondary" onClick={() => setPick("STAFF")}>
+            ตั้งเป็นทีมงาน
+          </button>
+          <button className="button secondary" onClick={() => setPick("ADMIN")}>
+            ให้สิทธิ์แอดมิน
+          </button>
+        </>
+      )}
+      <ErrorMessage message={error} />
+    </span>
+  );
+}
+
+type CustomerHit = { id: string; name: string; email: string; username: string | null; status?: string };
+function PromoteCustomer({ onDone }: { onDone: () => void }) {
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<CustomerHit[] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) {
+      setHits(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      api<{ customers: CustomerHit[] }>("/admin/customers?limit=8&q=" + encodeURIComponent(term))
+        .then((r) => {
+          setHits(r.customers);
+          setError("");
+        })
+        .catch((e) => setError((e as Error).message));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [q]);
+  return (
+    <section className="reference-admin-card admin-detail-card span-2">
+      <h2>มอบสิทธิ์ให้ลูกค้าที่สมัครแล้ว</h2>
+      <p className="field-help">
+        ค้นหาด้วยชื่อ อีเมล หรือชื่อผู้ใช้ แล้วเลือกสิทธิ์ ลูกค้าใช้รหัสผ่านเดิมเข้าหลังบ้านได้ทันที ประวัติการซื้อและเครดิตยังอยู่ครบ
+      </p>
+      <label className="field">
+        ค้นหาลูกค้า
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="อย่างน้อย 2 ตัวอักษร" maxLength={80} />
+      </label>
+      <ErrorMessage message={error} />
+      {hits && hits.length === 0 && <p className="muted">ไม่พบลูกค้าที่ตรงกับคำค้น</p>}
+      {hits?.map((c) => (
+        <div className="settings-row" key={c.id}>
+          <span>
+            {c.name}
+            <small>
+              {c.email.endsWith(".local") ? (c.username ?? "—") : c.email}
+              {c.status && c.status !== "ACTIVE" && " · ถูกระงับ"}
+            </small>
+          </span>
+          <GrantAccess
+            userId={c.id}
+            name={c.name}
+            onDone={() => {
+              setHits((list) => list?.filter((x) => x.id !== c.id) ?? null);
+              onDone();
+            }}
+          />
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export function AdminTeam() {
   const { toast, user } = useStore();
   const [team, setTeam] = useState<Member[] | null>(null);
@@ -1629,6 +2107,8 @@ export function AdminTeam() {
   const [busy, setBusy] = useState(false);
   // Granting or removing admin rights is asked once more, like other irreversible-feeling actions.
   const [confirming, setConfirming] = useState<string | null>(null);
+  // A new admin needs the acting admin's password again (server checks currentPassword).
+  const [addRole, setAddRole] = useState("STAFF");
   const load = () =>
     api<{ team: Member[] }>("/admin/team")
       .then((r) => setTeam(r.team))
@@ -1647,6 +2127,7 @@ export function AdminTeam() {
       const result = await api<{ member: Member; temporaryPassword: string }>("/admin/team", values);
       setCreated({ email: result.member.email, password: result.temporaryPassword, role: result.member.role });
       form.reset();
+      setAddRole("STAFF");
       toast(result.member.role === "ADMIN" ? "เพิ่มแอดมินแล้ว" : "เพิ่มทีมงานแล้ว");
       await load();
     } catch (err) {
@@ -1665,13 +2146,12 @@ export function AdminTeam() {
       setError((err as Error).message);
     }
   }
-  async function changeRole(m: Member) {
-    const role = m.role === "ADMIN" ? "STAFF" : "ADMIN";
-    setConfirming(null);
+  async function changeRole(m: Member, role: TeamRole, currentPassword?: string) {
     setError("");
     try {
-      await api("/admin/team", { id: m.id, name: m.name, role });
-      toast(role === "ADMIN" ? m.name + " เป็นแอดมินแล้ว" : m.name + " เป็นทีมงานแล้ว");
+      await api("/admin/team/" + m.id + "/role", { role, ...(currentPassword ? { currentPassword } : {}) });
+      setConfirming(null);
+      toast(m.name + " " + ROLE_DONE[role]);
       await load();
     } catch (err) {
       setError((err as Error).message);
@@ -1705,10 +2185,36 @@ export function AdminTeam() {
               </span>
               {!locked(m) && (
                 <span className="admin-row-actions">
-                  {confirming === m.id ? (
+                  {confirming === m.id + ":ADMIN" ? (
+                    <form
+                      className="admin-inline-confirm"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void changeRole(m, "ADMIN", String(new FormData(e.currentTarget).get("currentPassword") ?? ""));
+                      }}
+                    >
+                      <input
+                        name="currentPassword"
+                        type="password"
+                        autoComplete="current-password"
+                        aria-label="รหัสผ่านของคุณเพื่อยืนยัน"
+                        placeholder="รหัสผ่านของคุณ"
+                        required
+                        maxLength={128}
+                        autoFocus
+                      />
+                      <button className="button primary">ยืนยันให้สิทธิ์แอดมิน</button>
+                      <button type="button" className="button ghost" onClick={() => setConfirming(null)}>
+                        ยกเลิก
+                      </button>
+                    </form>
+                  ) : confirming?.startsWith(m.id + ":") ? (
                     <>
-                      <button className="button primary" onClick={() => void changeRole(m)}>
-                        {m.role === "ADMIN" ? "ยืนยันถอดสิทธิ์แอดมิน" : "ยืนยันให้สิทธิ์แอดมิน"}
+                      <button
+                        className="button primary"
+                        onClick={() => void changeRole(m, confirming.split(":")[1] as TeamRole)}
+                      >
+                        ยืนยัน{ROLE_ACTION[confirming.split(":")[1] as TeamRole]}
                       </button>
                       <button className="button ghost" onClick={() => setConfirming(null)}>
                         ยกเลิก
@@ -1717,8 +2223,16 @@ export function AdminTeam() {
                   ) : (
                     <>
                       {m.active && (
-                        <button className="button secondary" onClick={() => setConfirming(m.id)}>
-                          {m.role === "ADMIN" ? "ถอดสิทธิ์แอดมิน" : "ให้สิทธิ์แอดมิน"}
+                        <button
+                          className="button secondary"
+                          onClick={() => setConfirming(m.id + ":" + (m.role === "ADMIN" ? "STAFF" : "ADMIN"))}
+                        >
+                          {m.role === "ADMIN" ? "ลดเป็นทีมงาน" : "ให้สิทธิ์แอดมิน"}
+                        </button>
+                      )}
+                      {m.active && (
+                        <button className="button ghost" onClick={() => setConfirming(m.id + ":CUSTOMER")}>
+                          กลับเป็นลูกค้า
                         </button>
                       )}
                       <button className={"button " + (m.active ? "ghost" : "secondary")} onClick={() => void toggle(m)}>
@@ -1744,11 +2258,17 @@ export function AdminTeam() {
             </label>
             <label className="field span-2">
               สิทธิ์
-              <select name="role" defaultValue="STAFF">
+              <select name="role" value={addRole} onChange={(e) => setAddRole(e.target.value)}>
                 <option value="STAFF">ทีมงาน (ไม่เห็นการเงิน)</option>
                 <option value="ADMIN">แอดมิน (ทำได้ทุกอย่าง)</option>
               </select>
             </label>
+            {addRole === "ADMIN" && (
+              <label className="field span-2">
+                รหัสผ่านของคุณ (ยืนยันการเพิ่มแอดมิน)
+                <input name="currentPassword" type="password" autoComplete="current-password" required maxLength={128} />
+              </label>
+            )}
             <button className="button primary span-2" disabled={busy}>
               เพิ่มบัญชี
             </button>
@@ -1764,6 +2284,7 @@ export function AdminTeam() {
             </div>
           )}
         </section>
+        <PromoteCustomer onDone={() => void load()} />
       </div>
     </>
   );
@@ -2056,6 +2577,7 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
   }
   return (
     <div className="variant-stock">
+      <TestModeStockWarning />
       <form onSubmit={add} className="variant-stock-add">
         <label className="field">
           เติมสต็อก: ID และรหัสผ่าน บรรทัดละ 1 บัญชี
@@ -2117,10 +2639,11 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
                 </button>
               </span>
             )}
-            {u.status === "sold" && (
-              <button type="button" className="button ghost" onClick={() => void defect(u)}>
-                แจ้งเสีย
-              </button>
+            {u.status === "sold" && (u.order_id || u.reservation_id) && (
+              // A sold account is fixed from its order (replace + notify the customer), not here.
+              <Link className="button ghost" to={"/admin/orders/" + (u.order_id ?? u.reservation_id)}>
+                บัญชีเสีย? เปลี่ยนในออเดอร์
+              </Link>
             )}
           </div>
         ))}

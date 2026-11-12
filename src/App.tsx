@@ -136,11 +136,20 @@ export function Art({
   type,
   name,
   small = false,
+  image,
 }: {
   type: string;
   name: string;
   small?: boolean;
+  /** Uploaded cover (product images[0]); wins over the generated artwork. */
+  image?: string | null;
 }) {
+  if (image)
+    return (
+      <div className={`product-art art-photo ${small ? "art-small" : ""}`} aria-label={name}>
+        <img src={image} alt="" loading={small ? "eager" : "lazy"} />
+      </div>
+    );
   if (type === "stream" || type === "cinema")
     return (
       <div
@@ -454,7 +463,7 @@ export function ProductCard({ product }: { product: Product }) {
   return (
     <Link to={"/products/" + product.id} className="product-card">
       <div className="product-image">
-        <Art type={product.art} name={product.name} />
+        <Art type={product.art} name={product.name} image={product.imageUrl} />
         {!!product.preorder ? (
           <span className="stock-tag">{t("สั่งจอง")}</span>
         ) : stock === 0 ? (
@@ -875,7 +884,7 @@ function ProductDetail({ id }: { id: string }) {
       </div>
       <div className="product-detail">
         <div className="detail-art">
-          <Art type={p.art} name={p.name} />
+          <Art type={p.art} name={p.name} image={p.imageUrl} />
         </div>
         <div className="detail-info">
           <span className="eyebrow">{t("สินค้า")}</span>
@@ -1192,7 +1201,7 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
           <section className="panel cart-panel">
             <div className="cart-product">
               <div className="cart-art">
-                <Art type={p.art} name={p.name} />
+                <Art type={p.art} name={p.name} image={p.imageUrl} />
               </div>
               <div className="cart-info">
                 <Link to={"/products/" + p.id}>{p.name}</Link>
