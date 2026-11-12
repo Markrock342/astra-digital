@@ -9413,6 +9413,14 @@ a.reference-bestseller {
   object-fit: cover;
   display: block;
 }
+/* Products + stock round. Bulk bar / selection / preview table follow the
+   shadcn/ui data-table pattern (MIT), restyled with the back-office tokens. */
+.merchant-product-art > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 /* ---- Finance hardening (S2 banner, FR-F5/F6, FR-C7). shadcn/ui dashboard + Sheet patterns (MIT). ---- */
 .test-money-banner {
   display: flex;
@@ -9995,4 +10003,299 @@ a.button.is-disabled {
 }
 .order-replacements small {
   color: #64748b;
+}
+.reference-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.product-list-table .select-col,
+.reference-admin-main:has(.merchant-product-cell) .reference-table.product-list-table th.select-col {
+  width: 44px;
+  padding-right: 0;
+}
+.reference-admin-main:has(.merchant-product-cell) .reference-table.product-list-table th:nth-child(2) {
+  width: 46%;
+}
+.product-select-all {
+  display: none;
+}
+.product-list-table input[type="checkbox"],
+.bulk-action-bar input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand, #1534ff);
+  cursor: pointer;
+}
+.product-list-table tr.is-picked,
+.product-list-table tr.is-picked:hover {
+  background: var(--brand-soft, #eef1ff);
+}
+.bulk-action-bar {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--brand, #1534ff);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+.bulk-action-bar > strong {
+  font-size: 13px;
+  color: var(--brand, #1534ff);
+}
+.bulk-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bulk-action-buttons .button,
+.bulk-action-bar .queue-confirm .button {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+.variant-stock-summary {
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.variant-stock-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.variant-stock-label {
+  min-width: 0;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #52525b;
+}
+.variant-stock-line strong {
+  font-variant-numeric: tabular-nums;
+  color: #18181b;
+}
+.variant-stock-line.stock-low strong {
+  color: #b45309;
+}
+.variant-stock-line.stock-out strong {
+  color: #dc2626;
+}
+.variant-stock-summary:hover .variant-stock-label {
+  color: var(--brand, #1534ff);
+}
+.stock-badge {
+  font-style: normal;
+  font-size: 11px;
+  line-height: 16px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 99px;
+}
+.stock-badge-low {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+.stock-badge-out {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+.product-state > span.featured-tag {
+  border-color: #c7d2fe;
+  background: var(--brand-soft, #eef1ff);
+  color: var(--brand, #1534ff);
+}
+
+/* Stock import: paste → per-line check → add. */
+.reference-import-modal:has(.stock-import-body) {
+  width: 640px;
+}
+.stock-import-body {
+  padding: 0 24px 24px;
+}
+.reference-import-modal .stock-import-body form {
+  padding: 0;
+}
+.stock-import-form textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.stock-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.stock-import-preview {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin-top: 16px;
+}
+.variant-stock-add .stock-import-preview {
+  margin-top: 0;
+}
+.reference-import-modal .admin-test-warning {
+  margin: 0 24px 12px;
+}
+.reference-table.stock-import-table td {
+  height: auto;
+  padding: 8px 12px;
+}
+.stock-import-preview .field-help {
+  margin: 0;
+}
+.stock-import-preview .reference-status-tabs {
+  margin: 0;
+}
+.stock-import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.import-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.import-status.import-ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+.import-status.import-duplicate_batch,
+.import-status.import-existing {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+.import-status.import-invalid {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+.stock-import-table {
+  max-height: 320px;
+  overflow: auto;
+}
+.stock-import-table table {
+  min-width: 0 !important;
+}
+.stock-import-table td {
+  vertical-align: top;
+}
+.stock-import-id {
+  word-break: break-all;
+  font-size: 12px;
+}
+.stock-import-progress {
+  margin: 0;
+  background: var(--brand-soft, #eef1ff);
+  color: var(--brand, #1534ff);
+}
+.variant-stock:has(.stock-import-preview) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Warranty per option + on orders. */
+.variant-warranty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #52525b;
+}
+.variant-edit .variant-warranty input {
+  flex: 0 0 76px;
+  width: 76px;
+}
+.warranty-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 6px 10px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+  color: #15803d;
+  font-size: 13px;
+  font-weight: 500;
+}
+.warranty-status.is-expired {
+  border-color: #e4e4e7;
+  background: #f4f4f5;
+  color: #52525b;
+}
+.warranty-days {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #15803d;
+}
+
+@media (max-width: 600px) {
+  .stock-import-body {
+    padding: 0 16px 20px;
+  }
+  .reference-import-modal .admin-test-warning {
+    margin: 0 16px 12px;
+  }
+  .reference-table.stock-import-table td {
+    padding: 5px 0;
+  }
+  .product-select-all {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    font-size: 13px;
+  }
+  .stock-import-table {
+    max-height: none;
+  }
+  .merchant-shell .stock-import-table tbody tr {
+    padding: 4px 12px;
+  }
+  .variant-stock-summary {
+    justify-items: end;
+  }
+  .variant-stock-line {
+    justify-content: flex-end;
+  }
+  .bulk-action-bar {
+    top: 4px;
+  }
+  .bulk-action-buttons .button {
+    flex: 1 1 auto;
+  }
+  .reference-heading-actions .button {
+    flex: 1 1 auto;
+  }
 }

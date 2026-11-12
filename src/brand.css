@@ -801,7 +801,9 @@ html.theme-fade *::after {
 
 /* ---------- Page transitions ---------- */
 .page-transition {
-  animation: page-in 0.55s var(--ease-out-expo) both;
+  /* backwards, not both: a kept transform/filter would make every
+     position:fixed dialog inside the page scroll away with it. */
+  animation: page-in 0.55s var(--ease-out-expo) backwards;
 }
 
 /* ---------- Keyframes ---------- */

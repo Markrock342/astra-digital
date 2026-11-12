@@ -3,6 +3,8 @@ export type Variant = {
   product_id: string;
   label: string;
   price: number;
+  /** 0 = no warranty. */
+  warranty_days?: number;
   /** Public API caps this at 10; admin overview returns the exact count. */
   stock: number;
   stockStatus?: "in" | "low" | "out";
@@ -44,6 +46,8 @@ export type Order = {
   /** ID + password pairs, only for the owner once delivered (DB-005). */
   credentials?: Credential[];
   queueNumber?: number | null;
+  /** Fixed at delivery from the option's warranty days; null = no warranty. */
+  warranty_until?: string | null;
   reviewed: boolean;
   preorder?:boolean;
   paymentToken?: string | null;

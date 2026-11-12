@@ -74,6 +74,7 @@ import type {
 import Stores, { MerchantHeader } from "./Stores";
 import { CustomerChat, NotificationBell } from "./Ops";
 import { CountUp, useRouteMotion } from "./motion";
+import { WarrantyStatus } from "./Warranty";
 import {
   ReferenceCatalog,
   ReferenceCatalogPage,
@@ -1483,6 +1484,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               <span>{t("คำสั่งซื้อ #")}{order.id.slice(0, 8).toUpperCase()}</span>
               <span>{dateTime(order.created_at)}</span>
             </div>
+            {order.status === "DELIVERED" && <WarrantyStatus until={order.warranty_until} />}
             {order.status === "PREORDER" ? (
               <div className="note-box">
                 <Clock size={20} />

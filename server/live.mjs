@@ -13,6 +13,8 @@ const LIVE_METHODS = {
   topup: ["customers"],
   importCodes: ["catalog", "notify"],
   saveProduct: ["catalog"],
+  bulkUpdateProducts: ["catalog"],
+  duplicateProduct: ["catalog"],
   createVariant: ["catalog"],
   updateVariant: ["catalog"],
   deleteVariant: ["catalog"],

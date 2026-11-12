@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Copy,
   Download,
   ExternalLink,
   FileText,
@@ -60,7 +61,8 @@ import {
   AdminOrders,
   AdminProducts,
 } from "./AdminLists";
-import type { AdminData, Credential, Features, Product, QueueItem } from "./types";
+import { StockImport } from "./StockImport";
+import type { AdminData, Features, Product, QueueItem } from "./types";
 const productTabs = [
   ["products", "สินค้าทั้งหมด"],
   ["inventory", "บัญชีสต็อก"],
@@ -124,10 +126,11 @@ export default function Admin() {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
   const [features, setFeatures] = useState<Features>({});
-  const [pairs, setPairs] = useState<Credential[]>([{ loginId: "", password: "" }]);
   // Accounts (ID + password) are the default; single license codes stay available.
   const [importKind, setImportKind] = useState<"pair" | "code">("pair");
-  const pairMode = features.credentialPair && importKind === "pair";
+  const [importVariant, setImportVariant] = useState("");
+  const [duplicating, setDuplicating] = useState(false);
+  const pairMode = features.credentialPair !== false && importKind === "pair";
   const tab = path.split("/")[2] ?? "";
   const sub = path.split("/").slice(2).join("/");
   const productGroup = productTabs.some(([key]) => key === tab);
@@ -171,26 +174,6 @@ export default function Admin() {
     if (user?.role === "ADMIN") void load();
   }, [user?.id]);
   useEffect(() => {
-    if (importing) setPairs([{ loginId: "", password: "" }]);
-  }, [importing]);
-  function pastePairs(e: ClipboardEvent<HTMLInputElement>, index: number) {
-    const text = e.clipboardData.getData("text");
-    if (!text.includes("\t") && !text.includes("\n")) return;
-    e.preventDefault();
-    const rows = text
-      .split(/\r?\n/)
-      .filter((line) => line.trim())
-      .map((line) => {
-        const [loginId = "", ...rest] = line.split("\t");
-        return { loginId: loginId.trim(), password: rest.join("\t") };
-      });
-    setPairs((current) => [
-      ...current.slice(0, index),
-      ...rows,
-      ...current.slice(index + 1),
-    ]);
-  }
-  useEffect(() => {
     setQuery("");
     setImporting(false);
     setEditing(null);
@@ -221,43 +204,12 @@ export default function Admin() {
       setBusy(false);
     }
   }
-  async function importCodes(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      const form = Object.fromEntries(new FormData(e.currentTarget));
-      const items = pairs.filter((p) => p.loginId.trim() || p.password);
-      if (pairMode) {
-        if (!items.length) throw new Error("กรุณาใส่ไอดีและรหัสผ่านอย่างน้อยหนึ่งรายการ");
-        if (items.some((p) => !p.loginId.trim() || !p.password))
-          throw new Error("ทุกแถวต้องมีทั้งไอดีและรหัสผ่าน");
-      }
-      const result = await api<{ imported: number }>(
-        "/admin/inventory",
-        pairMode
-          ? {
-              variantId: form.variantId,
-              items: items.map((p) => ({
-                loginId: p.loginId.trim(),
-                password: p.password,
-              })),
-            }
-          : form,
-      );
-      await load();
-      await refresh();
-      setImporting(false);
-      toast(
-        pairMode
-          ? `นำเข้า ${result.imported} บัญชีสำเร็จ`
-          : `นำเข้า ${result.imported} โค้ดสำเร็จ`,
-      );
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+  /** Draft copy of a product (inactive, no stock), then open it in the editor. */
+  async function duplicateProduct(id: string) {
+    const result = await api<{ id: string; name: string }>("/admin/products/" + id + "/duplicate", {});
+    await load();
+    toast("คัดลอกเป็นฉบับร่างแล้ว: " + result.name);
+    go("/admin/products/" + result.id);
   }
   if (user?.role === "STAFF")
     return (
@@ -461,6 +413,7 @@ export default function Admin() {
               go("/admin/inventory");
               setQuery(name);
             }}
+            onDuplicate={duplicateProduct}
           />
         )}
         {formOpen && (
@@ -472,13 +425,34 @@ export default function Admin() {
             <div className="reference-admin-heading">
               <h1>{newProduct ? "เพิ่มสินค้า" : editingProduct?.name}</h1>
               {editingProduct && (
-                <Link
-                  to={"/products/" + editingProduct.id}
-                  className="button secondary"
-                >
-                  ดูหน้าสินค้า
-                  <ArrowUpRight size={15} />
-                </Link>
+                <span className="reference-heading-actions">
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={duplicating}
+                    onClick={async () => {
+                      setDuplicating(true);
+                      setError("");
+                      try {
+                        await duplicateProduct(editingProduct.id);
+                      } catch (e) {
+                        setError((e as Error).message);
+                      } finally {
+                        setDuplicating(false);
+                      }
+                    }}
+                  >
+                    {duplicating ? <LoaderCircle className="spin" size={15} /> : <Copy size={15} />}
+                    คัดลอกสินค้า
+                  </button>
+                  <Link
+                    to={"/products/" + editingProduct.id}
+                    className="button secondary"
+                  >
+                    ดูหน้าสินค้า
+                    <ArrowUpRight size={15} />
+                  </Link>
+                </span>
               )}
             </div>
             <div className="product-editor-layout">
@@ -686,7 +660,15 @@ export default function Admin() {
               </div>
               <button
                 className="button primary"
-                onClick={() => setImporting(true)}
+                onClick={() => {
+                  setImportVariant(
+                    editingProduct?.variants.find((v) => v.stock > 0)?.id ??
+                      editingProduct?.variants[0]?.id ??
+                      data.products[0]?.variants[0]?.id ??
+                      "",
+                  );
+                  setImporting(true);
+                }}
               >
                 <Plus size={16} />
                 นำเข้าโค้ด
@@ -845,16 +827,12 @@ export default function Admin() {
                 </button>
               </div>
               <TestModeStockWarning />
-              <form onSubmit={importCodes}>
-                <ErrorMessage message={error} />
+              <div className="stock-import-body">
                 <label className="field">
                   สินค้าและตัวเลือก
                   <select
-                    name="variantId"
-                    defaultValue={
-                      editingProduct?.variants.find((v) => v.stock > 0)?.id ??
-                      editingProduct?.variants[0]?.id
-                    }
+                    value={importVariant}
+                    onChange={(e) => setImportVariant(e.target.value)}
                   >
                     {data.products.flatMap((p) =>
                       p.variants.map((v) => (
@@ -865,7 +843,7 @@ export default function Admin() {
                     )}
                   </select>
                 </label>
-                {features.credentialPair && (
+                {features.credentialPair !== false && (
                   <div className="import-kind" role="radiogroup" aria-label="รูปแบบสินค้า">
                     {(
                       [
@@ -885,94 +863,21 @@ export default function Admin() {
                     ))}
                   </div>
                 )}
-                {pairMode ? (
-                  <fieldset className="credential-rows">
-                    <legend>ไอดีและรหัสผ่าน</legend>
-                    {pairs.map((pair, i) => (
-                      <div className="credential-row" key={i}>
-                        <label className="field">
-                          ไอดี {i + 1}
-                          <input
-                            value={pair.loginId}
-                            autoComplete="off"
-                            maxLength={200}
-                            onPaste={(e) => pastePairs(e, i)}
-                            onChange={(e) =>
-                              setPairs(pairs.map((p, j) => (j === i ? { ...p, loginId: e.target.value } : p)))
-                            }
-                          />
-                        </label>
-                        <label className="field">
-                          รหัสผ่าน {i + 1}
-                          <input
-                            value={pair.password}
-                            autoComplete="off"
-                            maxLength={200}
-                            onChange={(e) =>
-                              setPairs(pairs.map((p, j) => (j === i ? { ...p, password: e.target.value } : p)))
-                            }
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className="icon-button"
-                          aria-label={"ลบแถว " + (i + 1)}
-                          disabled={pairs.length === 1}
-                          onClick={() => setPairs(pairs.filter((_, j) => j !== i))}
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      className="button secondary"
-                      disabled={pairs.length >= 100}
-                      onClick={() => setPairs([...pairs, { loginId: "", password: "" }])}
-                    >
-                      <Plus size={15} />
-                      เพิ่มแถว
-                    </button>
-                    <p className="field-help">
-                      คัดลอกสองคอลัมน์ (ไอดี, รหัสผ่าน) จาก Google Sheets หรือ Excel
-                      แล้ววางในช่องไอดีแรกได้ทีเดียว · สูงสุด 100 รายการต่อครั้ง ·
-                      รหัสผ่านเก็บแบบเข้ารหัส และส่งให้ลูกค้าหลังยืนยันการชำระเงินเท่านั้น
-                    </p>
-                  </fieldset>
-                ) : (
-                  <>
-                    <label className="field">
-                      โค้ด (หนึ่งโค้ดต่อบรรทัด)
-                      <textarea
-                        name="codes"
-                        rows={7}
-                        placeholder="รหัสสินค้าหนึ่งรายการต่อบรรทัด"
-                        required
-                      />
-                    </label>
-                    <p className="field-help">
-                      ใส่รหัสสินค้าจริงได้ ระบบตรวจรหัสซ้ำก่อนบันทึก และยังไม่ส่งให้ลูกค้าก่อนยืนยันการชำระเงิน
-                    </p>
-                  </>
+                {importVariant && (
+                  <StockImport
+                    key={importVariant + ":" + (pairMode ? "pair" : "code")}
+                    variantId={importVariant}
+                    kind={pairMode ? "pair" : "code"}
+                    label={pairMode ? "ไอดีและรหัสผ่าน (บรรทัดละ 1 บัญชี)" : "โค้ด (หนึ่งโค้ดต่อบรรทัด)"}
+                    onCancel={() => setImporting(false)}
+                    onDone={async () => {
+                      await load();
+                      await refresh();
+                      setImporting(false);
+                    }}
+                  />
                 )}
-                <div className="form-actions">
-                  <button
-                    type="button"
-                    className="button secondary"
-                    onClick={() => setImporting(false)}
-                  >
-                    ยกเลิก
-                  </button>
-                  <button className="button primary" disabled={busy}>
-                    {busy ? (
-                      <LoaderCircle className="spin" size={16} />
-                    ) : (
-                      <Plus size={15} />
-                    )}
-                    นำเข้าโค้ด
-                  </button>
-                </div>
-              </form>
+              </div>
             </section>
           </div>
         )}

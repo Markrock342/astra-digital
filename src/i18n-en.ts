@@ -467,4 +467,7 @@ export const EN_STRINGS: Record<string, string> = {
   "คืนเงิน": "Refund",
   "ปรับยอด": "Adjustment",
   "คงเหลือ": "Balance",
+  "รับประกันถึง {date}": "Warranty until {date}",
+  "หมดประกันแล้ว": "Warranty expired",
+  "รับประกัน {n} วัน": "{n}-day warranty",
 };

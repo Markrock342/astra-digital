@@ -59,7 +59,8 @@ test("1. admin lists a product, adds a variant and stocks ID + password", async 
   await manager.getByRole("button", { name: /สต็อก 0/ }).first().click();
   await manager.getByLabel("เติมสต็อก 30 วัน").fill(accounts.map((a) => a.join("\t")).join("\n"));
   await expect(manager).toContainText("พร้อมเติม 2 บัญชี");
-  await manager.getByRole("button", { name: /เติม 2 บัญชี/ }).click();
+  await manager.getByRole("button", { name: /ตรวจ 2 รายการ/ }).click();
+  await manager.getByRole("button", { name: "เพิ่ม 2 บัญชี" }).click();
   await expect(manager.getByRole("button", { name: /สต็อก 2/ })).toBeVisible();
   // Stock list never shows the real ID or password.
   await expect(manager).not.toContainText(accounts[0][0]);
@@ -116,7 +117,8 @@ test("3. last unit sells, storefront shows sold out, admin restocks and the page
   const manager = admin.locator(".variant-manager");
   await manager.getByRole("button", { name: /สต็อก 0/ }).first().click();
   await manager.getByLabel("เติมสต็อก 30 วัน").fill("journey-c@stream.test,Pw-C-333");
-  await manager.getByRole("button", { name: /เติม 1 บัญชี/ }).click();
+  await manager.getByRole("button", { name: /ตรวจ 1 รายการ/ }).click();
+  await manager.getByRole("button", { name: "เพิ่ม 1 บัญชี" }).click();
   await expect(page.locator(".reference-variants")).toContainText(/มีสินค้า|เหลือน้อย/, { timeout: 10000 });
   await expect(page.getByRole("button", { name: "ซื้อเลย", exact: true })).toBeEnabled();
   await adminContext.close();
