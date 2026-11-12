@@ -34,6 +34,7 @@ import {
   ensureSmallUxB,
   ensureAlertsBackup,
   ensureEmailAndReset,
+  ensurePrivacyRequests,
 } from "./ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "./auth-hardening.mjs";
 import { createEmailSender } from "./email.mjs";
@@ -100,6 +101,7 @@ export function createCommerce(options = {}) {
   ensureLiveVersions(db);
   ensureAppendOnlyMoney(db);
   ensureAlertsBackup(db);
+  ensurePrivacyRequests(db);
   return createCommerceCore({ ...options, db, key });
 }
 export function openLocalCommerce({

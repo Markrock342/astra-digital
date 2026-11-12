@@ -37,6 +37,7 @@ import { createAdminOrderResendApis } from "./admin-order-resend.mjs";
 import { createOrderHistoryApis } from "./admin-order-history.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createProfileUploadApis } from "./profile-uploads.mjs";
+import { createPrivacyApis } from "./privacy.mjs";
 import { createFileStore } from "./file-store.mjs";
 import { createAuthHardening } from "./auth-hardening.mjs";
 import { createAdminMoneyApis } from "./admin-money.mjs";
@@ -1048,6 +1049,25 @@ export function createCommerceCore({
       return s;
     },
     writeShopSettings: (obj) => persistShopSettings(obj),
+  });
+  const {
+    exportMyData,
+    requestAccountDeletion,
+    adminPrivacyRequests,
+    approvePrivacyDeletion,
+  } = createPrivacyApis({
+    requireUser,
+    requireAdmin,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    audit,
+    randomUUID,
+    passwordHash,
+    deleteFile: (key) => fileStore.delete(key),
   });
   function mapProduct(row) {
     // Usage instructions are for buyers of a delivered order only (order-extras.mjs).
@@ -2928,6 +2948,10 @@ export function createCommerceCore({
     removeAvatar,
     setLogo,
     removeLogo,
+    exportMyData,
+    requestAccountDeletion,
+    adminPrivacyRequests,
+    approvePrivacyDeletion,
     profile,
     publicUser,
     queueBoard,

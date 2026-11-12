@@ -191,6 +191,13 @@ Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์
 - ตอบ `{ "imported": n }` · ซ้ำ (fingerprint ชน) ตอบ 409 ทั้งชุด ไม่บันทึกบางส่วน
 - ยังรับ `codes` แบบเดิมได้ระหว่างเปลี่ยนผ่าน
 
+### PDPA (FR-C9)
+
+- `GET /api/account/privacy/export` — CUSTOMER · JSON สำเนาข้อมูลตัวเอง (โปรไฟล์ ออเดอร์ ledger แชท ฯลฯ)
+- `POST /api/account/privacy/delete` — CUSTOMER · สร้างคำขอลบ `{ reason? }` → `{ id, status: "PENDING" }`
+- `GET /api/admin/privacy/requests?status=` — ADMIN
+- `POST /api/admin/privacy/requests/:id/approve` — ADMIN · anonymize ชื่อ/อีเมล/เบอร์/username/avatar/แชท · `status=DELETED` · **เก็บ** orders/payments/ledger · **ห้าม** ลบแถว append-only
+
 ### รายงานกำไร (หลัง MIG-009)
 
 `GET /api/admin/reports/profit?from&to&format` — **ADMIN only** (STAFF → 403)

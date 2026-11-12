@@ -1,5 +1,7 @@
 /** Idempotent schema helpers for Admin FR Work 1 (no numbered migration — 006 reserved for ledger). */
 
+export { ensurePrivacyRequests } from "./privacy.mjs";
+
 export function ensureChatThreadReads(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS chat_thread_reads (
     user_id TEXT NOT NULL,

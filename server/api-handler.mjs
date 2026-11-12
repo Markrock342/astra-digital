@@ -453,6 +453,15 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (path === "/api/account/totp") return send(200, service.totpStatus(user));
         if (path === "/api/account/sessions")
           return send(200, service.listSessions(user, token));
+        if (path === "/api/account/privacy/export")
+          return send(200, service.exportMyData(user));
+        if (path === "/api/admin/privacy/requests")
+          return send(
+            200,
+            service.adminPrivacyRequests(user, {
+              status: url.searchParams.get("status") ?? undefined,
+            }),
+          );
         if (path === "/api/admin/reports/sales") {
           const report = service.salesReport(user, {
             from: url.searchParams.get("from") ?? undefined,
@@ -657,6 +666,13 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, { user: service.topup(user, input) });
         if (path === "/api/profile")
           return send(200, { user: service.profile(user, input) });
+        if (path === "/api/account/privacy/delete")
+          return send(201, service.requestAccountDeletion(user, input));
+        if (/^\/api\/admin\/privacy\/requests\/[^/]+\/approve$/.test(path))
+          return send(
+            200,
+            service.approvePrivacyDeletion(user, path.split("/")[5]),
+          );
         if (path === "/api/reviews")
           return send(201, service.addReview(user, input));
         if (path === "/api/chat/threads")

@@ -41,6 +41,7 @@ import {
   ensureSmallUxB,
   ensureAlertsBackup,
   ensureEmailAndReset,
+  ensurePrivacyRequests,
 } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
 import {
@@ -131,6 +132,7 @@ export class Commerce extends DurableObject {
       ensureLiveVersions(db);
       ensureAppendOnlyMoney(db);
       ensureAlertsBackup(db);
+      ensurePrivacyRequests(db);
     });
     this.db = db;
     const adminPassword =
