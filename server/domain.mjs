@@ -29,6 +29,7 @@ import { createAdminVariantStockApis } from "./admin-variant-stock-apis.mjs";
 import { createAdminOrderReplaceApis } from "./admin-order-replace.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createFileStore } from "./file-store.mjs";
+import { createAuthHardening } from "./auth-hardening.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
@@ -61,6 +62,8 @@ export function createCommerceCore({
   adminPassword,
   fileStore: fileStoreOption,
   uploads,
+  // Injected clock for session / lockout / TOTP tests.
+  clock = () => Date.now(),
 } = {}) {
   const one = (sql, ...params) => db.prepare(sql).get(...params);
   const all = (sql, ...params) => db.prepare(sql).all(...params);
@@ -351,15 +354,32 @@ export function createCommerceCore({
   };
   const issueSession = (user) => {
     const token = randomBytes(32).toString("hex");
-    run("DELETE FROM sessions WHERE expires_at<?", Date.now());
+    const now = clock();
+    // ADMIN/STAFF: 12h absolute + 2h idle; customers keep 7 days (auth-hardening.mjs).
+    const lifetime = auth.sessionLifetime(user);
+    run("DELETE FROM sessions WHERE expires_at<?", now);
     run(
-      "INSERT INTO sessions VALUES(?,?,?)",
+      "INSERT INTO sessions(token_hash,user_id,expires_at,created_at,last_seen) VALUES(?,?,?,?,?)",
       hash(token),
       user.id,
-      Date.now() + 7 * 86400000,
+      now + lifetime,
+      now,
+      now,
     );
-    return { user: publicUser(user), token };
+    return { user: publicUser(user), token, maxAge: Math.floor(lifetime / 1000) };
   };
+  const auth = createAuthHardening({
+    one,
+    run,
+    tx,
+    fail,
+    key,
+    clock,
+    encrypt,
+    decrypt,
+    passwordMatches,
+    issueSession: (user) => issueSession(user),
+  });
   function seedData() {
     if (one("SELECT id FROM products LIMIT 1")) return;
     tx(() => {
@@ -622,14 +642,17 @@ export function createCommerceCore({
     // owner changed in the back office survives restarts. Rotating the secret still wins.
     const secretMark = createHmac("sha256", key).update("admin-secret:" + adminPassword).digest("hex");
     const appliedMark = one("SELECT value FROM runtime_flags WHERE key='admin-secret'")?.value;
-    if (existing && appliedMark !== secretMark)
+    if (existing && appliedMark !== secretMark) {
       run(
         "UPDATE users SET password_hash=?,role=? WHERE id=?",
         passwordHash(adminPassword),
         ROLES.ADMIN,
         existing.id,
       );
-    else if (existing) run("UPDATE users SET role=? WHERE id=?", ROLES.ADMIN, existing.id);
+      // Escape hatch: rotating the secret also clears the owner's 2FA and lockout,
+      // so an operator who lost the authenticator can always get back in.
+      auth.resetSecondFactor(existing.id, "admin-secret-rotated");
+    } else if (existing) run("UPDATE users SET role=? WHERE id=?", ROLES.ADMIN, existing.id);
     else
       run(
         "INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,?)",
@@ -705,33 +728,8 @@ export function createCommerceCore({
     });
     return issueSession(one("SELECT * FROM users WHERE id=?", id));
   }
-  function login(rawInput) {
-    const input = withoutClientPrivileges(rawInput);
-    const email = clean(
-      input.email ?? input.username,
-      3,
-      160,
-      "ชื่อผู้ใช้หรืออีเมล",
-    );
-    const password = clean(input.password, 1, 128, "รหัสผ่าน");
-    const user = one(
-      "SELECT * FROM users WHERE email=? OR username=?",
-      email,
-      email,
-    );
-    if (
-      !passwordMatches(
-        password,
-        user?.password_hash ??
-          "00000000000000000000000000000000:" + "00".repeat(64),
-      )
-    )
-      fail(401, "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
-    if ((user.status ?? "ACTIVE") !== "ACTIVE")
-      fail(403, "บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อร้าน");
-    audit(user, "LOGIN", user.id);
-    return issueSession(user);
-  }
+  // Lockout, failed-login audit and the TOTP second step live in auth-hardening.mjs.
+  const login = (rawInput, ctx) => auth.login(rawInput, ctx);
   function demo() {
     if (!allowSandbox) fail(403, "ร้านนี้ไม่เปิดบัญชีทดลอง");
     const suffix = randomBytes(8).toString("hex");
@@ -759,13 +757,7 @@ export function createCommerceCore({
   }
   function session(token) {
     if (!token) return null;
-    return (
-      one(
-        "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND COALESCE(u.status,'ACTIVE')='ACTIVE'",
-        hash(token),
-        Date.now(),
-      ) ?? null
-    );
+    return auth.sessionUser(hash(token));
   }
   const PUBLIC_STOCK_CAP = 10;
   const getLowStockAt = () => {
@@ -1985,6 +1977,7 @@ export function createCommerceCore({
     fail,
     clean,
     notify,
+    confirmPassword: auth.confirmPassword,
   });
   const {
     adminProductVariants,
@@ -2091,6 +2084,13 @@ export function createCommerceCore({
     adminCancelOrder,
     adminSetOrderNote,
     replaceOrderCredential,
+    loginTotp: auth.loginTotp,
+    confirmPassword: auth.confirmPassword,
+    reauthAdmin: auth.reauthAdmin,
+    totpStatus: auth.totpStatus,
+    totpSetup: auth.totpSetup,
+    totpEnable: auth.totpEnable,
+    totpDisable: auth.totpDisable,
     team,
     saveStaff,
     setStaffActive,

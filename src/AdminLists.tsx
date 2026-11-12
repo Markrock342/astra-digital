@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   ArrowLeft,
+  Copy,
   Download,
   Eye,
   LogOut,
@@ -1493,7 +1494,228 @@ export function AdminAccount() {
           </button>
         </form>
       </section>
+      <TwoFactorCard />
     </>
+  );
+}
+
+type TotpStatus = { enabled: boolean; enabledAt: string | null; recoveryCodesLeft: number };
+type TotpSetup = { secret: string; otpauthUrl: string };
+
+/** Settings › บัญชีแอดมิน › ยืนยันตัวตน 2 ขั้น (TOTP). Optional per account; form layout
+ * follows shadcn/ui (MIT) form patterns with the existing admin classes. */
+function TwoFactorCard() {
+  const { toast } = useStore();
+  const [status, setStatus] = useState<TotpStatus | null>(null);
+  const [step, setStep] = useState<"idle" | "password" | "scan" | "codes" | "disable">("idle");
+  const [setup, setSetup] = useState<TotpSetup | null>(null);
+  const [codes, setCodes] = useState<string[]>([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = () =>
+    api<TotpStatus>("/account/totp")
+      .then(setStatus)
+      .catch((e) => setError((e as Error).message));
+  useEffect(() => {
+    void load();
+  }, []);
+  const values = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    return Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
+  };
+  async function attempt(work: () => Promise<void>) {
+    setBusy(true);
+    setError("");
+    try {
+      await work();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const start = (e: FormEvent<HTMLFormElement>) => {
+    const form = values(e);
+    void attempt(async () => {
+      setSetup(await api<TotpSetup>("/account/totp/setup", { currentPassword: form.currentPassword }));
+      setStep("scan");
+    });
+  };
+  const enable = (e: FormEvent<HTMLFormElement>) => {
+    const form = values(e);
+    void attempt(async () => {
+      const result = await api<{ recoveryCodes: string[] }>("/account/totp/enable", { code: form.code });
+      setCodes(result.recoveryCodes);
+      setSetup(null);
+      setStep("codes");
+      toast("เปิดยืนยันตัวตน 2 ขั้นแล้ว");
+      await load();
+    });
+  };
+  const disable = (e: FormEvent<HTMLFormElement>) => {
+    const form = values(e);
+    void attempt(async () => {
+      await api("/account/totp/disable", { currentPassword: form.currentPassword, code: form.code });
+      setStep("idle");
+      toast("ปิดยืนยันตัวตน 2 ขั้นแล้ว");
+      await load();
+    });
+  };
+  async function copy(text: string, what: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("คัดลอก" + what + "แล้ว");
+    } catch {
+      setError("คัดลอกอัตโนมัติไม่ได้ กรุณาเลือกข้อความแล้วคัดลอกเอง");
+    }
+  }
+  const cancel = () => {
+    setStep("idle");
+    setSetup(null);
+    setError("");
+  };
+  return (
+    <section className="reference-admin-card admin-detail-card admin-account-card totp-card" aria-labelledby="totp-title">
+      <div className="totp-head">
+        <div>
+          <h2 id="totp-title">ยืนยันตัวตน 2 ขั้น</h2>
+          <p className="muted">
+            เข้าสู่ระบบด้วยรหัสผ่านแล้วต้องกรอกรหัส 6 หลักจากแอปในโทรศัพท์ (เช่น Google Authenticator หรือ Microsoft
+            Authenticator) อีกชั้น ถึงรหัสผ่านหลุดก็เข้าบัญชีไม่ได้
+          </p>
+        </div>
+        {status && (
+          <span className={status.enabled ? "status status-delivered" : "status"}>
+            {status.enabled ? "เปิดอยู่" : "ปิดอยู่"}
+          </span>
+        )}
+      </div>
+      <ErrorMessage message={error} />
+      {!status ? (
+        <p className="muted">กำลังโหลด…</p>
+      ) : step === "codes" ? (
+        <div className="admin-temp-password totp-recovery">
+          <p>
+            <strong>รหัสกู้คืน (แสดงครั้งเดียว)</strong> เก็บไว้ในที่ปลอดภัย ถ้าโทรศัพท์หาย ใช้รหัสเหล่านี้แทนรหัสจากแอปได้
+            รหัสละครั้ง
+          </p>
+          <ol className="totp-recovery-codes" aria-label="รหัสกู้คืน">
+            {codes.map((c) => (
+              <li key={c}>
+                <code>{c}</code>
+              </li>
+            ))}
+          </ol>
+          <div className="admin-row-actions">
+            <button type="button" className="button secondary" onClick={() => void copy(codes.join("\n"), "รหัสกู้คืน")}>
+              <Copy size={15} /> คัดลอกทั้งหมด
+            </button>
+            <button
+              type="button"
+              className="button primary"
+              onClick={() => {
+                setCodes([]);
+                setStep("idle");
+              }}
+            >
+              บันทึกรหัสแล้ว
+            </button>
+          </div>
+        </div>
+      ) : status.enabled ? (
+        step === "disable" ? (
+          <form onSubmit={disable} className="admin-form-grid">
+            <label className="field span-2">
+              รหัสผ่านปัจจุบัน
+              <input name="currentPassword" type="password" autoComplete="current-password" required maxLength={128} />
+            </label>
+            <label className="field span-2">
+              รหัส 6 หลักจากแอป หรือรหัสกู้คืน
+              <input name="code" autoComplete="one-time-code" required minLength={6} maxLength={11} />
+            </label>
+            <p className="field-help span-2">ปิดแล้วการเข้าสู่ระบบจะใช้แค่รหัสผ่าน และรหัสกู้คืนเดิมทั้งหมดใช้ไม่ได้อีก</p>
+            <button className="button primary" disabled={busy}>
+              ยืนยันปิดการยืนยัน 2 ขั้น
+            </button>
+            <button type="button" className="button ghost" onClick={cancel}>
+              ยกเลิก
+            </button>
+          </form>
+        ) : (
+          <>
+            <div className="settings-row">
+              <span>
+                เปิดใช้งานเมื่อ
+                <small>{status.enabledAt ? dateTime(status.enabledAt) : "–"}</small>
+              </span>
+              <span>
+                รหัสกู้คืนเหลือ <strong>{status.recoveryCodesLeft}</strong> ชุด
+              </span>
+            </div>
+            <button type="button" className="button secondary" onClick={() => setStep("disable")}>
+              ปิดการยืนยัน 2 ขั้น
+            </button>
+          </>
+        )
+      ) : step === "password" ? (
+        <form onSubmit={start} className="admin-form-grid">
+          <label className="field span-2">
+            รหัสผ่านปัจจุบัน
+            <input name="currentPassword" type="password" autoComplete="current-password" required maxLength={128} autoFocus />
+          </label>
+          <p className="field-help span-2">ยืนยันรหัสผ่านก่อน ระบบจึงจะสร้างคีย์สำหรับแอปยืนยันตัวตน</p>
+          <button className="button primary" disabled={busy}>
+            เริ่มตั้งค่า
+          </button>
+          <button type="button" className="button ghost" onClick={cancel}>
+            ยกเลิก
+          </button>
+        </form>
+      ) : step === "scan" && setup ? (
+        <form onSubmit={enable} className="admin-form-grid">
+          <div className="span-2 totp-steps">
+            <p>
+              <strong>1.</strong> ในแอปยืนยันตัวตน เลือก “เพิ่มบัญชี” › “กรอกคีย์ตั้งค่า” แล้วใส่คีย์นี้ (ชนิด: ตามเวลา)
+            </p>
+            <div className="totp-secret">
+              <code aria-label="คีย์ตั้งค่า">{setup.secret.match(/.{1,4}/g)?.join(" ")}</code>
+              <button type="button" className="button secondary" onClick={() => void copy(setup.secret, "คีย์")}>
+                <Copy size={15} /> คัดลอกคีย์
+              </button>
+            </div>
+            <p className="field-help">
+              เปิดหน้านี้บนโทรศัพท์อยู่? <a href={setup.otpauthUrl}>แตะเพื่อเพิ่มบัญชีในแอปยืนยันตัวตน</a>
+            </p>
+            <p>
+              <strong>2.</strong> กรอกรหัส 6 หลักที่แอปแสดงเพื่อยืนยันว่าตั้งค่าถูกต้อง
+            </p>
+          </div>
+          <label className="field span-2">
+            รหัส 6 หลักจากแอป
+            <input
+              name="code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              minLength={6}
+              maxLength={6}
+              placeholder="000000"
+              required
+            />
+          </label>
+          <button className="button primary" disabled={busy}>
+            ยืนยันและเปิดใช้งาน
+          </button>
+          <button type="button" className="button ghost" onClick={cancel}>
+            ยกเลิก
+          </button>
+        </form>
+      ) : (
+        <button type="button" className="button primary" onClick={() => setStep("password")}>
+          <ShieldCheck size={15} /> เปิดใช้งาน
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -1530,6 +1752,14 @@ const actionText: Record<string, string> = {
   CHAT_MESSAGE: "ส่งข้อความแชท",
   CLOSE_CHAT: "ปิดแชท",
   DEMO_TOPUP: "เติมเครดิตทดลอง",
+  LOGIN_FAILED: "เข้าสู่ระบบไม่สำเร็จ",
+  LOGIN_LOCKED: "พักการเข้าสู่ระบบ (ผิดหลายครั้ง)",
+  LOGIN_TOTP_FAILED: "รหัสยืนยัน 2 ขั้นไม่ถูกต้อง",
+  REAUTH_FAILED: "ยืนยันรหัสผ่านไม่สำเร็จ",
+  TOTP_ENABLE: "เปิดยืนยันตัวตน 2 ขั้น",
+  TOTP_DISABLE: "ปิดยืนยันตัวตน 2 ขั้น",
+  TOTP_RESET: "ล้างยืนยันตัวตน 2 ขั้น (เปลี่ยนรหัสลับระบบ)",
+  RECOVERY_CODE_USED: "ใช้รหัสกู้คืน",
 };
 
 export function AdminAudit() {
@@ -1575,6 +1805,9 @@ export function AdminAudit() {
             ["DELIVER_RESERVATION", "ส่งของพรีออเดอร์"],
             ["REVEAL_ORDER_CREDENTIALS", "เปิดดูรหัส"],
             ["SAVE_SETTINGS", "ตั้งค่าร้าน"],
+            ["LOGIN_", "เข้าสู่ระบบไม่สำเร็จ / ถูกพัก"],
+            ["TOTP_", "ยืนยันตัวตน 2 ขั้น"],
+            ["RECOVERY_CODE_USED", "ใช้รหัสกู้คืน"],
           ]}
         />
       </div>
@@ -1596,7 +1829,7 @@ export function AdminAudit() {
                 <tr key={e.id}>
                   <td className="nowrap">{dateTime(e.created_at)}</td>
                   <td>
-                    {e.actor ?? "ระบบ"}
+                    {e.actor ?? (e.action.startsWith("LOGIN") ? "ไม่ทราบตัวตน" : "ระบบ")}
                     <small>{e.actor_role === "ADMIN" ? "แอดมิน" : e.actor_role === "STAFF" ? "ทีมงาน" : e.actor_role ? "ลูกค้า" : ""}</small>
                   </td>
                   <td>{actionText[e.action] ?? e.action}</td>
@@ -1629,6 +1862,8 @@ export function AdminTeam() {
   const [busy, setBusy] = useState(false);
   // Granting or removing admin rights is asked once more, like other irreversible-feeling actions.
   const [confirming, setConfirming] = useState<string | null>(null);
+  // A new admin needs the acting admin's password again (server checks currentPassword).
+  const [addRole, setAddRole] = useState("STAFF");
   const load = () =>
     api<{ team: Member[] }>("/admin/team")
       .then((r) => setTeam(r.team))
@@ -1647,6 +1882,7 @@ export function AdminTeam() {
       const result = await api<{ member: Member; temporaryPassword: string }>("/admin/team", values);
       setCreated({ email: result.member.email, password: result.temporaryPassword, role: result.member.role });
       form.reset();
+      setAddRole("STAFF");
       toast(result.member.role === "ADMIN" ? "เพิ่มแอดมินแล้ว" : "เพิ่มทีมงานแล้ว");
       await load();
     } catch (err) {
@@ -1665,12 +1901,12 @@ export function AdminTeam() {
       setError((err as Error).message);
     }
   }
-  async function changeRole(m: Member) {
+  async function changeRole(m: Member, currentPassword?: string) {
     const role = m.role === "ADMIN" ? "STAFF" : "ADMIN";
-    setConfirming(null);
     setError("");
     try {
-      await api("/admin/team", { id: m.id, name: m.name, role });
+      await api("/admin/team", { id: m.id, name: m.name, role, ...(currentPassword ? { currentPassword } : {}) });
+      setConfirming(null);
       toast(role === "ADMIN" ? m.name + " เป็นแอดมินแล้ว" : m.name + " เป็นทีมงานแล้ว");
       await load();
     } catch (err) {
@@ -1705,10 +1941,33 @@ export function AdminTeam() {
               </span>
               {!locked(m) && (
                 <span className="admin-row-actions">
-                  {confirming === m.id ? (
+                  {confirming === m.id && m.role !== "ADMIN" ? (
+                    <form
+                      className="admin-inline-confirm"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void changeRole(m, String(new FormData(e.currentTarget).get("currentPassword") ?? ""));
+                      }}
+                    >
+                      <input
+                        name="currentPassword"
+                        type="password"
+                        autoComplete="current-password"
+                        aria-label="รหัสผ่านของคุณเพื่อยืนยัน"
+                        placeholder="รหัสผ่านของคุณ"
+                        required
+                        maxLength={128}
+                        autoFocus
+                      />
+                      <button className="button primary">ยืนยันให้สิทธิ์แอดมิน</button>
+                      <button type="button" className="button ghost" onClick={() => setConfirming(null)}>
+                        ยกเลิก
+                      </button>
+                    </form>
+                  ) : confirming === m.id ? (
                     <>
                       <button className="button primary" onClick={() => void changeRole(m)}>
-                        {m.role === "ADMIN" ? "ยืนยันถอดสิทธิ์แอดมิน" : "ยืนยันให้สิทธิ์แอดมิน"}
+                        ยืนยันถอดสิทธิ์แอดมิน
                       </button>
                       <button className="button ghost" onClick={() => setConfirming(null)}>
                         ยกเลิก
@@ -1744,11 +2003,17 @@ export function AdminTeam() {
             </label>
             <label className="field span-2">
               สิทธิ์
-              <select name="role" defaultValue="STAFF">
+              <select name="role" value={addRole} onChange={(e) => setAddRole(e.target.value)}>
                 <option value="STAFF">ทีมงาน (ไม่เห็นการเงิน)</option>
                 <option value="ADMIN">แอดมิน (ทำได้ทุกอย่าง)</option>
               </select>
             </label>
+            {addRole === "ADMIN" && (
+              <label className="field span-2">
+                รหัสผ่านของคุณ (ยืนยันการเพิ่มแอดมิน)
+                <input name="currentPassword" type="password" autoComplete="current-password" required maxLength={128} />
+              </label>
+            )}
             <button className="button primary span-2" disabled={busy}>
               เพิ่มบัญชี
             </button>

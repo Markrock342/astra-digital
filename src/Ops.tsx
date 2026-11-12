@@ -785,7 +785,9 @@ export function PaymentChannelSettings() {
       .then((r) => setChannel(r.channel))
       .catch((e: Error) => setError(e.message));
   }, []);
-  async function toggle() {
+  // Changing the payment channel is sensitive: the admin re-enters their password inline.
+  const [confirming, setConfirming] = useState(false);
+  async function toggle(currentPassword: string) {
     if (!channel) return;
     setBusy(true);
     setError("");
@@ -793,8 +795,10 @@ export function PaymentChannelSettings() {
       const next = await api<{ channel: Channel }>("/admin/payment-channel", {
         provider: "sandbox",
         active: !(channel.provider === "sandbox" && channel.active),
+        currentPassword,
       });
       setChannel(next.channel);
+      setConfirming(false);
       toast("บันทึกช่องทางรับเงินแล้ว");
     } catch (e) {
       setError((e as Error).message);
@@ -831,12 +835,45 @@ export function PaymentChannelSettings() {
               </span>
             </div>
             <p className="muted">{channel.note}</p>
-            {channel.sandboxOnly && (
-              <button className="button secondary" disabled={busy} onClick={() => void toggle()}>
-                {busy && <LoaderCircle className="spin" size={15} />}
-                {channel.provider === "sandbox" && channel.active ? "ปิดช่องทางทดสอบ" : "เปิดช่องทางทดสอบ"}
-              </button>
-            )}
+            {channel.sandboxOnly &&
+              (confirming ? (
+                <form
+                  className="admin-inline-confirm"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void toggle(String(new FormData(e.currentTarget).get("currentPassword") ?? ""));
+                  }}
+                >
+                  <input
+                    name="currentPassword"
+                    type="password"
+                    autoComplete="current-password"
+                    aria-label="รหัสผ่านของคุณเพื่อยืนยัน"
+                    placeholder="รหัสผ่านของคุณ"
+                    required
+                    maxLength={128}
+                    autoFocus
+                  />
+                  <button className="button primary" disabled={busy}>
+                    {busy && <LoaderCircle className="spin" size={15} />}
+                    {channel.provider === "sandbox" && channel.active ? "ยืนยันปิดช่องทาง" : "ยืนยันเปิดช่องทาง"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button ghost"
+                    onClick={() => {
+                      setConfirming(false);
+                      setError("");
+                    }}
+                  >
+                    ยกเลิก
+                  </button>
+                </form>
+              ) : (
+                <button className="button secondary" disabled={busy} onClick={() => setConfirming(true)}>
+                  {channel.provider === "sandbox" && channel.active ? "ปิดช่องทางทดสอบ" : "เปิดช่องทางทดสอบ"}
+                </button>
+              ))}
           </>
         )}
       </section>
