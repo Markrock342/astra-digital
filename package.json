@@ -22,6 +22,7 @@
     "qa:cloud": "node scripts/cloud-qa.mjs",
     "qa:wrangler-local": "node scripts/wrangler-local-ops-smoke.mjs",
     "qa:wrangler-email": "node scripts/wrangler-local-email-smoke.mjs",
+    "perf:10k": "node scripts/perf-10k-orders.mjs",
     "deploy:pages": "node scripts/deploy-pages.mjs",
     "db:migrate:local": "npx wrangler d1 migrations apply astra-commerce --local -c db/wrangler.jsonc"
   },

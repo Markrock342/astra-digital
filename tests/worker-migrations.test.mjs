@@ -53,4 +53,8 @@ test("MU3: worker migration list matches server/migrations/*.sql", () => {
     worker.includes("applyMigration010"),
     "worker must call applyMigration010",
   );
+  assert.ok(
+    worker.includes("applyMigration011"),
+    "worker must call applyMigration011",
+  );
 });

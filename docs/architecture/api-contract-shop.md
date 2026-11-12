@@ -191,6 +191,11 @@ Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์
 - ตอบ `{ "imported": n }` · ซ้ำ (fingerprint ชน) ตอบ 409 ทั้งชุด ไม่บันทึกบางส่วน
 - ยังรับ `codes` แบบเดิมได้ระหว่างเปลี่ยนผ่าน
 
+### ประสิทธิภาพ (~10k ออเดอร์)
+
+- Migration `011_perf_indexes.sql`: index บน payments/orders/reservations/inventory/ledger สำหรับรายการแอดมิน
+- สคริปต์วัด: `npm run perf:10k` (`scripts/perf-10k-orders.mjs`) · เป้า p95 &lt; 500ms หลัง index
+
 ### PDPA (FR-C9)
 
 - `GET /api/account/privacy/export` — CUSTOMER · JSON สำเนาข้อมูลตัวเอง (โปรไฟล์ ออเดอร์ ledger แชท ฯลฯ)
