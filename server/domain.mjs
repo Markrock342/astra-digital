@@ -909,8 +909,12 @@ export function createCommerceCore({
     fail,
     audit,
     fileStore,
+    // Read stored JSON only — settings() hides logoKey from API consumers.
     readShopSettings: () => {
-      const s = { ...settings() };
+      const raw = one(
+        "SELECT value FROM runtime_flags WHERE key='shop-settings'",
+      );
+      const s = raw ? JSON.parse(raw.value) : {};
       delete s.logoUrl;
       return s;
     },
@@ -980,12 +984,13 @@ export function createCommerceCore({
       pendingExpiryMinutes: PENDING_EXPIRY_DEFAULT,
       ...(raw ? JSON.parse(raw.value) : {}),
     };
-    // logoUrl is derived for API consumers; never persist it (see saveSettings / setLogo).
+    // logoUrl is derived for API consumers; logoKey stays internal (never expose).
     delete base.logoUrl;
     const logoKey =
       typeof base.logoKey === "string" && base.logoKey.length > 0
         ? base.logoKey
         : null;
+    delete base.logoKey;
     return {
       ...base,
       logoUrl: logoKey ? "/api/files/" + logoKey : null,
@@ -1003,6 +1008,15 @@ export function createCommerceCore({
     requireAdmin(user);
     const current = settings();
     const before = { ...current };
+    // settings() hides logoKey — reattach from store so saveSettings cannot wipe the logo.
+    const rawLogo = one(
+      "SELECT value FROM runtime_flags WHERE key='shop-settings'",
+    );
+    if (rawLogo) {
+      const parsed = JSON.parse(rawLogo.value);
+      if (typeof parsed.logoKey === "string" && parsed.logoKey)
+        current.logoKey = parsed.logoKey;
+    }
     for (const [field, max] of [
       ["shopName", 80],
       ["description", 1000],

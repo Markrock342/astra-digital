@@ -79,11 +79,13 @@ test("UP-2: set and remove avatar; /api/me exposes avatarUrl", async (t) => {
   const { s, buyer, buyerToken } = fixture(t);
   assert.equal(s.publicUser(buyer).avatarUrl, null);
 
+  const beforeCustomers = s.liveVersions().customers;
   const set = await s.setAvatar(buyer, {
     bytes: webpBytes(),
     contentType: "image/webp",
   });
   assert.match(set.avatarUrl, /^\/api\/files\/[0-9a-fA-F-]{8,}$/);
+  assert.ok(s.liveVersions().customers > beforeCustomers, "avatar bumps customers");
   const me = s.session(buyerToken);
   assert.equal(s.publicUser(me).avatarUrl, set.avatarUrl);
 
@@ -104,6 +106,15 @@ test("UP-2: set and remove avatar; /api/me exposes avatarUrl", async (t) => {
   const cleared = await s.removeAvatar(s.session(buyerToken));
   assert.equal(cleared.avatarUrl, null);
   assert.equal(s.publicUser(s.session(buyerToken)).avatarUrl, null);
+
+  const audits = s.db
+    .prepare(
+      "SELECT action FROM audit WHERE action IN ('AVATAR_SET','AVATAR_REMOVE') AND entity_id=? ORDER BY rowid",
+    )
+    .all(buyer.id)
+    .map((r) => r.action);
+  assert.ok(audits.includes("AVATAR_SET"));
+  assert.ok(audits.includes("AVATAR_REMOVE"));
 });
 
 test("UP-2: set and remove logo; settings/overview expose logoUrl", async (t) => {
@@ -118,6 +129,7 @@ test("UP-2: set and remove logo; settings/overview expose logoUrl", async (t) =>
   assert.match(set.logoUrl, /^\/api\/files\/[0-9a-fA-F-]{8,}$/);
   assert.equal(s.settings().logoUrl, set.logoUrl);
   assert.equal(s.overview().shop.logoUrl, set.logoUrl);
+  assert.equal(s.settings().logoKey, undefined, "logoKey must stay internal");
 
   // saveSettings must not wipe logoKey or persist derived logoUrl
   s.saveSettings(merchant, { shopName: "ร้านทดสอบโลโก้" });
@@ -130,10 +142,44 @@ test("UP-2: set and remove logo; settings/overview expose logoUrl", async (t) =>
   assert.equal(typeof stored.logoKey, "string");
   assert.equal(stored.logoUrl, undefined);
 
+  const beforeCatalog = s.liveVersions().catalog;
+  await s.setLogo(merchant, {
+    bytes: pngBytes(),
+    contentType: "image/png",
+  });
+  assert.ok(s.liveVersions().catalog > beforeCatalog, "logo bumps catalog");
+
   const cleared = await s.removeLogo(merchant);
   assert.equal(cleared.logoUrl, null);
   assert.equal(s.settings().logoUrl, null);
   assert.equal(s.overview().shop.logoUrl, null);
+
+  const logoAudits = s.db
+    .prepare(
+      "SELECT action FROM audit WHERE action IN ('LOGO_SET','LOGO_REMOVE') ORDER BY rowid",
+    )
+    .all()
+    .map((r) => r.action);
+  assert.ok(logoAudits.includes("LOGO_SET"));
+  assert.ok(logoAudits.includes("LOGO_REMOVE"));
+});
+
+test("UP-2: GET /api/files headers match contract", async (t) => {
+  const { s, buyer, buyerToken } = fixture(t);
+  const set = await s.setAvatar(buyer, {
+    bytes: webpBytes(),
+    contentType: "image/webp",
+  });
+  const handler = createAPIHandler(s);
+  const res = await http(handler, "GET", set.avatarUrl, { token: buyerToken });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("Content-Type"), "image/webp");
+  assert.equal(res.headers.get("X-Content-Type-Options"), "nosniff");
+  assert.match(res.headers.get("Content-Disposition") || "", /inline/i);
+  assert.match(
+    res.headers.get("Cache-Control") || "",
+    /public.*max-age=31536000.*immutable/i,
+  );
 });
 
 test("UP-2: buyer cannot set logo; anonymous cannot set avatar", async (t) => {
