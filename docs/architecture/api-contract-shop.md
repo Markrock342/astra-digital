@@ -57,7 +57,7 @@
 ### ยอดขายแดชบอร์ด (FR-F10)
 
 - `GET /api/admin` → `revenue` คิดจากสูตรเดียว: `SUM(payments.amount WHERE status='SUCCEEDED') − SUM(|ledger.amount| WHERE kind='REFUND')`
-- คืนเงินยังไม่มีในระบบ → ส่วนลบเป็น 0 จนกว่างานเงิน (FR-F6)
+- ส่วนลบใช้แถว `ledger.kind='REFUND'` จริงเมื่อมี (งาน 5 ยังไม่เปิด UI คืนเงิน) · แถว `DEMO_CREDIT` ไม่เข้าสูตรนี้
 - ห้ามนับจากสถานะออเดอร์ `DELIVERED`/`PREORDER` คนละสูตรกับหน้าการเงิน
 
 ### Features ให้หน้าจอรู้ว่าพร้อม
@@ -66,6 +66,7 @@
 - หลังงาน 1 มีอย่างน้อย: `credentialPair`, `preorderDelivery`, `adminChatInbox`, `adminOpsNotifications`, `salesRevenueFromPayments` (boolean)
 - หลังงาน 2 เพิ่ม: `adminOrdersApi`, `adminCustomersApi`, `adminProductsApi`, `adminSummaryApi` (boolean)
 - หลัง FR-P3: `productPreorderForm` (boolean) — `POST /api/admin/products` รับ `preorder`
+- หลังงาน 3: `adminFinance` (boolean) — `GET /api/admin/transactions` พร้อม
 
 ### สินค้า — ตั้งพรีออเดอร์จากฟอร์ม (FR-P3)
 
@@ -108,12 +109,31 @@
 `GET /api/admin/customers?q&status&from&to&minSpent&maxSpent&hasOrders&sort&cursor&limit`
 
 - `status` นอกจาก `ACTIVE` คืนรายการว่าง (ยังไม่มีแบนจนกว่างาน 5) · `sort` = created_at|spent|orders|name
-- คืน `{ customers[], nextCursor }` · มี `spentSatang`, `orderCount`, `status: "ACTIVE"`
+- คืน `{ customers[], nextCursor }` · มี `orderCount`, `status: "ACTIVE"`
+- `spentSatang` ส่งเฉพาะ **ADMIN** (STAFF ไม่ได้ตาม NFR-3)
+- `from`/`to` ตีความวันปฏิทิน **Asia/Bangkok** เหมือน summary · คำค้น LIKE escape `%` `_`
 
 `GET /api/admin/products?q&category&status=active|inactive&type=ready|preorder&stock=out|low|in&sort&cursor&limit`
 
 - `sort` = name|stock|sold|id · คืน `{ products[], nextCursor }` · มี stock / stockStatus / sold  
-- `POST /api/admin/products` (บันทึกสินค้า) ยังเป็นของเดิม ไม่เปลี่ยน
+- `sold` = ออเดอร์ `DELIVERED` + reservations สถานะ `PREORDER|DELIVERED`
+- คำค้น LIKE escape `%` `_`
+- `POST /api/admin/products` รับ `preorder` ตาม FR-P3
+
+### การเงิน — รายการ ledger (Admin FR งาน 3 · FR-F2–F4, F9)
+
+`GET /api/admin/transactions?from&to&kind&direction&status&customer&min&max&q&cursor&limit&format` — **ADMIN only** (STAFF/CUSTOMER → 403)
+
+- `from`/`to` = `YYYY-MM-DD` Asia/Bangkok (ส่งคู่หรือไม่ส่ง)
+- ค่าเริ่มต้น**ไม่รวม** `DEMO_CREDIT` · ส่ง `kind=DEMO_CREDIT` เท่านั้นจึงเห็นเครดิตทดลอง
+- kinds เงินจริง: `PAYMENT_IN|TOPUP|PURCHASE|REFUND|ADJUSTMENT|WITHDRAWAL|FEE`
+- คืน `{ transactions[], summary, nextCursor }`
+- `summary` ตามตัวกรองเดียวกัน: `{ in, out, net, pending, count, daily[] }`
+- `format=csv` → ไฟล์ CSV ตามตัวกรอง (FR-F9)
+- ตอนชำระ sandbox สำเร็จ บันทึกอย่างน้อย `PAYMENT_IN` ใน ledger (แยกจาก `DEMO_CREDIT` / `PURCHASE` ของ wallet)
+- runtime **ห้าม** UPDATE/DELETE แถวเงิน — แก้ด้วยแถว `ADJUSTMENT` (UI คืนเงิน/ถอน = งาน 5)
+
+Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์ `direction, fee, net, status, order_id, payment_id, provider_ref, actor_id, reason, finalized_at`
 
 ### สต็อกที่หน้าร้านเห็น
 

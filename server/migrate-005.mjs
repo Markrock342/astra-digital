@@ -16,6 +16,7 @@ export const TRACK_A_MIGRATION_FILES = [
   "003_reference_layout.sql",
   "004_commerce_ops.sql",
   MIGRATION_005_NAME,
+  "006_ledger_money.sql",
 ];
 
 /** Widen inventory_available so freeness checks can use reservation_id (idempotent). */

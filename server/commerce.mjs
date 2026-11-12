@@ -16,6 +16,7 @@ import {
   ensureInventoryAvailableIndex,
   MIGRATION_005_NAME,
 } from "./migrate-005.mjs";
+import { applyMigration006, MIGRATION_006_NAME } from "./migrate-006.mjs";
 import { ensureChatThreadReads } from "./ensure-admin-fr.mjs";
 export { ApiError } from "./domain.mjs";
 
@@ -40,6 +41,8 @@ export function createCommerce(options = {}) {
       try {
         if (file === MIGRATION_005_NAME) {
           applyMigration005(db, key);
+        } else if (file === MIGRATION_006_NAME) {
+          applyMigration006(db);
         } else {
           const sql = readFileSync(
             new URL("./migrations/" + file, import.meta.url),

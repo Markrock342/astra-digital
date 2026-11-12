@@ -2,10 +2,14 @@
 
 อัปเดตล่าสุด: 2026-11-12
 
-## Admin FR — FR-P3 พร้อม PR (ห้าม deploy)
-- ฐาน `main` @ `7fb79f9` · branch `feat/admin-fr-p3-saveproduct-preorder`
-- `saveProduct` รับ `preorder` · flag `productPreorderForm` · หลักฐาน 68/68 + e2e 14/14 · รายงาน [MARK_REPORT_ADMIN_FR_P3](../database/MARK_REPORT_ADMIN_FR_P3.md)
-- **ห้าม deploy** · งาน 3 เริ่มคนละ PR หลังส่งมอบนี้
+## Admin FR — งาน 3 พร้อม PR (ห้าม deploy)
+- PR #28 · branch `feat/admin-fr-work3-ledger-006` (stacked บน #27)
+- MIG-006 ledger + `GET /api/admin/transactions` + bugfixes Bangkok/sold/spent/LIKE · flag `adminFinance`
+- หลักฐาน 70/70 + e2e 14/14 · รายงาน [MARK_REPORT_ADMIN_FR_WORK3](../database/MARK_REPORT_ADMIN_FR_WORK3.md)
+- **ห้าม deploy** · รอ Mark ก่อนงาน 4
+
+## Admin FR — FR-P3 (รอ merge · ห้าม deploy)
+- branch `feat/admin-fr-p3-saveproduct-preorder` · PR #27 · รายงาน [MARK_REPORT_ADMIN_FR_P3](../database/MARK_REPORT_ADMIN_FR_P3.md)
 
 ## Admin FR Backend — งาน 2 merge แล้ว (PR #26 · ยังไม่ deploy)
 - merge ใน `7fb79f9` · รายงาน [MARK_REPORT_ADMIN_FR_WORK2](../database/MARK_REPORT_ADMIN_FR_WORK2.md)
