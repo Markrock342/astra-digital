@@ -62,6 +62,9 @@ import {
   AdminProducts,
 } from "./AdminLists";
 import { StockImport } from "./StockImport";
+import { ImageLibraryDialog, useLibrary } from "./ImageLibrary";
+import { libraryBlob, suggestFromName, type LibraryItem } from "./image-library";
+import { uploadImage } from "./image-upload";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 const productTabs = [
   ["products", "สินค้าทั้งหมด"],
@@ -144,6 +147,23 @@ export default function Admin() {
   const formOpen = newProduct || !!editingProduct;
   const [formValues, setFormValues] = useState<Record<string, string> | null>(null);
   useEffect(() => setFormValues(null), [editingProduct?.id, newProduct]);
+  // Images as ProductImages holds them right now, so the preview cover follows uploads at once.
+  const [liveImages, setLiveImages] = useState<{ id: string; url: string }[] | null>(null);
+  useEffect(() => setLiveImages(null), [editingProduct?.id]);
+  // New product: suggest a library cover from the typed name (FR: แนะนำรูปจากชื่อสินค้า).
+  const coverSuggest = newProduct && !!features.uploads;
+  const library = useLibrary(coverSuggest);
+  const [pickedCover, setPickedCover] = useState<LibraryItem | null>(null);
+  const [useCover, setUseCover] = useState(true);
+  const [coverPicker, setCoverPicker] = useState(false);
+  useEffect(() => {
+    setPickedCover(null);
+    setUseCover(true);
+    setCoverPicker(false);
+  }, [newProduct]);
+  const suggestedCover = coverSuggest
+    ? (pickedCover ?? (library.items ? suggestFromName(library.items, formValues?.name ?? "") : null))
+    : null;
   const realProducts = data?.products ?? [];
   const setupSteps: [string, string, boolean][] = [
     ["ใส่ชื่อร้านและช่องทางติดต่อ", "settings", !!overview?.shop?.shopName],
@@ -184,6 +204,7 @@ export default function Admin() {
     setError("");
     const { type, ...values } = Object.fromEntries(new FormData(e.currentTarget));
     try {
+      const cover = newProduct && useCover ? suggestedCover : null;
       const result = await api<{ id: string }>("/admin/products", {
         ...values,
         preorder: type === "preorder",
@@ -194,9 +215,19 @@ export default function Admin() {
         active: newProduct ? false : values.active === "on",
         ...(editingProduct ? { id: editingProduct.id } : {}),
       });
+      let coverNote = "";
+      if (cover) {
+        // Product exists now: upload the suggested cover through the normal image API.
+        try {
+          await uploadImage("/admin/products/" + result.id + "/images", await libraryBlob(cover));
+          coverNote = " · ใส่รูปปก " + cover.name + " แล้ว";
+        } catch (e) {
+          coverNote = " · เพิ่มรูปปกไม่สำเร็จ (" + (e as Error).message + ") เพิ่มเองได้ในส่วนรูปสินค้า";
+        }
+      }
       await load();
       await refresh();
-      toast(newProduct ? "สร้างฉบับร่างแล้ว" : "บันทึกสินค้าแล้ว");
+      toast((newProduct ? "สร้างฉบับร่างแล้ว" : "บันทึกสินค้าแล้ว") + coverNote);
       go("/admin/products/" + result.id);
     } catch (e) {
       setError((e as Error).message);
@@ -471,7 +502,13 @@ export default function Admin() {
                   active: formValues ? formValues.active === "on" : !!editingProduct?.active,
                   featured: formValues ? formValues.featured === "on" : !!editingProduct?.featured,
                   art: editingProduct?.art ?? "gift",
-                  imageUrl: editingProduct?.images?.[0]?.url ?? editingProduct?.imageUrl ?? null,
+                  imageUrl: newProduct
+                    ? useCover && suggestedCover
+                      ? suggestedCover.file
+                      : null
+                    : liveImages
+                      ? (liveImages[0]?.url ?? null)
+                      : (editingProduct?.images?.[0]?.url ?? editingProduct?.imageUrl ?? null),
                   variants: editingProduct
                     ? editingProduct.variants.map((v) => ({ id: v.id, label: v.label, price: v.price, stock: v.stock }))
                     : [
@@ -548,6 +585,42 @@ export default function Admin() {
                     defaultValue={editingProduct?.name}
                   />
                 </label>
+                {coverSuggest && (
+                  <div className={"library-suggest" + (suggestedCover ? "" : " empty")} aria-live="polite">
+                    {suggestedCover ? (
+                      <>
+                        <img src={suggestedCover.file} alt={"รูปปก " + suggestedCover.name} width={64} height={64} />
+                        <div className="library-suggest-text">
+                          <strong>แนะนำรูปจากชื่อสินค้า</strong>
+                          <small>
+                            {suggestedCover.name} · เพิ่มเป็นรูปปกให้อัตโนมัติหลังสร้างสินค้า
+                          </small>
+                          <label className="checkbox-label">
+                            <input
+                              type="checkbox"
+                              checked={useCover}
+                              onChange={(e) => setUseCover(e.target.checked)}
+                            />
+                            ใช้รูปนี้เป็นรูปปก
+                          </label>
+                        </div>
+                        <button type="button" className="button secondary" onClick={() => setCoverPicker(true)}>
+                          เปลี่ยนรูป
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="library-suggest-text">
+                          <strong>แนะนำรูปจากชื่อสินค้า</strong>
+                          <small>พิมพ์ชื่อแบรนด์ เช่น Netflix หรือ Spotify ระบบจะหารูปปกให้</small>
+                        </div>
+                        <button type="button" className="button secondary" onClick={() => setCoverPicker(true)}>
+                          เลือกรูปจากคลัง
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
                 {!newProduct && editingProduct && (
                   <div className="field">
                     ลิงก์สินค้า
@@ -641,8 +714,24 @@ export default function Admin() {
                 </button>
               </div>
             </form>
+            {coverSuggest && (
+              <ImageLibraryDialog
+                open={coverPicker}
+                onClose={() => setCoverPicker(false)}
+                hint="รูปที่เลือกจะใส่เป็นรูปปกหลังกดสร้างฉบับร่าง"
+                onPick={(item) => {
+                  setPickedCover(item);
+                  setUseCover(true);
+                  setCoverPicker(false);
+                }}
+              />
+            )}
             {editingProduct && !newProduct && features.uploads && (
-              <ProductImages productId={editingProduct.id} images={editingProduct.images ?? []} />
+              <ProductImages
+                productId={editingProduct.id}
+                images={editingProduct.images ?? []}
+                onChange={setLiveImages}
+              />
             )}
             {editingProduct && !newProduct && (
               <VariantManager productId={editingProduct.id} preorder={!!editingProduct.preorder} />

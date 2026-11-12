@@ -11,6 +11,8 @@ const mime = {
   ".svg": "image/svg+xml",
   ".woff2": "font/woff2",
   ".png": "image/png",
+  ".webp": "image/webp",
+  ".json": "application/json; charset=utf-8",
 };
 export function createApp(service, { production = false, d1Catalog } = {}) {
   const handle = createAPIHandler(service, { d1Catalog });

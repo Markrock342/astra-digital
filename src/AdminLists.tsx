@@ -6,6 +6,7 @@ import {
   Copy,
   Download,
   Eye,
+  Images,
   LoaderCircle,
   LogOut,
   Minus,
@@ -24,6 +25,8 @@ import { Art, ErrorMessage, Link, Status, ledgerTypeText, useStore } from "./App
 import { Change, TestMoneyBanner } from "./AdminDashboard";
 import { api, dateTime, money } from "./api";
 import { checkSource, toWebp, uploadImage } from "./image-upload";
+import { libraryBlob, type LibraryItem } from "./image-library";
+import { ImageLibraryDialog } from "./ImageLibrary";
 import {
   ORDER_TABS,
   OrderActivity,
@@ -3913,17 +3916,50 @@ export function ProductPreview({ draft, categoryName }: { draft: ProductDraft; c
 type ProductImage = { id: string; url: string };
 
 /** Upload, reorder and remove product images; the first is the cover. Shown once the API exists. */
-export function ProductImages({ productId, images }: { productId: string; images: ProductImage[] }) {
+export function ProductImages({
+  productId,
+  images,
+  onChange,
+}: {
+  productId: string;
+  images: ProductImage[];
+  /** Called with the current list (first = cover) so the live preview can follow. */
+  onChange?: (images: ProductImage[]) => void;
+}) {
   const { toast } = useStore();
   const [list, setList] = useState<ProductImage[]>(images);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [over, setOver] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [picking, setPicking] = useState("");
+  const [pickError, setPickError] = useState("");
   const input = useRef<HTMLInputElement>(null);
   // Server list changes (live refresh) replace ours; compare ids, not the array object.
   const serverKey = images.map((x) => x.id).join(",");
   useEffect(() => setList(images), [serverKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => onChange?.(list), [list]); // eslint-disable-line react-hooks/exhaustive-deps
   const MAX = 8;
+  /** Library cover → same upload path as a file, so it becomes a normal product image. */
+  async function pickFromLibrary(item: LibraryItem) {
+    if (list.length >= MAX) return setPickError("สินค้าหนึ่งชิ้นมีรูปได้สูงสุด " + MAX + " รูป");
+    setPickError("");
+    setPicking(item.slug);
+    try {
+      const { image } = await uploadImage<{ image: ProductImage }>(
+        "/admin/products/" + productId + "/images",
+        await libraryBlob(item),
+      );
+      const wasEmpty = list.length === 0;
+      setList((current) => [...current, image]);
+      setLibraryOpen(false);
+      toast(wasEmpty ? "ตั้งรูป " + item.name + " เป็นรูปปกแล้ว" : "เพิ่มรูป " + item.name + " แล้ว");
+    } catch (e) {
+      setPickError((e as Error).message);
+    } finally {
+      setPicking("");
+    }
+  }
   async function add(files: FileList | File[]) {
     setError("");
     const picked = Array.from(files).slice(0, MAX - list.length);
@@ -3970,7 +4006,21 @@ export function ProductImages({ productId, images }: { productId: string; images
   }
   return (
     <section className="reference-admin-card editor-panel product-images">
-      <h2>รูปสินค้า</h2>
+      <div className="product-images-head">
+        <h2>รูปสินค้า</h2>
+        <button
+          type="button"
+          className="button secondary"
+          disabled={list.length >= MAX || !!busy}
+          onClick={() => {
+            setPickError("");
+            setLibraryOpen(true);
+          }}
+        >
+          <Images size={16} />
+          เลือกรูปจากคลัง
+        </button>
+      </div>
       <p className="field-help">รูปแรกเป็นรูปปกในหน้ารายการสินค้า · สูงสุด {MAX} รูป · JPG, PNG, WebP · ระบบย่อรูปให้อัตโนมัติ</p>
       <div className="product-image-grid">
         {list.map((image, i) => (
@@ -4031,6 +4081,14 @@ export function ProductImages({ productId, images }: { productId: string; images
         }}
       />
       <ErrorMessage message={error} />
+      <ImageLibraryDialog
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        onPick={(item) => void pickFromLibrary(item)}
+        busySlug={picking}
+        error={pickError}
+        hint={list.length ? "รูปที่เลือกจะต่อท้ายรูปที่มีอยู่ (เลื่อนเป็นรูปปกได้)" : "สินค้านี้ยังไม่มีรูป รูปที่เลือกจะเป็นรูปปก"}
+      />
     </section>
   );
 }
