@@ -1,10 +1,24 @@
-export const categories = [
-  { id: "streaming", name: "ความบันเทิง" },
-  { id: "music", name: "เพลงและเสียง" },
-  { id: "software", name: "ซอฟต์แวร์" },
-  { id: "games", name: "เกม" },
-  { id: "gift", name: "บัตรของขวัญ" },
+/**
+ * Built-in categories. Since the categories table (ensureCategories in ensure-admin-fr.mjs)
+ * these are only seed data: the first five are the original hard-coded list (ids kept so
+ * existing products stay valid); ai / productivity / vpn are defaults for an account shop,
+ * added on a fresh shop only. `icon` is an image library slug (public/library/<slug>.webp).
+ * `name` stays for older importers of this module.
+ */
+export const DEFAULT_CATEGORIES = [
+  { id: "streaming", name: "ความบันเทิง", name_en: "Entertainment", icon: "netflix" },
+  { id: "music", name: "เพลงและเสียง", name_en: "Music & audio", icon: "spotify" },
+  { id: "software", name: "ซอฟต์แวร์", name_en: "Software", icon: "microsoft-365" },
+  { id: "games", name: "เกม", name_en: "Games", icon: "steam" },
+  { id: "gift", name: "บัตรของขวัญ", name_en: "Gift cards", icon: null },
 ];
+export const ACCOUNT_SHOP_CATEGORIES = [
+  { id: "ai", name: "AI", name_en: "AI", icon: "chatgpt" },
+  { id: "productivity", name: "ทำงาน/ออกแบบ", name_en: "Work & design", icon: "canva" },
+  { id: "vpn", name: "VPN/คลาวด์", name_en: "VPN & cloud", icon: "nordvpn" },
+];
+/** @deprecated read the categories table (server/categories.mjs); kept for old imports. */
+export const categories = DEFAULT_CATEGORIES;
 export const catalog = [
   [
     "stream-plus",

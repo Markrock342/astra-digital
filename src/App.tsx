@@ -86,6 +86,7 @@ import { DeliveredExtras, hasReceipt, ReceiptLink, ReceiptPage, receiptRoute } f
 import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
 import { RebuyActions } from "./Rebuy";
+import { HomeCategoryRow } from "./Categories";
 import {
   ReferenceCatalog,
   ReferenceCatalogPage,
@@ -106,7 +107,8 @@ type Store = {
   basket: Basket | null;
   setBasket: (basket: Basket | null) => void;
   refresh: () => Promise<void>;
-  go: (path: string) => void;
+  /** keepScroll: same-page URL changes (e.g. the /products category chips). */
+  go: (path: string, options?: { keepScroll?: boolean }) => void;
   toast: (message: string) => void;
   path: string;
   loading: boolean;
@@ -721,6 +723,7 @@ function Home() {
             </div>
           </aside>
         ) : null}
+        <HomeCategoryRow />
         <ReferenceCatalog />
       </main>
     </>
@@ -2536,7 +2539,9 @@ function Router() {
     "/terms": t("ข้อกำหนดการใช้บริการ การสั่งซื้อ การรับประกัน และการคืนเงินของร้าน"),
     "/privacy": t("วิธีที่ร้านเก็บรวบรวม ใช้ และคุ้มครองข้อมูลส่วนบุคคลตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562"),
   };
+  // /products sets its own title ("<หมวด> — <ร้าน>" when a category is picked).
   const dynamic =
+    path === "/products" ||
     path.startsWith("/products/") ||
     path.startsWith("/orders/") ||
     path.startsWith("/checkout/");
@@ -2705,14 +2710,14 @@ export default function App() {
   };
   // The URL on screen, so a cancelled back/forward can be put back.
   const shownUrl = useRef(location.pathname + location.search);
-  function go(to: string) {
+  function go(to: string, options: { keepScroll?: boolean } = {}) {
     // A page with unsaved changes (useUnsavedChangesGuard) may cancel.
     if (!confirmLeave()) return;
     history.pushState({}, "", to);
     shownUrl.current = location.pathname + location.search;
     setPath(location.pathname);
     dispatchEvent(new Event(NAVIGATE_EVENT));
-    window.scrollTo({ top: 0, behavior: "instant" });
+    if (!options.keepScroll) window.scrollTo({ top: 0, behavior: "instant" });
   }
   async function refresh() {
     try {

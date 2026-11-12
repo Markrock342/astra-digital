@@ -53,7 +53,7 @@ export function createApp(service, { production = false, d1Catalog } = {}) {
         const robots = url.pathname === "/robots.txt";
         const body = robots
           ? robotsTxt(url.origin)
-          : sitemapXml(url.origin, service.products());
+          : sitemapXml(url.origin, service.products(), service.publicCategories?.() ?? []);
         res.writeHead(200, {
           ...securityHeaders,
           "Content-Type": robots

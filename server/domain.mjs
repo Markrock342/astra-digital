@@ -8,7 +8,8 @@ import {
   createCipheriv,
   createDecipheriv,
 } from "node:crypto";
-import { catalog, categories } from "./catalog.mjs";
+import { catalog } from "./catalog.mjs";
+import { createCategoryApis } from "./categories.mjs";
 import {
   ROLES,
   withoutClientPrivileges,
@@ -469,6 +470,7 @@ export function createCommerceCore({
     moneyScope,
   });
   const { releaseCouponForOrder } = coupons;
+  const categoryApis = createCategoryApis({ requireAdmin, one, all, run, tx, fail });
   // ctx: { ip, userAgent } from the request. Only a coarse device label and the IP
   // cut to /24 (IPv6 /48) are stored, for the "my devices" list (account-sessions.mjs).
   const issueSession = (user, ctx = {}) => {
@@ -1199,7 +1201,8 @@ export function createCommerceCore({
       ).n,
       orders: one("SELECT COUNT(*) AS n FROM orders WHERE status='DELIVERED'")
         .n,
-      categories,
+      // Visible categories with at least one product on sale: {id,name,name_en,icon,count}.
+      categories: categoryApis.publicCategories(),
       activity: all(
         "SELECT 'purchase' AS kind,u.name,p.name AS product,p.art,v.label,o.created_at AS time FROM orders o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.status='DELIVERED' UNION ALL SELECT 'register' AS kind,u.name,NULL AS product,NULL AS art,NULL AS label,u.created_at AS time FROM users u WHERE role='CUSTOMER' ORDER BY time DESC LIMIT 4",
       ).map((a) => ({
@@ -1876,6 +1879,8 @@ export function createCommerceCore({
       stock: one(
         `SELECT COUNT(*) AS n FROM inventory i JOIN variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE ${inventoryAvailableAliased} AND p.hidden_seed=0 AND p.preorder=0`,
       ).n,
+      // Every category (hidden ones too) for the product editor and the list filter.
+      categories: categoryApis.listCategories(),
       products: all("SELECT * FROM products WHERE hidden_seed=0").map((p) => ({
         ...p,
         ...productImageFields(p.id),
@@ -2094,7 +2099,7 @@ export function createCommerceCore({
     const id = input.id ? clean(input.id, 1, 80, "รหัสสินค้า") : randomUUID();
     const name = clean(input.name, 2, 80, "ชื่อสินค้า");
     const description = clean(input.description, 5, 1000, "รายละเอียด");
-    if (!categories.some((c) => c.id === input.category))
+    if (typeof input.category !== "string" || !categoryApis.exists(input.category))
       fail(400, "หมวดหมู่ไม่ถูกต้อง");
     // Price belongs to the variants once a product exists (VariantManager); only a new
     // product takes it here, for its first variant. Updating never overwrites prices.
@@ -2661,6 +2666,7 @@ export function createCommerceCore({
     fail,
     clean,
     randomUUID,
+    categoryExists: categoryApis.exists,
   });
   const { salesReport } = createReportApis({
     requireAdmin,
@@ -2792,6 +2798,13 @@ export function createCommerceCore({
     adminDisableCoupon: coupons.adminDisableCoupon,
     adminDuplicateCoupon: coupons.adminDuplicateCoupon,
     adminCouponRedemptions: coupons.adminCouponRedemptions,
+    // Categories (server/categories.mjs).
+    publicCategories: categoryApis.publicCategories,
+    adminCategories: categoryApis.adminCategories,
+    adminCreateCategory: categoryApis.adminCreateCategory,
+    adminUpdateCategory: categoryApis.adminUpdateCategory,
+    adminReorderCategories: categoryApis.adminReorderCategories,
+    adminDeleteCategory: categoryApis.adminDeleteCategory,
     // For code that ends an unpaid order (e.g. auto-expiry); see server/coupons.mjs.
     releaseCouponForOrder,
     orderDetail,
@@ -2930,6 +2943,7 @@ export function createCommerceCore({
       coupons: true,
       faq: true,
       broadcasts: true,
+      categories: true,
       // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
       email: accountEmail.enabled,
       passwordReset: accountEmail.enabled,

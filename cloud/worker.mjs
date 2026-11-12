@@ -25,6 +25,7 @@ import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
   ensureCoupons,
+  ensureCategories,
   ensureCustomerAdmin,
   ensureOrderExtras,
   ensureOrderHistory,
@@ -112,6 +113,7 @@ export class Commerce extends DurableObject {
       ensureSmallUxB(db);
       ensureOrderExtras(db);
       ensureCoupons(db);
+      ensureCategories(db);
       ensureEmailAndReset(db);
       ensureBroadcasts(db);
       ensureLiveVersions(db);
@@ -151,7 +153,6 @@ export class Commerce extends DurableObject {
       email: createEmailSender(env),
       turnstile: createTurnstile(env),
       publicBaseUrl: env.PUBLIC_BASE_URL,
-      waitUntil: (promise) => ctx.waitUntil?.(promise),
     });
     this.service.storageKind = "cloudflare-durable-sqlite";
     this.service.onLive((topics) => {
