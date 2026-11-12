@@ -27,6 +27,8 @@ import { createTeamApis } from "./admin-team.mjs";
 import { createReportApis } from "./admin-reports.mjs";
 import { createAdminVariantStockApis } from "./admin-variant-stock-apis.mjs";
 import { createAdminOrderReplaceApis } from "./admin-order-replace.mjs";
+import { createAdminProductImageApis } from "./admin-product-images.mjs";
+import { createFileStore } from "./file-store.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
@@ -57,10 +59,14 @@ export function createCommerceCore({
   key = randomBytes(32),
   seed = true,
   adminPassword,
+  fileStore: fileStoreOption,
+  uploads,
 } = {}) {
   const one = (sql, ...params) => db.prepare(sql).get(...params);
   const all = (sql, ...params) => db.prepare(sql).all(...params);
   const run = (sql, ...params) => db.prepare(sql).run(...params);
+  const fileStore =
+    fileStoreOption ?? createFileStore({ db, uploads });
   const tx =
     transaction ??
     ((fn) => {
@@ -767,10 +773,28 @@ export function createCommerceCore({
     const n = Number(raw);
     return Number.isInteger(n) && n >= 1 && n <= 100 ? n : 3;
   };
+  const {
+    productImageFields,
+    addProductImage,
+    reorderProductImages,
+    deleteProductImage,
+    getFile,
+  } = createAdminProductImageApis({
+    requireAdmin,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    audit,
+    fileStore,
+  });
   function mapProduct(p) {
     const lowAt = getLowStockAt();
     return {
       ...p,
+      ...productImageFields(p.id),
       variants: all(
         `SELECT v.*, CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=? AND COALESCE(v.active,1)=1 ORDER BY v.sort_order ASC, CASE WHEN v.id='stream-plus-full' THEN 0 WHEN v.id LIKE '%-30' THEN 1 ELSE 2 END, price, v.id`,
         p.id,
@@ -1402,6 +1426,7 @@ export function createCommerceCore({
       ).n,
       products: all("SELECT * FROM products WHERE hidden_seed=0").map((p) => ({
         ...p,
+        ...productImageFields(p.id),
         variants: all(
           `SELECT v.*,CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=?`,
           p.id,
@@ -1889,13 +1914,7 @@ export function createCommerceCore({
     if (period === "week") start -= ((local.getUTCDay() + 6) % 7) * 86400000;
     return new Date(start - offset).toISOString().slice(0, 19).replace("T", " ");
   }
-  const {
-    adminOrders,
-    adminOrderDetail,
-    adminRevealOrderCredentials,
-    adminCustomers,
-    adminProducts,
-  } = createAdminListApis({
+  const listApis = createAdminListApis({
     requireStaff,
     one,
     all,
@@ -1909,6 +1928,22 @@ export function createCommerceCore({
     bangkokDayRange,
     isAdmin,
   });
+  const {
+    adminOrders,
+    adminOrderDetail,
+    adminRevealOrderCredentials,
+    adminCustomers,
+  } = listApis;
+  function adminProducts(user, query) {
+    const page = listApis.adminProducts(user, query);
+    return {
+      ...page,
+      products: page.products.map((p) => ({
+        ...p,
+        ...productImageFields(p.id),
+      })),
+    };
+  }
   const { adminTransactions } = createAdminFinanceApis({
     requireAdmin,
     one,
@@ -2074,6 +2109,10 @@ export function createCommerceCore({
     importCodes: importInventory,
     deliverReservation,
     saveProduct,
+    addProductImage,
+    reorderProductImages,
+    deleteProductImage,
+    getFile,
     profile,
     publicUser,
     queueBoard,
@@ -2106,6 +2145,7 @@ export function createCommerceCore({
       adminVariantCrud: true,
       adminStockApi: true,
       adminReplaceCredential: true,
+      uploads: true,
     }),
     salesRevenueSatang,
     logout: (token) =>
