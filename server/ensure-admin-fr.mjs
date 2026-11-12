@@ -275,3 +275,33 @@ export function ensureCoupons(db) {
     if (!has(table, "coupon_code")) db.exec(`ALTER TABLE ${table} ADD COLUMN coupon_code TEXT`);
   }
 }
+
+/**
+ * Email + self-service password reset (idempotent, no numbered migration).
+ * - email_log: one row per outgoing email. The recipient is stored masked only. `ref` is
+ *   a unique dedupe key (e.g. "order-confirmed:<id>") so a repeated request never mails twice.
+ * - password_resets: single-use tokens; only the keyed hash is stored; 30-minute expiry.
+ */
+export function ensureEmailAndReset(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS email_log (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    kind TEXT NOT NULL,
+    recipient TEXT NOT NULL,
+    ref TEXT UNIQUE,
+    ok INTEGER,
+    provider TEXT,
+    provider_id TEXT,
+    error TEXT,
+    finished_at TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_email_log_created ON email_log(created_at)");
+  db.exec(`CREATE TABLE IF NOT EXISTS password_resets (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    used_at INTEGER,
+    created_at INTEGER NOT NULL
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id)");
+}

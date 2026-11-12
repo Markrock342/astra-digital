@@ -74,6 +74,7 @@ import { libraryBlob, suggestFromName, type LibraryItem } from "./image-library"
 import { uploadImage } from "./image-upload";
 import { AdminAlerts, AdminBackup } from "./AdminAlerts";
 import { AdminCoupons } from "./AdminCoupons";
+import { AdminIntegrations } from "./AdminIntegrations";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -1389,6 +1390,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
           <button className="button primary">บันทึก</button>
         </div>
       </form>
+      <AdminIntegrations />
     </>
   );
 }

@@ -52,6 +52,7 @@ import {
   normalizeUsageInstructions,
 } from "./order-extras.mjs";
 import { createCouponApis, normalizeCouponCode } from "./coupons.mjs";
+import { createAccountEmail } from "./account-email.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -105,6 +106,10 @@ export function createCommerceCore({
   waitUntil,
   // R2 bucket binding BACKUPS for the automatic daily backup (absent = off).
   backups,
+  // Email + Turnstile (server/email.mjs, server/turnstile.mjs). Both off when omitted.
+  email: mailer = null,
+  turnstile = null,
+  publicBaseUrl = "",
 } = {}) {
   const one = (sql, ...params) => db.prepare(sql).get(...params);
   const all = (sql, ...params) => db.prepare(sql).all(...params);
@@ -2616,6 +2621,22 @@ export function createCommerceCore({
       spentSatang: row.spent_satang,
     }));
   }
+  const accountEmail = createAccountEmail({
+    one,
+    all,
+    run,
+    fail,
+    key,
+    clock,
+    passwordHash,
+    settings,
+    requireAdmin,
+    clearLockout: auth.clearLockout,
+    mailer,
+    turnstile,
+    publicBaseUrl,
+    waitUntil,
+  });
   const service = {
     db,
     reviews,
@@ -2771,7 +2792,17 @@ export function createCommerceCore({
       outsideAlerts: true,
       backupExport: true,
       coupons: true,
+      // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
+      email: accountEmail.enabled,
+      passwordReset: accountEmail.enabled,
+      turnstile: !!turnstile?.enabled,
     }),
+    turnstile: turnstile?.enabled ? turnstile : null,
+    requestPasswordReset: accountEmail.requestPasswordReset,
+    resetPassword: accountEmail.resetPassword,
+    sendOrderConfirmation: accountEmail.sendOrderConfirmation,
+    adminIntegrations: accountEmail.integrationsStatus,
+    emailIdle: accountEmail.idle,
     salesRevenueSatang,
     logout: (token) =>
       run("DELETE FROM sessions WHERE token_hash=?", hash(token ?? "")),
@@ -2796,6 +2827,8 @@ export function createCommerceCore({
       return walletHistory(all, user.id, 500);
     },
   };
+  // Order emails run after pay / deliverReservation returned; money logic is untouched.
+  accountEmail.hookOrderEmails(service);
   const live = withLive(service, { run, all });
   // Unpaid-order expiry runs lazily on these calls (pending-expiry.mjs). The bump goes
   // through live.mjs so listeners hear "orders changed" only when something expired.

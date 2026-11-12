@@ -5,6 +5,7 @@ import { ApiError } from "./domain.mjs";
  * per signed-in account and per client IP, in a 10-minute window.
  */
 export const COUPON_RATE_LIMIT = { perUser: 15, perIp: 40, windowMs: 600000 };
+import { TURNSTILE_ORIGIN, TURNSTILE_REJECTED, turnstileTokenFrom } from "./turnstile.mjs";
 export const securityHeaders = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -13,6 +14,18 @@ export const securityHeaders = {
   "Content-Security-Policy":
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
 };
+/** Storefront pages when Turnstile is on: only its script + iframe origin is added. */
+export const turnstileSecurityHeaders = {
+  ...securityHeaders,
+  "Content-Security-Policy": `default-src 'self'; script-src 'self' ${TURNSTILE_ORIGIN}; frame-src 'self' ${TURNSTILE_ORIGIN}; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'`,
+};
+/** Headers for an HTML page / static asset. The back office (/admin) never gets the wider CSP. */
+export function pageSecurityHeaders(pathname, turnstileOn) {
+  const admin = pathname === "/admin" || String(pathname).startsWith("/admin/");
+  return turnstileOn && !admin ? turnstileSecurityHeaders : securityHeaders;
+}
+/** Public, no-session POSTs (Origin check + global per-IP limit on the Worker). */
+export const accountRecoveryPaths = ["/api/password/forgot", "/api/password/reset"];
 export const authenticationPaths = [
   "/api/login",
   "/api/login/totp",
@@ -52,6 +65,25 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
     if (!hit || hit.expires < now) hit = { n: 0, expires: now + 60000 };
     attempts.set(key, hit);
     return ++hit.n <= 20;
+  }
+  const generic = new Map();
+  /** Named limit: Durable Object storage on Cloudflare, memory locally. */
+  function limit(key, max, windowMs) {
+    if (rateLimit) return rateLimit(key, max, windowMs);
+    const now = Date.now();
+    if (generic.size > 1000)
+      for (const [k, v] of generic) if (v.expires < now) generic.delete(k);
+    let hit = generic.get(key);
+    if (!hit || hit.expires < now) hit = { n: 0, expires: now + windowMs };
+    generic.set(key, hit);
+    return ++hit.n <= max;
+  }
+  /** Turnstile gate (no-op while Turnstile is not configured). */
+  async function requireHuman(input, request, env) {
+    const turnstile = service.turnstile;
+    if (!turnstile?.enabled) return;
+    const ok = await turnstile.verify(turnstileTokenFrom(input), clientIp(request, env));
+    if (!ok) throw new ApiError(403, TURNSTILE_REJECTED);
   }
   function localUploadLimit(key) {
     const now = Date.now();
@@ -242,6 +274,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           ip: clientIp(request, env),
           userAgent: request.headers.get("User-Agent") ?? "",
         };
+        // Turnstile: register and every password login (not the 2FA step, not demo).
+        if (path === "/api/login" || path === "/api/register")
+          await requireHuman(input, request, env);
         const result =
           path === "/api/login"
             ? service.login(input, ctx)
@@ -263,6 +298,25 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           },
         );
       }
+      if (request.method === "POST" && accountRecoveryPaths.includes(path)) {
+        const ip = clientIp(request, env);
+        const ctx = { ip, origin: url.origin };
+        const bucket = createHash("sha256")
+          .update(String(request.headers.get("CF-Connecting-IP") ?? env?.ip ?? "local"))
+          .digest("hex")
+          .slice(0, 32);
+        if (path === "/api/password/forgot") {
+          if (!limit("pw-forgot:" + bucket, 5, 900000))
+            throw new ApiError(429, "ขอลิงก์บ่อยเกินไป กรุณาลองอีกครั้งในอีก 15 นาที");
+          if (!service.features?.passwordReset)
+            throw new ApiError(404, "ระบบตั้งรหัสผ่านใหม่ทางอีเมลยังไม่เปิดใช้งาน กรุณาติดต่อร้าน");
+          await requireHuman(input, request, env);
+          return send(200, service.requestPasswordReset(input, ctx));
+        }
+        if (!limit("pw-reset:" + bucket, 10, 900000))
+          throw new ApiError(429, "มีคำขอมากเกินไป กรุณาลองอีกครั้งในอีก 15 นาที");
+        return send(200, service.resetPassword(input, ctx));
+      }
       if (request.method === "GET") {
         if (/^\/api\/files\/[^/]+$/.test(path)) {
           const file = await service.getFile(path.split("/")[3]);
@@ -283,6 +337,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             mode: service.mode ?? "sandbox",
             storage: service.storageKind ?? "local-sqlite",
             features: service.features ?? {},
+            // Public by design (it is embedded in the page); null while Turnstile is off.
+            turnstileSiteKey: service.turnstile?.siteKey ?? null,
           });
         if (path === "/api/live" && service.liveVersions)
           return send(200, { versions: service.liveVersions() });
@@ -385,6 +441,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (path === "/api/admin/team") return send(200, { team: service.team(user) });
         if (path === "/api/admin/alerts") return send(200, service.alertSettings(user));
         if (path === "/api/admin/backup") return send(200, service.backupStatus(user));
+        if (path === "/api/admin/integrations")
+          return send(200, service.adminIntegrations(user));
         if (path === "/api/account/totp") return send(200, service.totpStatus(user));
         if (path === "/api/account/sessions")
           return send(200, service.listSessions(user, token));
@@ -553,7 +611,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (/^\/api\/admin\/coupons\/[^/]+\/duplicate$/.test(path))
           return send(201, service.adminDuplicateCoupon(user, path.split("/")[4]));
         if (/^\/api\/orders\/[^/]+\/pay$/.test(path))
-          return send(200, service.pay(user, path.split("/")[3], input));
+          return send(
+            200,
+            service.pay(user, path.split("/")[3], input, { origin: url.origin }),
+          );
         if (/^\/api\/orders\/[^/]+\/retry$/.test(path))
           return send(200, service.retry(user, path.split("/")[3]));
         if (path === "/api/topup")
@@ -674,7 +735,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (/^\/api\/admin\/reservations\/[^/]+\/deliver$/.test(path))
           return send(
             200,
-            service.deliverReservation(user, path.split("/")[4]),
+            service.deliverReservation(user, path.split("/")[4], {
+              origin: url.origin,
+            }),
           );
         if (path === "/api/admin/settings")
           return send(200, service.saveSettings(user, input));

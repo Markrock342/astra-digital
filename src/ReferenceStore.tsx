@@ -34,6 +34,7 @@ import { WarrantyDays } from "./Warranty";
 import { api, dateTime, money } from "./api";
 import type { Order, Product, Review } from "./types";
 import { MAX_PER_ORDER } from "./types";
+import { ForgotPassword, TURNSTILE_WAIT, TurnstileBox, useAuthConfig } from "./AccountRecovery";
 export function ReferenceCatalog() {
   const { products, loading } = useStore();
   const [query, setQuery] = useState("");
@@ -148,14 +149,26 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
   // Second step for ADMIN/STAFF accounts with 2FA: the password was right, no session yet.
   const [challenge, setChallenge] = useState<string | null>(null);
   const [useRecovery, setUseRecovery] = useState(false);
+  // Email reset + Turnstile appear only when the server has them configured.
+  const authConfig = useAuthConfig();
+  const siteKey = authConfig?.turnstileSiteKey ?? null;
+  const [humanToken, setHumanToken] = useState("");
+  const [turnstileReset, setTurnstileReset] = useState(0);
+  const [forgot, setForgot] = useState(
+    () => !register && new URLSearchParams(location.search).has("forgot"),
+  );
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy(true);
     setError("");
+    if (siteKey && !humanToken) return setError(TURNSTILE_WAIT);
+    setBusy(true);
     try {
       const result = await api<{ needsTotp?: boolean; challenge?: string }>(
         register ? "/register" : "/login",
-        Object.fromEntries(new FormData(e.currentTarget)),
+        {
+          ...Object.fromEntries(new FormData(e.currentTarget)),
+          ...(siteKey ? { turnstileToken: humanToken } : {}),
+        },
       );
       if (result.needsTotp && result.challenge) {
         setChallenge(result.challenge);
@@ -169,6 +182,8 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+      // Turnstile tokens are single-use: get a fresh one for the next try.
+      if (siteKey) setTurnstileReset((n) => n + 1);
     }
   }
   async function submitCode(e: FormEvent<HTMLFormElement>) {
@@ -245,6 +260,18 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
           </button>
         </p>
       </main>
+    );
+  if (forgot && authConfig?.email)
+    return (
+      <ForgotPassword
+        siteKey={siteKey}
+        onBack={() => {
+          setForgot(false);
+          setError("");
+          if (location.search.includes("forgot"))
+            history.replaceState(history.state, "", "/login");
+        }}
+      />
     );
   return (
     <main className="reference-auth-main">
@@ -328,6 +355,9 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
             </span>
           </label>
         )}
+        {siteKey && (
+          <TurnstileBox siteKey={siteKey} onToken={setHumanToken} resetKey={turnstileReset} />
+        )}
         <button className="button primary full" disabled={busy}>
           {busy ? (
             <LoaderCircle className="spin" size={17} />
@@ -338,13 +368,27 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
           )}
         </button>
       </form>
-      {!register && (
-        <p className="reference-auth-help">
-          {t("ลืมรหัสผ่าน? ติดต่อร้านผ่านช่องทางในหน้า")}{" "}
-          <Link to="/support">{t("ติดต่อเรา")}</Link>{" "}
-          {t("ร้านจะตั้งรหัสผ่านชั่วคราวให้หลังยืนยันตัวตน")}
-        </p>
-      )}
+      {!register &&
+        (authConfig?.email ? (
+          <p className="reference-auth-help">
+            <button
+              type="button"
+              className="text-button forgot-link"
+              onClick={() => {
+                setError("");
+                setForgot(true);
+              }}
+            >
+              {t("ลืมรหัสผ่าน?")}
+            </button>
+          </p>
+        ) : (
+          <p className="reference-auth-help">
+            {t("ลืมรหัสผ่าน? ติดต่อร้านผ่านช่องทางในหน้า")}{" "}
+            <Link to="/support">{t("ติดต่อเรา")}</Link>{" "}
+            {t("ร้านจะตั้งรหัสผ่านชั่วคราวให้หลังยืนยันตัวตน")}
+          </p>
+        ))}
       <p className="reference-auth-switch">
         {register ? t("มีบัญชีแล้ว?") : t("ยังไม่มีบัญชี?")}{" "}
         <Link

@@ -526,8 +526,12 @@ export function createAuthHardening({
     if (had?.secret_enc) auditDetail(null, "TOTP_RESET", userId, { reason });
   }
 
+  /** Self-service password reset: the account's lockout counter starts fresh. */
+  const clearLockout = (userId) => clearFailures(lockKeyFor(null, { id: userId }));
+
   return {
     ownerEmail,
+    clearLockout,
     sessionLifetime,
     sessionUser,
     login,

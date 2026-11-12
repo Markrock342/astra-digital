@@ -3,7 +3,7 @@ import { Readable } from "node:stream";
 import { readFile } from "node:fs/promises";
 import { resolve, extname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createAPIHandler, securityHeaders } from "./api-handler.mjs";
+import { createAPIHandler, securityHeaders, pageSecurityHeaders } from "./api-handler.mjs";
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -56,7 +56,7 @@ export function createApp(service, { production = false, d1Catalog } = {}) {
       try {
         const content = await readFile(file);
         res.writeHead(200, {
-          ...securityHeaders,
+          ...pageSecurityHeaders(url.pathname, !!service.features?.turnstile),
           "Content-Type": mime[extname(file)] ?? "application/octet-stream",
           "Cache-Control": file.includes("/assets/")
             ? "public,max-age=31536000,immutable"

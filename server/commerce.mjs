@@ -31,8 +31,11 @@ import {
   ensureNotificationLinks,
   ensureSmallUxB,
   ensureAlertsBackup,
+  ensureEmailAndReset,
 } from "./ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "./auth-hardening.mjs";
+import { createEmailSender } from "./email.mjs";
+import { createTurnstile } from "./turnstile.mjs";
 export { ApiError } from "./domain.mjs";
 
 export function createCommerce(options = {}) {
@@ -87,6 +90,7 @@ export function createCommerce(options = {}) {
   ensureSmallUxB(db);
   ensureOrderExtras(db);
   ensureCoupons(db);
+  ensureEmailAndReset(db);
   ensureLiveVersions(db);
   ensureAppendOnlyMoney(db);
   ensureAlertsBackup(db);
@@ -109,5 +113,9 @@ export function openLocalCommerce({
     seed,
     allowSandbox,
     allowDemoAdmin,
+    // Off unless EMAIL_FROM + RESEND_API_KEY / TURNSTILE_SITE_KEY + TURNSTILE_SECRET are set.
+    email: createEmailSender(process.env),
+    turnstile: createTurnstile(process.env),
+    publicBaseUrl: process.env.PUBLIC_BASE_URL,
   });
 }

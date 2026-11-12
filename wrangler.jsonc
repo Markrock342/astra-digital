@@ -41,6 +41,14 @@
   "observability": {
     "enabled": true,
   },
+  // Email + Turnstile (docs/architecture/email-turnstile.md). All OFF until set by Mark:
+  //   Email via Cloudflare Email Sending: onboard the sender domain, then uncomment
+  //     "send_email": [{ "name": "EMAIL" }],
+  //   and add "EMAIL_FROM": "no-reply@<your-domain>" (+ optional "EMAIL_FROM_NAME") to vars.
+  //   Or via Resend: npx wrangler secret put RESEND_API_KEY, plus EMAIL_FROM in vars.
+  //   Recommended: "PUBLIC_BASE_URL": "https://<shop domain>" in vars (links in emails).
+  //   Turnstile: "TURNSTILE_SITE_KEY" in vars + npx wrangler secret put TURNSTILE_SECRET.
+  //   EMAIL_API_BASE / TURNSTILE_VERIFY_URL are for local smoke tests only — never set them here.
   // Mark creates the bucket: npx wrangler r2 bucket create asiax-uploads
   // Then uncomment the block below (Nott must not create the bucket).
   // "r2_buckets": [
