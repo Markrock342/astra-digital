@@ -20,6 +20,7 @@ export function createAdminProductBulkApis({
   fail,
   clean,
   randomUUID,
+  categoryExists = () => true,
 }) {
   const auditDetail = (user, action, entity, detail) =>
     run(
@@ -33,11 +34,10 @@ export function createAdminProductBulkApis({
   function bulkUpdateProducts(user, input = {}) {
     requireAdmin(user);
     const action = typeof input.action === "string" ? input.action : "";
+    if (action === "move") return bulkMoveProducts(user, input);
     const change = BULK_ACTIONS[action];
     if (!change) fail(400, "คำสั่งไม่ถูกต้อง");
-    if (!Array.isArray(input.ids) || input.ids.length < 1 || input.ids.length > 100)
-      fail(400, "เลือกสินค้า 1–100 รายการ");
-    const ids = [...new Set(input.ids.map((id) => clean(id, 1, 80, "รหัสสินค้า")))];
+    const ids = pickedIds(input);
     return tx(() => {
       const found = all(
         `SELECT id,${change.column} AS current FROM products
@@ -58,6 +58,56 @@ export function createAdminProductBulkApis({
           updated: changed.includes(id),
         });
       return { action, ids, updated: changed.length, unchanged: ids.length - changed.length };
+    });
+  }
+
+  function pickedIds(input) {
+    if (!Array.isArray(input.ids) || input.ids.length < 1 || input.ids.length > 100)
+      fail(400, "เลือกสินค้า 1–100 รายการ");
+    return [...new Set(input.ids.map((id) => clean(id, 1, 80, "รหัสสินค้า")))];
+  }
+
+  /** "ย้ายหมวด…": the picked products go to one category in one transaction. */
+  function bulkMoveProducts(user, input) {
+    const category = typeof input.category === "string" ? input.category.trim() : "";
+    if (!category) fail(400, "เลือกหมวดปลายทาง");
+    const ids = pickedIds(input);
+    return tx(() => {
+      if (!categoryExists(category)) fail(404, "ไม่พบหมวดปลายทาง");
+      const found = all(
+        `SELECT id,category FROM products
+         WHERE hidden_seed=0 AND id IN (${ids.map(() => "?").join(",")})`,
+        ...ids,
+      );
+      if (found.length !== ids.length) fail(404, "ไม่พบสินค้าบางรายการ");
+      const changed = found.filter((p) => p.category !== category);
+      if (changed.length)
+        run(
+          `UPDATE products SET category=? WHERE id IN (${changed.map(() => "?").join(",")})`,
+          category,
+          ...changed.map((p) => p.id),
+        );
+      for (const p of found)
+        auditDetail(user, "PRODUCT_BULK_MOVE", p.id, {
+          batch: ids.length,
+          from: p.category,
+          to: category,
+          updated: p.category !== category,
+        });
+      if (changed.length)
+        auditDetail(user, "CATEGORY_MOVE_PRODUCTS", category, {
+          to: category,
+          count: changed.length,
+          from: [...new Set(changed.map((p) => p.category))],
+          ids: changed.map((p) => p.id),
+        });
+      return {
+        action: "move",
+        category,
+        ids,
+        updated: changed.length,
+        unchanged: ids.length - changed.length,
+      };
     });
   }
 

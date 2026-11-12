@@ -5,7 +5,7 @@ export const BRAND = "ASIA EXTRA";
 export const DEFAULT_DESCRIPTION = "ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที";
 export const DEFAULT_IMAGE = "/brand/og.png";
 /** Storefront pages listed in the sitemap besides one URL per active product. */
-export const STATIC_PATHS = ["/", "/products", "/reviews", "/terms", "/privacy"];
+export const STATIC_PATHS = ["/", "/products", "/reviews", "/faq", "/terms", "/privacy"];
 
 const XML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
 export const escapeXml = (value) =>
@@ -38,7 +38,23 @@ export const isListedProduct = (p) =>
   p.active !== false &&
   !p.hidden_seed;
 
-export function sitemapXml(origin, products = []) {
+/** "/products?category=<id>" — the storefront's filtered list. */
+export const categoryPath = (id) => "/products?category=" + encodeURIComponent(id);
+
+/** Valid category slug from a URL query value, or null. */
+export function categoryIdFromQuery(value) {
+  const id = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return id && id.length <= 40 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) ? id : null;
+}
+
+/**
+ * Public categories only: /api/overview already lists just the visible ones that have a
+ * product on sale; this guards against stale or admin-shaped input.
+ */
+export const isListedCategory = (c) =>
+  !!c && typeof c.id === "string" && !!categoryIdFromQuery(c.id) && !c.hidden && (c.count ?? 1) > 0;
+
+export function sitemapXml(origin, products = [], categories = []) {
   const base = trimOrigin(origin);
   const seen = new Set();
   const urls = [];
@@ -51,6 +67,7 @@ export function sitemapXml(origin, products = []) {
   };
   for (const path of STATIC_PATHS)
     add(path, path === "/" ? "1.0" : path === "/products" ? "0.9" : "0.5");
+  for (const category of categories.filter(isListedCategory)) add(categoryPath(category.id), "0.7");
   for (const product of products.filter(isListedProduct)) add(productPath(product.id), "0.8");
   return (
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
@@ -118,6 +135,25 @@ export function productMeta(origin, product, shop) {
     imageIsDefault: !product.imageUrl,
     url: trimOrigin(origin) + productPath(product.id),
     type: "product",
+  };
+}
+
+/** "/products?category=x" link preview: "<หมวด> — <ร้าน>". Thai name (the default language). */
+export function categoryMeta(origin, category, shop) {
+  const name = shopTitle(shop);
+  const label = summary(category.name, 60);
+  const count = Number.isSafeInteger(category.count) && category.count > 0 ? category.count : 0;
+  return {
+    title: label + " — " + name,
+    siteName: name,
+    description: summary(
+      "สินค้าหมวด " + label + (count ? " " + count + " รายการ" : "") + " — " +
+        (shop?.description || DEFAULT_DESCRIPTION),
+    ),
+    image: absoluteUrl(origin, DEFAULT_IMAGE),
+    imageIsDefault: true,
+    url: trimOrigin(origin) + categoryPath(category.id),
+    type: "website",
   };
 }
 

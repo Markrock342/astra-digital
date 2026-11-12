@@ -1,4 +1,50 @@
 /** Idempotent schema helpers for Admin FR Work 1 (no numbered migration — 006 reserved for ledger). */
+import { ACCOUNT_SHOP_CATEGORIES, DEFAULT_CATEGORIES } from "./catalog.mjs";
+
+/**
+ * Product categories (idempotent, no numbered migration). products.category holds the id.
+ * - First run on an existing shop: the five built-in categories (same ids, so every product
+ *   stays valid). First run on a fresh shop (no products yet): those five plus the
+ *   account-shop defaults ai / productivity / vpn. INSERT OR IGNORE, so nothing is
+ *   overwritten, and a category the admin deleted later is never brought back.
+ * - Every run: a product whose category has no row (data written outside the app) gets a
+ *   plain row named after its id, so saveProduct / the storefront never meet an unknown id.
+ */
+export function ensureCategories(db) {
+  const existed = !!db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='categories'")
+    .get();
+  db.exec(`CREATE TABLE IF NOT EXISTS categories (
+    id TEXT PRIMARY KEY,
+    name_th TEXT NOT NULL,
+    name_en TEXT,
+    icon TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0,1)),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_products_category ON products(category)");
+  if (!existed) {
+    const fresh = !db.prepare("SELECT id FROM products LIMIT 1").get();
+    const seed = fresh ? [...DEFAULT_CATEGORIES, ...ACCOUNT_SHOP_CATEGORIES] : DEFAULT_CATEGORIES;
+    const insert = db.prepare(
+      "INSERT OR IGNORE INTO categories(id,name_th,name_en,icon,sort_order,hidden) VALUES(?,?,?,?,?,0)",
+    );
+    seed.forEach((c, i) => insert.run(c.id, c.name, c.name_en ?? null, c.icon ?? null, (i + 1) * 10));
+  }
+  const orphans = db
+    .prepare(
+      "SELECT DISTINCT category AS id FROM products WHERE category IS NOT NULL AND category NOT IN (SELECT id FROM categories)",
+    )
+    .all();
+  if (orphans.length) {
+    let next = db.prepare("SELECT COALESCE(MAX(sort_order),0) AS n FROM categories").get().n;
+    const insert = db.prepare(
+      "INSERT OR IGNORE INTO categories(id,name_th,sort_order,hidden) VALUES(?,?,?,0)",
+    );
+    for (const { id } of orphans) insert.run(id, String(id).slice(0, 40) || "หมวดหมู่", (next += 10));
+  }
+}
 
 export function ensureChatThreadReads(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS chat_thread_reads (
@@ -304,4 +350,71 @@ export function ensureEmailAndReset(db) {
     created_at INTEGER NOT NULL
   )`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id)");
+}
+
+/**
+ * Announcements to customers (broadcast.mjs). One row per send; the notifications themselves
+ * live in `notifications` (kind 'broadcast'). created_ms drives the 5-per-24h limit.
+ */
+export function ensureBroadcasts(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS broadcasts (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_ms INTEGER NOT NULL,
+    sender_id TEXT,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    link TEXT,
+    audience TEXT NOT NULL,
+    audience_label TEXT NOT NULL,
+    recipients INTEGER NOT NULL DEFAULT 0,
+    email_requested INTEGER NOT NULL DEFAULT 0,
+    emails_queued INTEGER NOT NULL DEFAULT 0
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_broadcasts_created ON broadcasts(created_ms)");
+}
+
+/**
+ * Back-in-stock notices ("แจ้งเตือนเมื่อสินค้าเข้า", server/stock-watch.mjs). Idempotent.
+ * - stock_watch: one row per customer and option while they wait. One-shot: notified_at is
+ *   set when the option comes back, and subscribing again starts a fresh row (new place in
+ *   the line). No foreign keys, so the one-time demo cleanup can delete freely; lookups
+ *   join variants/products, so a row for a deleted option is simply never shown.
+ */
+export function ensureStockWatch(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS stock_watch (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    variant_id TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    notified_at TEXT,
+    UNIQUE (user_id, variant_id)
+  )`);
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_stock_watch_waiting ON stock_watch(variant_id, notified_at, created_at)",
+  );
+}
+
+/**
+ * Review replies + moderation (server/review-moderation.mjs). Idempotent ALTERs.
+ * - One public shop reply per review (reply_text, editable; reply_at = first reply,
+ *   reply_updated_at = last edit, reply_by = who wrote the current text).
+ * - Hidden reviews keep their row: hidden_at / hidden_by / hidden_reason (SPAM, ABUSE,
+ *   OFF_TOPIC, OTHER) / hidden_note. Public lists and rating averages skip hidden_at IS NOT NULL.
+ */
+export function ensureReviewModeration(db) {
+  const has = (column) =>
+    db.prepare("PRAGMA table_info(reviews)").all().some((c) => c.name === column);
+  for (const column of [
+    "reply_text",
+    "reply_by",
+    "reply_at",
+    "reply_updated_at",
+    "hidden_at",
+    "hidden_by",
+    "hidden_reason",
+    "hidden_note",
+  ])
+    if (!has(column)) db.exec(`ALTER TABLE reviews ADD COLUMN ${column} TEXT`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_reviews_created ON reviews(created_at)");
 }

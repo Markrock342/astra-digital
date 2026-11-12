@@ -82,8 +82,12 @@ import { CustomerChat, NotificationBell } from "./Ops";
 import { CountUp, useRouteMotion } from "./motion";
 import { WarrantyStatus } from "./Warranty";
 import { SessionsCard } from "./Sessions";
+import { StockWatchList } from "./StockWatch";
 import { DeliveredExtras, hasReceipt, ReceiptLink, ReceiptPage, receiptRoute } from "./OrderExtras";
 import { ResetPasswordPage } from "./AccountRecovery";
+import { FaqPage } from "./Faq";
+import { RebuyActions } from "./Rebuy";
+import { HomeCategoryRow } from "./Categories";
 import {
   ReferenceCatalog,
   ReferenceCatalogPage,
@@ -104,7 +108,8 @@ type Store = {
   basket: Basket | null;
   setBasket: (basket: Basket | null) => void;
   refresh: () => Promise<void>;
-  go: (path: string) => void;
+  /** keepScroll: same-page URL changes (e.g. the /products category chips). */
+  go: (path: string, options?: { keepScroll?: boolean }) => void;
   toast: (message: string) => void;
   path: string;
   loading: boolean;
@@ -461,6 +466,7 @@ function Footer() {
           <Link to="/products">{t("สินค้าทั้งหมด")}</Link>
           <Link to="/reviews">{t("เครดิตร้าน")}</Link>
           <Link to="/orders">{t("ประวัติการซื้อ")}</Link>
+          <Link to="/faq">{t("คำถามที่พบบ่อย")}</Link>
         </div>
       </div>
       <div className="footer-bottom">
@@ -718,6 +724,7 @@ function Home() {
             </div>
           </aside>
         ) : null}
+        <HomeCategoryRow />
         <ReferenceCatalog />
       </main>
     </>
@@ -1763,6 +1770,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
           )}
           {order.status === "DELIVERED" && (
             <div className="result-actions">
+              <RebuyActions order={order} />
               <Link to="/products" className="button secondary">
                 {t("เลือกซื้อสินค้าเพิ่มเติม")}
                 <ArrowRight size={17} />
@@ -1893,11 +1901,14 @@ function HistoryPage() {
                     <ArrowRight size={15} />
                   </div>
                 </Link>
-                {hasReceipt(o) && (
+                {(hasReceipt(o) || o.status === "DELIVERED") && (
                   <div className="history-item-actions">
-                    <ReceiptLink id={o.id}>
-                      {t("ใบเสร็จ")} #{o.id.slice(0, 8).toUpperCase()}
-                    </ReceiptLink>
+                    <RebuyActions order={o} />
+                    {hasReceipt(o) && (
+                      <ReceiptLink id={o.id}>
+                        {t("ใบเสร็จ")} #{o.id.slice(0, 8).toUpperCase()}
+                      </ReceiptLink>
+                    )}
                   </div>
                 )}
                 </div>
@@ -2309,6 +2320,7 @@ function Account() {
               </Link>
             )}
           </div>
+          <StockWatchList />
           <form className="panel profile-form" onSubmit={save}>
             <h2>{t("ข้อมูลส่วนตัว")}</h2>
             <ErrorMessage message={error} />
@@ -2506,6 +2518,7 @@ function Router() {
     "/reviews": t("เครดิตร้าน"),
     "/credits": t("เครดิตร้าน"),
     "/support": t("ติดต่อร้าน"),
+    "/faq": t("คำถามที่พบบ่อย"),
     "/terms": t("ข้อกำหนดการใช้บริการ"),
     "/privacy": t("นโยบายความเป็นส่วนตัว"),
     "/stores": t("ร้านค้า"),
@@ -2524,10 +2537,13 @@ function Router() {
     "/reviews": t("รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์"),
     "/credits": t("รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์"),
     "/support": t("เราพร้อมช่วยเหลือคุณ"),
+    "/faq": t("คำตอบเรื่องการรับสินค้า การรับประกัน และการติดต่อร้าน"),
     "/terms": t("ข้อกำหนดการใช้บริการ การสั่งซื้อ การรับประกัน และการคืนเงินของร้าน"),
     "/privacy": t("วิธีที่ร้านเก็บรวบรวม ใช้ และคุ้มครองข้อมูลส่วนบุคคลตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562"),
   };
+  // /products sets its own title ("<หมวด> — <ร้าน>" when a category is picked).
   const dynamic =
+    path === "/products" ||
     path.startsWith("/products/") ||
     path.startsWith("/orders/") ||
     path.startsWith("/checkout/");
@@ -2599,6 +2615,7 @@ function Router() {
       </Suspense>
     );
   if (path === "/support") return <InfoPage kind="support" />;
+  if (path === "/faq") return <FaqPage />;
   return <NotFound />;
 }
 export default function App() {
@@ -2695,14 +2712,14 @@ export default function App() {
   };
   // The URL on screen, so a cancelled back/forward can be put back.
   const shownUrl = useRef(location.pathname + location.search);
-  function go(to: string) {
+  function go(to: string, options: { keepScroll?: boolean } = {}) {
     // A page with unsaved changes (useUnsavedChangesGuard) may cancel.
     if (!confirmLeave()) return;
     history.pushState({}, "", to);
     shownUrl.current = location.pathname + location.search;
     setPath(location.pathname);
     dispatchEvent(new Event(NAVIGATE_EVENT));
-    window.scrollTo({ top: 0, behavior: "instant" });
+    if (!options.keepScroll) window.scrollTo({ top: 0, behavior: "instant" });
   }
   async function refresh() {
     try {

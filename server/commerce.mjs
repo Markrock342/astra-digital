@@ -24,6 +24,7 @@ import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
   ensureCoupons,
+  ensureCategories,
   ensureCustomerAdmin,
   ensureOrderExtras,
   ensureOrderHistory,
@@ -32,6 +33,9 @@ import {
   ensureSmallUxB,
   ensureAlertsBackup,
   ensureEmailAndReset,
+  ensureBroadcasts,
+  ensureStockWatch,
+  ensureReviewModeration,
 } from "./ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "./auth-hardening.mjs";
 import { createEmailSender } from "./email.mjs";
@@ -90,7 +94,11 @@ export function createCommerce(options = {}) {
   ensureSmallUxB(db);
   ensureOrderExtras(db);
   ensureCoupons(db);
+  ensureCategories(db);
   ensureEmailAndReset(db);
+  ensureBroadcasts(db);
+  ensureStockWatch(db);
+  ensureReviewModeration(db);
   ensureLiveVersions(db);
   ensureAppendOnlyMoney(db);
   ensureAlertsBackup(db);

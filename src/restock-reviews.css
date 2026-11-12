@@ -1,0 +1,350 @@
+/* Back-in-stock notices + review replies / moderation.
+   Storefront parts use the theme tokens (--surface, --raised, --border, --accent…), so all
+   8 themes (light/dark × 4 accents) follow. Back office parts use the shadcn/ui-style
+   neutrals and --brand like the rest of /admin. */
+
+/* ---------- Storefront: product page "แจ้งเตือนเมื่อมีของ" ---------- */
+.stock-watch {
+  display: grid;
+  gap: 8px;
+}
+.stock-watch-subscribe {
+  width: 100%;
+  justify-content: center;
+}
+.stock-watch-help {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.stock-watch-on {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border-radius: var(--radius-sm, 10px);
+}
+.stock-watch-on > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.stock-watch-on strong {
+  display: block;
+  font-size: 14px;
+  color: var(--text);
+}
+.stock-watch-on small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.stock-watch-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.stock-watch-on .button {
+  flex: none;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+/* ---------- Storefront: account "สินค้าที่รอแจ้งเตือน" ---------- */
+.stock-watch-list {
+  margin-bottom: 16px;
+}
+.stock-watch-list h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+.stock-watch-list > .muted {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.stock-watch-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.stock-watch-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.stock-watch-list li > a {
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.stock-watch-list li > a strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stock-watch-list li > a small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.stock-watch-list li > a:hover strong {
+  color: var(--accent-text);
+}
+.stock-watch-list .button {
+  flex: none;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.stock-watch-back {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--green, #15803d);
+  background: var(--green-bg, #f0fdf4);
+}
+.stock-watch-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---------- Storefront: "ตอบกลับจากร้าน" under a review ---------- */
+.review-shop-reply {
+  margin: 10px 0 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--raised);
+  border-radius: 0 var(--radius-sm, 10px) var(--radius-sm, 10px) 0;
+  font-size: 13px;
+}
+.review-shop-reply-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-text);
+  font-size: 12px;
+}
+.review-shop-reply-head time {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+.review-shop-reply p,
+.reference-review-item .review-shop-reply p,
+.credit-review-card .review-shop-reply p {
+  margin: 4px 0 0;
+  color: var(--text);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.review-focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* ---------- Back office: waiting badge on options ---------- */
+.stock-waiting-badge {
+  display: inline-flex;
+  align-items: center;
+  font-style: normal;
+  font-size: 11px;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: var(--brand, #1534ff);
+  background: var(--brand-soft, #eef1ff);
+  white-space: nowrap;
+}
+
+/* ---------- Back office: สินค้า › รีวิว ---------- */
+.review-admin-policy {
+  margin: -4px 0 16px;
+  max-width: 760px;
+  line-height: 1.6;
+}
+.review-admin-list {
+  display: grid;
+  gap: 12px;
+}
+.review-admin-card {
+  padding: 16px;
+  overflow: visible;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.05);
+}
+.review-admin-card.is-hidden {
+  background: #fafafa;
+  border-style: dashed;
+}
+.review-admin-card.is-hidden .review-admin-comment {
+  color: #71717a;
+}
+.review-admin-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.review-admin-head time {
+  margin-left: auto;
+  font-size: 12px;
+  color: #71717a;
+}
+.review-admin-stars {
+  display: inline-flex;
+  gap: 2px;
+  color: #f59e0b;
+}
+.review-admin-badges .status {
+  font-size: 11px;
+}
+.review-admin-comment {
+  margin: 10px 0 6px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #18181b;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.review-admin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: #71717a;
+}
+.review-admin-meta strong {
+  color: #18181b;
+}
+.review-admin-meta a {
+  color: var(--brand, #1534ff);
+}
+.review-admin-hidden-note {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 12px;
+}
+.review-admin-reply {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--brand, #1534ff);
+  background: var(--brand-soft, #eef1ff);
+  border-radius: 0 8px 8px 0;
+}
+.review-admin-reply-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 12px;
+}
+.review-admin-reply-head small {
+  color: #52525b;
+}
+.review-admin-reply p {
+  margin: 4px 0 6px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.review-admin-reply .button {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.review-admin-reply-open {
+  margin: 0;
+}
+.review-admin-reply-form .field textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+}
+.review-admin-reply-form .admin-action-row {
+  align-items: center;
+  margin: 8px 0 0;
+}
+.review-admin-reply-form .field-help {
+  margin-left: auto;
+}
+.review-admin-actions {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #f4f4f5;
+}
+.review-hide-form,
+.review-hide-confirm {
+  margin: 12px 0 0;
+}
+.review-hide-form fieldset {
+  border: 0;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.review-hide-form legend {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.review-reason-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.review-reason-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  background: #fff;
+}
+.review-reason-options label.selected {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+.review-hide-form .admin-action-row {
+  margin: 8px 0 0;
+}
+@media (max-width: 520px) {
+  .review-admin-head time {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+  .stock-watch-on {
+    flex-wrap: wrap;
+  }
+  .stock-watch-on .button {
+    width: 100%;
+    justify-content: center;
+  }
+  .review-reason-options label {
+    flex: 1 1 calc(50% - 8px);
+  }
+}

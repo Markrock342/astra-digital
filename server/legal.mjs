@@ -2,13 +2,14 @@
 // and the React storefront/admin (defaults, templating, rendering to plain-text blocks).
 // No HTML is ever produced here: bodies become { type: "p" | "ul" } blocks of text and the
 // UI renders them as text nodes, so anything an admin types is shown literally.
+import { normalizeText, parseBlocks } from "./text-blocks.mjs";
 import {
   DEFAULT_FIELD_VALUES,
   DEFAULT_PRIVACY,
   DEFAULT_TERMS,
 } from "./legal-text.mjs";
 
-export { DEFAULT_FIELD_VALUES, DEFAULT_PRIVACY, DEFAULT_TERMS };
+export { DEFAULT_FIELD_VALUES, DEFAULT_PRIVACY, DEFAULT_TERMS, parseBlocks };
 
 export const LEGAL_DOCS = {
   terms: { title: "ข้อกำหนดการใช้บริการ", path: "/terms", defaults: DEFAULT_TERMS },
@@ -46,7 +47,6 @@ const POLICY_SECTION_TITLE = "ข้อกำหนดเพิ่มเติ�
 const SECTION_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const PLACEHOLDER = /\{\{\s*([A-Za-z]+)\s*\}\}/g;
-const BULLET = /^\s*[-•*]\s+/;
 
 const isObject = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 const defaultsById = (kind) =>
@@ -62,8 +62,6 @@ function validDate(value) {
     d.getUTCDate() === +m[3]
   );
 }
-const normalizeText = (value) =>
-  String(value).replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "");
 
 /**
  * Validate the `legal` settings object sent by the admin form.
@@ -216,39 +214,6 @@ export function fillTemplate(text, values) {
     if (!drop) out.push(filled);
   }
   return out.join("\n");
-}
-
-/** Plain text → blocks: blank line = new paragraph, "- " / "• " / "* " = bullet. */
-export function parseBlocks(text) {
-  const blocks = [];
-  let paragraph = [];
-  let list = null;
-  const flush = () => {
-    if (paragraph.length) blocks.push({ type: "p", text: paragraph.join("\n") });
-    paragraph = [];
-  };
-  for (const line of normalizeText(text ?? "").split("\n")) {
-    if (!line.trim()) {
-      flush();
-      list = null;
-      continue;
-    }
-    if (BULLET.test(line)) {
-      flush();
-      const item = line.replace(BULLET, "").trim();
-      if (!item) continue;
-      if (!list) {
-        list = { type: "ul", items: [] };
-        blocks.push(list);
-      }
-      list.items.push(item);
-      continue;
-    }
-    list = null;
-    paragraph.push(line.trim());
-  }
-  flush();
-  return blocks;
 }
 
 const THAI_MONTHS = [

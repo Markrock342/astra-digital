@@ -6,6 +6,7 @@ import { ApiError } from "./domain.mjs";
  */
 export const COUPON_RATE_LIMIT = { perUser: 15, perIp: 40, windowMs: 600000 };
 import { TURNSTILE_ORIGIN, TURNSTILE_REJECTED, turnstileTokenFrom } from "./turnstile.mjs";
+import { STOCK_WATCH_RATE_LIMIT } from "./stock-watch.mjs";
 export const securityHeaders = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -126,6 +127,17 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           "ลองโค้ดส่วนลดบ่อยเกินไป กรุณารอ 10 นาทีแล้วลองใหม่",
         );
     }
+  }
+  /** "แจ้งเตือนเมื่อมีของ": subscribe + cancel share one budget per signed-in customer. */
+  function assertStockWatchRate(user) {
+    if (!user) throw new ApiError(401, "กรุณาเข้าสู่ระบบก่อนดำเนินการ");
+    const { perUser, windowMs } = STOCK_WATCH_RATE_LIMIT;
+    const key = "stock-watch:user:" + user.id;
+    const allowed = rateLimit
+      ? rateLimit(key, perUser, windowMs)
+      : localWindowLimit(key, perUser, windowMs);
+    if (!allowed)
+      throw new ApiError(429, "กดแจ้งเตือนบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่");
   }
   /** Client IP for the audit trail: Cloudflare header, then proxy header, then the socket. */
   function clientIp(request, env) {
@@ -368,8 +380,20 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         }
         if (path === "/api/overview") return send(200, service.overview());
         if (path === "/api/legal") return send(200, service.legal());
+        if (path === "/api/faq") return send(200, service.faq());
         if (path === "/api/reviews")
           return send(200, { reviews: service.reviews() });
+        if (path === "/api/stock-watch")
+          return send(200, { watches: service.myStockWatches(user) });
+        if (path === "/api/admin/reviews")
+          return send(200, service.adminReviews(user, {
+            rating: url.searchParams.get("rating") ?? undefined,
+            product: url.searchParams.get("product") ?? undefined,
+            reply: url.searchParams.get("reply") ?? undefined,
+            hidden: url.searchParams.get("hidden") ?? undefined,
+            cursor: url.searchParams.get("cursor") ?? undefined,
+            limit: url.searchParams.get("limit") ?? undefined,
+          }));
         if (path === "/api/orders")
           return send(200, { orders: service.orders(user) });
         if (/^\/api\/orders\/[^/]+$/.test(path))
@@ -471,6 +495,16 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             });
           return send(200, report);
         }
+        if (path === "/api/admin/broadcasts") return send(200, service.broadcastStatus(user));
+        if (path === "/api/admin/broadcasts/preview")
+          return send(
+            200,
+            service.broadcastPreview(user, Object.fromEntries(url.searchParams)),
+          );
+        if (path === "/api/categories")
+          return send(200, { categories: service.publicCategories() });
+        if (path === "/api/admin/categories")
+          return send(200, service.adminCategories(user));
         if (path === "/api/admin/coupons")
           return send(200, service.adminCoupons(user, {
             q: url.searchParams.get("q") ?? undefined,
@@ -549,6 +583,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             }),
           );
       } else if (request.method === "PATCH") {
+        if (/^\/api\/admin\/categories\/[^/]+$/.test(path))
+          return send(200, service.adminUpdateCategory(user, path.split("/")[4], input));
         if (/^\/api\/admin\/coupons\/[^/]+$/.test(path))
           return send(200, service.adminUpdateCoupon(user, path.split("/")[4], input));
         if (/^\/api\/admin\/products\/[^/]+\/images$/.test(path))
@@ -559,7 +595,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (/^\/api\/admin\/variants\/[^/]+$/.test(path))
           return send(
             200,
-            service.updateVariant(user, path.split("/")[4], input),
+            service.updateVariant(user, path.split("/")[4], input, { origin: url.origin }),
           );
         return send(404, { error: "ไม่พบหน้าที่ร้องขอ" });
       } else if (request.method === "DELETE") {
@@ -576,6 +612,14 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
               : {},
           );
         }
+        // ?moveTo=<id>: move the category's products there, then delete (one transaction).
+        if (/^\/api\/admin\/categories\/[^/]+$/.test(path))
+          return send(
+            200,
+            service.adminDeleteCategory(user, path.split("/")[4], {
+              moveTo: url.searchParams.get("moveTo") ?? undefined,
+            }),
+          );
         if (/^\/api\/admin\/product-images\/[^/]+$/.test(path))
           return send(
             200,
@@ -585,6 +629,16 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, await service.removeAvatar(user));
         if (path === "/api/admin/settings/logo")
           return send(200, await service.removeLogo(user));
+        if (/^\/api\/stock-watch\/[^/]+$/.test(path)) {
+          assertStockWatchRate(user);
+          let variantId;
+          try {
+            variantId = decodeURIComponent(path.split("/")[3]);
+          } catch {
+            throw new ApiError(400, "ตัวเลือกสินค้าไม่ถูกต้อง");
+          }
+          return send(200, service.removeStockWatch(user, variantId));
+        }
         if (/^\/api\/admin\/variants\/[^/]+$/.test(path))
           return send(200, service.deleteVariant(user, path.split("/")[4]));
         if (/^\/api\/admin\/inventory\/[^/]+$/.test(path))
@@ -615,6 +669,12 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             assertCouponRate(request, env, user);
           return send(201, service.createOrder(user, input));
         }
+        if (path === "/api/admin/broadcasts")
+          return send(201, service.sendBroadcast(user, input, { origin: url.origin }));
+        if (path === "/api/admin/categories")
+          return send(201, service.adminCreateCategory(user, input));
+        if (path === "/api/admin/categories/reorder")
+          return send(200, service.adminReorderCategories(user, input));
         if (path === "/api/admin/coupons")
           return send(201, service.adminCreateCoupon(user, input));
         if (/^\/api\/admin\/coupons\/[^/]+\/disable$/.test(path))
@@ -634,6 +694,16 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, { user: service.profile(user, input) });
         if (path === "/api/reviews")
           return send(201, service.addReview(user, input));
+        if (path === "/api/stock-watch") {
+          assertStockWatchRate(user);
+          return send(201, service.addStockWatch(user, input));
+        }
+        if (/^\/api\/admin\/reviews\/[^/]+\/reply$/.test(path))
+          return send(200, { review: service.replyToReview(user, path.split("/")[4], input) });
+        if (/^\/api\/admin\/reviews\/[^/]+\/hide$/.test(path))
+          return send(200, { review: service.hideReview(user, path.split("/")[4], input) });
+        if (/^\/api\/admin\/reviews\/[^/]+\/unhide$/.test(path))
+          return send(200, { review: service.unhideReview(user, path.split("/")[4]) });
         if (path === "/api/chat/threads")
           return send(201, service.openChatThread(user, input));
         if (/^\/api\/chat\/threads\/[^/]+\/messages$/.test(path))
@@ -727,10 +797,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             200,
             input?.dryRun === true
               ? service.previewImportCodes(user, input)
-              : service.importCodes(user, input),
+              : service.importCodes(user, input, { origin: url.origin }),
           );
         if (path === "/api/admin/products/bulk")
-          return send(200, service.bulkUpdateProducts(user, input));
+          return send(200, service.bulkUpdateProducts(user, input, { origin: url.origin }));
         if (/^\/api\/admin\/products\/[^/]+\/duplicate$/.test(path))
           return send(201, service.duplicateProduct(user, path.split("/")[4]));
         if (/^\/api\/admin\/inventory\/[^/]+\/defect$/.test(path))
@@ -757,7 +827,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (path === "/api/profile/avatar")
           return send(200, await service.setAvatar(user, input));
         if (path === "/api/admin/products")
-          return send(200, service.saveProduct(user, input));
+          return send(200, service.saveProduct(user, input, { origin: url.origin }));
         if (/^\/api\/admin\/products\/[^/]+\/images$/.test(path))
           return send(
             200,

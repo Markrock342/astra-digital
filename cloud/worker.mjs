@@ -25,6 +25,7 @@ import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
   ensureCoupons,
+  ensureCategories,
   ensureCustomerAdmin,
   ensureOrderExtras,
   ensureOrderHistory,
@@ -33,6 +34,9 @@ import {
   ensureSmallUxB,
   ensureAlertsBackup,
   ensureEmailAndReset,
+  ensureBroadcasts,
+  ensureStockWatch,
+  ensureReviewModeration,
 } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
 import {
@@ -111,7 +115,11 @@ export class Commerce extends DurableObject {
       ensureSmallUxB(db);
       ensureOrderExtras(db);
       ensureCoupons(db);
+      ensureCategories(db);
       ensureEmailAndReset(db);
+      ensureBroadcasts(db);
+      ensureStockWatch(db);
+      ensureReviewModeration(db);
       ensureLiveVersions(db);
       ensureAppendOnlyMoney(db);
       ensureAlertsBackup(db);
@@ -149,7 +157,6 @@ export class Commerce extends DurableObject {
       email: createEmailSender(env),
       turnstile: createTurnstile(env),
       publicBaseUrl: env.PUBLIC_BASE_URL,
-      waitUntil: (promise) => ctx.waitUntil?.(promise),
     });
     this.service.storageKind = "cloudflare-durable-sqlite";
     this.service.onLive((topics) => {

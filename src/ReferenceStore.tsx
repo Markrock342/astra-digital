@@ -4,7 +4,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   Check,
-  ChevronDown,
   ChevronRight,
   Clock,
   Eye,
@@ -31,19 +30,33 @@ import {
 import { t } from "./i18n";
 import { BrandLogo, shopName } from "./Theme";
 import { WarrantyDays } from "./Warranty";
+import { ProductFaq } from "./Faq";
 import { api, dateTime, money } from "./api";
 import type { Order, Product, Review } from "./types";
 import { MAX_PER_ORDER } from "./types";
+import { CategoryChips, categoryName, useCategoryParam } from "./Categories";
 import { ForgotPassword, TURNSTILE_WAIT, TurnstileBox, useAuthConfig } from "./AccountRecovery";
-export function ReferenceCatalog() {
-  const { products, loading } = useStore();
+import { StockWatchButton } from "./StockWatch";
+import { ReviewReply } from "./ReviewReply";
+/**
+ * Product list with search + sort. On /products (`routed`) it also shows the category chips
+ * and filters by ?category=<id>; the URL loads filtered and works with search and sort.
+ * An unknown or hidden category id falls back to all products.
+ */
+export function ReferenceCatalog({ routed = false }: { routed?: boolean }) {
+  const { products, loading, overview } = useStore();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("featured");
+  const param = useCategoryParam();
+  const categories = routed ? (overview?.categories ?? []) : [];
+  const category = categories.find((c) => c.id === param) ?? null;
   const filtered = products
-    .filter((p) =>
-      (p.name + " " + p.description)
-        .toLowerCase()
-        .includes(query.toLowerCase()),
+    .filter(
+      (p) =>
+        (!category || p.category === category.id) &&
+        (p.name + " " + p.description)
+          .toLowerCase()
+          .includes(query.toLowerCase()),
     )
     .sort((a, b) =>
       sort === "low"
@@ -57,7 +70,7 @@ export function ReferenceCatalog() {
   return (
     <section className="reference-catalog">
       <div className="reference-catalog-title">
-        <h2>{t("สินค้าทั้งหมด")}</h2>
+        <h2>{category ? categoryName(category) : t("สินค้าทั้งหมด")}</h2>
         <p>{filtered.length}{" "}{t("รายการ")}</p>
       </div>
       <div className="reference-catalog-tools">
@@ -91,6 +104,9 @@ export function ReferenceCatalog() {
           </select>
         </label>
       </div>
+      {routed && (
+        <CategoryChips categories={categories} selected={category?.id ?? ""} total={products.length} />
+      )}
       {loading ? (
         <div className="product-grid">
           {[1, 2].map((i) => (
@@ -125,13 +141,23 @@ export function ReferenceCatalog() {
   );
 }
 export function ReferenceCatalogPage() {
+  const { overview } = useStore();
+  const param = useCategoryParam();
+  const category = overview?.categories.find((c) => c.id === param);
+  // Title: "<หมวด> — <ร้าน>" for a category, like the Pages proxy link preview.
+  usePageTitle(
+    category ? categoryName(category) : t("สินค้าทั้งหมด"),
+    category
+      ? t("สินค้าหมวด {name} ทั้งหมดของร้าน", { name: categoryName(category) })
+      : t("สินค้าดิจิทัลทั้งหมดของร้าน"),
+  );
   return (
     <main className="container page-main reference-catalog-page">
       <div className="page-heading">
         <h1>{t("สินค้า")}</h1>
         <p>{t("สินค้าทั้งหมดของร้าน")}</p>
       </div>
-      <ReferenceCatalog />
+      <ReferenceCatalog routed />
     </main>
   );
 }
@@ -416,7 +442,10 @@ export function ReferenceProduct({ id }: { id: string }) {
             ? "cinema-max"
             : id),
   );
-  const [selected, setSelected] = useState("");
+  // ?variant=<id> (back-in-stock notice, login return) preselects that option.
+  const [selected, setSelected] = useState(
+    () => new URLSearchParams(location.search).get("variant") ?? "",
+  );
   const [quantity, setQuantity] = useState(1);
   const [image, setImage] = useState(0);
   const variant =
@@ -431,7 +460,11 @@ export function ReferenceProduct({ id }: { id: string }) {
   useEffect(() => {
     api<{ reviews: Review[] }>("/reviews")
       .then((r) =>
-        setReviews(r.reviews.filter((x) => x.product === product?.name)),
+        setReviews(
+          r.reviews.filter((x) =>
+            x.product_id ? x.product_id === product?.id : x.product === product?.name,
+          ),
+        ),
       )
       .catch(() => {});
   }, [product?.id]);
@@ -558,6 +591,10 @@ export function ReferenceProduct({ id }: { id: string }) {
               </button>
             ))}
           </fieldset>
+          {!product.preorder && !variant.available ? (
+            // Out of stock (ready-stock only): ask to be told when it is back instead of buy.
+            <StockWatchButton key={variant.id} variantId={variant.id} productId={product.id} />
+          ) : (
           <div className="reference-buy-row">
             <Quantity
               value={quantity}
@@ -580,6 +617,7 @@ export function ReferenceProduct({ id }: { id: string }) {
               {product.preorder ? t("จองเลย") : t("ซื้อเลย")}
             </button>
           </div>
+          )}
           <p className="reference-delivery-note">
             <KeyRound size={15} />
             {product.preorder
@@ -592,28 +630,7 @@ export function ReferenceProduct({ id }: { id: string }) {
           </section>
         </div>
       </div>
-      <section className="reference-faq">
-        <h2>{t("คำถามที่พบบ่อย")}</h2>
-        {(product.preorder
-          ? [
-              [t("พรีออเดอร์ได้ของเมื่อไหร่"), t("ร้านส่งตามลำดับคิวที่ได้หลังชำระเงิน เมื่อส่งแล้วจะมีแจ้งเตือนในเว็บ และดู ID กับรหัสผ่านได้ในประวัติการซื้อ")],
-              [t("ดูเลขคิวได้ที่ไหน"), t("เปิดประวัติการซื้อ แล้วกดคำสั่งซื้อนั้น เลขคิวอยู่ในหน้ารายละเอียด")],
-              [t("มีปัญหากับบัญชีที่ได้รับ ทำอย่างไร"), t("กดปุ่มแชทมุมขวาล่างเพื่อติดต่อร้าน แจ้งเลขคำสั่งซื้อด้วย")],
-            ]
-          : [
-              [t("ได้รับสินค้าเมื่อไหร่"), t("ทันทีหลังชำระเงินสำเร็จ ID และรหัสผ่านจะแสดงในหน้าคำสั่งซื้อ และเปิดดูซ้ำได้ในประวัติการซื้อ")],
-              [t("มีปัญหากับบัญชีที่ได้รับ ทำอย่างไร"), t("กดปุ่มแชทมุมขวาล่างเพื่อติดต่อร้าน แจ้งเลขคำสั่งซื้อด้วย")],
-            ]
-        ).map(([q, a]) => (
-          <details key={q}>
-            <summary>
-              {q}
-              <ChevronDown size={16} />
-            </summary>
-            <p>{a}</p>
-          </details>
-        ))}
-      </section>
+      <ProductFaq product={product} />
       <section className="reference-product-reviews">
         <h2>{t("รีวิวจากผู้ซื้อ")}</h2>
         {reviews.length ? (
@@ -640,7 +657,7 @@ export function ReferenceProduct({ id }: { id: string }) {
             </div>
             <div>
               {reviews.map((r) => (
-                <div className="reference-review-item" key={r.id}>
+                <div className="reference-review-item" key={r.id} id={"review-" + r.id}>
                   <div className="review-stars">
                     {Array.from({ length: r.rating }, (_, i) => (
                       <Star key={i} size={13} fill="currentColor" />
@@ -658,6 +675,7 @@ export function ReferenceProduct({ id }: { id: string }) {
                       {t("ผู้ซื้อจริง")}
                     </span>
                   </span>
+                  <ReviewReply reply={r.reply} />
                 </div>
               ))}
             </div>
@@ -714,6 +732,15 @@ export function ReferenceReviews() {
   useEffect(() => {
     void load();
   }, [user?.id]);
+  // ?review=<id> (the "ร้านตอบกลับรีวิวของคุณ" notice): bring that review into view.
+  const [focus] = useState(() => new URLSearchParams(location.search).get("review") ?? "");
+  useEffect(() => {
+    if (!focus || !ready) return;
+    setFilter(0);
+    requestAnimationFrame(() =>
+      document.getElementById("review-" + focus)?.scrollIntoView({ block: "center" }),
+    );
+  }, [focus, ready]);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
@@ -749,8 +776,8 @@ export function ReferenceReviews() {
             </span>
             <h1>{t("เครดิตร้าน")}</h1>
             <h2>{shopName(overview?.shop?.shopName)}</h2>
-            <p>
-              {t("ทุกรีวิวมาจากลูกค้าที่ซื้อจริง และเขียนได้ภายใน 7 วันหลังซื้อเท่านั้น ร้านแก้ไขหรือซ่อนรีวิวไม่ได้")}
+            <p data-testid="review-policy">
+              {t("ทุกรีวิวมาจากลูกค้าที่ซื้อจริง และเขียนได้ภายใน 7 วันหลังซื้อเท่านั้น ร้านแก้ไขข้อความรีวิวไม่ได้ และไม่ซ่อนรีวิวเพราะคะแนนต่ำหรือคำติ จะซ่อนเฉพาะสแปม/โฆษณา คำหยาบหรือข้อมูลส่วนตัว และเนื้อหาที่ไม่เกี่ยวกับสินค้า โดยบันทึกเหตุผลไว้ทุกครั้ง")}
             </p>
             {ready && reviews.length > 0 && (
               <div className="credit-trust-badges">
@@ -888,7 +915,11 @@ export function ReferenceReviews() {
             {reviews
               .filter((r) => !filter || r.rating === filter)
               .map((r) => (
-                <article className="review-card credit-review-card" key={r.id}>
+                <article
+                  className={"review-card credit-review-card" + (focus === r.id ? " review-focus" : "")}
+                  key={r.id}
+                  id={"review-" + r.id}
+                >
                   <div className="review-stars">
                     {[1, 2, 3, 4, 5].map((n) => (
                       <Star
@@ -903,6 +934,7 @@ export function ReferenceReviews() {
                     {r.comment ||
                       t("ให้คะแนน ") + r.rating + t(" ดาว โดยไม่ได้เขียนความเห็น")}
                   </p>
+                  <ReviewReply reply={r.reply} />
                   <div className="credit-review-owner">
                     <span className="avatar">{r.name.slice(0, 2)}</span>
                     <div>

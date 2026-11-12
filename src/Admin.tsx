@@ -74,8 +74,12 @@ import { libraryBlob, suggestFromName, type LibraryItem } from "./image-library"
 import { uploadImage } from "./image-upload";
 import { AdminAlerts, AdminBackup } from "./AdminAlerts";
 import { AdminCoupons } from "./AdminCoupons";
+import { AdminCategories } from "./AdminCategories";
+import { AdminReviews } from "./AdminReviews";
 import { AdminIntegrations } from "./AdminIntegrations";
 import { LegalSettings } from "./Legal";
+import { FaqSettingsPanel } from "./FaqAdmin";
+import { AdminBroadcasts } from "./AdminBroadcasts";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -84,15 +88,21 @@ const productTabs = [
   ["inventory", "บัญชีสต็อก"],
   ["categories", "หมวดหมู่"],
   ["coupons", "คูปอง"],
+  ["reviews", "รีวิว"],
 ];
 const orderTabs = [
   ["orders", "ออเดอร์ทั้งหมด"],
   ["preorders", "คิวพรีออเดอร์"],
 ];
+const customerTabs = [
+  ["customers", "ลูกค้าทั้งหมด"],
+  ["broadcasts", "ประกาศถึงลูกค้า"],
+];
 const settingTabs = [
   ["settings", "ร้าน"],
   ["settings/payment", "รับเงิน"],
   ["settings/legal", "ข้อกำหนดและนโยบาย"],
+  ["settings/faq", "คำถามที่พบบ่อย"],
   ["settings/account", "บัญชีแอดมิน"],
   ["settings/alerts", "แจ้งเตือนนอกเว็บ"],
   ["settings/backup", "สำรองข้อมูล"],
@@ -155,6 +165,7 @@ export default function Admin() {
   const sub = path.split("/").slice(2).join("/");
   const productGroup = productTabs.some(([key]) => key === tab);
   const orderGroup = orderTabs.some(([key]) => key === tab);
+  const customerGroup = customerTabs.some(([key]) => key === tab);
   const productId = path.split("/")[3];
   const detailId = ["orders", "customers"].includes(tab) ? productId : undefined;
   const editingProduct = data?.products.find(
@@ -193,6 +204,9 @@ export default function Admin() {
     ? (pickedCover ?? (library.items ? suggestFromName(library.items, formValues?.name ?? "") : null))
     : null;
   const realProducts = data?.products ?? [];
+  // Every category (hidden ones too); the public overview lists only the visible ones.
+  const categories = data?.categories ?? [];
+  const defaultCategory = categories.find((c) => !c.hidden)?.id ?? categories[0]?.id ?? "streaming";
   const setupSteps: [string, string, boolean][] = [
     ["ใส่ชื่อร้านและช่องทางติดต่อ", "settings", !!overview?.shop?.shopName],
     ["เพิ่มสินค้าชิ้นแรก", "products", realProducts.length > 0],
@@ -239,7 +253,7 @@ export default function Admin() {
         preorder: type === "preorder",
         name: values.name,
         description: values.description,
-        category: values.category ?? "streaming",
+        category: values.category ?? defaultCategory,
         price: Math.round(Number(values.price ?? 1) * 100),
         firstWarrantyDays: firstWarrantyValue(values.firstWarrantyDays),
         active: newProduct ? false : values.active === "on",
@@ -363,6 +377,7 @@ export default function Admin() {
     <>
       {productGroup && <Subnav items={productTabs} current={tab} />}{" "}
       {orderGroup && <Subnav items={orderTabs} current={tab} />}{" "}
+      {customerGroup && <Subnav items={customerTabs} current={tab} />}{" "}
       {tab === "settings" && <Subnav items={settingTabs} current={sub} />}
       <main
         className={
@@ -462,9 +477,10 @@ export default function Admin() {
             </AdminDashboard>
           </>
         ) : null}
+        {tab === "categories" && <AdminCategories />}
         {tab === "products" && !formOpen && (
           <AdminProducts
-            categories={overview?.categories ?? []}
+            categories={categories}
             priceOf={(id) => {
               const p = data.products.find((x) => x.id === id);
               if (!p || !p.variants.length) return "–";
@@ -524,14 +540,14 @@ export default function Admin() {
             <aside className="product-preview-col" aria-label="ตัวอย่างบนหน้าร้าน">
               <ProductPreview
                 categoryName={
-                  overview?.categories.find(
-                    (c) => c.id === (formValues?.category ?? editingProduct?.category ?? "streaming"),
+                  categories.find(
+                    (c) => c.id === (formValues?.category ?? editingProduct?.category ?? defaultCategory),
                   )?.name ?? ""
                 }
                 draft={{
                   name: formValues?.name ?? editingProduct?.name ?? "",
                   description: formValues?.description ?? editingProduct?.description ?? "",
-                  category: formValues?.category ?? editingProduct?.category ?? "streaming",
+                  category: formValues?.category ?? editingProduct?.category ?? defaultCategory,
                   preorder: formValues ? formValues.type === "preorder" : !!editingProduct?.preorder,
                   active: formValues ? formValues.active === "on" : !!editingProduct?.active,
                   featured: formValues ? formValues.featured === "on" : !!editingProduct?.featured,
@@ -694,11 +710,12 @@ export default function Admin() {
                   หมวดหมู่
                   <select
                     name="category"
-                    defaultValue={editingProduct?.category ?? "streaming"}
+                    defaultValue={editingProduct?.category ?? defaultCategory}
                   >
-                    {overview?.categories.map((c) => (
+                    {categories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
+                        {c.hidden ? " (ซ่อนอยู่)" : ""}
                       </option>
                     ))}
                   </select>
@@ -853,12 +870,14 @@ export default function Admin() {
           (detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />)}
         {tab === "preorders" && <PreorderQueue />}
         {tab === "coupons" && <AdminCoupons id={productId} />}
+        {tab === "reviews" && <AdminReviews />}
         {tab === "customers" &&
           (detailId ? (
             <AdminCustomerDetail id={detailId} />
           ) : (
             <AdminCustomers />
           ))}
+        {tab === "broadcasts" && <AdminBroadcasts />}
         {["payments", "top-ups", "ledger"].includes(tab) && <AdminFinance />}
         {tab === "settings" &&
           (sub === "settings/payment" ? (
@@ -875,6 +894,8 @@ export default function Admin() {
             <AdminBackup />
           ) : sub === "settings/legal" ? (
             <LegalSettings />
+          ) : sub === "settings/faq" ? (
+            <FaqSettingsPanel products={data.products} />
           ) : (
             <ReferenceSettings sub={sub} />
           ))}
@@ -913,7 +934,10 @@ export default function Admin() {
           "orders",
           "preorders",
           "coupons",
+          "categories",
+          "reviews",
           "customers",
+          "broadcasts",
           "payments",
           "top-ups",
           "ledger",
@@ -929,17 +953,7 @@ export default function Admin() {
                 ([key]) => key === tab,
               )?.[1] ?? "รายการ"}
             </h1>
-            {tab !== "categories" && <p>ไม่พบหน้านี้</p>}
-            {tab === "categories" &&
-              overview?.categories.map((c) => (
-                <div className="settings-row" key={c.id}>
-                  <span>{c.name}</span>
-                  <strong>
-                    {data.products.filter((p) => p.category === c.id).length}{" "}
-                    สินค้า
-                  </strong>
-                </div>
-              ))}
+            <p>ไม่พบหน้านี้</p>
           </section>
         )}
         {importing && (
