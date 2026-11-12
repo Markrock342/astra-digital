@@ -1429,17 +1429,24 @@ export function createCommerceCore({
     if (!categories.some((c) => c.id === input.category))
       fail(400, "หมวดหมู่ไม่ถูกต้อง");
     const price = integer(input.price, 100, 10000000, "ราคา");
+    const hasPreorder = Object.prototype.hasOwnProperty.call(input, "preorder");
+    const preorderFlag =
+      input.preorder === true || input.preorder === "on" || input.preorder === 1
+        ? 1
+        : 0;
     return tx(() => {
       if (input.id) {
-        if (!one("SELECT id FROM products WHERE id=?", id))
-          fail(404, "ไม่พบสินค้า");
+        const existing = one("SELECT id,preorder FROM products WHERE id=?", id);
+        if (!existing) fail(404, "ไม่พบสินค้า");
+        const preorder = hasPreorder ? preorderFlag : existing.preorder ? 1 : 0;
         run(
-          "UPDATE products SET name=?,description=?,category=?,active=?,featured=? WHERE id=?",
+          "UPDATE products SET name=?,description=?,category=?,active=?,featured=?,preorder=? WHERE id=?",
           name,
           description,
           input.category,
           input.active === false ? 0 : 1,
           input.featured === true || input.featured === "on" ? 1 : 0,
+          preorder,
           id,
         );
         run(
@@ -1449,7 +1456,7 @@ export function createCommerceCore({
         );
       } else {
         run(
-          "INSERT INTO products(id,name,category,description,art,active,featured) VALUES(?,?,?,?,?,?,?)",
+          "INSERT INTO products(id,name,category,description,art,active,featured,preorder) VALUES(?,?,?,?,?,?,?,?)",
           id,
           name,
           input.category,
@@ -1457,6 +1464,7 @@ export function createCommerceCore({
           "gift",
           input.active === false ? 0 : 1,
           input.featured === true || input.featured === "on" ? 1 : 0,
+          hasPreorder ? preorderFlag : 0,
         );
         run(
           "INSERT INTO variants VALUES(?,?,?,?)",
@@ -1467,7 +1475,8 @@ export function createCommerceCore({
         );
       }
       audit(user, "SAVE_PRODUCT", id);
-      return { id };
+      const saved = one("SELECT preorder FROM products WHERE id=?", id);
+      return { id, preorder: !!saved?.preorder };
     });
   }
   function profile(user, rawInput) {
@@ -1859,6 +1868,7 @@ export function createCommerceCore({
       adminCustomersApi: true,
       adminProductsApi: true,
       adminSummaryApi: true,
+      productPreorderForm: true,
     }),
     salesRevenueSatang,
     logout: (token) =>
