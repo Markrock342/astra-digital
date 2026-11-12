@@ -47,6 +47,7 @@ import {
   SlidersHorizontal,
   Clock,
   Upload,
+  RotateCcw,
 } from "lucide-react";
 import { t, getLang, setLang, setMerchantScope, type Lang } from "./i18n";
 import {
@@ -206,6 +207,8 @@ export function Status({ status }: { status: string }) {
     CANCELLED: t("ยกเลิกแล้ว"),
     OUT_OF_STOCK: t("สินค้าหมด"),
     PREORDER: t("รอส่งสินค้าสั่งจอง"),
+    REFUNDED: t("คืนเงินแล้ว"),
+    PARTIALLY_REFUNDED: t("คืนเงินบางส่วน"),
   };
   return (
     <span className={`status status-${status.toLowerCase()}`}>
@@ -1261,6 +1264,13 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
     </main>
   );
 }
+/** Credit history type (เติม / ซื้อ / คืนเงิน / ปรับยอด). */
+export const ledgerTypeText: Record<string, string> = {
+  TOPUP: "เติม",
+  PURCHASE: "ซื้อ",
+  REFUND: "คืนเงิน",
+  ADJUSTMENT: "ปรับยอด",
+};
 function ledgerText(label: string) {
   const prefixes = ["ชำระสินค้าสั่งจอง ", "ชำระคำสั่งซื้อ "];
   for (const prefix of prefixes) {
@@ -1446,8 +1456,20 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                   {order.label}{" "}{t("· จำนวน")}{" "}{order.quantity}{" "}{t("ชิ้น")}
                 </p>
               </div>
-              <Status status={order.status} />
+              <Status status={order.refundStatus ?? order.status} />
             </div>
+            {!!order.refundedTotal && (
+              <div className="note-box refund-note">
+                <RotateCcw size={20} />
+                <div>
+                  <strong>
+                    {order.refundStatus === "REFUNDED" ? t("ร้านคืนเงินคำสั่งซื้อนี้แล้ว") : t("ร้านคืนเงินบางส่วนแล้ว")}{" "}
+                    {money(order.refundedTotal)}
+                  </strong>
+                  <p>{t("ดูรายละเอียดได้ที่การแจ้งเตือนและหน้าเครดิตของฉัน")}</p>
+                </div>
+              </div>
+            )}
             <div className="order-meta">
               <span>{t("คำสั่งซื้อ #")}{order.id.slice(0, 8).toUpperCase()}</span>
               <span>{dateTime(order.created_at)}</span>
@@ -1651,7 +1673,7 @@ function HistoryPage() {
                       #{o.id.slice(0, 8).toUpperCase()}{" "}
                       <small>{dateTime(o.created_at)}</small>
                     </span>
-                    <Status status={o.status} />
+                    <Status status={o.refundStatus ?? o.status} />
                   </div>
                   <div className="history-card-body">
                     <div className="history-art">
@@ -1799,12 +1821,20 @@ function WalletPage() {
                     )}
                   </span>
                   <div>
-                    <strong>{ledgerText(e.label)}</strong>
+                    <strong>
+                      {e.type && <span className={"ledger-type ledger-type-" + e.type.toLowerCase()}>{t(ledgerTypeText[e.type])}</span>}
+                      {ledgerText(e.label)}
+                    </strong>
                     <small>{dateTime(e.created_at)}</small>
                   </div>
                   <b className={e.amount > 0 ? "positive" : ""}>
-                    {e.amount > 0 ? "+" : ""}
-                    {money(e.amount)}
+                    {e.amount > 0 ? "+" : e.amount < 0 ? "−" : ""}
+                    {money(Math.abs(e.amount))}
+                    {e.balanceAfter != null && (
+                      <small className="ledger-balance">
+                        {t("คงเหลือ")} {money(e.balanceAfter)}
+                      </small>
+                    )}
                   </b>
                 </div>
               ))

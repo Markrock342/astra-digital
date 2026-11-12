@@ -9280,3 +9280,453 @@ a.reference-bestseller {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ---- Finance hardening (S2 banner, FR-F5/F6, FR-C7). shadcn/ui dashboard + Sheet patterns (MIT). ---- */
+.test-money-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid #fcd34d;
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #92400e;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+}
+.test-money-banner svg {
+  flex: none;
+  margin-top: 2px;
+  color: #d97706;
+}
+.test-money-banner strong {
+  display: block;
+  font-size: 14px;
+  color: #78350f;
+}
+.test-money-banner small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: #92400e;
+}
+.admin-callout.warning {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+.reference-admin-metrics.metrics-six {
+  grid-template-columns: repeat(3, 1fr);
+}
+.reference-admin-metrics.metrics-six > div:nth-child(3) {
+  border-right: 0;
+}
+.reference-admin-metrics.metrics-six > div:nth-child(-n + 3) {
+  border-bottom: 1px solid var(--border);
+}
+@media (max-width: 760px) {
+  .reference-admin-metrics.metrics-six {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .reference-admin-metrics.metrics-six > div {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .reference-admin-metrics.metrics-six > div:nth-child(2n) {
+    border-right: 0;
+  }
+  .reference-admin-metrics.metrics-six > div:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+}
+.daily-bars i.negative,
+.merchant-shell .daily-bars i.negative {
+  background: #dc2626;
+}
+.negative {
+  color: #b91c1c;
+}
+.finance-stats .reference-admin-card > small:last-child {
+  margin-top: 4px;
+}
+.finance-stats .trend {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #71717a;
+}
+.finance-stats .trend.up {
+  color: #15803d;
+}
+.finance-stats .trend.down {
+  color: #b91c1c;
+}
+.finance-stats .liability-card {
+  border-color: #c7d2fe;
+  background: #f5f7ff;
+}
+.finance-stats .liability-card strong {
+  color: var(--brand, #1534ff);
+}
+.admin-filter-text input,
+.admin-filter-amounts {
+  height: 36px;
+  border: 1px dashed #d4d4d8;
+  border-radius: 7px;
+  background: #fff;
+  color: #18181b;
+  font-size: 13px;
+}
+.admin-filter-text input {
+  width: 180px;
+  padding: 0 10px;
+  min-height: 0;
+}
+.admin-filter-amounts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+}
+.admin-filter-amounts input {
+  width: 72px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  min-height: 0;
+  padding: 0;
+  color: inherit;
+}
+.merchant-shell .admin-filter-text.is-set input,
+.merchant-shell .admin-filter-amounts.is-set {
+  border-style: solid;
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.admin-list-table tr.is-open {
+  background: var(--brand-soft, #eef1ff);
+}
+.admin-list-table tr.admin-row-link:focus-visible {
+  outline: 2px solid var(--brand, #1534ff);
+  outline-offset: -2px;
+}
+a.button.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.test-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Transaction detail side sheet */
+.txn-sheet-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+.txn-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 23, 42, 0.35);
+  cursor: default;
+}
+.txn-sheet {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(440px, 100vw);
+  background: #fff;
+  box-shadow: -8px 0 24px rgba(16, 24, 40, 0.12);
+  display: flex;
+  flex-direction: column;
+  animation: txn-sheet-in 160ms ease-out;
+}
+@keyframes txn-sheet-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .txn-sheet {
+    animation: none;
+  }
+}
+.txn-sheet header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e4e4e7;
+}
+.txn-sheet header small {
+  color: #71717a;
+  font-size: 12px;
+}
+.txn-sheet header h2 {
+  margin: 2px 0 0;
+  font-size: 18px;
+}
+.txn-sheet-body {
+  overflow-y: auto;
+  padding: 16px 20px 24px;
+}
+.txn-sheet-body h3 {
+  margin: 20px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.txn-sheet-amount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.txn-sheet-amount strong {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin-right: 4px;
+}
+.txn-facts {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.txn-facts > div {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 8px;
+  font-size: 13px;
+}
+.txn-facts dt {
+  color: #71717a;
+}
+.txn-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.txn-facts dd small {
+  display: block;
+  color: #71717a;
+  font-size: 12px;
+}
+.txn-facts code,
+.txn-sheet code {
+  font-size: 12px;
+  background: #f4f4f5;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.txn-sheet .settings-row.is-current {
+  background: var(--brand-soft, #eef1ff);
+  border-radius: 6px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.merchant-shell .txn-sheet a:not(.button) {
+  color: var(--brand);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+/* Order money summary + refund */
+.order-money-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.order-money-heading h2 {
+  margin: 0;
+}
+.money-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.money-summary > div {
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fafafa;
+}
+.money-summary dt {
+  font-size: 12px;
+  color: #71717a;
+}
+.money-summary dd {
+  margin: 4px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 760px) {
+  .money-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .txn-facts > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+.refund-list {
+  margin-bottom: 12px;
+}
+.money-hint {
+  align-self: center;
+  font-size: 13px;
+}
+.refund-destination {
+  border: 0;
+  padding: 0;
+  margin: 4px 0 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.refund-destination legend {
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.refund-destination label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 550;
+}
+.refund-destination label small {
+  display: block;
+  font-weight: 400;
+  color: #71717a;
+  font-size: 12px;
+}
+.merchant-shell .refund-destination label.selected {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+  background: var(--brand-soft);
+}
+@media (max-width: 520px) {
+  .refund-destination {
+    grid-template-columns: 1fr;
+  }
+}
+.refund-form select {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #e4e4e7;
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #fff;
+  font-size: 14px;
+}
+.money-confirm {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.money-confirm p {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.money-confirm small {
+  display: block;
+  color: #7f1d1d;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.credit-sign {
+  margin-bottom: 10px;
+}
+.credit-sign button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Credit history: type + running balance */
+.ledger-type {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  margin-right: 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid #e4e4e7;
+  background: #f4f4f5;
+  color: #3f3f46;
+  vertical-align: 1px;
+}
+.ledger-type-topup {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+.ledger-type-purchase {
+  border-color: #e4e4e7;
+  background: #f4f4f5;
+  color: #3f3f46;
+}
+.ledger-type-refund {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+  color: #3730a3;
+}
+.ledger-type-adjustment {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+.credit-history {
+  margin-top: 12px;
+}
+.credit-history td small {
+  display: block;
+  color: #71717a;
+  font-size: 12px;
+}
+.ledger-balance {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  text-align: right;
+}
+.refund-note {
+  margin-top: 12px;
+}
+.txn-sheet .settings-row small {
+  display: block;
+  margin-top: 2px;
+  color: #71717a;
+  font-size: 12px;
+}
+.txn-sheet .settings-row > span {
+  font-size: 13px;
+  font-weight: 550;
+}

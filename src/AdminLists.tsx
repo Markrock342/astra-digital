@@ -6,9 +6,11 @@ import {
   Download,
   Eye,
   LogOut,
+  Minus,
   Package,
   Plus,
   RotateCcw,
+  X,
   Search,
   ShieldBan,
   ShieldCheck,
@@ -16,7 +18,8 @@ import {
 } from "lucide-react";
 import { useLive, type LiveTopic } from "./live";
 import { AdminChat as AdminChatLazy, BuyerRankingCard as BuyerRankingInline } from "./Ops";
-import { Art, ErrorMessage, Link, Status, useStore } from "./App";
+import { Art, ErrorMessage, Link, Status, ledgerTypeText, useStore } from "./App";
+import { Change, TestMoneyBanner } from "./AdminDashboard";
 import { api, dateTime, money } from "./api";
 import { checkSource, toWebp, uploadImage } from "./image-upload";
 
@@ -357,7 +360,245 @@ type OrderDetail = {
   credentials: { loginId: string; password: string }[];
   units?: { id: string; kind: "pair" | "code" }[];
   note?: string | null;
+  /** ADMIN only (money). */
+  paymentSummary?: PaymentSummary;
 };
+
+type PaymentSummary = {
+  paid: number;
+  refunded: number;
+  outstanding: number;
+  fee: number;
+  net: number;
+  refundable: number;
+  refundStatus: "REFUNDED" | "PARTIALLY_REFUNDED" | null;
+  refunds: {
+    id: string;
+    amount: number;
+    destination: "CREDIT" | "EXTERNAL";
+    reason: string | null;
+    externalRef: string | null;
+    actor: string | null;
+    created_at: string;
+  }[];
+};
+
+const refundReasons: [string, string][] = [
+  ["CUSTOMER_CANCEL", "ลูกค้าขอยกเลิก"],
+  ["ACCOUNT_BROKEN", "บัญชีใช้งานไม่ได้"],
+  ["CANNOT_DELIVER", "ส่งของไม่ได้"],
+  ["OTHER", "อื่นๆ"],
+];
+
+/** Baht text from an input -> satang integer, or null when it is not a valid amount. */
+const toSatang = (text: string) => {
+  const value = Number(text.replace(/,/g, "").trim());
+  if (!text.trim() || !Number.isFinite(value) || value <= 0) return null;
+  const satang = Math.round(value * 100);
+  return Math.abs(satang - value * 100) < 1e-6 ? satang : null;
+};
+
+/**
+ * FR-F6 order money: paid / refunded / outstanding / fee, refund history and the
+ * refund form. Money actions follow one pattern (Medusa refund modal, MIT): amount and
+ * reason first, then a confirm step that repeats the amount and needs a second click.
+ */
+function OrderMoney({
+  id,
+  summary,
+  paidState,
+  onChanged,
+}: {
+  id: string;
+  summary: PaymentSummary;
+  paidState: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const { toast } = useStore();
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [amount, setAmount] = useState("");
+  const [reasonCode, setReasonCode] = useState("");
+  const [note, setNote] = useState("");
+  const [destination, setDestination] = useState<"CREDIT" | "EXTERNAL">("CREDIT");
+  const [externalRef, setExternalRef] = useState("");
+  const requestKey = useRef("");
+  const satang = toSatang(amount);
+  function start() {
+    setOpen(true);
+    setConfirming(false);
+    setError("");
+    setAmount((summary.refundable / 100).toFixed(2));
+    setReasonCode("");
+    setNote("");
+    setDestination("CREDIT");
+    setExternalRef("");
+    requestKey.current = crypto.randomUUID();
+  }
+  function review(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (satang == null) return setError("กรุณาใส่ยอดคืนเงินเป็นบาท เช่น 50 หรือ 49.50");
+    if (satang > summary.refundable) return setError("ยอดคืนเกินยอดที่คืนได้ (" + money(summary.refundable) + ")");
+    if (!reasonCode) return setError("กรุณาเลือกเหตุผลการคืนเงิน");
+    if (reasonCode === "OTHER" && note.trim().length < 3) return setError("กรุณาใส่รายละเอียดเหตุผล");
+    if (destination === "EXTERNAL" && externalRef.trim().length < 3) return setError("กรุณาใส่เลขอ้างอิงการโอนคืน");
+    setConfirming(true);
+  }
+  async function submit() {
+    if (satang == null) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api("/admin/orders/" + id + "/refund", {
+        amount: satang,
+        reasonCode,
+        note,
+        destination,
+        externalRef: destination === "EXTERNAL" ? externalRef : undefined,
+        requestKey: requestKey.current,
+      });
+      toast("คืนเงิน " + money(satang) + (destination === "CREDIT" ? " เข้าเครดิตลูกค้าแล้ว" : " บันทึกการคืนนอกระบบแล้ว"));
+      setOpen(false);
+      setConfirming(false);
+      await onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+      setConfirming(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const full = satang != null && satang >= summary.refundable;
+  return (
+    <section className="reference-admin-card admin-detail-card order-money">
+      <div className="order-money-heading">
+        <h2>สรุปการเงิน</h2>
+        {summary.refundStatus && <Status status={summary.refundStatus} />}
+      </div>
+      <dl className="money-summary">
+        <div>
+          <dt>ชำระแล้ว</dt>
+          <dd>{money(summary.paid)}</dd>
+        </div>
+        <div>
+          <dt>คืนเงินแล้ว</dt>
+          <dd className={summary.refunded ? "negative" : ""}>{summary.refunded ? "−" + money(summary.refunded) : money(0)}</dd>
+        </div>
+        <div>
+          <dt>ค้างชำระ</dt>
+          <dd>{money(summary.outstanding)}</dd>
+        </div>
+        <div>
+          <dt>ค่าธรรมเนียม</dt>
+          <dd>{money(summary.fee)}</dd>
+        </div>
+      </dl>
+      {summary.refunds.length > 0 && (
+        <ol className="admin-timeline refund-list">
+          {summary.refunds.map((r) => (
+            <li key={r.id}>
+              <strong>
+                คืน {money(r.amount)} · {r.destination === "CREDIT" ? "เข้าเครดิตร้าน" : "คืนนอกระบบ" + (r.externalRef ? " (" + r.externalRef + ")" : "")}
+              </strong>
+              <time>
+                {r.reason} · {r.actor ?? "ระบบ"} · {dateTime(r.created_at)}
+              </time>
+            </li>
+          ))}
+        </ol>
+      )}
+      <ErrorMessage message={error} />
+      {!open && paidState && summary.refundable > 0 && (
+        <div className="admin-action-row">
+          <button className="button secondary" onClick={start}>
+            <RotateCcw size={15} />
+            คืนเงิน
+          </button>
+          <span className="muted money-hint">คืนได้อีก {money(summary.refundable)}</span>
+        </div>
+      )}
+      {open && !confirming && (
+        <form className="admin-reason-form refund-form" onSubmit={review}>
+          <label className="field">
+            ยอดคืน (บาท)
+            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+          </label>
+          <p className="field-help">
+            คืนได้สูงสุด {money(summary.refundable)} · ถ้าคืนครบยอด พรีออเดอร์ที่ยังไม่ส่งจะออกจากคิว และบัญชีที่ส่งไปแล้วจะไม่ถูกนำไปขายซ้ำ
+          </p>
+          <label className="field">
+            เหตุผล
+            <select aria-label="เหตุผลการคืนเงิน" value={reasonCode} onChange={(e) => setReasonCode(e.target.value)}>
+              <option value="">เลือกเหตุผล</option>
+              {refundReasons.map(([key, text]) => (
+                <option key={key} value={key}>
+                  {text}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            {reasonCode === "OTHER" ? "รายละเอียดเหตุผล" : "รายละเอียด (ไม่บังคับ)"}
+            <input maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} />
+          </label>
+          <fieldset className="refund-destination">
+            <legend>คืนเงินไปที่</legend>
+            <label className={destination === "CREDIT" ? "selected" : ""}>
+              <input type="radio" name="refund-destination" checked={destination === "CREDIT"} onChange={() => setDestination("CREDIT")} />
+              <span>
+                เครดิตร้าน
+                <small>ยอดเข้ากระเป๋าเครดิตของลูกค้าทันที</small>
+              </span>
+            </label>
+            <label className={destination === "EXTERNAL" ? "selected" : ""}>
+              <input type="radio" name="refund-destination" checked={destination === "EXTERNAL"} onChange={() => setDestination("EXTERNAL")} />
+              <span>
+                คืนนอกระบบ
+                <small>ร้านโอนคืนเอง ระบบบันทึกไว้เท่านั้น</small>
+              </span>
+            </label>
+          </fieldset>
+          {destination === "EXTERNAL" && (
+            <label className="field">
+              เลขอ้างอิงการโอนคืน
+              <input maxLength={120} value={externalRef} onChange={(e) => setExternalRef(e.target.value)} placeholder="เช่น เลขที่รายการธนาคาร" />
+            </label>
+          )}
+          <div className="admin-action-row">
+            <button type="button" className="button secondary" onClick={() => setOpen(false)}>
+              ยกเลิก
+            </button>
+            <button className="button primary">ตรวจสอบการคืนเงิน</button>
+          </div>
+        </form>
+      )}
+      {open && confirming && satang != null && (
+        <div className="money-confirm" role="group" aria-label="ยืนยันการคืนเงิน">
+          <p>
+            คืนเงิน <strong>{money(satang)}</strong>{" "}
+            {destination === "CREDIT" ? "เข้าเครดิตร้านของลูกค้า" : "แบบคืนนอกระบบ (" + externalRef + ")"}
+          </p>
+          <small>
+            เหตุผล: {refundReasons.find(([key]) => key === reasonCode)?.[1]}
+            {note ? " — " + note : ""}
+            {full ? " · คืนครบยอด" : " · คืนบางส่วน"} · ลูกค้าได้รับแจ้งเตือน · ยกเลิกรายการนี้ไม่ได้
+          </small>
+          <div className="admin-action-row">
+            <button type="button" className="button secondary" disabled={busy} onClick={() => setConfirming(false)}>
+              แก้ไข
+            </button>
+            <button type="button" className="button danger" disabled={busy} onClick={() => void submit()}>
+              ยืนยันคืนเงิน {money(satang)}
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
 
 function OrderNote({ id, note }: { id: string; note: string | null }) {
   const { toast } = useStore();
@@ -486,7 +727,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
                 {order.queue_number != null && " · คิวที่ " + order.queue_number}
               </p>
             </div>
-            <Status status={order.status} />
+            <Status status={order.paymentSummary?.refundStatus ?? order.status} />
           </div>
           {order.status === "PENDING_PAYMENT" && user?.role === "ADMIN" && (
             <section className="reference-admin-card admin-detail-card">
@@ -512,6 +753,17 @@ export function AdminOrderDetail({ id }: { id: string }) {
                 </div>
               )}
             </section>
+          )}
+          {order.paymentSummary && (
+            <OrderMoney
+              id={order.id}
+              summary={order.paymentSummary}
+              paidState={order.status === "DELIVERED" || order.status === "PREORDER"}
+              onChanged={async () => {
+                setRevealed(null);
+                setOrder(await api<OrderDetail>("/admin/orders/" + id));
+              }}
+            />
           )}
           <OrderNote id={order.id} note={order.note ?? null} />
           <div className="admin-detail-grid">
@@ -797,8 +1049,131 @@ type CustomerDetail = {
   history: { id: number; action: string; detail: Record<string, unknown> | null; created_at: string; actor: string | null }[];
   spentSatang?: number;
   creditSatang?: number;
-  ledger?: { id: string; amount: number; label: string; created_at: string }[];
+  ledger?: {
+    id: string;
+    amount: number;
+    label: string;
+    created_at: string;
+    type: "TOPUP" | "PURCHASE" | "REFUND" | "ADJUSTMENT";
+    balanceAfter: number;
+    reason: string | null;
+    order_id: string | null;
+  }[];
 };
+
+/** FR-C7: 10,000 THB per adjustment (same cap as the server). */
+const CREDIT_ADJUST_CAP = 1_000_000;
+
+/** FR-C7 add or subtract customer credit: reason required, cap, two-step confirm. */
+function CreditAdjust({ id, balance, onChanged }: { id: string; balance: number; onChanged: () => Promise<void> }) {
+  const { toast } = useStore();
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [sign, setSign] = useState<1 | -1>(1);
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const requestKey = useRef("");
+  const satang = toSatang(amount);
+  function start() {
+    setOpen(true);
+    setConfirming(false);
+    setError("");
+    setSign(1);
+    setAmount("");
+    setReason("");
+    requestKey.current = crypto.randomUUID();
+  }
+  function review(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (satang == null) return setError("กรุณาใส่ยอดเป็นบาท เช่น 100 หรือ 49.50");
+    if (satang > CREDIT_ADJUST_CAP) return setError("ปรับได้ไม่เกิน " + money(CREDIT_ADJUST_CAP) + " ต่อครั้ง");
+    if (sign < 0 && satang > balance) return setError("หักได้ไม่เกินยอดคงเหลือ " + money(balance));
+    if (reason.trim().length < 3) return setError("กรุณาใส่เหตุผลอย่างน้อย 3 ตัวอักษร");
+    setConfirming(true);
+  }
+  async function submit() {
+    if (satang == null) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ balance: number }>("/admin/customers/" + id + "/credit", {
+        amount: sign * satang,
+        reason,
+        requestKey: requestKey.current,
+      });
+      toast((sign > 0 ? "เพิ่มเครดิต " : "หักเครดิต ") + money(satang) + " แล้ว · คงเหลือ " + money(result.balance));
+      setOpen(false);
+      setConfirming(false);
+      await onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+      setConfirming(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <ErrorMessage message={error} />
+      {!open && (
+        <button className="button secondary" onClick={start}>
+          ปรับยอดเครดิต
+        </button>
+      )}
+      {open && !confirming && (
+        <form className="admin-reason-form" onSubmit={review}>
+          <div className="segmented-control credit-sign" role="group" aria-label="ประเภทการปรับ">
+            <button type="button" className={sign > 0 ? "active" : ""} onClick={() => setSign(1)}>
+              <Plus size={14} />
+              เพิ่มเครดิต
+            </button>
+            <button type="button" className={sign < 0 ? "active" : ""} onClick={() => setSign(-1)}>
+              <Minus size={14} />
+              หักเครดิต
+            </button>
+          </div>
+          <label className="field">
+            ยอด (บาท)
+            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+          </label>
+          <label className="field">
+            เหตุผล (บันทึกภายใน)
+            <input minLength={3} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />
+          </label>
+          <p className="field-help">
+            ไม่เกิน {money(CREDIT_ADJUST_CAP)} ต่อครั้ง · ยอดเครดิตติดลบไม่ได้ · ลูกค้าได้รับแจ้งเตือน
+          </p>
+          <div className="admin-action-row">
+            <button type="button" className="button secondary" onClick={() => setOpen(false)}>
+              ยกเลิก
+            </button>
+            <button className="button primary">ตรวจสอบ</button>
+          </div>
+        </form>
+      )}
+      {open && confirming && satang != null && (
+        <div className="money-confirm" role="group" aria-label="ยืนยันการปรับเครดิต">
+          <p>
+            {sign > 0 ? "เพิ่ม" : "หัก"}เครดิต <strong>{money(satang)}</strong> · คงเหลือหลังปรับ{" "}
+            <strong>{money(balance + sign * satang)}</strong>
+          </p>
+          <small>เหตุผล: {reason} · ยกเลิกรายการนี้ไม่ได้ ถ้าผิดให้ปรับกลับด้วยรายการใหม่</small>
+          <div className="admin-action-row">
+            <button type="button" className="button secondary" disabled={busy} onClick={() => setConfirming(false)}>
+              แก้ไข
+            </button>
+            <button type="button" className={"button " + (sign > 0 ? "primary" : "danger")} disabled={busy} onClick={() => void submit()}>
+              ยืนยัน{sign > 0 ? "เพิ่ม" : "หัก"}เครดิต {money(satang)}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 const historyText = (h: CustomerDetail["history"][number]) => {
   const d = (h.detail ?? {}) as Record<string, { from?: unknown; to?: unknown } | unknown>;
@@ -808,6 +1183,10 @@ const historyText = (h: CustomerDetail["history"][number]) => {
   }
   if (h.action === "CUSTOMER_SIGN_OUT") return "บังคับออกจากระบบทุกอุปกรณ์";
   if (h.action === "CUSTOMER_PASSWORD_RESET") return "ตั้งรหัสผ่านชั่วคราว";
+  if (h.action === "CREDIT_ADJUST") {
+    const a = h.detail as { amount: number; reason?: string };
+    return (a.amount > 0 ? "เพิ่มเครดิต " : "หักเครดิต ") + money(Math.abs(a.amount)) + (a.reason ? " · " + a.reason : "");
+  }
   if (h.action === "CUSTOMER_UPDATE") {
     const labels: Record<string, string> = { firstName: "ชื่อ", lastName: "นามสกุล", email: "อีเมล", phone: "เบอร์โทร", note: "หมายเหตุ" };
     return "แก้ " + Object.keys(d).map((k) => labels[k] ?? k).join(", ");
@@ -1049,20 +1428,46 @@ export function AdminCustomerDetail({ id }: { id: string }) {
           </section>
           {admin && data.ledger && (
             <section className="reference-admin-card admin-detail-card">
-              <h2>รายการเครดิต</h2>
+              <div className="order-money-heading">
+                <h2>รายการเครดิต</h2>
+                <span className="muted">คงเหลือ {money(data.creditSatang ?? 0)}</span>
+              </div>
+              <CreditAdjust id={c.id} balance={data.creditSatang ?? 0} onChanged={load} />
               {data.ledger.length === 0 && <p className="muted">ยังไม่มีรายการ</p>}
-              {data.ledger.map((l) => (
-                <div className="settings-row" key={l.id}>
-                  <span>
-                    {l.label}
-                    <small>{dateTime(l.created_at)}</small>
-                  </span>
-                  <strong className={l.amount > 0 ? "positive" : ""}>
-                    {l.amount > 0 ? "+" : "−"}
-                    {money(Math.abs(l.amount))}
-                  </strong>
+              {data.ledger.length > 0 && (
+                <div className="table-scroll reference-table credit-history">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>เวลา</th>
+                        <th>ประเภท</th>
+                        <th>รายการ</th>
+                        <th className="num">ยอด</th>
+                        <th className="num">คงเหลือหลังรายการ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.ledger.map((l) => (
+                        <tr key={l.id}>
+                          <td className="nowrap">{dateTime(l.created_at)}</td>
+                          <td>
+                            <span className={"ledger-type ledger-type-" + l.type.toLowerCase()}>{ledgerTypeText[l.type]}</span>
+                          </td>
+                          <td>
+                            {l.order_id ? <Link to={"/admin/orders/" + l.order_id}>{l.label}</Link> : l.label}
+                            {l.reason && l.type !== "ADJUSTMENT" && <small>{l.reason}</small>}
+                          </td>
+                          <td className={"num " + (l.amount > 0 ? "positive" : "")}>
+                            {l.amount > 0 ? "+" : "−"}
+                            {money(Math.abs(l.amount))}
+                          </td>
+                          <td className="num">{money(l.balanceAfter)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
+              )}
             </section>
           )}
         </>
@@ -1238,6 +1643,8 @@ type Txn = {
   label: string;
   kind: string;
   direction: "in" | "out";
+  /** Shop view: refunds are always money out. */
+  flow?: "in" | "out";
   fee: number;
   net: number;
   status: string;
@@ -1247,7 +1654,51 @@ type Txn = {
   created_at: string;
   finalized_at: string | null;
 };
-type TxnSummary = { in: number; out: number; net: number; pending: number; count: number };
+type TxnSummary = {
+  in: number;
+  out: number;
+  net: number;
+  refunds?: number;
+  pending: number;
+  count: number;
+  csvMaxRows?: number;
+  customerCredit?: number | null;
+  mode?: "sandbox" | "live";
+};
+type TxnDetail = {
+  transaction: {
+    id: string;
+    kind: string;
+    direction: "in" | "out";
+    flow: "in" | "out";
+    amount: number;
+    fee: number;
+    net: number;
+    status: string;
+    label: string;
+    reason: string | null;
+    reference: string | null;
+    provider_ref: string | null;
+    created_at: string;
+    finalized_at: string | null;
+    test: boolean;
+  };
+  customer: { id: string; name: string; email: string };
+  actor: { id: string; name: string } | null;
+  order: { id: string; status: string; total: number; quantity: number; created_at: string; preorder: boolean } | null;
+  payment: {
+    id: string;
+    amount: number;
+    status: string;
+    provider: string;
+    provider_ref: string | null;
+    idempotency_key: string | null;
+    created_at: string;
+    finalized_at: string | null;
+  } | null;
+  related: { id: string; kind: string; flow: "in" | "out"; amount: number; net: number; label: string; created_at: string; actor: string | null; current: boolean }[];
+  events: { at: string; event: string; action?: string; actor?: string | null; text?: string }[];
+};
 
 const kindText: Record<string, string> = {
   PAYMENT_IN: "รับชำระ",
@@ -1265,21 +1716,204 @@ const txnStatusText: Record<string, string> = {
   FAILED: "ไม่สำเร็จ",
   REFUNDED: "คืนเงินแล้ว",
 };
+const txnEventText: Record<string, string> = {
+  created: "บันทึกรายการ",
+  finalized: "ยืนยันรายการ",
+  payment_created: "เริ่มการชำระ",
+  payment_succeeded: "ชำระสำเร็จ",
+  payment_failed: "ชำระไม่สำเร็จ",
+  payment_cancelled: "ยกเลิกการชำระ",
+  PAYMENT_AND_DELIVERY: "ชำระและส่งของ",
+  PREORDER_PAID: "ชำระพรีออเดอร์",
+  DELIVER_RESERVATION: "ส่งของพรีออเดอร์",
+  ORDER_REFUND: "คืนเงิน",
+  CANCEL_ORDER: "ยกเลิกออเดอร์",
+  REPLACE_ORDER_CREDENTIAL: "เปลี่ยนบัญชีให้ลูกค้า",
+};
 /** Bangkok calendar day, n days before today. */
 const bangkokDay = (daysAgo = 0) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date(Date.now() - daysAgo * 86400000));
-const emptyFinanceFilters = { q: "", kind: "", direction: "", status: "", from: "", to: "" };
+/** The same number of days just before [from, to]. */
+const previousRange = (from: string, to: string) => {
+  const dayMs = 86400000;
+  const start = Date.parse(from + "T00:00:00Z");
+  const length = Math.round((Date.parse(to + "T00:00:00Z") - start) / dayMs) + 1;
+  const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  return { from: iso(start - length * dayMs), to: iso(start - dayMs) };
+};
+const emptyFinanceFilters = { q: "", kind: "", direction: "", status: "", from: "", to: "", customer: "", min: "", max: "" };
+const signed = (flow: "in" | "out", value: number) => (flow === "in" ? "+" : "−") + money(Math.abs(value));
+
+/** FR-F5 detail panel: a side sheet in the shadcn/ui Sheet pattern (MIT). */
+function TxnDetailPanel({ id, onClose }: { id: string; onClose: () => void }) {
+  const [detail, setDetail] = useState<TxnDetail | null>(null);
+  const [error, setError] = useState("");
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    setDetail(null);
+    setError("");
+    api<TxnDetail>("/admin/transactions/" + id)
+      .then(setDetail)
+      .catch((e) => setError((e as Error).message));
+  }, [id]);
+  useEffect(() => {
+    closeRef.current?.focus();
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    addEventListener("keydown", key);
+    return () => removeEventListener("keydown", key);
+  }, [onClose]);
+  const t = detail?.transaction;
+  return (
+    <div className="txn-sheet-layer">
+      <button className="txn-sheet-backdrop" aria-label="ปิดรายละเอียด" tabIndex={-1} onClick={onClose} />
+      <aside className="txn-sheet" role="dialog" aria-modal="true" aria-label="รายละเอียดรายการเงิน">
+        <header>
+          <div>
+            <small>รายการเงิน {shortId(id)}</small>
+            <h2>{t ? kindText[t.kind] ?? t.kind : "กำลังโหลด…"}</h2>
+          </div>
+          <button ref={closeRef} className="icon-button" aria-label="ปิด" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </header>
+        <ErrorMessage message={error} />
+        {detail && t && (
+          <div className="txn-sheet-body">
+            <div className="txn-sheet-amount">
+              <strong className={t.flow === "in" ? "positive" : "negative"}>{signed(t.flow, t.net)}</strong>
+              <span className={"status txn-status-" + t.status.toLowerCase()}>{txnStatusText[t.status] ?? t.status}</span>
+              {t.test && <span className="test-chip">เงินทดสอบ</span>}
+            </div>
+            <dl className="txn-facts">
+              <div>
+                <dt>รายการ</dt>
+                <dd>{t.label}</dd>
+              </div>
+              {t.reason && (
+                <div>
+                  <dt>เหตุผล</dt>
+                  <dd>{t.reason}</dd>
+                </div>
+              )}
+              <div>
+                <dt>ยอด · ค่าธรรมเนียม · สุทธิ</dt>
+                <dd>
+                  {money(t.amount)} · {money(t.fee)} · {money(Math.abs(t.net))}
+                </dd>
+              </div>
+              <div>
+                <dt>ลูกค้า</dt>
+                <dd>
+                  <Link to={"/admin/customers/" + detail.customer.id}>{detail.customer.name}</Link>
+                  <small>{detail.customer.email}</small>
+                </dd>
+              </div>
+              {detail.order && (
+                <div>
+                  <dt>ออเดอร์</dt>
+                  <dd>
+                    <Link to={"/admin/orders/" + detail.order.id}>
+                      {shortId(detail.order.id)} · {money(detail.order.total)}
+                    </Link>
+                    <small>{detail.order.preorder ? "พรีออเดอร์" : "พร้อมส่ง"}</small>
+                  </dd>
+                </div>
+              )}
+              <div>
+                <dt>ผู้ทำรายการ</dt>
+                <dd>{detail.actor ? detail.actor.name : "ระบบ / ลูกค้า"}</dd>
+              </div>
+              {detail.payment && (
+                <div>
+                  <dt>ช่องทาง</dt>
+                  <dd>
+                    {detail.payment.provider}
+                    <small>
+                      อ้างอิง <code>{detail.payment.provider_ref ?? "–"}</code>
+                    </small>
+                  </dd>
+                </div>
+              )}
+              {t.provider_ref && (
+                <div>
+                  <dt>เลขอ้างอิง</dt>
+                  <dd>
+                    <code>{t.provider_ref}</code>
+                  </dd>
+                </div>
+              )}
+              <div>
+                <dt>เวลา</dt>
+                <dd>
+                  {dateTime(t.created_at)}
+                  {t.finalized_at && t.finalized_at !== t.created_at && <small>ยืนยัน {dateTime(t.finalized_at)}</small>}
+                </dd>
+              </div>
+            </dl>
+            <h3>ไทม์ไลน์</h3>
+            <ol className="admin-timeline">
+              {detail.events.map((e, i) => (
+                <li key={i}>
+                  <strong>
+                    {txnEventText[e.action ?? e.event] ?? e.action ?? e.event}
+                    {e.text ? " · " + e.text : ""}
+                  </strong>
+                  <time>
+                    {e.actor ? e.actor + " · " : ""}
+                    {dateTime(e.at)}
+                  </time>
+                </li>
+              ))}
+            </ol>
+            {detail.related.length > 1 && (
+              <>
+                <h3>รายการเงินของออเดอร์นี้</h3>
+                {detail.related.map((r) => (
+                  <div className={"settings-row" + (r.current ? " is-current" : "")} key={r.id}>
+                    <span>
+                      {kindText[r.kind] ?? r.kind}
+                      <small>
+                        {r.label} · {dateTime(r.created_at)}
+                      </small>
+                    </span>
+                    <strong className={r.flow === "in" ? "positive" : ""}>{signed(r.flow, r.net)}</strong>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+      </aside>
+    </div>
+  );
+}
 
 export function AdminFinance() {
   const [filters, setFilters] = useState<Filters>(emptyFinanceFilters);
   const [summary, setSummary] = useState<TxnSummary | null>(null);
+  const [previous, setPrevious] = useState<TxnSummary | undefined>(undefined);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [csvNote, setCsvNote] = useState("");
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
-  const list = useCursorList<Txn>("/admin/transactions", "transactions", { ...filters, limit: "50" }, ["orders", "customers"]);
+  // Amount filters are typed in baht; the API compares satang.
+  const apiFilters = (f: Filters): Filters => ({
+    ...f,
+    min: f.min && toSatang(f.min) != null ? String(toSatang(f.min)) : "",
+    max: f.max && toSatang(f.max) != null ? String(toSatang(f.max)) : "",
+  });
+  const list = useCursorList<Txn>("/admin/transactions", "transactions", { ...apiFilters(filters), limit: "50" }, ["orders", "customers"]);
   const serial = JSON.stringify(filters);
   useEffect(() => {
-    api<{ summary: TxnSummary }>("/admin/transactions" + query({ ...filters, limit: "1" }))
+    const current = apiFilters(filters);
+    api<{ summary: TxnSummary }>("/admin/transactions" + query({ ...current, limit: "1" }))
       .then((d) => setSummary(d.summary))
       .catch(() => setSummary(null));
+    if (filters.from && filters.to) {
+      api<{ summary: TxnSummary }>("/admin/transactions" + query({ ...current, ...previousRange(filters.from, filters.to), limit: "1" }))
+        .then((d) => setPrevious(d.summary))
+        .catch(() => setPrevious(undefined));
+    } else setPrevious(undefined);
+    setCsvNote("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serial]);
   const active = Object.values(filters).some(Boolean);
@@ -1287,18 +1921,47 @@ export function AdminFinance() {
     days == null ? set({ from: "", to: "" }) : set({ from: bangkokDay(days), to: bangkokDay(0) });
   const presetActive = (days: number | null) =>
     days == null ? !filters.from : filters.from === bangkokDay(days) && filters.to === bangkokDay(0);
+  const csvMax = summary?.csvMaxRows ?? 10000;
+  const rows = summary?.count ?? 0;
+  const tooMany = rows > csvMax;
+  const compare = (key: "in" | "out" | "net") =>
+    summary && previous ? <Change now={summary[key]} before={previous[key]} /> : <small>{filters.from ? "" : "ตั้งแต่เปิดร้าน"}</small>;
   return (
     <>
       <div className="reference-admin-heading">
         <div>
           <h1>การเงิน</h1>
-          <p>ทุกรายการเงินเข้าและออก พร้อมเวลา ลูกค้า และออเดอร์ที่เกี่ยวข้อง รายการเงินแก้หรือลบไม่ได้</p>
+          <p>ทุกรายการเงินเข้าและออก พร้อมเวลา ลูกค้า และออเดอร์ที่เกี่ยวข้อง รายการเงินแก้หรือลบไม่ได้ คลิกแถวเพื่อดูรายละเอียด</p>
         </div>
-        <a className="button secondary" href={"/api/admin/transactions" + query({ ...filters, format: "csv", limit: "100" })}>
-          <Download size={15} />
-          ดาวน์โหลด CSV
-        </a>
+        {tooMany ? (
+          <button
+            className="button secondary"
+            onClick={() =>
+              setCsvNote(
+                "มี " + rows.toLocaleString("th-TH") + " รายการ เกินที่ดาวน์โหลดได้ครั้งละ " + csvMax.toLocaleString("th-TH") + " แถว กรุณาเลือกช่วงวันให้แคบลงหรือเพิ่มตัวกรอง",
+              )
+            }
+          >
+            <Download size={15} />
+            ดาวน์โหลด CSV ({rows.toLocaleString("th-TH")} แถว)
+          </button>
+        ) : (
+          <a
+            className={"button secondary" + (summary && !rows ? " is-disabled" : "")}
+            aria-disabled={summary ? !rows : undefined}
+            href={"/api/admin/transactions" + query({ ...apiFilters(filters), format: "csv", limit: "100" })}
+          >
+            <Download size={15} />
+            ดาวน์โหลด CSV{summary ? " (" + rows.toLocaleString("th-TH") + " แถว)" : ""}
+          </a>
+        )}
       </div>
+      <TestMoneyBanner />
+      {csvNote && (
+        <p className="admin-callout warning" role="alert">
+          {csvNote}
+        </p>
+      )}
       <div className="reference-status-tabs" role="group" aria-label="ช่วงเวลา">
         {(
           [
@@ -1315,22 +1978,29 @@ export function AdminFinance() {
       </div>
       <div className="admin-stat-row finance-stats">
         <div className="reference-admin-card">
-          <small>เงินเข้า</small>
+          <small>เงินเข้า (รับชำระ เติมเครดิต)</small>
           <strong className="positive">{summary ? money(summary.in) : "–"}</strong>
+          {compare("in")}
         </div>
         <div className="reference-admin-card">
           <small>เงินออก (คืนเงิน ถอน ค่าธรรมเนียม)</small>
           <strong>{summary ? money(summary.out) : "–"}</strong>
+          {compare("out")}
         </div>
         <div className="reference-admin-card">
           <small>สุทธิ</small>
           <strong>{summary ? money(summary.net) : "–"}</strong>
+          {compare("net")}
         </div>
         <div className="reference-admin-card">
           <small>รอยืนยัน · ทั้งหมด</small>
-          <strong>
-            {summary ? summary.pending + " · " + summary.count : "–"}
-          </strong>
+          <strong>{summary ? summary.pending + " · " + summary.count : "–"}</strong>
+          <small>รายการตามตัวกรอง</small>
+        </div>
+        <div className="reference-admin-card liability-card">
+          <small>เครดิตลูกค้าคงค้าง (หนี้สิน)</small>
+          <strong>{summary?.customerCredit != null ? money(summary.customerCredit) : "–"}</strong>
+          <small>เงินที่ร้านติดลูกค้า ไม่นับเป็นรายได้ · ทุกช่วงเวลา</small>
         </div>
       </div>
       <FilterBar
@@ -1345,9 +2015,9 @@ export function AdminFinance() {
           value={filters.kind}
           onChange={(kind) => set({ kind })}
           options={[
-            ["", "ทุกประเภท (ไม่รวมทดลอง)"],
+            ["", summary?.mode === "live" ? "ทุกประเภท" : "ทุกประเภท (ไม่รวมทดลอง)"],
             ...Object.entries(kindText).filter(([k]) => k !== "DEMO_CREDIT"),
-            ["DEMO_CREDIT", "เครดิตทดลองเท่านั้น"],
+            ...(summary?.mode === "live" ? [] : ([["DEMO_CREDIT", "เครดิตทดลองเท่านั้น"]] as [string, string][])),
           ]}
         />
         <Select
@@ -1366,6 +2036,20 @@ export function AdminFinance() {
           onChange={(status) => set({ status })}
           options={[["", "ทุกสถานะ"], ...Object.entries(txnStatusText)]}
         />
+        <label className={"admin-filter-text" + (filters.customer ? " is-set" : "")}>
+          <span className="sr-only">ลูกค้า</span>
+          <input
+            aria-label="ลูกค้า"
+            placeholder="ลูกค้า (ชื่อหรืออีเมล)"
+            value={filters.customer}
+            onChange={(e) => set({ customer: e.target.value })}
+          />
+        </label>
+        <span className={"admin-filter-amounts" + (filters.min || filters.max ? " is-set" : "")}>
+          <input aria-label="ยอดต่ำสุด (บาท)" inputMode="decimal" placeholder="฿ ต่ำสุด" value={filters.min} onChange={(e) => set({ min: e.target.value })} />
+          <span aria-hidden="true">–</span>
+          <input aria-label="ยอดสูงสุด (บาท)" inputMode="decimal" placeholder="฿ สูงสุด" value={filters.max} onChange={(e) => set({ max: e.target.value })} />
+        </span>
         <DateRange from={filters.from} to={filters.to} onChange={(from, to) => set({ from, to })} />
       </FilterBar>
       <ErrorMessage message={list.error} />
@@ -1381,37 +2065,51 @@ export function AdminFinance() {
             </tr>
           </thead>
           <tbody>
-            {list.rows?.map((t) => (
-              <tr key={t.id}>
-                <td className="nowrap">
-                  {dateTime(t.created_at)}
-                  {t.finalized_at && t.finalized_at !== t.created_at && <small>ยืนยัน {dateTime(t.finalized_at)}</small>}
-                </td>
-                <td>
-                  <span className={"txn-kind txn-" + t.direction}>{kindText[t.kind] ?? t.kind}</span>
-                  <small>
-                    {t.order_id ? (
-                      <Link to={"/admin/orders/" + t.order_id}>ออเดอร์ {shortId(t.order_id)}</Link>
-                    ) : (
-                      t.label
-                    )}
-                    {t.provider_ref && " · " + t.provider_ref}
-                  </small>
-                </td>
-                <td>
-                  <Link to={"/admin/customers/" + t.user_id}>{t.customer}</Link>
-                  <small>{t.customer_email}</small>
-                </td>
-                <td>
-                  <span className={"status txn-status-" + t.status.toLowerCase()}>{txnStatusText[t.status] ?? t.status}</span>
-                </td>
-                <td className={"num " + (t.direction === "in" ? "positive" : "")}>
-                  {t.direction === "in" ? "+" : "−"}
-                  {money(Math.abs(t.net))}
-                  {t.fee > 0 && <small>ค่าธรรมเนียม {money(t.fee)}</small>}
-                </td>
-              </tr>
-            ))}
+            {list.rows?.map((t) => {
+              const flow = t.flow ?? t.direction;
+              return (
+                <tr
+                  key={t.id}
+                  className={"admin-row-link" + (openId === t.id ? " is-open" : "")}
+                  tabIndex={0}
+                  aria-label={"ดูรายละเอียด " + (kindText[t.kind] ?? t.kind) + " " + money(Math.abs(t.net))}
+                  onClick={() => setOpenId(t.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setOpenId(t.id);
+                    }
+                  }}
+                >
+                  <td className="nowrap">
+                    {dateTime(t.created_at)}
+                    {t.finalized_at && t.finalized_at !== t.created_at && <small>ยืนยัน {dateTime(t.finalized_at)}</small>}
+                  </td>
+                  <td>
+                    <span className={"txn-kind txn-" + flow}>{kindText[t.kind] ?? t.kind}</span>
+                    <small>
+                      {t.order_id ? (
+                        <Link to={"/admin/orders/" + t.order_id}>ออเดอร์ {shortId(t.order_id)}</Link>
+                      ) : (
+                        t.label
+                      )}
+                      {t.provider_ref && " · " + (t.provider_ref.length > 24 ? t.provider_ref.slice(0, 20) + "…" : t.provider_ref)}
+                    </small>
+                  </td>
+                  <td>
+                    <Link to={"/admin/customers/" + t.user_id}>{t.customer}</Link>
+                    <small>{t.customer_email}</small>
+                  </td>
+                  <td>
+                    <span className={"status txn-status-" + t.status.toLowerCase()}>{txnStatusText[t.status] ?? t.status}</span>
+                  </td>
+                  <td className={"num " + (flow === "in" ? "positive" : "")}>
+                    {signed(flow, t.net)}
+                    {t.fee > 0 && <small>ค่าธรรมเนียม {money(t.fee)}</small>}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {list.rows === null && !list.error && <p className="reference-empty-text">กำลังโหลด…</p>}
@@ -1422,6 +2120,7 @@ export function AdminFinance() {
         )}
       </div>
       {list.rows && <MoreRow next={list.next} more={list.more} loading={list.loadingMore} count={list.rows.length} />}
+      {openId && <TxnDetailPanel id={openId} onClose={() => setOpenId(null)} />}
     </>
   );
 }
@@ -2286,15 +2985,6 @@ export function AdminReports() {
     ["ทั้งหมด", "", ""],
   ];
   const peak = Math.max(1, ...(report?.byDay ?? []).map((d) => d.revenue));
-  const exportCsv = () =>
-    report &&
-    downloadCsv("sales-report.csv", [
-      ["สินค้า", "ตัวเลือก", "ประเภท", "ออเดอร์", "ชิ้น", "ยอดขาย (บาท)"],
-      ...report.byProduct.map((r) => [r.product, r.variant, r.preorder ? "พรีออเดอร์" : "พร้อมส่ง", r.orders, r.units, (r.revenue / 100).toFixed(2)]),
-      [],
-      ["วัน", "ออเดอร์", "ชิ้น", "ผู้ซื้อ", "ยอดขาย (บาท)"],
-      ...report.byDay.map((d) => [d.day, d.orders, d.units, d.buyers, (d.revenue / 100).toFixed(2)]),
-    ]);
   return (
     <>
       <div className="reference-admin-heading">
@@ -2302,11 +2992,12 @@ export function AdminReports() {
           <h1>รายงานยอดขาย</h1>
           <p>นับเฉพาะออเดอร์ที่ชำระสำเร็จ · เวลาไทย · ยอดสุทธิหักคืนเงินแล้ว</p>
         </div>
-        <button className="button secondary" onClick={exportCsv} disabled={!report}>
+        <a className="button secondary" href={"/api/admin/reports/sales" + query({ ...range, format: "csv" })}>
           <Download size={15} />
           ดาวน์โหลด CSV
-        </button>
+        </a>
       </div>
+      <TestMoneyBanner />
       <div className="admin-filters">
         <div className="reference-status-tabs" role="group" aria-label="ช่วงรายงาน">
           {presets.map(([label, from, to]) => (
@@ -2321,6 +3012,7 @@ export function AdminReports() {
       <div className="admin-stat-row">
         {[
           ["ยอดขาย", report ? money(report.totals.revenue) : "–"],
+          ["คืนเงิน", report ? money(report.totals.refunds) : "–"],
           ["ยอดสุทธิ (หักคืนเงิน)", report ? money(report.totals.net) : "–"],
           ["ออเดอร์ที่ชำระ", report ? String(report.totals.orders) : "–"],
           ["ผู้ซื้อ", report ? String(report.totals.buyers) : "–"],

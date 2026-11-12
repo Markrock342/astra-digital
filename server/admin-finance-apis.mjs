@@ -49,8 +49,16 @@ const MONEY_KINDS = new Set([
 /** created_at is stored as UTC wall-clock; +7h yields Asia/Bangkok calendar day. */
 const BANGKOK_DAY_SQL = "substr(datetime(l.created_at, '+7 hours'), 1, 10)";
 export const CSV_MAX_ROWS = 10000;
-/** Shop view of a row: refunds always take money out of revenue, whatever the wallet saw. */
-const FLOW_SQL = "CASE WHEN l.kind='REFUND' THEN 'out' ELSE l.direction END";
+/**
+ * Shop view of a row for the in/out totals: payments and top-ups are money in; refunds
+ * (to credit or outside), fees and withdrawals are money out. Wallet-only moves
+ * (PURCHASE, ADJUSTMENT, DEMO_CREDIT) are not shop cash, so they count only when the
+ * admin filters on that kind.
+ */
+const flowSql = (kindFiltered) =>
+  `CASE WHEN l.kind IN ('PAYMENT_IN','TOPUP') THEN 'in' WHEN l.kind IN ('REFUND','FEE','WITHDRAWAL') THEN 'out' ${
+    kindFiltered ? "ELSE l.direction" : "ELSE 'credit'"
+  } END`;
 
 export function createAdminFinanceApis({
   requireAdmin,
@@ -192,8 +200,8 @@ export function createAdminFinanceApis({
 
     const agg = one(
       `SELECT
-         COALESCE(SUM(CASE WHEN ${FLOW_SQL}='in' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS inflow,
-         COALESCE(SUM(CASE WHEN ${FLOW_SQL}='out' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS outflow,
+         COALESCE(SUM(CASE WHEN ${flowSql(!!kind)}='in' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS inflow,
+         COALESCE(SUM(CASE WHEN ${flowSql(!!kind)}='out' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS outflow,
          COALESCE(SUM(CASE WHEN l.kind='REFUND' AND l.status='SUCCEEDED' THEN l.amount ELSE 0 END),0) AS refunds,
          COALESCE(SUM(CASE WHEN l.status='PENDING' THEN 1 ELSE 0 END),0) AS pending,
          COUNT(*) AS count
@@ -204,8 +212,8 @@ export function createAdminFinanceApis({
     );
     const daily = all(
       `SELECT ${BANGKOK_DAY_SQL} AS day,
-              COALESCE(SUM(CASE WHEN ${FLOW_SQL}='in' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS inflow,
-              COALESCE(SUM(CASE WHEN ${FLOW_SQL}='out' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS outflow,
+              COALESCE(SUM(CASE WHEN ${flowSql(!!kind)}='in' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS inflow,
+              COALESCE(SUM(CASE WHEN ${flowSql(!!kind)}='out' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS outflow,
               COUNT(*) AS count
        FROM ledger l
        JOIN users u ON u.id = l.user_id
