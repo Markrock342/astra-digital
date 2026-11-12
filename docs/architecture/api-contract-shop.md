@@ -69,7 +69,7 @@
 - หลังงาน 3: `adminFinance` (boolean) — `GET /api/admin/transactions` พร้อม
 - หลังงาน 4: `adminVariantCrud`, `adminStockApi` (boolean)
 - หลังงาน 5 (FR-O5): `adminReplaceCredential` (boolean) — `POST /api/admin/orders/:id/replace`
-- หลังงาน 5 (UP-1 uploads): `uploads` (boolean) — รูปสินค้า + `GET /api/files/:key`
+- หลังงาน 5 (UP-1/UP-2 uploads): `uploads` (boolean) — รูปสินค้า + avatar + logo + `GET /api/files/:key`
 
 ### สินค้า — ตั้งพรีออเดอร์จากฟอร์ม (FR-P3)
 
@@ -190,7 +190,7 @@ Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์
 - เรียกซ้ำหลังส่งแล้วตอบ metadata เดิม 200 · ไม่ใช่ PREORDER ตอบ 409 · ของไม่พอตอบ 409
 - กระดานคิวใช้ `GET /api/queue` เดิม
 
-**อัปโหลดรูปสินค้า (W5 UP-1)** — flag `uploads`
+**อัปโหลดรูป (W5 UP-1 + UP-2)** — flag `uploads`
 
 | Method | Path | สิทธิ์ |
 |--------|------|--------|
@@ -198,11 +198,19 @@ Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์
 | POST | `/api/admin/products/:id/images` | ADMIN · body = ไบต์รูป · `Content-Type: image/jpeg\|png\|webp` |
 | PATCH | `/api/admin/products/:id/images` | ADMIN · JSON `{ "order": [imageId…] }` ครบชุด |
 | DELETE | `/api/admin/product-images/:id` | ADMIN |
+| POST | `/api/profile/avatar` | ผู้ใช้ที่ล็อกอิน · body = ไบต์รูป |
+| DELETE | `/api/profile/avatar` | ผู้ใช้ที่ล็อกอิน |
+| POST | `/api/admin/settings/logo` | ADMIN · body = ไบต์รูป |
+| DELETE | `/api/admin/settings/logo` | ADMIN |
 
 - เก็บผ่าน `file-store`: R2 `UPLOADS` ถ้ามี · ไม่มีใช้ตาราง `files` (BLOB)
-- ตรวจ magic bytes + Content-Type · ≤2MB · ห้าม SVG/GIF · key = UUID · rate 30 ครั้ง/10 นาที · audit `PRODUCT_IMAGE_*`
+- ตรวจ magic bytes + Content-Type · ≤2MB · ห้าม SVG/GIF · key = UUID · rate 30 ครั้ง/10 นาที
+- audit: `PRODUCT_IMAGE_*` · `AVATAR_SET`/`AVATAR_REMOVE` · `LOGO_SET`/`LOGO_REMOVE`
 - `GET /api/files/:key` → `Content-Type` ตามไฟล์ · `nosniff` · `Content-Disposition: inline` · `Cache-Control: public, max-age=31536000, immutable`
 - `products` / `productDetail` / admin products / admin overview ส่ง `images: [{ id, url }]` + `imageUrl` (รูปแรกหรือ null)
+- `publicUser` (`/api/me`, ทีม, ลูกค้าหลังบ้าน) ส่ง `avatarUrl` (หรือ null)
+- `settings()` / `GET /api/overview` ส่ง `logoUrl` (หรือ null) · เก็บจริงเป็น `logoKey` ใน shop-settings
+- live: รูปสินค้า + logo bump `catalog` · avatar bump `customers`
 
 **เปลี่ยนบัญชีที่เสีย (FR-O5)** — `POST /api/admin/orders/:id/replace` (ADMIN)
 

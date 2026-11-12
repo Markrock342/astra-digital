@@ -1,120 +1,73 @@
-# รายงานส่งมาร์ค — Admin FR งาน 5 · UP-1 อัปโหลดรูปสินค้า (ตรวจครบ + เทส 2 รอบ)
+# รายงานส่งมาร์ค — Admin FR งาน 5 · UP-2 รูปโปรไฟล์ + โลโก้ร้าน
 
 **ถึง:** มาร์ค  
 **จาก:** น็อต  
-**วันที่:** 2026-11-12  
-**PR:** https://github.com/Markrock342/astra-digital/pull/40  
-**Branch:** `feat/admin-fr-w5-up1-product-images`  
-**ฐาน:** `main` หลัง #37 (DO `.changes`) + #38  
-**Deploy:** **ห้าม** จนกว่ามาร์คสั่ง
+**วันที่:** 2026-11-13  
+**Branch:** `feat/admin-fr-w5-up2-avatar-logo`  
+**ฐาน:** `main` @ `9dcbc8f` (หลัง #40 UP-1 + money/auth-hardening)  
+**Deploy:** **ห้าม** จนกว่ามาร์คสั่ง merge + deploy
 
 ---
 
-## 0) คำตัดสินหลังตรวจทีละขั้น + เทส 2 รอบ
+## 0) คำตัดสิน
 
 | ขอบเขต | สถานะ |
 |--------|--------|
-| Prerequisite `run().changes` (#37) | ผ่าน (อยู่บน main แล้ว) |
-| **UP-1** แกนกลาง + รูปสินค้า | **ครบตามโจทย์รอบนี้** |
-| **UP-2** avatar + logo | **ยังไม่ทำ** (PR แยกตามลำดับ) |
-| **UP-3** แชท/สลิป | **ห้ามทำ** (รอมาร์คยืนยัน) |
+| **UP-1** แกนกลาง + รูปสินค้า | merge แล้ว (#40) |
+| **UP-2** avatar + logo | **ครบตามโจทย์รอบนี้** |
+| **UP-3** แชท/สลิป | **ห้ามทำ** |
+| งานมาร์ค (อีเมล/Turnstile/backup/notify/คูปอง/นโยบาย/คลังรูป) | ไม่แตะซ้ำ |
 
 ---
 
-## 1) ตรวจทีละขั้นเทียบโจทย์ (UP-1)
+## 1) ตรวจทีละขั้นเทียบโจทย์ (UP-2)
 
-### ขั้น A — Prerequisite / ลำดับงาน
+### API + payload
 | ข้อ | สถานะ | หลักฐาน |
 |-----|--------|---------|
-| แก้บั๊ก `run().changes` ก่อน | ผ่าน | #37 merged |
-| UP-1 ก่อน UP-2 คนละ PR | ผ่าน | PR #40 = UP-1 เท่านั้น |
-| ห้าม UP-3 | ผ่าน | ไม่มีโค้ดแชท/สลิป |
+| POST/DELETE `/api/profile/avatar` (ทุก role ที่ล็อกอิน) | ผ่าน | `profile-uploads.mjs` + api-handler |
+| POST/DELETE `/api/admin/settings/logo` (ADMIN) | ผ่าน | |
+| `publicUser` → `avatarUrl` (`/api/me` …) | ผ่าน | domain.mjs |
+| `settings()` / `/api/overview` → `logoUrl` | ผ่าน | เก็บ `logoKey` ใน shop-settings · ไม่ persist `logoUrl` |
+| แทนรูปเดิมแล้วลบ file เก่า | ผ่าน | unit + smoke |
+| magic/CT · ≤2MB · UUID · rate เดิม · audit AVATAR_*/LOGO_* | ผ่าน | |
+| live: avatar → `customers` · logo → `catalog` | ผ่าน | เพิ่ม 4 ชื่อใน LIVE_METHODS เท่านั้น |
+| ห้ามแตะ `src/` / team/reports/customers | ผ่าน | |
+| ห้าม UP-3 / deploy | ผ่าน | |
 
-### ขั้น B — ที่เก็บไฟล์ (adapter)
-| ข้อ | สถานะ | หลักฐาน |
-|-----|--------|---------|
-| `server/file-store.mjs` put/get/delete | ผ่าน | ไฟล์ใหม่ |
-| R2 `UPLOADS` ถ้ามี / ไม่มีใช้ `files` BLOB | ผ่าน | `createFileStore({ uploads: env.UPLOADS })` |
-| Node ใช้ตาราง `files` | ผ่าน | commerce local |
-| ห้ามสร้าง bucket · คอมเมนต์ binding ใน wrangler | ผ่าน | `wrangler.jsonc` คอมเมนต์ + วิธีเปิดใช้ |
-
-### ขั้น C — Schema MIG-008
-| ข้อ | สถานะ | หลักฐาน |
-|-----|--------|---------|
-| `product_images` + index | ผ่าน | migrate-008 + เทสต์ local-migrate |
-| `files` table | ผ่าน | |
-| `users.avatar_key` (เตรียมไว้ · API ใน UP-2) | ผ่าน | คอลัมน์มีแล้ว ไม่เปิด API avatar |
-
-### ขั้น D — API รูปสินค้า + GET ไฟล์
-| ข้อ | สถานะ | หลักฐาน |
-|-----|--------|---------|
-| GET `/api/files/:key` headers ครบ | ผ่าน | nosniff · inline · immutable · CT ตามไฟล์ |
-| POST `/api/admin/products/:id/images` | ผ่าน | body ไบต์ · สูงสุด 8 · `{ image }` |
-| PATCH reorder ครบชุด | ผ่าน | |
-| DELETE `/api/admin/product-images/:id` | ผ่าน | ลบแถว + ลบ file · fail ลบ file แค่ log |
-| body ไม่ใช่ multipart · jpeg/png/webp + magic | ผ่าน | |
-| ≤2MB · 415/413 | ผ่าน | |
-| key = UUID เซิร์ฟเวอร์ | ผ่าน | `randomUUID()` |
-| rate 30/10 นาที | ผ่าน | เทสต์ 429 ที่ครั้งที่ 31 |
-| audit ADD/REMOVE/REORDER | ผ่าน | เทสต์ assert audit |
-| api-handler ยกเว้น JSON เฉพาะ path อัปโหลด | ผ่าน | เส้น settings ยัง 415 ถ้าส่งรูป |
-
-### ขั้น E — Payload เดิม + live
-| ข้อ | สถานะ | หลักฐาน |
-|-----|--------|---------|
-| products / productDetail / admin products / overview → `images[]` + `imageUrl` | ผ่าน | |
-| live bump `catalog` บน mutation รูปสินค้า | ผ่าน | LIVE_METHODS เพิ่ม 3 ชื่อเท่านั้น |
-| `uploads: true` | ผ่าน | health/me |
-| `avatarUrl` / `logoUrl` | **UP-2** | นอก PR นี้ตามลำดับมาร์ค |
-
-### ขั้น F — ข้อห้าม
-| ข้อ | สถานะ |
-|-----|--------|
-| ไม่แตะ `src/` | ผ่าน (diff ไม่มี) |
-| ไม่แตะ team/reports/customers | ผ่าน |
-| ห้าม deploy / qa:cloud ร้านจริง | ผ่าน |
-
-### ขั้น G — ช่องโหว่ที่พบตอนตรวจซ้ำ (แก้แล้ว)
-| ช่องโหว่ | แก้ |
-|----------|-----|
-| นับจำนวนรูปก่อนเข้า tx → อัปพร้อมกันอาจเกิน 8 | ย้าย count+insert เข้า tx · ถ้า fail ลบ file ที่ put ไว้ |
-| เทสต์ไม่ครอบ GIF/HTML/max8/audit/rate/404 หลังลบ | ขยาย `tests/uploads-up1.test.mjs` |
+### ไฟล์หลักที่เปลี่ยน
+- `server/profile-uploads.mjs` (ใหม่)
+- `server/domain.mjs` · `api-handler.mjs` · `live.mjs`
+- `tests/uploads-up2.test.mjs` · `package.json` (ใส่เทสต์ใน npm test)
+- `scripts/wrangler-local-uploads-smoke.mjs` (ขยาย avatar/logo)
+- `docs/architecture/api-contract-shop.md`
+- `tests/auth-hardening.test.mjs` — แก้ cleanup `rmSync` หลัง `db.close()` กัน EPERM บน Windows (assertion เดิมผ่านอยู่แล้ว)
 
 ---
 
-## 2) หลักฐานเทส 2 รอบ (เต็มรูปแบบ)
+## 2) Prove Matrix (รันจริงบนเครื่อง)
 
-### รอบที่ 1
-| ชุด | ผล |
+| ชั้น | ผล |
 |-----|-----|
-| `tests/uploads-up1.test.mjs` | **5/5** (magic/SVG/GIF/HTML · CRUD+audit · max8 · HTTP security · rate 429) |
-| `npm test` ทั้งชุด | **93/93** |
+| `tests/uploads-up2.test.mjs` | **4/4** |
+| `npm test` | **171/171** |
+| `npm run build` + `npm run test:e2e` | **61/61** |
+| `wrangler dev --local --port 4341` + smoke | **19/19** (UP-1 10 + UP-2 avatar/logo 9) |
 
-### รอบที่ 2
-| ชุด | ผล |
-|-----|-----|
-| `npm test` ซ้ำ | **93/93** |
-| `npm run test:e2e` | **31/31** |
-| `wrangler dev --local` smoke #1 | **10/10** (อัป→GET ไบต์ตรง→เรียง→ลบ→storefront) |
-| `wrangler dev --local` smoke #2 | **10/10** ซ้ำ |
+Smoke UP-2 ที่พิสูจน์บน workerd: อัปโหลด avatar → `/api/me` มี `avatarUrl` → GET ไบต์ตรง · logo → `/api/overview` มี `logoUrl` · DELETE เคลียร์ทั้งคู่ (SQLite store · ไม่มี R2)
 
 ---
 
-## 3) สิ่งที่ส่งใน PR #40 (ไฟล์หลัก)
+## 3) ขอมาร์ค
 
-- `server/file-store.mjs`, `migrate-008.mjs`, `migrations/008_uploads.sql`
-- `server/admin-product-images.mjs`
-- `domain.mjs` / `api-handler.mjs` / `live.mjs` / `commerce.mjs` / `cloud/worker.mjs`
-- `wrangler.jsonc` (คอมเมนต์ R2)
-- เทสต์ + `scripts/wrangler-local-uploads-smoke.mjs`
-- สัญญา API + รายงานนี้
+1. รีวิว/merge PR UP-2 นี้
+2. แบงค์ต่อ UI รูปโปรไฟล์ในหน้าบัญชี · มาร์คต่อโลโก้ถ้ายังไม่ครบ
+3. **ห้าม deploy** จาก PR นี้จนกว่าสั่ง
+4. ถัดไป (แยก PR): คิวต้นทุน/หมดอายุ/PDPA/10k/health ตาม roadmap — ยังไม่ทำใน PR นี้
+5. PR #21: น็อตจะ rebase เหลือเทสต์ race · ทิ้ง `payment_events`
 
 ---
 
-## 4) ขอมาร์ค
+## ภาคผนวก — สรุป UP-1 (อ้างอิง)
 
-1. รีวิว/merge **PR #40**
-2. ต่อ UI จาก `uploads`
-3. สร้าง bucket แล้ว uncomment R2 เมื่อพร้อม
-4. หลัง merge → น็อตเริ่ม **UP-2** (avatar + logoUrl) คนละ PR
-5. **ห้าม deploy** จาก PR นี้จนกว่าสั่ง
+PR #40 · file-store + MIG-008 + รูปสินค้า · ดูประวัติแชท/commit บน main
