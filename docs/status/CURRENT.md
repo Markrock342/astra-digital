@@ -2,11 +2,13 @@
 
 อัปเดตล่าสุด: 2026-11-12
 
-## Admin FR — งาน 4 พร้อม PR (ห้าม deploy)
-- PR #31 · branch `feat/admin-fr-work4-variant-stock` จาก `main` @ `56f4603`
-- MIG-007 + variant CRUD + inventory list/defect/delete/CSV + `lowStockAt` · flags `adminVariantCrud`/`adminStockApi`
-- หลักฐาน 77/77 + e2e 19/19 · รายงาน [MARK_REPORT_ADMIN_FR_WORK4](../database/MARK_REPORT_ADMIN_FR_WORK4.md)
-- **ห้าม deploy** · รอ Mark ก่อนงาน 5
+## Admin FR — งาน 5 FR-O5 พร้อม PR (ห้าม deploy)
+- branch `feat/admin-fr-work5-o5-replace-credential` จาก `main` @ `4a8c33f`
+- `POST /api/admin/orders/:id/replace` · flag `adminReplaceCredential` · รายงาน [MARK_REPORT_ADMIN_FR_WORK5_O5](../database/MARK_REPORT_ADMIN_FR_WORK5_O5.md)
+- **ห้าม deploy**
+
+## Admin FR — งาน 4 + polish + round2 merge แล้ว
+- #31 / #32 / #34 ใน `4a8c33f` · รายงาน [MARK_REPORT_ADMIN_FR_WORK4](../database/MARK_REPORT_ADMIN_FR_WORK4.md)
 
 
 ## Admin FR — งาน 3 + FR-P3 + หน้าจอ Mark merge แล้ว
