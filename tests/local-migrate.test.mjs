@@ -7,7 +7,7 @@ import { createCommerce } from "../server/commerce.mjs";
 import { ROLES } from "../server/auth-policy.mjs";
 import { openLocalCommerce } from "../server/commerce.mjs";
 
-test("local .data migrate applies through 005 and keeps product API free of codes", (t) => {
+test("local .data migrate applies through 006 and keeps product API free of codes", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "astra-data-"));
   const dbPath = join(dir, "commerce.sqlite");
   const s = createCommerce({ path: dbPath, seed: true });
@@ -25,7 +25,14 @@ test("local .data migrate applies through 005 and keeps product API free of code
     "003_reference_layout.sql",
     "004_commerce_ops.sql",
     "005_credential_preorder_indexes.sql",
+    "006_ledger_money.sql",
   ]);
+  assert.ok(
+    s.db
+      .prepare("PRAGMA table_info(ledger)")
+      .all()
+      .some((c) => c.name === "direction"),
+  );
   assert.ok(
     s.db
       .prepare("PRAGMA table_info(inventory)")
@@ -66,8 +73,10 @@ test("npm migrate target openLocalCommerce writes schema into .data/commerce.sql
     assert.ok(names.includes("003_reference_layout.sql"));
     assert.ok(names.includes("004_commerce_ops.sql"));
     assert.ok(names.includes("005_credential_preorder_indexes.sql"));
+    assert.ok(names.includes("006_ledger_money.sql"));
     const kind = s.db.prepare("PRAGMA table_info(ledger)").all();
     assert.ok(kind.some((c) => c.name === "kind"));
+    assert.ok(kind.some((c) => c.name === "direction"));
   } finally {
     s.db.close();
   }

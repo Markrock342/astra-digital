@@ -165,9 +165,11 @@ test("wallet cannot become negative, invalid confirmations do not deliver", (t) 
   );
   s.db
     .prepare(
-      "INSERT INTO ledger(id,user_id,amount,reference,label) VALUES(?,?,?,?,?)",
+      `INSERT INTO ledger(
+        id,user_id,amount,reference,label,kind,direction,fee,net,status,finalized_at,created_at
+      ) VALUES(?,?,?,?,?,'DEMO_CREDIT','out',0,?,'SUCCEEDED',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
     )
-    .run("drain", user.id, -50000, "test-drain", "test");
+    .run("drain", user.id, -50000, "test-drain", "test", -50000);
   assert.throws(
     () => approve(s, user, order),
     (e) => e.status === 409,

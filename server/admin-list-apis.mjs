@@ -39,6 +39,18 @@ function maskCredential(item) {
   };
 }
 
+/** Escape LIKE wildcards; pair with `ESCAPE '\\'` in SQL. */
+function likeContains(value) {
+  return (
+    "%" +
+    String(value)
+      .replace(/\\/g, "\\\\")
+      .replace(/%/g, "\\%")
+      .replace(/_/g, "\\_") +
+    "%"
+  );
+}
+
 const ORDER_UNION = `
   SELECT o.id,o.status,o.total,o.quantity,o.created_at,o.variant_id,
          u.id AS customer_id,u.name AS customer,u.email AS customer_email,
@@ -70,7 +82,20 @@ export function createAdminListApis({
   readDeliveredItems,
   inventoryAvailableAliased,
   LOW_STOCK_AT,
+  bangkokDayRange,
+  isAdmin,
 }) {
+  function dayBounds(fromRaw, toRaw) {
+    const hasFrom = fromRaw != null && String(fromRaw).trim() !== "";
+    const hasTo = toRaw != null && String(toRaw).trim() !== "";
+    if (hasFrom !== hasTo) fail(400, "ต้องส่ง from และ to คู่กัน");
+    if (!hasFrom) return null;
+    return bangkokDayRange(
+      clean(String(fromRaw).trim(), 10, 10, "วันเริ่ม"),
+      clean(String(toRaw).trim(), 10, 10, "วันสิ้นสุด"),
+    );
+  }
+
   function adminOrders(user, query = {}) {
     requireStaff(user);
     const lim = parseLimit(query.limit, fail);
@@ -78,14 +103,7 @@ export function createAdminListApis({
       query.status != null && String(query.status).trim() !== ""
         ? clean(query.status, 1, 40, "สถานะ")
         : null;
-    const from =
-      query.from != null && String(query.from).trim() !== ""
-        ? clean(query.from, 10, 32, "วันเริ่ม")
-        : null;
-    const to =
-      query.to != null && String(query.to).trim() !== ""
-        ? clean(query.to, 10, 32, "วันสิ้นสุด")
-        : null;
+    const range = dayBounds(query.from, query.to);
     const product =
       query.product != null && String(query.product).trim() !== ""
         ? clean(query.product, 1, 120, "สินค้า")
@@ -112,31 +130,29 @@ export function createAdminListApis({
       where.push("status = ?");
       params.push(status);
     }
-    if (from) {
+    if (range) {
       where.push("created_at >= ?");
-      params.push(from.length === 10 ? from + " 00:00:00" : from);
-    }
-    if (to) {
+      params.push(range.fromUtc);
       where.push("created_at <= ?");
-      params.push(to.length === 10 ? to + " 23:59:59" : to);
+      params.push(range.toUtc);
     }
     if (product) {
-      where.push("(product_id = ? OR product LIKE ?)");
-      params.push(product, "%" + product + "%");
+      where.push("(product_id = ? OR product LIKE ? ESCAPE '\\')");
+      params.push(product, likeContains(product));
     }
     if (customer) {
       where.push(
-        "(customer_id = ? OR customer LIKE ? OR customer_email LIKE ?)",
+        "(customer_id = ? OR customer LIKE ? ESCAPE '\\' OR customer_email LIKE ? ESCAPE '\\')",
       );
-      params.push(customer, "%" + customer + "%", "%" + customer + "%");
+      params.push(customer, likeContains(customer), likeContains(customer));
     }
     if (typeRaw === "ready") where.push("preorder = 0");
     if (typeRaw === "preorder") where.push("preorder = 1");
     if (q) {
       where.push(
-        "(id LIKE ? OR product LIKE ? OR customer LIKE ? OR customer_email LIKE ?)",
+        "(id LIKE ? ESCAPE '\\' OR product LIKE ? ESCAPE '\\' OR customer LIKE ? ESCAPE '\\' OR customer_email LIKE ? ESCAPE '\\')",
       );
-      const like = "%" + q + "%";
+      const like = likeContains(q);
       params.push(like, like, like, like);
     }
     if (cursorParts) {
@@ -323,14 +339,8 @@ export function createAdminListApis({
     // Until Work 5 / FR-C5 every account is effectively ACTIVE.
     if (status && status !== "ACTIVE")
       return { customers: [], nextCursor: null };
-    const from =
-      query.from != null && String(query.from).trim() !== ""
-        ? clean(query.from, 10, 32, "วันเริ่ม")
-        : null;
-    const to =
-      query.to != null && String(query.to).trim() !== ""
-        ? clean(query.to, 10, 32, "วันสิ้นสุด")
-        : null;
+    const range = dayBounds(query.from, query.to);
+    const adminViewer = isAdmin(user);
     const minSpent =
       query.minSpent != null && String(query.minSpent).trim() !== ""
         ? Number(query.minSpent)
@@ -343,6 +353,8 @@ export function createAdminListApis({
       fail(400, "ยอดขั้นต่ำไม่ถูกต้อง");
     if (maxSpent != null && (!Number.isInteger(maxSpent) || maxSpent < 0))
       fail(400, "ยอดสูงสุดไม่ถูกต้อง");
+    if (!adminViewer && (minSpent != null || maxSpent != null))
+      fail(403, "เฉพาะผู้ดูแลร้านเท่านั้นที่กรองยอดใช้จ่ายได้");
     let hasOrders = null;
     if (query.hasOrders != null && String(query.hasOrders).trim() !== "") {
       const v = String(query.hasOrders).toLowerCase();
@@ -356,6 +368,8 @@ export function createAdminListApis({
         : "created_at";
     if (!["created_at", "spent", "orders", "name"].includes(sortRaw))
       fail(400, "การเรียงไม่ถูกต้อง");
+    if (!adminViewer && sortRaw === "spent")
+      fail(403, "เฉพาะผู้ดูแลร้านเท่านั้นที่เรียงตามยอดใช้จ่ายได้");
     const cursorParts = decodeCursor(query.cursor, fail, 2);
 
     const spentExpr = `COALESCE((SELECT SUM(amount) FROM payments pay WHERE pay.user_id=u.id AND pay.status='SUCCEEDED'),0)`;
@@ -365,18 +379,16 @@ export function createAdminListApis({
     const params = [];
     if (q) {
       where.push(
-        "(u.name LIKE ? OR u.email LIKE ? OR IFNULL(u.username,'') LIKE ?)",
+        "(u.name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\' OR IFNULL(u.username,'') LIKE ? ESCAPE '\\')",
       );
-      const like = "%" + q + "%";
+      const like = likeContains(q);
       params.push(like, like, like);
     }
-    if (from) {
+    if (range) {
       where.push("u.created_at >= ?");
-      params.push(from.length === 10 ? from + " 00:00:00" : from);
-    }
-    if (to) {
+      params.push(range.fromUtc);
       where.push("u.created_at <= ?");
-      params.push(to.length === 10 ? to + " 23:59:59" : to);
+      params.push(range.toUtc);
     }
     if (minSpent != null) {
       where.push(`(${spentExpr}) >= ?`);
@@ -430,17 +442,20 @@ export function createAdminListApis({
       ...params,
       lim + 1,
     );
-    const page = rows.slice(0, lim).map((row) => ({
-      id: row.id,
-      name: row.name,
-      email: row.email,
-      username: row.username,
-      role: row.role,
-      status: "ACTIVE",
-      created_at: row.created_at,
-      spentSatang: row.spentSatang,
-      orderCount: row.orderCount,
-    }));
+    const page = rows.slice(0, lim).map((row) => {
+      const base = {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        username: row.username,
+        role: row.role,
+        status: "ACTIVE",
+        created_at: row.created_at,
+        orderCount: row.orderCount,
+      };
+      if (adminViewer) base.spentSatang = row.spentSatang;
+      return base;
+    });
     const nextCursor =
       rows.length > lim
         ? encodeCursor([
@@ -450,7 +465,7 @@ export function createAdminListApis({
                 : sortRaw === "created_at"
                   ? page[page.length - 1].created_at
                   : sortRaw === "spent"
-                    ? page[page.length - 1].spentSatang
+                    ? rows[lim - 1].spentSatang
                     : page[page.length - 1].orderCount,
             ),
             page[page.length - 1].id,
@@ -501,7 +516,10 @@ export function createAdminListApis({
       JOIN variants v ON v.id=i.variant_id
       WHERE v.product_id=p.id AND ${inventoryAvailableAliased}
     ) END`;
-    const soldExpr = `(SELECT COALESCE(SUM(o.quantity),0) FROM orders o JOIN variants v ON v.id=o.variant_id WHERE v.product_id=p.id AND o.status='DELIVERED')`;
+    const soldExpr = `(
+      COALESCE((SELECT SUM(o.quantity) FROM orders o JOIN variants v ON v.id=o.variant_id WHERE v.product_id=p.id AND o.status='DELIVERED'),0)
+      + COALESCE((SELECT SUM(r.quantity) FROM reservations r JOIN variants v ON v.id=r.variant_id WHERE v.product_id=p.id AND r.status IN ('PREORDER','DELIVERED')),0)
+    )`;
     const stockStatusExpr = `CASE
       WHEN (${stockExpr}) <= 0 THEN 'out'
       WHEN (${stockExpr}) <= ${LOW_STOCK_AT} THEN 'low'
@@ -510,8 +528,8 @@ export function createAdminListApis({
     const where = ["p.hidden_seed = 0"];
     const params = [];
     if (q) {
-      where.push("p.name LIKE ?");
-      params.push("%" + q + "%");
+      where.push("p.name LIKE ? ESCAPE '\\'");
+      params.push(likeContains(q));
     }
     if (category) {
       where.push("p.category = ?");

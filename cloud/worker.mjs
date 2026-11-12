@@ -7,6 +7,10 @@ import {
   ensureInventoryAvailableIndex,
   MIGRATION_005_NAME,
 } from "../server/migrate-005.mjs";
+import {
+  applyMigration006,
+  MIGRATION_006_NAME,
+} from "../server/migrate-006.mjs";
 import { ensureChatThreadReads } from "../server/ensure-admin-fr.mjs";
 import {
   createAPIHandler,
@@ -18,6 +22,7 @@ import reviews from "../server/migrations/002_reviews.sql";
 import referenceLayout from "../server/migrations/003_reference_layout.sql";
 import commerceOps from "../server/migrations/004_commerce_ops.sql";
 import credentialPreorder from "../server/migrations/005_credential_preorder_indexes.sql";
+import ledgerMoney from "../server/migrations/006_ledger_money.sql";
 export class Commerce extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -45,6 +50,7 @@ export class Commerce extends DurableObject {
         ["003_reference_layout.sql", referenceLayout],
         ["004_commerce_ops.sql", commerceOps],
         [MIGRATION_005_NAME, credentialPreorder],
+        [MIGRATION_006_NAME, ledgerMoney],
       ]) {
         if (
           !db
@@ -53,6 +59,8 @@ export class Commerce extends DurableObject {
         ) {
           if (name === MIGRATION_005_NAME) {
             applyMigration005(db, key, content);
+          } else if (name === MIGRATION_006_NAME) {
+            applyMigration006(db, content);
           } else {
             executeSqliteMigration(db, content);
             db.prepare("INSERT INTO schema_migrations(name) VALUES(?)").run(

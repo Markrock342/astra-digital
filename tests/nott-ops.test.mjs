@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createCommerce } from "../server/commerce.mjs";
 import { createAPIHandler } from "../server/api-handler.mjs";
 import { ROLES } from "../server/auth-policy.mjs";
+// applyMigration006 imported inside W3 test to keep sync fixtures light
 
 function fixture(t) {
   const s = createCommerce({ allowDemoAdmin: true });
@@ -906,9 +907,18 @@ test("ADMIN-FR-W2: customers and products list filters + RBAC", (t) => {
   const customers = s.adminCustomers(staff, { q: "QA Buyer", hasOrders: "true" });
   assert.ok(customers.customers.some((c) => c.id === user.id));
   assert.ok(customers.customers.every((c) => c.status === "ACTIVE"));
+  assert.equal(
+    customers.customers.find((c) => c.id === user.id).spentSatang,
+    undefined,
+    "STAFF must not see spentSatang",
+  );
   assert.equal(s.adminCustomers(staff, { status: "BANNED" }).customers.length, 0);
 
-  const spent = customers.customers.find((c) => c.id === user.id).spentSatang;
+  const adminCustomers = s.adminCustomers(merchant, {
+    q: "QA Buyer",
+    hasOrders: "true",
+  });
+  const spent = adminCustomers.customers.find((c) => c.id === user.id).spentSatang;
   assert.ok(spent > 0);
 
   assert.throws(() => s.adminProducts(user), (e) => e.status === 403);
@@ -1066,4 +1076,97 @@ test("ADMIN-FR-P3: saveProduct accepts preorder create/update; staff forbidden",
   });
   assert.equal(untouched.preorder, true, "omit preorder keeps existing value");
   assert.equal(s.features.productPreorderForm, true);
+});
+
+test("ADMIN-FR-W3: bangkok day bounds, sold includes preorder, LIKE escape", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  // 02:00 Asia/Bangkok = previous calendar day in naive UTC cutoff
+  const bangkokDay = "2026-06-15";
+  const createdAtThaiNight = "2026-06-14 19:00:00"; // 02:00+7
+  const order = s.createOrder(user, {
+    variantId: "stream-plus-30",
+    quantity: 1,
+    requestKey: "w3-bkk-bounds",
+  });
+  s.pay(user, order.id, {
+    paymentToken: order.paymentToken,
+    outcome: "success",
+  });
+  s.db
+    .prepare("UPDATE orders SET created_at=? WHERE id=?")
+    .run(createdAtThaiNight, order.id);
+  const utcWrong = s.adminOrders(staff, {
+    from: bangkokDay,
+    to: bangkokDay,
+  });
+  assert.ok(
+    utcWrong.orders.some((o) => o.id === order.id),
+    "Bangkok day must include 02:00 Thailand order",
+  );
+
+  const pre = s.createOrder(user, {
+    variantId: "cinema-max-90",
+    quantity: 1,
+    requestKey: "w3-sold-pre",
+  });
+  s.pay(user, pre.id, {
+    paymentToken: pre.paymentToken,
+    outcome: "success",
+  });
+  const products = s.adminProducts(merchant, { type: "preorder" });
+  const cinema = products.products.find((p) => p.id === "cinema-max");
+  assert.ok(cinema.sold >= 1, "sold must count paid preorder reservations");
+
+  s.saveProduct(merchant, {
+    name: "Percent%Wild_Card",
+    description: "สินค้าทดสอบ LIKE escape",
+    category: "gift",
+    price: 15000,
+    active: true,
+  });
+  const hit = s.adminProducts(staff, { q: "Percent%Wild" });
+  assert.ok(hit.products.some((p) => p.name === "Percent%Wild_Card"));
+  const miss = s.adminProducts(staff, { q: "PercentXWild" });
+  assert.ok(!miss.products.some((p) => p.name === "Percent%Wild_Card"));
+});
+
+test("ADMIN-FR-W3: ledger 006 + transactions exclude DEMO; STAFF 403", async (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  assert.ok(
+    s.db.prepare("SELECT name FROM schema_migrations WHERE name=?").get(
+      "006_ledger_money.sql",
+    ),
+  );
+  assert.ok(
+    s.db
+      .prepare("PRAGMA table_info(ledger)")
+      .all()
+      .some((c) => c.name === "direction"),
+  );
+  const { applyMigration006 } = await import("../server/migrate-006.mjs");
+  const again = applyMigration006(s.db);
+  assert.equal(again.skipped, true);
+
+  assert.throws(() => s.adminTransactions(staff), (e) => e.status === 403);
+  assert.throws(() => s.adminTransactions(user), (e) => e.status === 403);
+
+  const order = s.createOrder(user, {
+    variantId: "stream-plus-30",
+    quantity: 1,
+    requestKey: "w3-tx-pay",
+  });
+  const paid = s.pay(user, order.id, {
+    paymentToken: order.paymentToken,
+    outcome: "success",
+  });
+  const page = s.adminTransactions(merchant, { limit: 50 });
+  assert.ok(page.transactions.every((row) => row.kind !== "DEMO_CREDIT"));
+  assert.ok(page.transactions.some((row) => row.kind === "PAYMENT_IN"));
+  assert.ok(page.summary.in >= paid.total);
+  assert.equal(s.features.adminFinance, true);
+
+  const csvPage = s.adminTransactions(merchant, { format: "csv", limit: 10 });
+  assert.match(csvPage.csv, /^id,kind,direction/);
 });

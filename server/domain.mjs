@@ -15,9 +15,11 @@ import {
   assertAdmin,
   assertStaff,
   isStaff,
+  isAdmin,
 } from "./auth-policy.mjs";
 import { credentialFingerprint } from "./migrate-005.mjs";
 import { createAdminListApis } from "./admin-list-apis.mjs";
+import { createAdminFinanceApis } from "./admin-finance-apis.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
@@ -133,7 +135,7 @@ export function createCommerceCore({
           name: user.name,
           role: user.role,
           balance: one(
-            "SELECT COALESCE(SUM(amount),0) AS value FROM ledger WHERE user_id=?",
+            "SELECT COALESCE(SUM(amount),0) AS value FROM ledger WHERE user_id=? AND kind='DEMO_CREDIT'",
             user.id,
           ).value,
         }
@@ -145,6 +147,58 @@ export function createCommerceCore({
       action,
       entity ?? null,
     );
+  /** Append-only ledger row (MIG-006 columns). Never UPDATE/DELETE money rows. */
+  const insertLedgerEntry = ({
+    userId,
+    amount,
+    reference,
+    label,
+    kind = "DEMO_CREDIT",
+    direction,
+    fee = 0,
+    status = "SUCCEEDED",
+    orderId = null,
+    paymentId = null,
+    providerRef = null,
+    actorId = null,
+    reason = null,
+    createdAt = null,
+  }) => {
+    const dir = direction ?? (amount < 0 ? "out" : "in");
+    const net =
+      kind === "DEMO_CREDIT"
+        ? amount
+        : dir === "out"
+          ? -(Math.abs(amount) + fee)
+          : Math.abs(amount) - fee;
+    const storedAmount = kind === "DEMO_CREDIT" ? amount : Math.abs(amount);
+    const when =
+      createdAt ??
+      new Date().toISOString().slice(0, 19).replace("T", " ");
+    run(
+      `INSERT INTO ledger(
+        id,user_id,amount,reference,label,kind,direction,fee,net,status,
+        order_id,payment_id,provider_ref,actor_id,reason,finalized_at,created_at
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      randomUUID(),
+      userId,
+      storedAmount,
+      reference,
+      label,
+      kind,
+      dir,
+      fee,
+      net,
+      status,
+      orderId,
+      paymentId,
+      providerRef,
+      actorId,
+      reason,
+      status === "SUCCEEDED" ? when : null,
+      when,
+    );
+  };
   const requireUser = (user) => assertAuthenticated(user, fail);
   const requireAdmin = (user) => assertAdmin(user, fail);
   const requireStaff = (user) => assertStaff(user, fail);
@@ -340,12 +394,19 @@ export function createCommerceCore({
           i === 0 ? "-9 hours" : "-2 days",
         );
         run(
-          "INSERT INTO ledger(id,user_id,amount,reference,label,kind,created_at) VALUES(?,?,?,?,?,'DEMO_CREDIT',datetime('now','-2 days'))",
+          `INSERT INTO ledger(id,user_id,amount,reference,label,kind,direction,fee,net,status,finalized_at,created_at)
+           VALUES(?,?,?,?,?,'DEMO_CREDIT','in',0,?,?,?,datetime('now','-2 days'))`,
           randomUUID(),
           id,
           50000,
           "seed-grant-" + id,
           "เครดิตเริ่มต้น (ทดลอง)",
+          50000,
+          "SUCCEEDED",
+          new Date(Date.now() - 2 * 86400000)
+            .toISOString()
+            .slice(0, 19)
+            .replace("T", " "),
         );
         const order = randomUUID();
         run(
@@ -366,12 +427,20 @@ export function createCommerceCore({
           stock.id,
         );
         run(
-          "INSERT INTO ledger(id,user_id,amount,reference,label,kind,created_at) VALUES(?,?,?,?,?,'DEMO_CREDIT',datetime('now','-1 day'))",
+          `INSERT INTO ledger(id,user_id,amount,reference,label,kind,direction,fee,net,status,order_id,finalized_at,created_at)
+           VALUES(?,?,?,?,?,'DEMO_CREDIT','out',0,?,?,?,?,datetime('now','-1 day'))`,
           randomUUID(),
           id,
           -10000,
           order,
           "ซื้อ STREAM+",
+          -10000,
+          "SUCCEEDED",
+          order,
+          new Date(Date.now() - 86400000)
+            .toISOString()
+            .slice(0, 19)
+            .replace("T", " "),
         );
       }
     });
@@ -601,14 +670,14 @@ export function createCommerceCore({
       );
       if (username) run("UPDATE users SET username=? WHERE id=?", username, id);
       if (allowSandbox)
-        run(
-          "INSERT INTO ledger(id,user_id,amount,reference,label,kind) VALUES(?,?,?,?,?,'DEMO_CREDIT')",
-          randomUUID(),
-          id,
-          50000,
-          "welcome-" + id,
-          "เครดิตต้อนรับ (ทดลอง)",
-        );
+        insertLedgerEntry({
+          userId: id,
+          amount: 50000,
+          reference: "welcome-" + id,
+          label: "เครดิตต้อนรับ (ทดลอง)",
+          kind: "DEMO_CREDIT",
+          direction: "in",
+        });
       audit({ id }, "REGISTER", id);
     });
     return issueSession(one("SELECT * FROM users WHERE id=?", id));
@@ -1047,32 +1116,46 @@ export function createCommerceCore({
         if (publicUser(user).balance < o.total)
           fail(409, "เครดิตทดลองไม่เพียงพอ กรุณาเติมเครดิตก่อน");
         if (o.total)
-          run(
-            "INSERT INTO ledger(id,user_id,amount,reference,label,kind) VALUES(?,?,?,?,?,'DEMO_CREDIT')",
-            randomUUID(),
-            user.id,
-            -o.total,
-            "preorder:" + id,
-            "ชำระสินค้าสั่งจอง " + id.slice(0, 8),
-          );
+          insertLedgerEntry({
+            userId: user.id,
+            amount: -o.total,
+            reference: "preorder:" + id,
+            label: "ชำระสินค้าสั่งจอง " + id.slice(0, 8),
+            kind: "DEMO_CREDIT",
+            direction: "out",
+            orderId: id,
+          });
         const queueNumber = o.queue_number ?? nextQueueNumber();
         run(
           "UPDATE reservations SET status='PREORDER', queue_number=? WHERE id=?",
           queueNumber,
           id,
         );
+        const paymentId = randomUUID();
         run(
           `INSERT OR IGNORE INTO payments(
             id, order_id, reservation_id, user_id, amount, currency, status,
             provider, provider_ref, idempotency_key, created_at, finalized_at
           ) VALUES(?,NULL,?,?,?,'THB','SUCCEEDED','sandbox',?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
-          randomUUID(),
+          paymentId,
           id,
           user.id,
           o.total,
           "sandbox:preorder:" + id,
           "pay:reservation:" + id,
         );
+        if (o.total)
+          insertLedgerEntry({
+            userId: user.id,
+            amount: o.total,
+            reference: "payment-in:" + paymentId,
+            label: "รับชำระพรีออเดอร์ " + id.slice(0, 8),
+            kind: "PAYMENT_IN",
+            direction: "in",
+            orderId: id,
+            paymentId,
+            providerRef: "sandbox:preorder:" + id,
+          });
         notify(
           user.id,
           "preorder_queue",
@@ -1131,14 +1214,15 @@ export function createCommerceCore({
       const balance = publicUser(user).balance;
       if (balance < order.total)
         fail(409, "เครดิตทดลองไม่เพียงพอ กรุณาเติมเครดิตก่อน");
-      run(
-        "INSERT INTO ledger(id,user_id,amount,reference,label,kind) VALUES(?,?,?,?,?,'DEMO_CREDIT')",
-        randomUUID(),
-        user.id,
-        -order.total,
-        id,
-        "ชำระคำสั่งซื้อ " + id.slice(0, 8),
-      );
+      insertLedgerEntry({
+        userId: user.id,
+        amount: -order.total,
+        reference: id,
+        label: "ชำระคำสั่งซื้อ " + id.slice(0, 8),
+        kind: "DEMO_CREDIT",
+        direction: "out",
+        orderId: id,
+      });
       for (const item of available)
         run(
           `UPDATE inventory SET order_id=?,sold_at=CURRENT_TIMESTAMP WHERE id=? AND ${inventoryAvailableSql}`,
@@ -1146,18 +1230,30 @@ export function createCommerceCore({
           item.id,
         );
       run("UPDATE orders SET status='DELIVERED' WHERE id=?", id);
+      const paymentId = randomUUID();
       run(
         `INSERT OR IGNORE INTO payments(
           id, order_id, reservation_id, user_id, amount, currency, status,
           provider, provider_ref, idempotency_key, created_at, finalized_at
         ) VALUES(?,?,NULL,?,?,'THB','SUCCEEDED','sandbox',?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
-        randomUUID(),
+        paymentId,
         id,
         user.id,
         order.total,
         "sandbox:order:" + id,
         "pay:order:" + id,
       );
+      insertLedgerEntry({
+        userId: user.id,
+        amount: order.total,
+        reference: "payment-in:" + paymentId,
+        label: "รับชำระออเดอร์ " + id.slice(0, 8),
+        kind: "PAYMENT_IN",
+        direction: "in",
+        orderId: id,
+        paymentId,
+        providerRef: "sandbox:order:" + id,
+      });
       notify(
         user.id,
         "code_delivery",
@@ -1212,14 +1308,14 @@ export function createCommerceCore({
       if (prior && prior.amount !== input.amount * 100)
         fail(409, "รหัสคำขอนี้ถูกใช้กับยอดเติมอื่นแล้ว");
       if (!prior) {
-        run(
-          "INSERT INTO ledger(id,user_id,amount,reference,label,kind) VALUES(?,?,?,?,?,'DEMO_CREDIT')",
-          randomUUID(),
-          user.id,
-          input.amount * 100,
-          ref,
-          "เติมเครดิตทดลอง",
-        );
+        insertLedgerEntry({
+          userId: user.id,
+          amount: input.amount * 100,
+          reference: ref,
+          label: "เติมเครดิตทดลอง",
+          kind: "DEMO_CREDIT",
+          direction: "in",
+        });
         audit(user, "DEMO_TOPUP", ref);
       }
     });
@@ -1780,6 +1876,16 @@ export function createCommerceCore({
     readDeliveredItems,
     inventoryAvailableAliased,
     LOW_STOCK_AT,
+    bangkokDayRange,
+    isAdmin,
+  });
+  const { adminTransactions } = createAdminFinanceApis({
+    requireAdmin,
+    one,
+    all,
+    fail,
+    clean,
+    bangkokDayRange,
   });
   function buyerRanking(user, query = {}) {
     requireAdmin(user);
@@ -1835,6 +1941,7 @@ export function createCommerceCore({
     adminRevealOrderCredentials,
     adminCustomers,
     adminProducts,
+    adminTransactions,
     getPaymentChannel,
     setPaymentChannel,
     pay,
@@ -1869,6 +1976,7 @@ export function createCommerceCore({
       adminProductsApi: true,
       adminSummaryApi: true,
       productPreorderForm: true,
+      adminFinance: true,
     }),
     salesRevenueSatang,
     logout: (token) =>

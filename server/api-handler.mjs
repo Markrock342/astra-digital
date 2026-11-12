@@ -205,6 +205,34 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             from: url.searchParams.get("from") ?? undefined,
             to: url.searchParams.get("to") ?? undefined,
           }));
+        if (path === "/api/admin/transactions") {
+          const page = service.adminTransactions(user, {
+            from: url.searchParams.get("from") ?? undefined,
+            to: url.searchParams.get("to") ?? undefined,
+            kind: url.searchParams.get("kind") ?? undefined,
+            direction: url.searchParams.get("direction") ?? undefined,
+            status: url.searchParams.get("status") ?? undefined,
+            customer: url.searchParams.get("customer") ?? undefined,
+            min: url.searchParams.get("min") ?? undefined,
+            max: url.searchParams.get("max") ?? undefined,
+            q: url.searchParams.get("q") ?? undefined,
+            cursor: url.searchParams.get("cursor") ?? undefined,
+            limit: url.searchParams.get("limit") ?? undefined,
+            format: url.searchParams.get("format") ?? undefined,
+          });
+          if (page.csv != null)
+            return new Response(page.csv, {
+              status: 200,
+              headers: {
+                ...securityHeaders,
+                "Content-Type": "text/csv; charset=utf-8",
+                "Cache-Control": "no-store",
+                "Content-Disposition":
+                  'attachment; filename="transactions.csv"',
+              },
+            });
+          return send(200, page);
+        }
         if (path === "/api/admin/orders")
           return send(200, service.adminOrders(user, {
             status: url.searchParams.get("status") ?? undefined,
