@@ -180,3 +180,91 @@ test("dashboard reads server numbers, audit log lists admin actions, unpaid orde
   await page.goto(base + "/admin/settings/account");
   await expect(page.getByRole("heading", { name: "บัญชีแอดมิน" })).toBeVisible();
 });
+
+test("preorder queue filters by product and delivers several queues at once", async ({ page }) => {
+  const admin = service.session(adminToken);
+  const queued = [];
+  for (const key of ["lists-batch-01", "lists-batch-02"]) {
+    const r = service.createOrder(buyer, { variantId: "cinema-max-90", quantity: 1, requestKey: key });
+    service.topup(buyer, { amount: 300, requestKey: key + "-topup" });
+    queued.push(service.pay(buyer, r.id, { paymentToken: r.paymentToken, outcome: "success" }));
+  }
+  service.importCodes(admin, {
+    variantId: "cinema-max-90",
+    items: [
+      { loginId: "batch-a@stream.test", password: "Pw-BA" },
+      { loginId: "batch-b@stream.test", password: "Pw-BB" },
+    ],
+  });
+  await as(page, adminToken);
+  await page.goto(base + "/admin/preorders");
+  await page.getByLabel("สินค้า").selectOption({ index: 1 });
+  for (const q of queued) await page.getByLabel("เลือกคิว #" + q.queueNumber).check();
+  await page.getByRole("button", { name: "ส่งที่เลือก 2 คิว" }).click();
+  await page.getByRole("button", { name: "ยืนยันส่ง 2 คิว" }).click();
+  await expect(page.getByText("ส่งของแล้ว 2 คิว")).toBeVisible();
+  for (const q of queued) expect(service.orderDetail(buyer, q.id).status).toBe("DELIVERED");
+
+  // Internal note on the order: saved for staff, never shown to the customer.
+  await page.goto(base + "/admin/orders/" + queued[0].id);
+  await page.getByLabel("หมายเหตุภายใน").fill("ลูกค้าขอส่งด่วน");
+  await page.getByRole("button", { name: "บันทึกหมายเหตุ" }).click();
+  await expect(page.getByText("บันทึกหมายเหตุแล้ว")).toBeVisible();
+  expect(JSON.stringify(service.orderDetail(buyer, queued[0].id))).not.toContain("ส่งด่วน");
+});
+
+test("product images UI resizes to webp and sends raw bytes (upload API mocked until W5)", async ({ page }) => {
+  await as(page, adminToken);
+  const uploads = [];
+  await page.route("**/api/health", async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    await route.fulfill({ response: res, json: { ...body, features: { ...body.features, uploads: true } } });
+  });
+  await page.route("**/api/admin/products/stream-plus/images", async (route) => {
+    const req = route.request();
+    uploads.push({ type: req.headers()["content-type"], bytes: req.postDataBuffer()?.length ?? 0, head: req.postDataBuffer()?.subarray(0, 12).toString("latin1") });
+    await route.fulfill({ json: { image: { id: "img-" + uploads.length, url: "/brand/og.png" } } });
+  });
+  await page.goto(base + "/admin/products/stream-plus");
+  await expect(page.getByRole("heading", { name: "รูปสินค้า" })).toBeVisible();
+  // 1x1 PNG
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==", "base64");
+  await page.getByLabel("เลือกรูปสินค้า").setInputFiles({ name: "cover.png", mimeType: "image/png", buffer: png });
+  await expect(page.locator(".product-image-grid figure")).toHaveCount(1);
+  await expect(page.locator(".product-image-badge")).toHaveText("ปก");
+  expect(uploads[0].type).toBe("image/webp");
+  expect(uploads[0].head.startsWith("RIFF") && uploads[0].head.endsWith("WEBP")).toBe(true);
+  await page.getByLabel("เลือกรูปสินค้า").setInputFiles({ name: "evil.svg", mimeType: "image/svg+xml", buffer: Buffer.from("<svg/>") });
+  await expect(page.getByRole("alert")).toContainText("รองรับเฉพาะไฟล์ JPG, PNG หรือ WebP");
+  expect(uploads.length).toBe(1);
+});
+
+test("admin adds another admin, grants and removes admin rights with a confirm step", async ({ page, browser }) => {
+  await as(page, adminToken);
+  await page.goto(base + "/admin/settings/team");
+  await expect(page.getByText("เจ้าของร้าน")).toBeVisible();
+  await page.getByLabel("ชื่อ", { exact: true }).fill("แอดมินสำรอง");
+  await page.getByLabel("อีเมลสำหรับเข้าสู่ระบบ").fill("backup-admin@example.invalid");
+  await page.getByLabel("สิทธิ์").selectOption("ADMIN");
+  await page.getByRole("button", { name: "เพิ่มบัญชี" }).click();
+  const temp = (await page.locator(".admin-temp-password code").textContent()).trim();
+  const row = page.locator(".settings-row", { hasText: "backup-admin@example.invalid" });
+  await expect(row).toContainText("แอดมิน");
+
+  // The new admin can open finance, which staff never see.
+  const other = await browser.newPage();
+  const token = service.login({ email: "backup-admin@example.invalid", password: temp }).token;
+  await other.context().addCookies([{ name: "astra_session", value: token, url: base, httpOnly: true, sameSite: "Lax" }]);
+  await other.goto(base + "/admin/payments");
+  await expect(other.getByRole("heading", { name: "การเงิน", exact: true })).toBeVisible();
+  await other.close();
+
+  // Remove admin rights: first click only asks, the second applies.
+  await row.getByRole("button", { name: "ถอดสิทธิ์แอดมิน" }).click();
+  await row.getByRole("button", { name: "ยืนยันถอดสิทธิ์แอดมิน" }).click();
+  await expect(row).toContainText("ทีมงาน");
+  await expect(row.getByRole("button", { name: "ให้สิทธิ์แอดมิน" })).toBeVisible();
+  // The owner row and the signed-in admin have no role buttons.
+  await expect(page.locator(".settings-row", { hasText: "admin@astra.local" }).getByRole("button")).toHaveCount(0);
+});

@@ -6,6 +6,7 @@ import {
   Download,
   Eye,
   LogOut,
+  Package,
   Plus,
   RotateCcw,
   Search,
@@ -17,6 +18,7 @@ import { useLive, type LiveTopic } from "./live";
 import { AdminChat as AdminChatLazy, BuyerRankingCard as BuyerRankingInline } from "./Ops";
 import { Art, ErrorMessage, Link, Status, useStore } from "./App";
 import { api, dateTime, money } from "./api";
+import { checkSource, toWebp, uploadImage } from "./image-upload";
 
 type Filters = Record<string, string>;
 
@@ -354,7 +356,51 @@ type OrderDetail = {
   codes: string[];
   credentials: { loginId: string; password: string }[];
   units?: { id: string; kind: "pair" | "code" }[];
+  note?: string | null;
 };
+
+function OrderNote({ id, note }: { id: string; note: string | null }) {
+  const { toast } = useStore();
+  const [text, setText] = useState(note ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => setText(note ?? ""), [note]);
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      await api("/admin/orders/" + id + "/note", { note: text });
+      toast("บันทึกหมายเหตุแล้ว");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <section className="reference-admin-card admin-detail-card">
+      <h2>หมายเหตุภายใน</h2>
+      <form onSubmit={save} className="admin-note-form">
+        <label className="field">
+          <span className="sr-only">หมายเหตุภายใน</span>
+          <textarea
+            aria-label="หมายเหตุภายใน"
+            maxLength={2000}
+            rows={3}
+            placeholder="เช่น ลูกค้าแจ้งทางแชทว่า… · ลูกค้าไม่เห็นข้อความนี้"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </label>
+        <ErrorMessage message={error} />
+        <button className="button secondary" disabled={saving || text === (note ?? "")}>
+          บันทึกหมายเหตุ
+        </button>
+      </form>
+    </section>
+  );
+}
 
 const eventText: Record<string, string> = {
   created: "สร้างออเดอร์",
@@ -467,6 +513,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
               )}
             </section>
           )}
+          <OrderNote id={order.id} note={order.note ?? null} />
           <div className="admin-detail-grid">
             <section className="reference-admin-card admin-detail-card">
               <h2>สินค้า</h2>
@@ -1572,14 +1619,16 @@ export function AdminAudit() {
 
 // ---------------------------------------------------------------- Settings: team (FR-S4)
 
-type Member = { id: string; name: string; email: string; role: string; active: boolean; created_at: string };
+type Member = { id: string; name: string; email: string; role: string; active: boolean; owner?: boolean; created_at: string };
 
 export function AdminTeam() {
   const { toast, user } = useStore();
   const [team, setTeam] = useState<Member[] | null>(null);
   const [error, setError] = useState("");
-  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [created, setCreated] = useState<{ email: string; password: string; role: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  // Granting or removing admin rights is asked once more, like other irreversible-feeling actions.
+  const [confirming, setConfirming] = useState<string | null>(null);
   const load = () =>
     api<{ team: Member[] }>("/admin/team")
       .then((r) => setTeam(r.team))
@@ -1596,9 +1645,9 @@ export function AdminTeam() {
     setError("");
     try {
       const result = await api<{ member: Member; temporaryPassword: string }>("/admin/team", values);
-      setCreated({ email: result.member.email, password: result.temporaryPassword });
+      setCreated({ email: result.member.email, password: result.temporaryPassword, role: result.member.role });
       form.reset();
-      toast("เพิ่มทีมงานแล้ว");
+      toast(result.member.role === "ADMIN" ? "เพิ่มแอดมินแล้ว" : "เพิ่มทีมงานแล้ว");
       await load();
     } catch (err) {
       setError((err as Error).message);
@@ -1607,20 +1656,37 @@ export function AdminTeam() {
     }
   }
   async function toggle(m: Member) {
+    setError("");
     try {
       await api("/admin/team/" + m.id + "/active", { active: !m.active });
-      toast(m.active ? "ปิดบัญชีทีมงานแล้ว" : "เปิดบัญชีทีมงานแล้ว");
+      toast(m.active ? "ปิดบัญชีแล้ว" : "เปิดบัญชีแล้ว");
       await load();
     } catch (err) {
       setError((err as Error).message);
     }
   }
+  async function changeRole(m: Member) {
+    const role = m.role === "ADMIN" ? "STAFF" : "ADMIN";
+    setConfirming(null);
+    setError("");
+    try {
+      await api("/admin/team", { id: m.id, name: m.name, role });
+      toast(role === "ADMIN" ? m.name + " เป็นแอดมินแล้ว" : m.name + " เป็นทีมงานแล้ว");
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  const locked = (m: Member) => m.id === user?.id || !!m.owner;
   return (
     <>
       <div className="reference-admin-heading">
         <div>
           <h1>ทีมงาน</h1>
-          <p>ทีมงานตอบแชท ดูออเดอร์ ส่งของพรีออเดอร์ และดูลูกค้าได้ · ไม่เห็นการเงิน ตั้งค่า และแก้สินค้าไม่ได้</p>
+          <p>
+            แอดมินทำได้ทุกอย่าง รวมถึงการเงินและเพิ่มแอดมินคนอื่น · ทีมงานตอบแชท ดูออเดอร์ ส่งของพรีออเดอร์ และดูลูกค้าได้
+            แต่ไม่เห็นการเงิน ตั้งค่า และแก้สินค้าไม่ได้
+          </p>
         </div>
       </div>
       <ErrorMessage message={error} />
@@ -1633,20 +1699,40 @@ export function AdminTeam() {
               <span>
                 {m.name} {m.id === user?.id && <span className="admin-chip">ฉัน</span>}
                 <small>
-                  {m.email} · {m.role === "ADMIN" ? "แอดมิน (เจ้าของ)" : "ทีมงาน"}
+                  {m.email} · {m.owner ? "เจ้าของร้าน" : m.role === "ADMIN" ? "แอดมิน" : "ทีมงาน"}
                   {!m.active && " · ปิดอยู่"}
                 </small>
               </span>
-              {m.role === "STAFF" && (
-                <button className={"button " + (m.active ? "ghost" : "secondary")} onClick={() => void toggle(m)}>
-                  {m.active ? "ปิดบัญชี" : "เปิดบัญชี"}
-                </button>
+              {!locked(m) && (
+                <span className="admin-row-actions">
+                  {confirming === m.id ? (
+                    <>
+                      <button className="button primary" onClick={() => void changeRole(m)}>
+                        {m.role === "ADMIN" ? "ยืนยันถอดสิทธิ์แอดมิน" : "ยืนยันให้สิทธิ์แอดมิน"}
+                      </button>
+                      <button className="button ghost" onClick={() => setConfirming(null)}>
+                        ยกเลิก
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {m.active && (
+                        <button className="button secondary" onClick={() => setConfirming(m.id)}>
+                          {m.role === "ADMIN" ? "ถอดสิทธิ์แอดมิน" : "ให้สิทธิ์แอดมิน"}
+                        </button>
+                      )}
+                      <button className={"button " + (m.active ? "ghost" : "secondary")} onClick={() => void toggle(m)}>
+                        {m.active ? "ปิดบัญชี" : "เปิดบัญชี"}
+                      </button>
+                    </>
+                  )}
+                </span>
               )}
             </div>
           ))}
         </section>
         <section className="reference-admin-card admin-detail-card">
-          <h2>เพิ่มทีมงาน</h2>
+          <h2>เพิ่มแอดมินหรือทีมงาน</h2>
           <form onSubmit={add} className="admin-form-grid">
             <label className="field span-2">
               ชื่อ
@@ -1656,13 +1742,23 @@ export function AdminTeam() {
               อีเมลสำหรับเข้าสู่ระบบ
               <input name="email" type="email" required maxLength={160} />
             </label>
+            <label className="field span-2">
+              สิทธิ์
+              <select name="role" defaultValue="STAFF">
+                <option value="STAFF">ทีมงาน (ไม่เห็นการเงิน)</option>
+                <option value="ADMIN">แอดมิน (ทำได้ทุกอย่าง)</option>
+              </select>
+            </label>
             <button className="button primary span-2" disabled={busy}>
-              เพิ่มทีมงาน
+              เพิ่มบัญชี
             </button>
           </form>
           {created && (
             <div className="admin-temp-password">
-              <p>ส่งข้อมูลนี้ให้ทีมงาน (แสดงครั้งเดียว) แล้วให้เปลี่ยนรหัสผ่านหลังเข้าสู่ระบบ</p>
+              <p>
+                ส่งข้อมูลนี้ให้{created.role === "ADMIN" ? "แอดมินคนใหม่" : "ทีมงาน"} (แสดงครั้งเดียว)
+                แล้วให้เปลี่ยนรหัสผ่านหลังเข้าสู่ระบบ
+              </p>
               <span>อีเมล: {created.email}</span>
               <code>{created.password}</code>
             </div>
@@ -1687,11 +1783,17 @@ type QueueRow = {
   label: string;
 };
 
-function StaffQueue() {
+/** FR-O8: preorder queue for admin and team — filter by product, deliver one or many in queue order. */
+export function PreorderQueue() {
   const { toast } = useStore();
   const [queue, setQueue] = useState<QueueRow[] | null>(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [product, setProduct] = useState("");
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [progress, setProgress] = useState("");
+  // Delivery sends the account and cannot be undone, so every send asks once more.
+  const [confirming, setConfirming] = useState<string | null>(null);
   const load = () =>
     api<{ queue: QueueRow[] }>("/queue")
       .then((r) => setQueue(r.queue))
@@ -1699,46 +1801,123 @@ function StaffQueue() {
   useEffect(() => {
     void load();
   }, []);
-  useLive(["orders", "catalog"], () => void load());
-  async function deliver(item: QueueRow) {
-    setBusy(item.id);
+  useLive(["orders", "catalog"], () => {
+    if (!busy) void load();
+  });
+  const waiting = (queue ?? [])
+    .filter((q) => q.status === "PREORDER")
+    .sort((x, y) => x.queue_number - y.queue_number);
+  const products = Array.from(new Set(waiting.map((q) => q.product))).sort();
+  const shown = waiting.filter((q) => !product || q.product === product);
+  const toggle = (id: string) =>
+    setPicked((set) => {
+      const next = new Set(set);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const allPicked = shown.length > 0 && shown.every((q) => picked.has(q.id));
+  async function deliver(items: QueueRow[]) {
+    setBusy(true);
     setError("");
+    let done = 0;
     try {
-      await api("/admin/reservations/" + item.id + "/deliver", {});
-      toast("ส่งของคิว #" + item.queue_number + " แล้ว");
-      await load();
+      // In queue order; stop at the first failure (usually stock ran out) so nobody is skipped.
+      for (const item of items) {
+        setProgress(`กำลังส่งคิว #${item.queue_number} (${done + 1}/${items.length})`);
+        await api("/admin/reservations/" + item.id + "/deliver", {});
+        done++;
+      }
+      toast(items.length === 1 ? `ส่งของคิว #${items[0].queue_number} แล้ว` : `ส่งของแล้ว ${done} คิว`);
     } catch (e) {
-      setError((e as Error).message);
+      setError((done ? `ส่งแล้ว ${done} คิว แล้วหยุดที่คิว #${items[done].queue_number}: ` : "") + (e as Error).message);
     } finally {
-      setBusy("");
+      setBusy(false);
+      setProgress("");
+      setConfirming(null);
+      setPicked(new Set());
+      await load();
     }
   }
-  const waiting = (queue ?? []).filter((q) => q.status === "PREORDER");
   return (
     <>
       <div className="reference-admin-heading">
         <div>
           <h1>คิวพรีออเดอร์</h1>
-          <p>ส่งของตามลำดับคิว ระบบดึง ID และรหัสผ่านจากสต็อกให้อัตโนมัติ (แอดมินต้องเติมสต็อกก่อน)</p>
+          <p>เลขคิวออกเมื่อลูกค้าชำระเงิน ส่งของตามลำดับคิว ระบบดึง ID และรหัสผ่านจากสต็อกของตัวเลือกนั้นให้อัตโนมัติ</p>
         </div>
       </div>
+      <div className="admin-filters">
+        <Select
+          label="สินค้า"
+          value={product}
+          onChange={(value) => {
+            setProduct(value);
+            setPicked(new Set());
+          }}
+          options={[["", "ทุกสินค้า"], ...products.map((p) => [p, p] as [string, string])]}
+        />
+        <span className="muted">รอส่ง {shown.length} คิว</span>
+        {picked.size > 0 &&
+          (confirming === "batch" ? (
+            <span className="queue-confirm">
+              <button
+                className="button primary"
+                disabled={busy}
+                onClick={() => void deliver(shown.filter((q) => picked.has(q.id)))}
+              >
+                <Package size={15} />
+                ยืนยันส่ง {picked.size} คิว
+              </button>
+              <button className="button secondary" disabled={busy} onClick={() => setConfirming(null)}>
+                ยกเลิก
+              </button>
+            </span>
+          ) : (
+            <button className="button primary" disabled={busy} onClick={() => setConfirming("batch")}>
+              <Package size={15} />
+              ส่งที่เลือก {picked.size} คิว
+            </button>
+          ))}
+      </div>
+      {progress && <p className="admin-callout">{progress}</p>}
       <ErrorMessage message={error} />
       <div className="table-scroll reference-table admin-list-table">
         <table>
           <thead>
             <tr>
+              <th>
+                <input
+                  type="checkbox"
+                  aria-label="เลือกทุกคิวที่แสดง"
+                  checked={allPicked}
+                  disabled={busy || !shown.length}
+                  onChange={() => setPicked(allPicked ? new Set() : new Set(shown.map((q) => q.id)))}
+                />
+              </th>
               <th>คิว</th>
               <th>ลูกค้า</th>
               <th>สินค้า</th>
-              <th>วันที่</th>
+              <th>ชำระเมื่อ</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {waiting.map((q) => (
+            {shown.map((q) => (
               <tr key={q.id}>
                 <td>
-                  <strong>#{q.queue_number}</strong>
+                  <input
+                    type="checkbox"
+                    aria-label={"เลือกคิว #" + q.queue_number}
+                    checked={picked.has(q.id)}
+                    disabled={busy}
+                    onChange={() => toggle(q.id)}
+                  />
+                </td>
+                <td>
+                  <Link to={"/admin/orders/" + q.id} className="order-number">
+                    #{q.queue_number}
+                  </Link>
                 </td>
                 <td>{q.customer}</td>
                 <td>
@@ -1749,15 +1928,27 @@ function StaffQueue() {
                 </td>
                 <td className="nowrap">{dateTime(q.created_at)}</td>
                 <td>
-                  <button className="button primary" disabled={!!busy} onClick={() => void deliver(q)}>
-                    {busy === q.id ? "กำลังส่ง…" : "ส่งของ"}
-                  </button>
+                  {confirming === q.id ? (
+                    <span className="queue-confirm">
+                      <button className="button primary" disabled={busy} onClick={() => void deliver([q])}>
+                        ยืนยันส่งคิว #{q.queue_number}
+                      </button>
+                      <button className="button secondary" disabled={busy} onClick={() => setConfirming(null)}>
+                        ยกเลิก
+                      </button>
+                    </span>
+                  ) : (
+                    <button className="button secondary" disabled={busy} onClick={() => setConfirming(q.id)}>
+                      ส่งของ
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {queue && !waiting.length && <p className="reference-empty-text">ไม่มีคิวรอส่ง</p>}
+        {queue && !shown.length && <p className="reference-empty-text">ไม่มีคิวรอส่ง</p>}
+        {!queue && !error && <p className="reference-empty-text">กำลังโหลดคิว…</p>}
       </div>
     </>
   );
@@ -1767,7 +1958,7 @@ function StaffQueue() {
 export function StaffBackOffice({ tab, sub, detailId }: { tab: string; sub: string; detailId?: string }) {
   if (tab === "chat" || tab === "") return <AdminChatLazy />;
   if (tab === "orders") return detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />;
-  if (tab === "preorders") return <StaffQueue />;
+  if (tab === "preorders") return <PreorderQueue />;
   if (tab === "customers") return detailId ? <AdminCustomerDetail id={detailId} /> : <AdminCustomers />;
   if (sub === "settings/account") return <AdminAccount />;
   return (
@@ -2192,6 +2383,7 @@ export type ProductDraft = {
   active: boolean;
   featured: boolean;
   art: string;
+  imageUrl?: string | null;
   variants: { id: string; label: string; price: number; stock: number }[];
 };
 
@@ -2220,7 +2412,11 @@ export function ProductPreview({ draft, categoryName }: { draft: ProductDraft; c
         <small className="product-preview-label">การ์ดในหน้ารายการสินค้า</small>
         <article className="product-preview-card">
           <div className="product-preview-art">
-            <Art small type={draft.art} name={draft.name || "สินค้า"} />
+            {draft.imageUrl ? (
+              <img src={draft.imageUrl} alt="" className="product-preview-img" />
+            ) : (
+              <Art small type={draft.art} name={draft.name || "สินค้า"} />
+            )}
           </div>
           <div>
             {draft.preorder && <span className="product-preview-pill">สั่งจอง</span>}
@@ -2259,5 +2455,133 @@ export function ProductPreview({ draft, categoryName }: { draft: ProductDraft; c
         {draft.featured && <p className="product-preview-hint">★ แสดงในส่วน "สินค้าแนะนำ" บนหน้าแรก</p>}
       </div>
     </div>
+  );
+}
+
+
+// ---------------------------------------------------------------- Product images (W5 uploads UI)
+
+type ProductImage = { id: string; url: string };
+
+/** Upload, reorder and remove product images; the first is the cover. Shown once the API exists. */
+export function ProductImages({ productId, images }: { productId: string; images: ProductImage[] }) {
+  const { toast } = useStore();
+  const [list, setList] = useState<ProductImage[]>(images);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [over, setOver] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  // Server list changes (live refresh) replace ours; compare ids, not the array object.
+  const serverKey = images.map((x) => x.id).join(",");
+  useEffect(() => setList(images), [serverKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const MAX = 8;
+  async function add(files: FileList | File[]) {
+    setError("");
+    const picked = Array.from(files).slice(0, MAX - list.length);
+    if (!picked.length) return setError("สินค้าหนึ่งชิ้นมีรูปได้สูงสุด " + MAX + " รูป");
+    for (const [i, file] of picked.entries()) {
+      const problem = checkSource(file);
+      if (problem) {
+        setError(file.name + ": " + problem);
+        continue;
+      }
+      try {
+        setBusy(`กำลังอัปโหลด ${i + 1}/${picked.length}`);
+        const blob = await toWebp(file, 1200);
+        const { image } = await uploadImage<{ image: ProductImage }>("/admin/products/" + productId + "/images", blob);
+        setList((current) => [...current, image]);
+      } catch (e) {
+        setError(file.name + ": " + (e as Error).message);
+      }
+    }
+    setBusy("");
+    toast("อัปโหลดรูปแล้ว");
+  }
+  async function move(index: number, by: number) {
+    const next = list.slice();
+    const [item] = next.splice(index, 1);
+    next.splice(index + by, 0, item);
+    setList(next);
+    try {
+      await api("/admin/products/" + productId + "/images", { order: next.map((x) => x.id) }, "PATCH");
+    } catch (e) {
+      setError((e as Error).message);
+      setList(list);
+    }
+  }
+  async function remove(image: ProductImage) {
+    if (!confirm("ลบรูปนี้?")) return;
+    try {
+      await api("/admin/product-images/" + image.id, {}, "DELETE");
+      setList((current) => current.filter((x) => x.id !== image.id));
+      toast("ลบรูปแล้ว");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  return (
+    <section className="reference-admin-card editor-panel product-images">
+      <h2>รูปสินค้า</h2>
+      <p className="field-help">รูปแรกเป็นรูปปกในหน้ารายการสินค้า · สูงสุด {MAX} รูป · JPG, PNG, WebP · ระบบย่อรูปให้อัตโนมัติ</p>
+      <div className="product-image-grid">
+        {list.map((image, i) => (
+          <figure key={image.id} className={i === 0 ? "cover" : ""}>
+            <img src={image.url} alt={"รูปที่ " + (i + 1)} />
+            {i === 0 && <span className="product-image-badge">ปก</span>}
+            <figcaption>
+              <button type="button" className="icon-button" aria-label="เลื่อนไปทางซ้าย" disabled={i === 0} onClick={() => void move(i, -1)}>
+                ‹
+              </button>
+              <button type="button" className="icon-button" aria-label="ลบรูป" onClick={() => void remove(image)}>
+                ×
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="เลื่อนไปทางขวา"
+                disabled={i === list.length - 1}
+                onClick={() => void move(i, 1)}
+              >
+                ›
+              </button>
+            </figcaption>
+          </figure>
+        ))}
+        {list.length < MAX && (
+          <button
+            type="button"
+            className={"product-image-drop" + (over ? " over" : "")}
+            onClick={() => input.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setOver(true);
+            }}
+            onDragLeave={() => setOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setOver(false);
+              void add(e.dataTransfer.files);
+            }}
+            disabled={!!busy}
+          >
+            <Plus size={18} />
+            {busy || "เพิ่มรูป หรือลากไฟล์มาวาง"}
+          </button>
+        )}
+      </div>
+      <input
+        ref={input}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        hidden
+        aria-label="เลือกรูปสินค้า"
+        onChange={(e) => {
+          if (e.target.files) void add(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <ErrorMessage message={error} />
+    </section>
   );
 }

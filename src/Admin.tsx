@@ -43,6 +43,8 @@ import { api, dateTime, money } from "./api";
 import { AdminDashboard } from "./AdminDashboard";
 import { AdminChat, BuyerRanking, BuyerRankingCard, PaymentChannelSettings } from "./Ops";
 import {
+  PreorderQueue,
+  ProductImages,
   ProductPreview,
   AdminAccount,
   AdminAudit,
@@ -122,8 +124,6 @@ export default function Admin() {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
   const [features, setFeatures] = useState<Features>({});
-  const [queue, setQueue] = useState<QueueItem[] | null>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
   const [pairs, setPairs] = useState<Credential[]>([{ loginId: "", password: "" }]);
   // Accounts (ID + password) are the default; single license codes stay available.
   const [importKind, setImportKind] = useState<"pair" | "code">("pair");
@@ -166,39 +166,13 @@ export default function Admin() {
   // Orders, stock and queue counts refresh the moment anything changes.
   useLive(["orders", "catalog", "customers"], () => {
     if (user?.role === "ADMIN") void load();
-    if (user?.role === "ADMIN" && tab === "preorders") void loadQueue();
   });
   useEffect(() => {
     if (user?.role === "ADMIN") void load();
   }, [user?.id]);
-  async function loadQueue() {
-    try {
-      setQueue((await api<{ queue: QueueItem[] }>("/queue")).queue);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-  useEffect(() => {
-    if (user?.role === "ADMIN" && tab === "preorders") void loadQueue();
-  }, [user?.id, tab]);
   useEffect(() => {
     if (importing) setPairs([{ loginId: "", password: "" }]);
   }, [importing]);
-  async function deliver(item: QueueItem) {
-    setBusy(true);
-    setError("");
-    try {
-      await api("/admin/reservations/" + item.id + "/deliver", {});
-      setConfirming(null);
-      await loadQueue();
-      await load();
-      toast("ส่งของคิว #" + item.queue_number + " แล้ว");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
   function pastePairs(e: ClipboardEvent<HTMLInputElement>, index: number) {
     const text = e.clipboardData.getData("text");
     if (!text.includes("\t") && !text.includes("\n")) return;
@@ -219,7 +193,6 @@ export default function Admin() {
   useEffect(() => {
     setQuery("");
     setImporting(false);
-    setConfirming(null);
     setEditing(null);
   }, [path]);
   async function save(e: FormEvent<HTMLFormElement>) {
@@ -524,6 +497,7 @@ export default function Admin() {
                   active: formValues ? formValues.active === "on" : !!editingProduct?.active,
                   featured: formValues ? formValues.featured === "on" : !!editingProduct?.featured,
                   art: editingProduct?.art ?? "gift",
+                  imageUrl: editingProduct?.images?.[0]?.url ?? editingProduct?.imageUrl ?? null,
                   variants: editingProduct
                     ? editingProduct.variants.map((v) => ({ id: v.id, label: v.label, price: v.price, stock: v.stock }))
                     : [
@@ -705,6 +679,9 @@ export default function Admin() {
                 </button>
               </div>
             </form>
+            {editingProduct && !newProduct && features.uploads && (
+              <ProductImages productId={editingProduct.id} images={editingProduct.images ?? []} />
+            )}
             {editingProduct && !newProduct && (
               <VariantManager productId={editingProduct.id} preorder={!!editingProduct.preorder} />
             )}
@@ -774,107 +751,7 @@ export default function Admin() {
         )}
         {tab === "orders" &&
           (detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />)}
-        {tab === "preorders" && (
-          <>
-            <div className="reference-admin-heading">
-              <div>
-                <h1>คิวพรีออเดอร์</h1>
-                <p>
-                  เลขคิวออกเมื่อลูกค้าชำระเงินสำเร็จ เรียงตามลำดับการจ่าย
-                  ส่งของตามคิวจากบนลงล่าง
-                </p>
-              </div>
-              <button className="button secondary" onClick={() => void loadQueue()}>
-                <History size={15} />
-                โหลดใหม่
-              </button>
-            </div>
-            {!features.preorderDelivery && (
-              <p className="note-box queue-pending-note" role="note">
-                ปุ่มส่งของจะใช้ได้หลังอัปเดตฐานข้อมูลรอบถัดไป ตอนนี้ดูลำดับคิวได้อย่างเดียว
-              </p>
-            )}
-            <div className="table-scroll reference-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>คิว</th>
-                    <th>ลูกค้า</th>
-                    <th>สินค้า</th>
-                    <th>ยอดรวม</th>
-                    <th>ชำระเมื่อ</th>
-                    <th>สถานะ</th>
-                    <th>ส่งของ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(queue ?? []).map((q) => (
-                    <tr key={q.id}>
-                      <td>
-                        <strong className="order-number">#{q.queue_number}</strong>
-                      </td>
-                      <td>{q.customer}</td>
-                      <td>
-                        {q.product}
-                        <small>
-                          {q.label} · {q.quantity} ชิ้น
-                        </small>
-                      </td>
-                      <td>{money(q.total)}</td>
-                      <td>{dateTime(q.created_at)}</td>
-                      <td>
-                        <Status status={q.status} />
-                      </td>
-                      <td>
-                        {q.status === "DELIVERED" ? (
-                          <span className="muted">ส่งแล้ว</span>
-                        ) : q.status !== "PREORDER" ? (
-                          <span className="muted">—</span>
-                        ) : confirming === q.id ? (
-                          <span className="queue-confirm">
-                            <button
-                              className="button primary"
-                              disabled={busy}
-                              onClick={() => void deliver(q)}
-                            >
-                              {busy ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}
-                              ยืนยันส่งคิว #{q.queue_number}
-                            </button>
-                            <button
-                              className="button secondary"
-                              disabled={busy}
-                              onClick={() => setConfirming(null)}
-                            >
-                              ยกเลิก
-                            </button>
-                          </span>
-                        ) : (
-                          <button
-                            className="button secondary"
-                            disabled={!features.preorderDelivery}
-                            title={
-                              features.preorderDelivery
-                                ? undefined
-                                : "รออัปเดตฐานข้อมูล (DB-005)"
-                            }
-                            onClick={() => setConfirming(q.id)}
-                          >
-                            <Package size={15} />
-                            ส่งของ
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {queue && !queue.length && (
-                <p className="reference-empty-text">ยังไม่มีคิวพรีออเดอร์ที่ชำระแล้ว</p>
-              )}
-              {!queue && <p className="reference-empty-text">กำลังโหลดคิว…</p>}
-            </div>
-          </>
-        )}
+        {tab === "preorders" && <PreorderQueue />}
         {tab === "customers" &&
           (detailId ? (
             <AdminCustomerDetail id={detailId} />

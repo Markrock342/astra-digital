@@ -1,7 +1,10 @@
-/** FR-S4 team accounts (one STAFF level) and FR-M1 chat assignment. */
+/** FR-S4 team accounts (ADMIN or STAFF) and FR-M1 chat assignment.
+ * Admins can add admins and change roles. Guards: nobody changes their own role or
+ * account, the owner login (re-promoted from the env secret on every start) stays
+ * an active admin, and the shop always keeps at least one active admin. */
 import { randomBytes, randomUUID } from "node:crypto";
 
-export function createTeamApis({ passwordHash, requireAdmin, requireStaff, one, all, run, tx, fail, clean, notify }) {
+export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash, requireAdmin, requireStaff, one, all, run, tx, fail, clean, notify }) {
   const auditDetail = (user, action, entity, detail) =>
     run(
       "INSERT INTO audit(user_id,action,entity_id,detail) VALUES(?,?,?,?)",
@@ -20,8 +23,22 @@ export function createTeamApis({ passwordHash, requireAdmin, requireStaff, one, 
     email: row.email,
     role: row.role,
     active: (row.status ?? "ACTIVE") === "ACTIVE",
+    owner: row.email === ownerEmail,
     created_at: row.created_at,
   });
+  const TEAM_ROLES = ["ADMIN", "STAFF"];
+  const pickRole = (raw, fallback) => {
+    if (raw == null || raw === "") return fallback;
+    if (!TEAM_ROLES.includes(raw)) fail(400, "สิทธิ์ไม่ถูกต้อง");
+    return raw;
+  };
+  const activeAdmins = () =>
+    one("SELECT COUNT(*) AS n FROM users WHERE role='ADMIN' AND COALESCE(status,'ACTIVE')='ACTIVE'").n;
+  // Rows the acting admin may demote or suspend.
+  function guardChange(user, row) {
+    if (row.id === user.id) fail(400, "เปลี่ยนสิทธิ์หรือปิดบัญชีของตัวเองไม่ได้");
+    if (row.email === ownerEmail) fail(400, "บัญชีเจ้าของร้านเปลี่ยนสิทธิ์หรือปิดไม่ได้");
+  }
 
   function team(user) {
     requireStaff(user);
@@ -35,25 +52,34 @@ export function createTeamApis({ passwordHash, requireAdmin, requireStaff, one, 
     const name = clean(input.name, 2, 60, "ชื่อ");
     return tx(() => {
       if (input.id) {
-        const row = one("SELECT * FROM users WHERE id=? AND role='STAFF'", clean(input.id, 1, 80, "ทีมงาน"));
+        const row = one("SELECT * FROM users WHERE id=? AND role IN ('ADMIN','STAFF')", clean(input.id, 1, 80, "ทีมงาน"));
         if (!row) fail(404, "ไม่พบทีมงาน");
-        run("UPDATE users SET name=? WHERE id=?", name, row.id);
+        const role = pickRole(input.role, row.role);
+        if (role !== row.role) {
+          guardChange(user, row);
+          if (row.role === "ADMIN" && (row.status ?? "ACTIVE") === "ACTIVE" && activeAdmins() <= 1)
+            fail(409, "ต้องมีแอดมินที่ใช้งานอยู่อย่างน้อย 1 คน");
+        }
+        run("UPDATE users SET name=?,role=? WHERE id=?", name, role, row.id);
         auditDetail(user, "STAFF_UPDATE", row.id, { name });
+        if (role !== row.role) auditDetail(user, "TEAM_ROLE", row.id, { from: row.role, to: role });
         return { member: member(one("SELECT * FROM users WHERE id=?", row.id)) };
       }
       const email = clean(input.email, 5, 160, "อีเมล").toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, "อีเมลไม่ถูกต้อง");
       if (one("SELECT id FROM users WHERE email=?", email)) fail(409, "อีเมลนี้มีบัญชีแล้ว");
+      const role = pickRole(input.role, "STAFF");
       const id = randomUUID();
       const password = temporaryPassword();
       run(
-        "INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,'STAFF')",
+        "INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,?)",
         id,
         email,
         name,
         passwordHash(password),
+        role,
       );
-      auditDetail(user, "STAFF_CREATE", id, { email });
+      auditDetail(user, "STAFF_CREATE", id, { email, role });
       return { member: member(one("SELECT * FROM users WHERE id=?", id)), temporaryPassword: password };
     });
   }
@@ -61,9 +87,14 @@ export function createTeamApis({ passwordHash, requireAdmin, requireStaff, one, 
   function setStaffActive(user, id, input = {}) {
     requireAdmin(user);
     return tx(() => {
-      const row = one("SELECT * FROM users WHERE id=? AND role='STAFF'", clean(id, 1, 80, "ทีมงาน"));
+      const row = one("SELECT * FROM users WHERE id=? AND role IN ('ADMIN','STAFF')", clean(id, 1, 80, "ทีมงาน"));
       if (!row) fail(404, "ไม่พบทีมงาน");
       const active = input.active === true;
+      if (!active) {
+        guardChange(user, row);
+        if (row.role === "ADMIN" && (row.status ?? "ACTIVE") === "ACTIVE" && activeAdmins() <= 1)
+          fail(409, "ต้องมีแอดมินที่ใช้งานอยู่อย่างน้อย 1 คน");
+      }
       run("UPDATE users SET status=?,status_changed_at=CURRENT_TIMESTAMP,status_changed_by=? WHERE id=?", active ? "ACTIVE" : "SUSPENDED", user.id, row.id);
       if (!active) {
         run("DELETE FROM sessions WHERE user_id=?", row.id);

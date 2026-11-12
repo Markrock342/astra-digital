@@ -9184,3 +9184,99 @@ a.reference-bestseller {
   font-size: 12px;
   color: #b91c1c;
 }
+.admin-note-form {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.admin-note-form .field,
+.admin-note-form textarea {
+  width: 100%;
+}
+.product-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.product-image-grid figure {
+  position: relative;
+  margin: 0;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fafafa;
+  aspect-ratio: 1;
+}
+.product-image-grid figure.cover {
+  border-color: var(--brand, #1534ff);
+  box-shadow: 0 0 0 1px var(--brand, #1534ff);
+}
+.product-image-grid img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.product-image-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--brand, #1534ff);
+  color: #fff;
+  font-size: 11px;
+}
+.product-image-grid figcaption {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 4px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.45));
+}
+.product-image-grid figcaption .icon-button {
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #18181b;
+  font-size: 16px;
+}
+.product-image-drop {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1.5px dashed #c4c4cc;
+  border-radius: 8px;
+  background: #fff;
+  color: #52525b;
+  font-size: 12px;
+  text-align: center;
+  padding: 8px;
+  cursor: pointer;
+}
+.product-image-drop.over,
+.product-image-drop:hover {
+  border-color: var(--brand, #1534ff);
+  background: var(--brand-soft, #eef1ff);
+  color: var(--brand, #1534ff);
+}
+.product-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Team: role + account actions on one row, wrap on narrow screens. */
+.merchant-shell .admin-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}

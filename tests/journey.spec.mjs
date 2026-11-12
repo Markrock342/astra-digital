@@ -178,6 +178,7 @@ test("5. preorder: customer gets a queue number, a team member delivers, custome
   await staffPage.goto(base + "/admin/preorders");
   await expect(staffPage.getByRole("navigation", { name: "จัดการร้านค้า" })).not.toContainText("การเงิน");
   await staffPage.getByRole("button", { name: "ส่งของ" }).first().click();
+  await staffPage.getByRole("button", { name: /ยืนยันส่งคิว/ }).click();
   await expect(staffPage.getByText(/ส่งของคิว #\d+ แล้ว/)).toBeVisible();
   await staffContext.close();
 
