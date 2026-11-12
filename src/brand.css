@@ -2144,3 +2144,95 @@ html.lang-swap .storefront-shell .main-nav {
 .storefront-shell .order-price-breakdown .is-total dt {
   color: var(--text);
 }
+@media (max-width: 600px) {
+  .storefront-shell .reference-order-page .note-box strong,
+  .storefront-shell .reference-order-page .note-box p,
+  .storefront-shell .reference-order-page .delivery-product p,
+  .storefront-shell .reference-order-page .delivery-product .status,
+  .storefront-shell .reference-order-page .order-meta,
+  .storefront-shell .reference-order-page .order-result-heading p,
+  .storefront-shell .reference-order-page .code-heading strong,
+  .storefront-shell .reference-order-page .code-heading .text-button,
+  .storefront-shell .reference-order-page .code-row,
+  .storefront-shell .reference-order-page .code-row code,
+  .storefront-shell .reference-order-page .code-row small,
+  .storefront-shell .reference-order-page .sandbox-note,
+  .storefront-shell .reference-order-page .subtle-link,
+  .storefront-shell .reference-order-page .receipt-link,
+  .storefront-shell .reference-cart-page .cart-info > p,
+  .storefront-shell .reference-cart-page .small-note,
+  .storefront-shell .reference-cart-page .balance-note,
+  .storefront-shell .reference-wallet-page .wallet-balance > small,
+  .storefront-shell .reference-wallet-page .ledger-row small,
+  .storefront-shell .reference-wallet-page .ledger-type,
+  .storefront-shell .chat-bubble time,
+  .storefront-shell .stat-label,
+  .storefront-shell .ticker-event,
+  .storefront-shell .ticker-event time,
+  .storefront-shell .search-field input,
+  .storefront-shell .product-sold {
+    font-size: 12px;
+  }
+  .storefront-shell .reference-order-page .code-heading {
+    align-items: center;
+  }
+  .storefront-shell .reference-order-page .code-heading .text-button,
+  .storefront-shell .reference-order-page .pay-actions .button,
+  .storefront-shell .reference-order-page .rebuy-actions .button,
+  .storefront-shell .reference-order-page .subtle-link,
+  .storefront-shell .reference-order-page .receipt-link,
+  .storefront-shell .reference-wallet-page .topup-amounts .button,
+  .storefront-shell .chat-composer textarea,
+  .storefront-shell .chat-composer .button,
+  .storefront-shell .chat-panel .icon-button,
+  .storefront-shell .search-field {
+    min-height: 44px;
+  }
+  .storefront-shell .reference-order-page .pay-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .storefront-shell .reference-order-page .pay-actions .button {
+    width: 100%;
+  }
+  .storefront-shell .reference-order-page .code-row small {
+    flex-shrink: 0;
+  }
+  .storefront-shell .reference-cart-page .quantity-control {
+    height: 44px;
+  }
+  .storefront-shell .reference-cart-page .quantity-control button,
+  .storefront-shell .reference-cart-page .cart-product > .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+  .storefront-shell .reference-wallet-page .ledger-row > b,
+  .storefront-shell .order-price-breakdown dd {
+    flex-shrink: 0;
+  }
+  .storefront-shell .chat-composer textarea,
+  .storefront-shell .chat-composer .button,
+  .storefront-shell .chat-panel .icon-button {
+    box-sizing: border-box;
+    height: 44px;
+  }
+  .storefront-shell .chat-composer .button {
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+  }
+  .storefront-shell .chat-panel .icon-button {
+    width: 44px;
+  }
+  .storefront-shell .reference-order-page .order-meta {
+    flex-wrap: wrap;
+  }
+  .storefront-shell .pay-qr {
+    flex-wrap: wrap;
+  }
+  .storefront-shell .pay-qr,
+  .storefront-shell .reference-cart-page .cart-info,
+  .storefront-shell .reference-order-page .code-heading strong {
+    min-width: 0;
+  }
+}
