@@ -353,6 +353,9 @@ export function createAdminListApis({
       id: row.id,
       status: row.status,
       total: row.total,
+      // Coupon snapshot from order time; total is already after the discount.
+      discount: row.discount ?? 0,
+      coupon_code: row.coupon_code ?? null,
       quantity: row.quantity,
       created_at: row.created_at,
       preorder: !!row.preorder,

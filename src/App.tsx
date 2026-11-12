@@ -49,6 +49,7 @@ import {
   Clock,
   Upload,
   RotateCcw,
+  TicketPercent,
 } from "lucide-react";
 import { t, getLang, locale, setLang, setMerchantScope, type Lang } from "./i18n";
 import {
@@ -71,6 +72,8 @@ import type {
   Overview,
   Ledger,
   Review,
+  CouponCheck,
+  CouponPreview,
 } from "./types";
 import { MAX_PER_ORDER } from "./types";
 import { NAVIGATE_EVENT, confirmLeave } from "./navigation";
@@ -1157,6 +1160,41 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
     p.variants.some((v) => v.id === basket?.variantId),
   );
   const variant = p?.variants.find((v) => v.id === basket?.variantId);
+  // Discount code (checkout only). The server works out the discount; this is a preview.
+  const [code, setCode] = useState("");
+  const [coupon, setCoupon] = useState<CouponPreview | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [checking, setChecking] = useState(false);
+  async function checkCode(raw: string) {
+    if (!variant || !basket) return;
+    setChecking(true);
+    setCouponError("");
+    try {
+      const result = await api<CouponCheck>("/coupons/check", {
+        code: raw.trim(),
+        variantId: variant.id,
+        quantity: basket.quantity,
+      });
+      if (result.valid) {
+        setCoupon(result);
+        setCode("");
+      } else {
+        setCoupon(null);
+        setCouponError(result.reason);
+      }
+    } catch (e) {
+      setCoupon(null);
+      setCouponError((e as Error).message);
+    } finally {
+      setChecking(false);
+    }
+  }
+  // Quantity or option changed: the discount depends on the subtotal, so check again.
+  useEffect(() => {
+    if (coupon && variant && basket && coupon.subtotal !== variant.price * basket.quantity)
+      void checkCode(coupon.code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [basket?.quantity, basket?.variantId]);
   async function order() {
     if (!user) return go("/login?next=%2Fcheckout");
     setBusy(true);
@@ -1167,6 +1205,7 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
         variantId: variant!.id,
         quantity: basket!.quantity,
         requestKey: key,
+        ...(coupon ? { couponCode: coupon.code } : {}),
       });
       sessionStorage.setItem("astra-pay-" + o.id, o.paymentToken!);
       go("/checkout/" + o.id);
@@ -1176,6 +1215,8 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
       setBusy(false);
     }
   }
+  const subtotal = variant && basket ? variant.price * basket.quantity : 0;
+  const payable = coupon ? coupon.total : subtotal;
   return (
     <main className="container page-main reference-cart-page">
       {loading ? (
@@ -1243,15 +1284,78 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
             <h2>{t("สรุปคำสั่งซื้อ")}</h2>
             <div>
               <span>{t("สินค้า (")}{basket.quantity}{" "}{t("ชิ้น)")}</span>
-              <span>{money(variant.price * basket.quantity)}</span>
+              <span>{money(subtotal)}</span>
             </div>
             <div>
               <span>{t("ค่าจัดส่งดิจิทัล")}</span>
               <span>{t("ฟรี")}</span>
             </div>
+            {checkout && coupon && (
+              <div className="summary-discount">
+                <span>{t("ส่วนลด")} ({coupon.code})</span>
+                <span>−{money(coupon.discount)}</span>
+              </div>
+            )}
+            {checkout && (
+              <section className="coupon-box" aria-label={t("โค้ดส่วนลด")}>
+                {coupon ? (
+                  <div className="coupon-applied">
+                    <TicketPercent size={18} />
+                    <span>
+                      <strong>{coupon.code}</strong>
+                      <small>{t("ใช้โค้ดแล้ว ลด {amount}", { amount: money(coupon.discount) })}</small>
+                    </span>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => {
+                        setCoupon(null);
+                        setCouponError("");
+                      }}
+                    >
+                      {t("ลบโค้ด")}
+                    </button>
+                  </div>
+                ) : !user ? (
+                  <p className="coupon-login">
+                    <TicketPercent size={16} />
+                    <Link to="/login?next=%2Fcheckout">{t("เข้าสู่ระบบเพื่อใช้โค้ดส่วนลด")}</Link>
+                  </p>
+                ) : (
+                  <form
+                    className="coupon-form"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (code.trim()) void checkCode(code);
+                    }}
+                  >
+                    <label htmlFor="coupon-code">{t("โค้ดส่วนลด")}</label>
+                    <div>
+                      <input
+                        id="coupon-code"
+                        value={code}
+                        maxLength={32}
+                        autoCapitalize="characters"
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder={t("เช่น WELCOME10")}
+                        onChange={(e) => {
+                          setCode(e.target.value.toUpperCase());
+                          setCouponError("");
+                        }}
+                      />
+                      <button className="button secondary" disabled={checking || !code.trim()}>
+                        {checking ? <LoaderCircle className="spin" size={16} /> : t("ใช้โค้ด")}
+                      </button>
+                    </div>
+                  </form>
+                )}
+                <ErrorMessage message={couponError} />
+              </section>
+            )}
             <div className="summary-total">
               <strong>{t("ยอดรวม")}</strong>
-              <strong>{money(variant.price * basket.quantity)}</strong>
+              <strong>{money(checkout ? payable : subtotal)}</strong>
             </div>
             <ErrorMessage message={error} />
             <button
@@ -1502,6 +1606,26 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               <span>{dateTime(order.created_at)}</span>
               {hasReceipt(order) && <ReceiptLink id={order.id} />}
             </div>
+            {!!order.discount && (
+              <dl className="order-price-breakdown" aria-label={t("สรุปยอด")}>
+                <div>
+                  <dt>{t("ราคาสินค้า")}</dt>
+                  <dd>{money(order.subtotal ?? order.total + order.discount)}</dd>
+                </div>
+                <div className="is-discount">
+                  <dt>
+                    <TicketPercent size={15} />
+                    {t("ส่วนลด")}
+                    {order.coupon_code ? " (" + order.coupon_code + ")" : ""}
+                  </dt>
+                  <dd>−{money(order.discount)}</dd>
+                </div>
+                <div className="is-total">
+                  <dt>{t("ยอดชำระ")}</dt>
+                  <dd>{money(order.total)}</dd>
+                </div>
+              </dl>
+            )}
             {order.status === "DELIVERED" && <WarrantyStatus until={order.warranty_until} />}
             {order.status === "CANCELLED" && order.expired_at ? (
               <div className="note-box expired-note" role="status">

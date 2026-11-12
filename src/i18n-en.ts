@@ -496,4 +496,15 @@ export const EN_STRINGS: Record<string, string> = {
   "ยกเลิก": "Cancel",
   "ออกจากระบบทุกเครื่องยกเว้นเครื่องนี้": "Sign out all devices except this one",
   "อุปกรณ์ที่ไม่รู้จัก": "Unknown device",
+  // Coupons
+  "ส่วนลด": "Discount",
+  "โค้ดส่วนลด": "Discount code",
+  "ใช้โค้ด": "Apply",
+  "ลบโค้ด": "Remove",
+  "ใช้โค้ดแล้ว ลด {amount}": "Code applied: {amount} off",
+  "เข้าสู่ระบบเพื่อใช้โค้ดส่วนลด": "Sign in to use a discount code",
+  "เช่น WELCOME10": "e.g. WELCOME10",
+  "สรุปยอด": "Price summary",
+  "ราคาสินค้า": "Item price",
+  "ยอดชำระ": "Amount paid",
 };

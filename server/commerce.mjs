@@ -23,6 +23,7 @@ import { applyMigration008, MIGRATION_008_NAME } from "./migrate-008.mjs";
 import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
+  ensureCoupons,
   ensureCustomerAdmin,
   ensureOrderExtras,
   ensureOrderHistory,
@@ -85,6 +86,7 @@ export function createCommerce(options = {}) {
   ensureNotificationLinks(db);
   ensureSmallUxB(db);
   ensureOrderExtras(db);
+  ensureCoupons(db);
   ensureLiveVersions(db);
   ensureAppendOnlyMoney(db);
   ensureAlertsBackup(db);

@@ -73,6 +73,7 @@ import { ImageLibraryDialog, useLibrary } from "./ImageLibrary";
 import { libraryBlob, suggestFromName, type LibraryItem } from "./image-library";
 import { uploadImage } from "./image-upload";
 import { AdminAlerts, AdminBackup } from "./AdminAlerts";
+import { AdminCoupons } from "./AdminCoupons";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -80,6 +81,7 @@ const productTabs = [
   ["products", "สินค้าทั้งหมด"],
   ["inventory", "บัญชีสต็อก"],
   ["categories", "หมวดหมู่"],
+  ["coupons", "คูปอง"],
 ];
 const orderTabs = [
   ["orders", "ออเดอร์ทั้งหมด"],
@@ -847,6 +849,7 @@ export default function Admin() {
         {tab === "orders" &&
           (detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />)}
         {tab === "preorders" && <PreorderQueue />}
+        {tab === "coupons" && <AdminCoupons id={productId} />}
         {tab === "customers" &&
           (detailId ? (
             <AdminCustomerDetail id={detailId} />
@@ -904,6 +907,7 @@ export default function Admin() {
           "inventory",
           "orders",
           "preorders",
+          "coupons",
           "customers",
           "payments",
           "top-ups",

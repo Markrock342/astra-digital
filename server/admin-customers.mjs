@@ -17,6 +17,7 @@ export function createAdminCustomerApis({
   fail,
   clean,
   moneyScope,
+  releaseCouponForOrder = () => ({ released: false }),
 }) {
   const auditDetail = (user, action, entity, detail) =>
     run(
@@ -252,7 +253,10 @@ export function createAdminCustomerApis({
       ...(expiredAt ? [expiredAt, orderId] : [orderId]),
     ).changes;
     if (!changed) return false;
-    auditDetail(actor, action, orderId, detail);
+    // An unpaid order gives its coupon use back, in the same transaction as the cancel
+    // (admin cancel and payment-window expiry both come through here).
+    const coupon = releaseCouponForOrder(orderId, expiredAt ? "EXPIRED" : "CANCELLED");
+    auditDetail(actor, action, orderId, coupon.released ? { ...detail, couponReleased: coupon.code } : detail);
     return true;
   }
 

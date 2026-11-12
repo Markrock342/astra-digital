@@ -10664,3 +10664,200 @@ a.button.is-disabled {
     transition: none;
   }
 }
+/* ---- Coupons (admin). shadcn/ui data-table + form patterns (MIT), brand blue on white
+   cards over the cool-grey merchant background. ---- */
+.money-summary.money-summary-coupon {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.money-summary-coupon dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.money-summary-coupon .admin-chip {
+  margin-left: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.coupon-status {
+  font-size: 11px;
+}
+.coupon-status-active {
+  color: #15803d;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.coupon-status-scheduled {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.coupon-status-expired,
+.coupon-status-disabled {
+  color: #52525b;
+  background: #f4f4f5;
+  border-color: #e4e4e7;
+}
+.coupon-status-used_up {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.coupon-code,
+.coupon-code-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.04em;
+}
+.coupon-code {
+  font-weight: 600;
+  color: var(--text);
+}
+.coupon-table td small {
+  display: block;
+  margin-top: 2px;
+  color: #71717a;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.coupon-row-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.coupon-row-actions .button {
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.coupon-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  color: #71717a;
+  text-align: center;
+}
+.coupon-empty svg {
+  color: var(--brand, #1534ff);
+}
+.coupon-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.coupon-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+.coupon-editor-form {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.coupon-editor-form .editor-panel {
+  margin: 0;
+}
+.coupon-type-group {
+  grid-template-columns: 1fr 1fr;
+  margin: 8px 0 12px;
+}
+.coupon-type-group legend {
+  grid-column: 1 / -1;
+}
+.coupon-type-group .product-type-option svg {
+  color: var(--brand, #1534ff);
+  flex: none;
+}
+.coupon-scope {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  border: 0;
+  padding: 0;
+  margin: 0 0 8px;
+}
+.coupon-product-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 2px 12px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafafa;
+}
+.coupon-summary-col {
+  position: sticky;
+  top: 16px;
+  display: grid;
+  gap: 12px;
+}
+.coupon-summary-card {
+  padding: 20px;
+  border-top: 3px solid var(--brand, #1534ff);
+}
+.coupon-summary-card > small {
+  display: block;
+  font-size: 12px;
+  color: #71717a;
+  margin-bottom: 10px;
+}
+.coupon-ticket {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px dashed var(--brand, #1534ff);
+  border-radius: 8px;
+  background: var(--brand-soft, #eef1ff);
+  color: var(--brand, #1534ff);
+  max-width: 100%;
+}
+.coupon-ticket strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+.coupon-sentence {
+  margin: 12px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--text);
+}
+.coupon-stats {
+  grid-template-columns: 1fr 1fr;
+  margin: 0;
+}
+.coupon-stats .reference-admin-card:last-child {
+  grid-column: 1 / -1;
+}
+.coupon-released td {
+  color: #a1a1aa;
+}
+@media (max-width: 900px) {
+  .coupon-editor-layout {
+    grid-template-columns: 1fr;
+  }
+  .coupon-summary-col {
+    position: static;
+    order: -1;
+  }
+}
+@media (max-width: 560px) {
+  .coupon-type-group {
+    grid-template-columns: 1fr;
+  }
+  .coupon-product-list {
+    grid-template-columns: 1fr;
+  }
+  .coupon-heading-actions .button {
+    flex: 1 1 auto;
+  }
+}
