@@ -36,6 +36,7 @@ import { createAdminOrderReplaceApis } from "./admin-order-replace.mjs";
 import { createAdminOrderResendApis } from "./admin-order-resend.mjs";
 import { createOrderHistoryApis } from "./admin-order-history.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
+import { createProfileUploadApis } from "./profile-uploads.mjs";
 import { createFileStore } from "./file-store.mjs";
 import { createAuthHardening } from "./auth-hardening.mjs";
 import { createAdminMoneyApis } from "./admin-money.mjs";
@@ -228,6 +229,7 @@ export function createCommerceCore({
           role: user.role,
           // S4: one balance formula (signed net over wallet rows), see money.mjs.
           balance: one(walletBalanceSql, user.id).value,
+          avatarUrl: user.avatar_key ? "/api/files/" + user.avatar_key : null,
         }
       : null;
   const audit = (user, action, entity) =>
@@ -979,6 +981,27 @@ export function createCommerceCore({
     audit,
     fileStore,
   });
+  // Profile avatar + shop logo (UP-2). Wired after product images so fileStore is ready.
+  // settings()/persistShopSettings are function declarations (hoisted) in this scope.
+  const { setAvatar, removeAvatar, setLogo, removeLogo } = createProfileUploadApis({
+    requireUser,
+    requireAdmin,
+    one,
+    run,
+    fail,
+    audit,
+    fileStore,
+    // Read stored JSON only — settings() hides logoKey from API consumers.
+    readShopSettings: () => {
+      const raw = one(
+        "SELECT value FROM runtime_flags WHERE key='shop-settings'",
+      );
+      const s = raw ? JSON.parse(raw.value) : {};
+      delete s.logoUrl;
+      return s;
+    },
+    writeShopSettings: (obj) => persistShopSettings(obj),
+  });
   function mapProduct(row) {
     // Usage instructions are for buyers of a delivered order only (order-extras.mjs).
     const { usage_instructions: _usage, ...p } = row;
@@ -1025,7 +1048,7 @@ export function createCommerceCore({
     const raw = one(
       "SELECT value FROM runtime_flags WHERE key='shop-settings'",
     );
-    return {
+    const base = {
       shopName: "ร้านค้า",
       description: "",
       announcement: "",
@@ -1043,11 +1066,39 @@ export function createCommerceCore({
       pendingExpiryMinutes: PENDING_EXPIRY_DEFAULT,
       ...(raw ? JSON.parse(raw.value) : {}),
     };
+    // logoUrl is derived for API consumers; logoKey stays internal (never expose).
+    delete base.logoUrl;
+    const logoKey =
+      typeof base.logoKey === "string" && base.logoKey.length > 0
+        ? base.logoKey
+        : null;
+    delete base.logoKey;
+    return {
+      ...base,
+      logoUrl: logoKey ? "/api/files/" + logoKey : null,
+    };
+  }
+  function persistShopSettings(settingsObj) {
+    const stored = { ...settingsObj };
+    delete stored.logoUrl;
+    run(
+      "INSERT INTO runtime_flags(key,value) VALUES('shop-settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+      JSON.stringify(stored),
+    );
   }
   function saveSettings(user, input) {
     requireAdmin(user);
     const current = settings();
     const before = { ...current };
+    // settings() hides logoKey — reattach from store so saveSettings cannot wipe the logo.
+    const rawLogo = one(
+      "SELECT value FROM runtime_flags WHERE key='shop-settings'",
+    );
+    if (rawLogo) {
+      const parsed = JSON.parse(rawLogo.value);
+      if (typeof parsed.logoKey === "string" && parsed.logoKey)
+        current.logoKey = parsed.logoKey;
+    }
     for (const [field, max] of [
       ["shopName", 80],
       ["description", 1000],
@@ -1092,10 +1143,9 @@ export function createCommerceCore({
     }
     // Legal pages form (ตั้งค่า › ข้อกำหนดและนโยบาย). Plain text only; escaped when rendered.
     if (input.legal !== undefined) current.legal = normalizeLegal(input.legal, fail);
-    run(
-      "INSERT INTO runtime_flags(key,value) VALUES('shop-settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-      JSON.stringify(current),
-    );
+    // Client cannot set logo via this form — logoKey stays; logoUrl is never stored.
+    delete current.logoUrl;
+    persistShopSettings(current);
     // S10: keep what changed (short values only) so the audit log answers "who changed what".
     const changed = {};
     for (const [field, value] of Object.entries(current)) {
@@ -1120,7 +1170,7 @@ export function createCommerceCore({
       user.id,
       Object.keys(changed).length ? JSON.stringify({ changed }) : null,
     );
-    return { shop: current };
+    return { shop: settings() };
   }
   /** Public legal pages data: the saved form (or nothing → built-in defaults) + the old policy text. */
   function legal() {
@@ -2491,7 +2541,7 @@ export function createCommerceCore({
     outstandingCredit,
   });
   const {
-    adminCustomerDetail,
+    adminCustomerDetail: adminCustomerDetailRaw,
     adminUpdateCustomer,
     adminSetCustomerStatus,
     adminSignOutCustomer,
@@ -2518,8 +2568,23 @@ export function createCommerceCore({
       alerts.emit("chat_assigned", { threadId: thread.id, assignee: thread.assignee, by: user.name });
     return thread;
   }
+  // Attach avatarUrl without editing admin-customers.mjs (MUST_NOT).
+  function adminCustomerDetail(user, id) {
+    const detail = adminCustomerDetailRaw(user, id);
+    const key = one(
+      "SELECT avatar_key FROM users WHERE id=?",
+      detail.customer.id,
+    )?.avatar_key;
+    return {
+      ...detail,
+      customer: {
+        ...detail.customer,
+        avatarUrl: key ? "/api/files/" + key : null,
+      },
+    };
+  }
   const {
-    team,
+    team: teamRaw,
     saveStaff,
     setMemberRole,
     setStaffActive,
@@ -2537,6 +2602,20 @@ export function createCommerceCore({
     notify,
     confirmPassword: auth.confirmPassword,
   });
+  // Attach avatarUrl without editing admin-team.mjs (MUST_NOT). Team lists stay small.
+  function team(user) {
+    const members = teamRaw(user);
+    if (!members.length) return members;
+    const keys = all(
+      `SELECT id, avatar_key FROM users WHERE id IN (${members.map(() => "?").join(",")})`,
+      ...members.map((m) => m.id),
+    );
+    const byId = new Map(keys.map((r) => [r.id, r.avatar_key]));
+    return members.map((m) => ({
+      ...m,
+      avatarUrl: byId.get(m.id) ? "/api/files/" + byId.get(m.id) : null,
+    }));
+  }
   const {
     adminProductVariants,
     createVariant,
@@ -2742,6 +2821,10 @@ export function createCommerceCore({
     reorderProductImages,
     deleteProductImage,
     getFile,
+    setAvatar,
+    removeAvatar,
+    setLogo,
+    removeLogo,
     profile,
     publicUser,
     queueBoard,

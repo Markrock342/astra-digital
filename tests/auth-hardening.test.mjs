@@ -167,7 +167,6 @@ test("five failures lock the account for 15 minutes with backoff; unknown accoun
 
 test("lockout is stored in SQLite and survives a restart", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "astra-lock-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const path = join(dir, "shop.sqlite");
   const key = randomBytes(32);
   const first = createCommerce({ path, key, adminPassword: OWNER_PASSWORD });
@@ -175,7 +174,15 @@ test("lockout is stored in SQLite and survives a restart", (t) => {
     assert.throws(() => first.login({ email: "admin@astra.local", password: "nope-" + i }));
   first.db.close();
   const second = createCommerce({ path, key, adminPassword: OWNER_PASSWORD });
-  t.after(() => second.db.close());
+  // Close DB before rmSync — Windows holds the SQLite lock otherwise (EPERM).
+  t.after(() => {
+    try {
+      second.db.close();
+    } catch {
+      /* already closed */
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
   assert.throws(
     () => second.login({ email: "admin@astra.local", password: OWNER_PASSWORD }),
     (e) => e.status === 429,
@@ -452,7 +459,6 @@ test("the existing per-IP limit still covers both login steps", async (t) => {
 
 test("rotating the env admin secret clears the owner's 2FA (escape hatch)", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "astra-hatch-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const path = join(dir, "shop.sqlite");
   const key = randomBytes(32);
   const first = createCommerce({ path, key, adminPassword: OWNER_PASSWORD });
@@ -471,7 +477,15 @@ test("rotating the env admin secret clears the owner's 2FA (escape hatch)", asyn
   // Rotated secret: password reset and 2FA cleared.
   const rotated = "Rotated-owner-Password-2";
   const after = createCommerce({ path, key, adminPassword: rotated });
-  t.after(() => after.db.close());
+  // Close DB before rmSync — Windows holds the SQLite lock otherwise (EPERM).
+  t.after(() => {
+    try {
+      after.db.close();
+    } catch {
+      /* already closed */
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
   const signedIn = after.login({ email: "admin@astra.local", password: rotated });
   assert.equal(signedIn.needsTotp, undefined);
   assert.ok(signedIn.token);

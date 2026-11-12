@@ -560,7 +560,7 @@ export function createAdminListApis({
             : "orderCount DESC, u.id DESC";
 
     const rows = all(
-      `SELECT u.id,u.name,u.email,u.username,u.role,u.created_at,COALESCE(u.status,'ACTIVE') AS status,u.phone,
+      `SELECT u.id,u.name,u.email,u.username,u.role,u.created_at,COALESCE(u.status,'ACTIVE') AS status,u.phone,u.avatar_key,
               (${spentExpr}) AS spentSatang,
               (${orderCountExpr}) AS orderCount
        FROM users u
@@ -581,6 +581,7 @@ export function createAdminListApis({
         phone: row.phone ?? null,
         created_at: row.created_at,
         orderCount: row.orderCount,
+        avatarUrl: row.avatar_key ? "/api/files/" + row.avatar_key : null,
       };
       if (adminViewer) base.spentSatang = row.spentSatang;
       return base;

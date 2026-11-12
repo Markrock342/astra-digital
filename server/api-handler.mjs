@@ -581,6 +581,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             200,
             await service.deleteProductImage(user, path.split("/")[4]),
           );
+        if (path === "/api/profile/avatar")
+          return send(200, await service.removeAvatar(user));
+        if (path === "/api/admin/settings/logo")
+          return send(200, await service.removeLogo(user));
         if (/^\/api\/admin\/variants\/[^/]+$/.test(path))
           return send(200, service.deleteVariant(user, path.split("/")[4]));
         if (/^\/api\/admin\/inventory\/[^/]+$/.test(path))
@@ -748,6 +752,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           );
         if (path === "/api/admin/settings")
           return send(200, service.saveSettings(user, input));
+        if (path === "/api/admin/settings/logo")
+          return send(200, await service.setLogo(user, input));
+        if (path === "/api/profile/avatar")
+          return send(200, await service.setAvatar(user, input));
         if (path === "/api/admin/products")
           return send(200, service.saveProduct(user, input));
         if (/^\/api\/admin\/products\/[^/]+\/images$/.test(path))
