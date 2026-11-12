@@ -158,7 +158,13 @@ export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash,
       }
       run("UPDATE chat_threads SET assigned_to=? WHERE id=?", assignee?.id ?? null, id);
       if (assignee && assignee.id !== user.id)
-        notify(assignee.id, "chat_assigned", "มีแชทมอบหมายให้คุณ", user.name + " มอบหมายแชทให้คุณดูแล");
+        notify(
+          assignee.id,
+          "chat_assigned",
+          "มีแชทมอบหมายให้คุณ",
+          user.name + " มอบหมายแชทให้คุณดูแล",
+          "/admin/chat?thread=" + encodeURIComponent(id),
+        );
       auditDetail(user, "CHAT_ASSIGN", id, { to: assignee?.name ?? null });
       return one(
         "SELECT t.*,a.name AS assignee FROM chat_threads t LEFT JOIN users a ON a.id=t.assigned_to WHERE t.id=?",

@@ -33,6 +33,7 @@ import {
 } from "./admin-variant-stock-apis.mjs";
 import { createAdminProductBulkApis } from "./admin-product-bulk.mjs";
 import { createAdminOrderReplaceApis } from "./admin-order-replace.mjs";
+import { createAdminOrderResendApis } from "./admin-order-resend.mjs";
 import { createOrderHistoryApis } from "./admin-order-history.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createFileStore } from "./file-store.mjs";
@@ -283,21 +284,24 @@ export function createCommerceCore({
     if (channel.provider === "sandbox" && !Number(channel.active))
       fail(403, "ช่องทางจ่ายยังไม่ได้เปิดใช้งาน");
   };
-  const notify = (userId, kind, title, body) => {
+  // `link` is an in-app path the bell opens (e.g. /orders/<id>); null = the old
+  // kind-based fallback. Only site-relative paths are stored.
+  const notify = (userId, kind, title, body, link = null) => {
     run(
-      "INSERT INTO notifications(id,user_id,kind,title,body,created_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)",
+      "INSERT INTO notifications(id,user_id,kind,title,body,link,created_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP)",
       randomUUID(),
       userId,
       kind,
       title,
       body,
+      typeof link === "string" && /^\/(?!\/)/.test(link) ? link : null,
     );
   };
-  const notifyStaffRoles = (kind, title, body) => {
+  const notifyStaffRoles = (kind, title, body, link = null) => {
     for (const staff of all(
       "SELECT id FROM users WHERE role IN ('STAFF','ADMIN')",
     ))
-      notify(staff.id, kind, title, body);
+      notify(staff.id, kind, title, body, link);
   };
   const stockLowCooldown = new Map();
   const maybeNotifyStockLow = (variantId) => {
@@ -383,6 +387,7 @@ export function createCommerceCore({
     chatRate.set(userId, hit);
     if (hit.n > 30) fail(429, "ส่งข้อความเร็วเกินไป กรุณาลองใหม่ในหนึ่งนาที");
   };
+  const adminChatLink = (threadId) => "/admin/chat?thread=" + encodeURIComponent(threadId);
   const notifyStaffChatThrottled = (threadId, title, body) => {
     const now = Date.now();
     const last = staffChatCooldown.get(threadId) ?? 0;
@@ -391,7 +396,7 @@ export function createCommerceCore({
     for (const staff of all(
       "SELECT id FROM users WHERE role IN ('STAFF','ADMIN')",
     ))
-      notify(staff.id, "chat", title, body);
+      notify(staff.id, "chat", title, body, adminChatLink(threadId));
   };
   const integer = (v, min, max, label) => {
     if (!Number.isSafeInteger(v) || v < min || v > max)
@@ -827,7 +832,6 @@ export function createCommerceCore({
     if (!token) return null;
     return auth.sessionUser(hash(token));
   }
-  const PUBLIC_STOCK_CAP = 10;
   const getLowStockAt = () => {
     const raw = settings().lowStockAt;
     const n = Number(raw);
@@ -858,13 +862,13 @@ export function createCommerceCore({
       variants: all(
         `SELECT v.*, CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=? AND COALESCE(v.active,1)=1 ORDER BY v.sort_order ASC, CASE WHEN v.id='stream-plus-full' THEN 0 WHEN v.id LIKE '%-30' THEN 1 ELSE 2 END, price, v.id`,
         p.id,
-      ).map((v) => ({
+      ).map(({ stock, ...v }) => ({
         ...v,
         price: p.preorder && v.id === "cinema-max-30" ? 0 : v.price,
-        // Public stock is capped at the per-order maximum so exact inventory stays private.
-        stock: Math.min(v.stock, PUBLIC_STOCK_CAP),
-        stockStatus:
-          v.stock <= 0 ? "out" : v.stock <= lowAt ? "low" : "in",
+        // Customers never see a stock number: only a status and whether it can be
+        // ordered now (preorder = always). Exact counts stay on the admin APIs.
+        stockStatus: stock <= 0 ? "out" : stock <= lowAt ? "low" : "in",
+        available: !!p.preorder || stock > 0,
       })),
       rating: one(
         "SELECT AVG(r.rating) AS average,COUNT(*) AS count FROM reviews r JOIN orders o ON o.id=r.order_id JOIN variants v ON v.id=o.variant_id WHERE v.product_id=?",
@@ -1294,11 +1298,13 @@ export function createCommerceCore({
           "preorder_queue",
           "ได้รับเลขคิวพรีออเดอร์",
           "คิวของคุณคือ #" + queueNumber,
+          "/orders/" + id,
         );
         notifyStaffRoles(
           "preorder_queue_admin",
           "คิวพรีออเดอร์ใหม่",
           "คิว #" + queueNumber + " · " + id.slice(0, 8),
+          "/admin/orders/" + id,
         );
         audit(user, "PREORDER_PAID", id);
         return orderDetail(user, id);
@@ -1399,11 +1405,13 @@ export function createCommerceCore({
         "code_delivery",
         "ส่งโค้ดสำเร็จ",
         "คำสั่งซื้อ " + id.slice(0, 8) + " ได้รับโค้ดแล้ว",
+        "/orders/" + id,
       );
       notifyStaffRoles(
         "order_new",
         "ออเดอร์ใหม่",
         "คำสั่งซื้อ " + id.slice(0, 8) + " ชำระแล้วและส่งของแล้ว",
+        "/admin/orders/" + id,
       );
       maybeNotifyStockLow(order.variant_id);
       audit(user, "PAYMENT_AND_DELIVERY", id);
@@ -1779,6 +1787,7 @@ export function createCommerceCore({
         "order",
         "พรีออเดอร์พร้อมใช้งานแล้ว",
         "รหัสสินค้าถูกจัดส่งแล้ว กดดูคำสั่งซื้อเพื่อรับรหัส",
+        "/orders/" + reservationId,
       );
       maybeNotifyStockLow(reservation.variant_id);
       audit(user, "DELIVER_RESERVATION", reservationId);
@@ -2098,7 +2107,7 @@ export function createCommerceCore({
   function notifications(user) {
     requireUser(user);
     return all(
-      "SELECT id,kind,title,body,read_at,created_at FROM notifications WHERE user_id=? ORDER BY created_at DESC,rowid DESC LIMIT 100",
+      "SELECT id,kind,title,body,link,read_at,created_at FROM notifications WHERE user_id=? ORDER BY created_at DESC,rowid DESC LIMIT 100",
       user.id,
     );
   }
@@ -2303,6 +2312,16 @@ export function createCommerceCore({
     maybeNotifyStockLow,
     recordReplacement: orderHistory.recordReplacement,
   });
+  const { resendOrderCredentials } = createAdminOrderResendApis({
+    requireStaff,
+    one,
+    run,
+    tx,
+    fail,
+    clean,
+    notify,
+    randomUUID,
+  });
   /** S2: in live mode an order paid with sandbox money is not real spend. */
   const liveOnlySql = (idCol, payCol) =>
     moneyScope.live
@@ -2376,6 +2395,7 @@ export function createCommerceCore({
     adminCancelOrder,
     adminAddOrderNote,
     replaceOrderCredential,
+    resendOrderCredentials,
     loginTotp: auth.loginTotp,
     confirmPassword: auth.confirmPassword,
     reauthAdmin: auth.reauthAdmin,
@@ -2445,6 +2465,8 @@ export function createCommerceCore({
       adminVariantCrud: true,
       adminStockApi: true,
       adminReplaceCredential: true,
+      resendCredentials: true,
+      notificationLinks: true,
       uploads: true,
       livemodeFinance: true,
       adminRefunds: true,

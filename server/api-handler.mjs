@@ -505,6 +505,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             200,
             service.replaceOrderCredential(user, path.split("/")[4], input),
           );
+        if (/^\/api\/admin\/orders\/[^/]+\/resend-credentials$/.test(path))
+          return send(200, service.resendOrderCredentials(user, path.split("/")[4]));
         if (/^\/api\/admin\/orders\/[^/]+\/reveal$/.test(path))
           return send(
             200,

@@ -10299,3 +10299,50 @@ a.button.is-disabled {
     flex: 1 1 auto;
   }
 }
+
+/* Small UX round A: copy revealed credentials, resend to customer, chat order links. */
+.admin-credential-list .credential-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.admin-credential-list .credential-value code {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.admin-credential-list .credential-copy {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--brand);
+}
+.resend-credentials-btn {
+  margin: 0 8px 12px 0;
+}
+.resend-confirm {
+  border: 1px solid #c7d2fe;
+  background: var(--brand-soft, #eef1ff);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.resend-confirm p {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.resend-confirm small {
+  display: block;
+  color: #3f3f46;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.chat-bubble .chat-order-link {
+  color: inherit;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}

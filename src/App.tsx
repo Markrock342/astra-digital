@@ -3,6 +3,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
   type CSSProperties,
@@ -71,6 +72,8 @@ import type {
   Ledger,
   Review,
 } from "./types";
+import { MAX_PER_ORDER } from "./types";
+import { NAVIGATE_EVENT, confirmLeave } from "./navigation";
 import Stores, { MerchantHeader } from "./Stores";
 import { CustomerChat, NotificationBell } from "./Ops";
 import { CountUp, useRouteMotion } from "./motion";
@@ -463,14 +466,14 @@ function Footer() {
   );
 }
 export function ProductCard({ product }: { product: Product }) {
-  const stock = product.variants.reduce((n, v) => n + v.stock, 0);
+  const soldOut = product.variants.every((v) => v.stockStatus === "out");
   return (
     <Link to={"/products/" + product.id} className="product-card">
       <div className="product-image">
         <Art type={product.art} name={product.name} image={product.imageUrl} />
         {!!product.preorder ? (
           <span className="stock-tag">{t("สั่งจอง")}</span>
-        ) : stock === 0 ? (
+        ) : soldOut ? (
           <span className="stock-tag">{t("สินค้าหมด")}</span>
         ) : null}
         <span className="card-hover-action">{t("เลือกตัวเลือก")}</span>
@@ -713,7 +716,7 @@ function Catalog() {
         `${p.name} ${p.description}`
           .toLowerCase()
           .includes(query.toLowerCase()) &&
-        (!available || p.variants.some((v) => v.stock > 0)),
+        (!available || p.variants.some((v) => v.stockStatus !== "out")),
     )
     .sort((a, b) =>
       sort === "low"
@@ -894,7 +897,7 @@ function ProductDetail({ id }: { id: string }) {
           <span className="eyebrow">{t("สินค้า")}</span>
           <h1>{p.name}</h1>
           <div className="detail-stock">
-            {variant.stock > 0 ? (
+            {variant.available ? (
               <>
                 <span className="service-dot" />
                 {t("พร้อมจัดส่ง")}
@@ -934,18 +937,18 @@ function ProductDetail({ id }: { id: string }) {
             <span>{t("จำนวน")}</span>
             <Quantity
               value={quantity}
-              max={Math.min(10, variant.stock)}
+              max={variant.available ? MAX_PER_ORDER : 0}
               onChange={setQuantity}
             />
           </div>
           <button
             className="button primary full"
-            disabled={!variant.stock}
+            disabled={!variant.available}
             onClick={() => buy(true)}
           >
             <ShoppingBag size={18} />
-            {variant.stock ? t("ซื้อสินค้าเลย") : t("สินค้าหมดชั่วคราว")}
-            {variant.stock > 0 && (
+            {variant.available ? t("ซื้อสินค้าเลย") : t("สินค้าหมดชั่วคราว")}
+            {variant.available && (
               <span className="button-end">
                 {money(variant.price * quantity)}
               </span>
@@ -953,7 +956,7 @@ function ProductDetail({ id }: { id: string }) {
           </button>
           <button
             className="button secondary full"
-            disabled={!variant.stock}
+            disabled={!variant.available}
             onClick={() => buy(false)}
           >
             {t("เพิ่มลงตะกร้า")}
@@ -1213,7 +1216,7 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
                 <strong>{money(variant.price)}</strong>
                 <Quantity
                   value={basket.quantity}
-                  max={p.preorder ? 10 : Math.min(10, variant.stock)}
+                  max={variant.available ? MAX_PER_ORDER : 0}
                   onChange={(quantity) => setBasket({ ...basket, quantity })}
                 />
               </div>
@@ -1247,7 +1250,7 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
             <ErrorMessage message={error} />
             <button
               className="button primary full"
-              disabled={busy || (!p.preorder && variant.stock < basket.quantity)}
+              disabled={busy || !variant.available}
               onClick={checkout ? order : () => go("/checkout")}
             >
               {busy ? (
@@ -2512,9 +2515,15 @@ export default function App() {
     setBasketState(value);
     localStorage.setItem("astra-basket", JSON.stringify(value));
   };
+  // The URL on screen, so a cancelled back/forward can be put back.
+  const shownUrl = useRef(location.pathname + location.search);
   function go(to: string) {
+    // A page with unsaved changes (useUnsavedChangesGuard) may cancel.
+    if (!confirmLeave()) return;
     history.pushState({}, "", to);
+    shownUrl.current = location.pathname + location.search;
     setPath(location.pathname);
+    dispatchEvent(new Event(NAVIGATE_EVENT));
     window.scrollTo({ top: 0, behavior: "instant" });
   }
   async function refresh() {
@@ -2538,7 +2547,15 @@ export default function App() {
   useLive(["catalog"], () => void refresh());
   useEffect(() => {
     void refresh();
-    const onPop = () => setPath(location.pathname);
+    const onPop = () => {
+      if (location.pathname + location.search !== shownUrl.current && !confirmLeave()) {
+        history.pushState({}, "", shownUrl.current);
+        return;
+      }
+      shownUrl.current = location.pathname + location.search;
+      setPath(location.pathname);
+      dispatchEvent(new Event(NAVIGATE_EVENT));
+    };
     addEventListener("popstate", onPop);
     return () => removeEventListener("popstate", onPop);
   }, []);

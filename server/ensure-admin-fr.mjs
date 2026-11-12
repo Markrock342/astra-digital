@@ -122,3 +122,16 @@ export function ensureProductsStock(db) {
   add("inventory", "login_key", "TEXT");
   db.exec("CREATE INDEX IF NOT EXISTS inventory_login_key ON inventory(login_key)");
 }
+
+/**
+ * Notification deep links (idempotent, no numbered migration): an optional
+ * in-app path the bell opens, e.g. /orders/<id> or /admin/chat?thread=<id>.
+ * Older rows keep NULL and fall back to the kind-based target.
+ */
+export function ensureNotificationLinks(db) {
+  const has = db
+    .prepare("PRAGMA table_info(notifications)")
+    .all()
+    .some((c) => c.name === "link");
+  if (!has) db.exec("ALTER TABLE notifications ADD COLUMN link TEXT");
+}

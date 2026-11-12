@@ -24,6 +24,7 @@ const AUDIT_EVENTS = {
   CANCEL_ORDER: "cancelled",
   REVEAL_ORDER_CREDENTIALS: "revealed",
   REPLACE_ORDER_CREDENTIAL: "replaced",
+  RESEND_CREDENTIALS: "resent",
   ADD_REVIEW: "reviewed",
 };
 // Same-second events keep their natural order.

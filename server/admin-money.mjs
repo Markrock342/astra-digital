@@ -207,6 +207,7 @@ export function createAdminMoneyApis({
           " คืนเงิน " +
           thb(amount) +
           (destination === "CREDIT" ? " เข้าเครดิตของคุณ" : " โอนคืนนอกระบบ อ้างอิง " + externalRef),
+        "/orders/" + orderId,
       );
       auditDetail(user, "ORDER_REFUND", orderId, {
         amount,

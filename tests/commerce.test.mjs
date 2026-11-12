@@ -33,6 +33,14 @@ const checkout = (
   variantId = "stream-plus-30",
   quantity = 1,
 ) => s.createOrder(user, { variantId, quantity, requestKey: key });
+// Exact ready stock straight from the inventory table: the public catalog only
+// carries stockStatus/available, never a number.
+const readyStock = (s, variantId) =>
+  s.db
+    .prepare(
+      "SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL AND COALESCE(defective,0)=0",
+    )
+    .get(variantId).n;
 const approve = (s, user, order) =>
   s.pay(user, order.id, {
     paymentToken: order.paymentToken,
@@ -75,10 +83,7 @@ test("purchase delivers exactly one key per unit and deducts once", (t) => {
   assert.equal(s.publicUser(user).balance, before - order.total);
   assert.deepEqual(s.orderDetail(user, order.id).codes, paid.codes);
   assert.equal(
-    s
-      .products()
-      .find((p) => p.id === "stream-plus")
-      .variants.find((v) => v.id === "stream-plus-30").stock,
+    readyStock(s, "stream-plus-30"),
     7,
   );
 });
@@ -105,10 +110,7 @@ test("failed payment does not expose codes or charge wallet", (t) => {
   const { s, user } = fixture(t);
   const order = checkout(s, user);
   const balance = s.publicUser(user).balance;
-  const stock = s
-    .products()
-    .find((p) => p.id === "stream-plus")
-    .variants.find((v) => v.id === "stream-plus-30").stock;
+  const stock = readyStock(s, "stream-plus-30");
   const result = s.pay(user, order.id, {
     paymentToken: order.paymentToken,
     outcome: "failure",
@@ -117,10 +119,7 @@ test("failed payment does not expose codes or charge wallet", (t) => {
   assert.deepEqual(result.codes, []);
   assert.equal(s.publicUser(user).balance, balance);
   assert.equal(
-    s
-      .products()
-      .find((p) => p.id === "stream-plus")
-      .variants.find((v) => v.id === "stream-plus-30").stock,
+    readyStock(s, "stream-plus-30"),
     stock,
   );
   assert.throws(
@@ -145,10 +144,7 @@ test("last key can only be purchased by one customer", (t) => {
   assert.deepEqual(two.codes, []);
   assert.equal(s.publicUser(other).balance, balance);
   assert.equal(
-    s
-      .products()
-      .find((p) => p.id === "stream-plus")
-      .variants.find((v) => v.id === "stream-plus-30").stock,
+    readyStock(s, "stream-plus-30"),
     0,
   );
   assert.throws(

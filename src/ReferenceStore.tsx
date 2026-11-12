@@ -33,6 +33,7 @@ import { BrandLogo, shopName } from "./Theme";
 import { WarrantyDays } from "./Warranty";
 import { api, dateTime, money } from "./api";
 import type { Order, Product, Review } from "./types";
+import { MAX_PER_ORDER } from "./types";
 export function ReferenceCatalog() {
   const { products, loading } = useStore();
   const [query, setQuery] = useState("");
@@ -376,7 +377,7 @@ export function ReferenceProduct({ id }: { id: string }) {
   const [image, setImage] = useState(0);
   const variant =
     product?.variants.find((v) => v.id === selected) ??
-    product?.variants.find((v) => v.stock > 0) ??
+    product?.variants.find((v) => v.available) ??
     product?.variants[0];
   usePageTitle(
     product?.name ?? (loading ? t("สินค้า") : t("ไม่พบสินค้า")),
@@ -415,7 +416,7 @@ export function ReferenceProduct({ id }: { id: string }) {
     );
   const available =
     overview?.shop?.shopOpen !== false &&
-    (product.preorder || variant.stock > 0);
+    variant.available;
   const buy = (checkout: boolean) => {
     setBasket({ variantId: variant.id, quantity });
     if (checkout) go("/checkout");
@@ -503,7 +504,7 @@ export function ReferenceProduct({ id }: { id: string }) {
                       ? ""
                       : v.stockStatus === "low"
                         ? t("เหลือน้อย")
-                        : v.stock
+                        : v.stockStatus !== "out"
                           ? t("มีสินค้า")
                           : t("สินค้าหมด")}
                   </small>
@@ -516,7 +517,7 @@ export function ReferenceProduct({ id }: { id: string }) {
           <div className="reference-buy-row">
             <Quantity
               value={quantity}
-              max={product.preorder ? 10 : Math.min(variant.stock, 10)}
+              max={variant.available ? MAX_PER_ORDER : 0}
               onChange={setQuantity}
             />
             <button

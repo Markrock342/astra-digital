@@ -87,6 +87,7 @@ export function createAdminOrderReplaceApis({
         "order",
         "บัญชีถูกเปลี่ยนแล้ว",
         "ร้านส่งบัญชีใหม่แทนบัญชีที่มีปัญหา กดดูคำสั่งซื้อเพื่อรับบัญชีใหม่",
+        "/orders/" + orderId,
       );
       const replacementId = recordReplacement({
         orderId,

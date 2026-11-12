@@ -172,8 +172,9 @@ test("UC3 public catalog hides exact stock but keeps it for admin", async (t) =>
 
   const pub = await api.get("/api/products/stream-plus");
   const v = pub.body.product.variants.find((x) => x.id === "stream-plus-30");
-  assert.equal(v.stock, 10, "public stock is capped at the per-order max");
+  assert.ok(!("stock" in v), "no numeric stock on the public product");
   assert.equal(v.stockStatus, "in");
+  assert.equal(v.available, true);
   assert.ok(!JSON.stringify(pub.body).includes("UC3-STOCK"), "codes never public");
 
   const adminView = await api.get("/api/admin", boss.cookie);
@@ -182,11 +183,16 @@ test("UC3 public catalog hides exact stock but keeps it for admin", async (t) =>
     .find((x) => x.id === "stream-plus-30");
   assert.ok(exact.stock > 10, "admin sees the exact count");
 
+  const exactById = new Map(
+    adminView.body.products.flatMap((p) => p.variants).map((x) => [x.id, x.stock]),
+  );
   const all = await api.get("/api/products");
   for (const p of all.body.products)
     for (const x of p.variants) {
-      assert.ok(x.stock <= 10);
-      assert.equal(x.stockStatus, x.stock === 0 ? "out" : x.stock <= 3 ? "low" : "in");
+      assert.ok(!("stock" in x), "no numeric stock on " + x.id);
+      const real = exactById.get(x.id);
+      assert.equal(x.stockStatus, real === 0 ? "out" : real <= 3 ? "low" : "in");
+      assert.equal(x.available, !!p.preorder || real > 0);
     }
 });
 
@@ -200,9 +206,9 @@ test("UC4 out-of-stock and low-stock items behave correctly", async (t) => {
     assert.equal(top.status, 200);
   }
   const product = (await api.get("/api/products")).body.products.find(
-    (p) => !p.preorder && p.variants.some((v) => v.stock > 0),
+    (p) => !p.preorder && p.variants.some((v) => v.available),
   );
-  const variant = product.variants.find((v) => v.stock > 0);
+  const variant = product.variants.find((v) => v.available);
   const real = api.s.db
     .prepare("SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND order_id IS NULL")
     .get(variant.id).n;
@@ -215,6 +221,8 @@ test("UC4 out-of-stock and low-stock items behave correctly", async (t) => {
       (v) => v.id === variant.id,
     );
     assert.equal(now.stockStatus, left === 0 ? "out" : left <= 3 ? "low" : "in");
+    assert.equal(now.available, left > 0);
+    assert.ok(!("stock" in now));
   }
   const sold = await api.post("/api/orders", buyer.cookie, {
     variantId: variant.id,

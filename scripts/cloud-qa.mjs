@@ -144,7 +144,7 @@ try {
     variant = product.variants[0];
   check(
     "merchant-created product reaches storefront",
-    !!product && variant.stock === 0,
+    !!product && variant.stockStatus === "out" && variant.available === false && !("stock" in variant),
   );
   await visit("/admin/inventory");
   await page.getByRole("button", { name: "นำเข้าโค้ด", exact: true }).click();
@@ -163,8 +163,13 @@ try {
     .waitFor();
   check(
     "code import updates actual inventory",
-    (await api(context, "/products")).products.find((p) => p.id === product.id)
+    (await api(context, "/admin")).products.find((p) => p.id === product.id)
       .variants[0].stock === 2,
+  );
+  const afterImport = (await api(context, "/products")).products.find((p) => p.id === product.id).variants[0];
+  check(
+    "storefront shows a stock status, never a count",
+    afterImport.available === true && !("stock" in afterImport),
   );
   const publicProducts = (await api(other, "/products")).products;
   check(
