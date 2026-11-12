@@ -212,3 +212,30 @@ test("preorder queue filters by product and delivers several queues at once", as
   await expect(page.getByText("บันทึกหมายเหตุแล้ว")).toBeVisible();
   expect(JSON.stringify(service.orderDetail(buyer, queued[0].id))).not.toContain("ส่งด่วน");
 });
+
+test("product images UI resizes to webp and sends raw bytes (upload API mocked until W5)", async ({ page }) => {
+  await as(page, adminToken);
+  const uploads = [];
+  await page.route("**/api/health", async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    await route.fulfill({ response: res, json: { ...body, features: { ...body.features, uploads: true } } });
+  });
+  await page.route("**/api/admin/products/stream-plus/images", async (route) => {
+    const req = route.request();
+    uploads.push({ type: req.headers()["content-type"], bytes: req.postDataBuffer()?.length ?? 0, head: req.postDataBuffer()?.subarray(0, 12).toString("latin1") });
+    await route.fulfill({ json: { image: { id: "img-" + uploads.length, url: "/brand/og.png" } } });
+  });
+  await page.goto(base + "/admin/products/stream-plus");
+  await expect(page.getByRole("heading", { name: "รูปสินค้า" })).toBeVisible();
+  // 1x1 PNG
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==", "base64");
+  await page.getByLabel("เลือกรูปสินค้า").setInputFiles({ name: "cover.png", mimeType: "image/png", buffer: png });
+  await expect(page.locator(".product-image-grid figure")).toHaveCount(1);
+  await expect(page.locator(".product-image-badge")).toHaveText("ปก");
+  expect(uploads[0].type).toBe("image/webp");
+  expect(uploads[0].head.startsWith("RIFF") && uploads[0].head.endsWith("WEBP")).toBe(true);
+  await page.getByLabel("เลือกรูปสินค้า").setInputFiles({ name: "evil.svg", mimeType: "image/svg+xml", buffer: Buffer.from("<svg/>") });
+  await expect(page.getByRole("alert")).toContainText("รองรับเฉพาะไฟล์ JPG, PNG หรือ WebP");
+  expect(uploads.length).toBe(1);
+});

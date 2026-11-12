@@ -18,6 +18,7 @@ import { useLive, type LiveTopic } from "./live";
 import { AdminChat as AdminChatLazy, BuyerRankingCard as BuyerRankingInline } from "./Ops";
 import { Art, ErrorMessage, Link, Status, useStore } from "./App";
 import { api, dateTime, money } from "./api";
+import { checkSource, toWebp, uploadImage } from "./image-upload";
 
 type Filters = Record<string, string>;
 
@@ -2333,6 +2334,7 @@ export type ProductDraft = {
   active: boolean;
   featured: boolean;
   art: string;
+  imageUrl?: string | null;
   variants: { id: string; label: string; price: number; stock: number }[];
 };
 
@@ -2361,7 +2363,11 @@ export function ProductPreview({ draft, categoryName }: { draft: ProductDraft; c
         <small className="product-preview-label">การ์ดในหน้ารายการสินค้า</small>
         <article className="product-preview-card">
           <div className="product-preview-art">
-            <Art small type={draft.art} name={draft.name || "สินค้า"} />
+            {draft.imageUrl ? (
+              <img src={draft.imageUrl} alt="" className="product-preview-img" />
+            ) : (
+              <Art small type={draft.art} name={draft.name || "สินค้า"} />
+            )}
           </div>
           <div>
             {draft.preorder && <span className="product-preview-pill">สั่งจอง</span>}
@@ -2400,5 +2406,133 @@ export function ProductPreview({ draft, categoryName }: { draft: ProductDraft; c
         {draft.featured && <p className="product-preview-hint">★ แสดงในส่วน "สินค้าแนะนำ" บนหน้าแรก</p>}
       </div>
     </div>
+  );
+}
+
+
+// ---------------------------------------------------------------- Product images (W5 uploads UI)
+
+type ProductImage = { id: string; url: string };
+
+/** Upload, reorder and remove product images; the first is the cover. Shown once the API exists. */
+export function ProductImages({ productId, images }: { productId: string; images: ProductImage[] }) {
+  const { toast } = useStore();
+  const [list, setList] = useState<ProductImage[]>(images);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [over, setOver] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  // Server list changes (live refresh) replace ours; compare ids, not the array object.
+  const serverKey = images.map((x) => x.id).join(",");
+  useEffect(() => setList(images), [serverKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const MAX = 8;
+  async function add(files: FileList | File[]) {
+    setError("");
+    const picked = Array.from(files).slice(0, MAX - list.length);
+    if (!picked.length) return setError("สินค้าหนึ่งชิ้นมีรูปได้สูงสุด " + MAX + " รูป");
+    for (const [i, file] of picked.entries()) {
+      const problem = checkSource(file);
+      if (problem) {
+        setError(file.name + ": " + problem);
+        continue;
+      }
+      try {
+        setBusy(`กำลังอัปโหลด ${i + 1}/${picked.length}`);
+        const blob = await toWebp(file, 1200);
+        const { image } = await uploadImage<{ image: ProductImage }>("/admin/products/" + productId + "/images", blob);
+        setList((current) => [...current, image]);
+      } catch (e) {
+        setError(file.name + ": " + (e as Error).message);
+      }
+    }
+    setBusy("");
+    toast("อัปโหลดรูปแล้ว");
+  }
+  async function move(index: number, by: number) {
+    const next = list.slice();
+    const [item] = next.splice(index, 1);
+    next.splice(index + by, 0, item);
+    setList(next);
+    try {
+      await api("/admin/products/" + productId + "/images", { order: next.map((x) => x.id) }, "PATCH");
+    } catch (e) {
+      setError((e as Error).message);
+      setList(list);
+    }
+  }
+  async function remove(image: ProductImage) {
+    if (!confirm("ลบรูปนี้?")) return;
+    try {
+      await api("/admin/product-images/" + image.id, {}, "DELETE");
+      setList((current) => current.filter((x) => x.id !== image.id));
+      toast("ลบรูปแล้ว");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  return (
+    <section className="reference-admin-card editor-panel product-images">
+      <h2>รูปสินค้า</h2>
+      <p className="field-help">รูปแรกเป็นรูปปกในหน้ารายการสินค้า · สูงสุด {MAX} รูป · JPG, PNG, WebP · ระบบย่อรูปให้อัตโนมัติ</p>
+      <div className="product-image-grid">
+        {list.map((image, i) => (
+          <figure key={image.id} className={i === 0 ? "cover" : ""}>
+            <img src={image.url} alt={"รูปที่ " + (i + 1)} />
+            {i === 0 && <span className="product-image-badge">ปก</span>}
+            <figcaption>
+              <button type="button" className="icon-button" aria-label="เลื่อนไปทางซ้าย" disabled={i === 0} onClick={() => void move(i, -1)}>
+                ‹
+              </button>
+              <button type="button" className="icon-button" aria-label="ลบรูป" onClick={() => void remove(image)}>
+                ×
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="เลื่อนไปทางขวา"
+                disabled={i === list.length - 1}
+                onClick={() => void move(i, 1)}
+              >
+                ›
+              </button>
+            </figcaption>
+          </figure>
+        ))}
+        {list.length < MAX && (
+          <button
+            type="button"
+            className={"product-image-drop" + (over ? " over" : "")}
+            onClick={() => input.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setOver(true);
+            }}
+            onDragLeave={() => setOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setOver(false);
+              void add(e.dataTransfer.files);
+            }}
+            disabled={!!busy}
+          >
+            <Plus size={18} />
+            {busy || "เพิ่มรูป หรือลากไฟล์มาวาง"}
+          </button>
+        )}
+      </div>
+      <input
+        ref={input}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        hidden
+        aria-label="เลือกรูปสินค้า"
+        onChange={(e) => {
+          if (e.target.files) void add(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <ErrorMessage message={error} />
+    </section>
   );
 }

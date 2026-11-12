@@ -44,6 +44,7 @@ import { AdminDashboard } from "./AdminDashboard";
 import { AdminChat, BuyerRanking, BuyerRankingCard, PaymentChannelSettings } from "./Ops";
 import {
   PreorderQueue,
+  ProductImages,
   ProductPreview,
   AdminAccount,
   AdminAudit,
@@ -496,6 +497,7 @@ export default function Admin() {
                   active: formValues ? formValues.active === "on" : !!editingProduct?.active,
                   featured: formValues ? formValues.featured === "on" : !!editingProduct?.featured,
                   art: editingProduct?.art ?? "gift",
+                  imageUrl: editingProduct?.images?.[0]?.url ?? editingProduct?.imageUrl ?? null,
                   variants: editingProduct
                     ? editingProduct.variants.map((v) => ({ id: v.id, label: v.label, price: v.price, stock: v.stock }))
                     : [
@@ -677,6 +679,9 @@ export default function Admin() {
                 </button>
               </div>
             </form>
+            {editingProduct && !newProduct && features.uploads && (
+              <ProductImages productId={editingProduct.id} images={editingProduct.images ?? []} />
+            )}
             {editingProduct && !newProduct && (
               <VariantManager productId={editingProduct.id} preorder={!!editingProduct.preorder} />
             )}

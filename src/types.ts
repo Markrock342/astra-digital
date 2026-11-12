@@ -20,6 +20,9 @@ export type Product = {
   variants: Variant[];
   sold: number;
   rating: { average: number | null; count: number };
+  /** Uploaded images in display order (W5 uploads); first is the cover. */
+  images?: { id: string; url: string }[];
+  imageUrl?: string | null;
 };
 export type User = {
   id: string;
@@ -119,6 +122,7 @@ export type Features = {
   adminVariantCrud?: boolean;
   adminStockApi?: boolean;
   adminReplaceCredential?: boolean;
+  uploads?: boolean;
 };
 export type QueueItem = {
   id: string;
