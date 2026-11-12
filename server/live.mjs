@@ -77,6 +77,8 @@ export function withLive(service, { run, all }) {
       return result;
     };
   }
+  // For changes that are not a single service call (the lazy unpaid-order expiry).
+  wrapped.bumpLive = (topics) => bump(topics.filter((topic) => LIVE_TOPICS.includes(topic)));
   wrapped.liveVersions = () => {
     const versions = Object.fromEntries(LIVE_TOPICS.map((t) => [t, 0]));
     for (const row of all("SELECT topic,version FROM live_versions")) versions[row.topic] = row.version;

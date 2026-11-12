@@ -21,6 +21,7 @@ import {
 import { useLive, type LiveTopic } from "./live";
 import { AdminChat as AdminChatLazy, BuyerRankingCard as BuyerRankingInline } from "./Ops";
 import { Art, ErrorMessage, Link, Status, ledgerTypeText, useStore } from "./App";
+import { SessionsCard } from "./Sessions";
 import { Change, TestMoneyBanner } from "./AdminDashboard";
 import { api, dateTime, money } from "./api";
 import { checkSource, toWebp, uploadImage } from "./image-upload";
@@ -2476,6 +2477,7 @@ export function AdminAccount() {
         </form>
       </section>
       <TwoFactorCard />
+      <SessionsCard variant="admin" />
     </>
   );
 }
@@ -2758,6 +2760,9 @@ const actionText: Record<string, string> = {
   TOTP_DISABLE: "ปิดยืนยันตัวตน 2 ขั้น",
   TOTP_RESET: "ล้างยืนยันตัวตน 2 ขั้น (เปลี่ยนรหัสลับระบบ)",
   RECOVERY_CODE_USED: "ใช้รหัสกู้คืน",
+  SESSION_REVOKE: "ออกจากระบบอุปกรณ์หนึ่งเครื่อง",
+  SESSION_REVOKE_OTHERS: "ออกจากระบบอุปกรณ์อื่นทั้งหมด",
+  ORDER_EXPIRED: "ยกเลิกออเดอร์ (หมดเวลาชำระเงิน)",
 };
 const roleText: Record<string, string> = { ADMIN: "แอดมิน", STAFF: "ทีมงาน", CUSTOMER: "ลูกค้า" };
 /** Readable one-liner for the audit detail JSON instead of raw braces. */
@@ -2772,6 +2777,10 @@ const detailLabel: Record<string, string> = {
   updated: "เปลี่ยนจริง:",
   variants: "ตัวเลือก",
   images: "รูป",
+  sessions: "จำนวนเครื่อง",
+  device: "อุปกรณ์",
+  current: "เครื่องที่ใช้อยู่:",
+  minutes: "ตั้งไว้ (นาที)",
 };
 function auditDetailText(detail: Record<string, unknown>) {
   const parts: string[] = [];
@@ -2799,7 +2808,7 @@ export function AdminAudit() {
   const entityLink = (e: AuditEntry) => {
     if (!e.entity_id) return null;
     if (e.action.startsWith("CUSTOMER_")) return "/admin/customers/" + e.entity_id;
-    if (["REVEAL_ORDER_CREDENTIALS", "REVEAL_LIMIT", "ORDER_NOTE", "CANCEL_ORDER", "DELIVER_RESERVATION", "CREATE_ORDER", "CREATE_PREORDER", "PAYMENT_AND_DELIVERY", "PREORDER_PAID"].includes(e.action))
+    if (["REVEAL_ORDER_CREDENTIALS", "REVEAL_LIMIT", "ORDER_NOTE", "CANCEL_ORDER", "ORDER_EXPIRED", "DELIVER_RESERVATION", "CREATE_ORDER", "CREATE_PREORDER", "PAYMENT_AND_DELIVERY", "PREORDER_PAID"].includes(e.action))
       return "/admin/orders/" + e.entity_id;
     if (e.action.startsWith("PRODUCT_") || e.action === "SAVE_PRODUCT") return "/admin/products/" + e.entity_id;
     return null;

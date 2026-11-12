@@ -188,7 +188,7 @@ test("customer sees a stock label, never a count or a code, and orders wait for 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await ready(page, "/account");
   await page.locator(".account-button").click();
-  await page.getByRole("button", { name: "ออกจากระบบ" }).click();
+  await page.getByRole("button", { name: "ออกจากระบบ", exact: true }).click();
   await expect(
     page.getByRole("link", { name: "สมัครสมาชิก", exact: true }),
   ).toBeVisible();

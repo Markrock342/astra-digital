@@ -39,6 +39,14 @@ import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createFileStore } from "./file-store.mjs";
 import { createAuthHardening } from "./auth-hardening.mjs";
 import { createAdminMoneyApis } from "./admin-money.mjs";
+import { createAccountSessionApis, sessionContext } from "./account-sessions.mjs";
+import {
+  createPendingExpiry,
+  EXPIRED_MESSAGE,
+  PENDING_EXPIRY_DEFAULT,
+  PENDING_EXPIRY_MAX,
+  PENDING_EXPIRY_MIN,
+} from "./pending-expiry.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -408,19 +416,24 @@ export function createCommerceCore({
       fail(400, label + "ไม่ถูกต้อง");
     return v.trim();
   };
-  const issueSession = (user) => {
+  // ctx: { ip, userAgent } from the request. Only a coarse device label and the IP
+  // cut to /24 (IPv6 /48) are stored, for the "my devices" list (account-sessions.mjs).
+  const issueSession = (user, ctx = {}) => {
     const token = randomBytes(32).toString("hex");
     const now = clock();
     // ADMIN/STAFF: 12h absolute + 2h idle; customers keep 7 days (auth-hardening.mjs).
     const lifetime = auth.sessionLifetime(user);
+    const context = sessionContext(ctx);
     run("DELETE FROM sessions WHERE expires_at<?", now);
     run(
-      "INSERT INTO sessions(token_hash,user_id,expires_at,created_at,last_seen) VALUES(?,?,?,?,?)",
+      "INSERT INTO sessions(token_hash,user_id,expires_at,created_at,last_seen,device,ip_masked) VALUES(?,?,?,?,?,?,?)",
       hash(token),
       user.id,
       now + lifetime,
       now,
       now,
+      context.device,
+      context.ipMasked,
     );
     return { user: publicUser(user), token, maxAge: Math.floor(lifetime / 1000) };
   };
@@ -434,7 +447,18 @@ export function createCommerceCore({
     encrypt,
     decrypt,
     passwordMatches,
-    issueSession: (user) => issueSession(user),
+    issueSession: (user, ctx) => issueSession(user, ctx),
+  });
+  const accountSessions = createAccountSessionApis({
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    key,
+    clock,
+    hash,
+    requireUser,
   });
   function seedData() {
     if (one("SELECT id FROM products LIMIT 1")) return;
@@ -741,7 +765,7 @@ export function createCommerceCore({
     if (!one("SELECT id FROM users WHERE username='admin' AND id<>?", adminId))
       run("UPDATE users SET username='admin' WHERE id=?", adminId);
   }
-  function register(rawInput) {
+  function register(rawInput, ctx = {}) {
     const input = withoutClientPrivileges(rawInput);
     const name = clean(input.name ?? input.username, 2, 60, "ชื่อผู้ใช้");
     const username = input.username
@@ -797,22 +821,22 @@ export function createCommerceCore({
         });
       audit({ id }, "REGISTER", id);
     });
-    return issueSession(one("SELECT * FROM users WHERE id=?", id));
+    return issueSession(one("SELECT * FROM users WHERE id=?", id), ctx);
   }
   // Lockout, failed-login audit and the TOTP second step live in auth-hardening.mjs.
   const login = (rawInput, ctx) => auth.login(rawInput, ctx);
-  function demo() {
+  function demo(ctx = {}) {
     if (!allowSandbox) fail(403, "ร้านนี้ไม่เปิดบัญชีทดลอง");
     const suffix = randomBytes(8).toString("hex");
     const visitor = register({
       name: "ผู้เยี่ยมชม " + suffix.slice(0, 4),
       email: suffix + "@demo.astra.local",
       password: randomBytes(24).toString("hex"),
-    });
+    }, ctx);
     run("UPDATE users SET is_demo=1 WHERE id=?", visitor.user.id);
     return visitor;
   }
-  function demoMerchant() {
+  function demoMerchant(ctx = {}) {
     if (!allowDemoAdmin)
       fail(403, "บัญชีผู้ดูแลทดลองใช้ได้เฉพาะพื้นที่สาธิตส่วนตัว");
     const suffix = randomBytes(8).toString("hex");
@@ -826,6 +850,7 @@ export function createCommerceCore({
     audit({ id: registered.user.id }, "DEMO_MERCHANT", registered.user.id);
     return issueSession(
       one("SELECT * FROM users WHERE id=?", registered.user.id),
+      ctx,
     );
   }
   function session(token) {
@@ -912,6 +937,8 @@ export function createCommerceCore({
       stockOrder: "oldest",
       shopOpen: true,
       lowStockAt: 3,
+      // Unpaid orders/preorders older than this are cancelled (pending-expiry.mjs).
+      pendingExpiryMinutes: PENDING_EXPIRY_DEFAULT,
       ...(raw ? JSON.parse(raw.value) : {}),
     };
   }
@@ -952,6 +979,14 @@ export function createCommerceCore({
     }
     if (input.lowStockAt !== undefined) {
       current.lowStockAt = integer(input.lowStockAt, 1, 100, "เกณฑ์สต็อกใกล้หมด");
+    }
+    if (input.pendingExpiryMinutes !== undefined) {
+      // Form posts send text; accept "30" as well as 30.
+      const raw = input.pendingExpiryMinutes;
+      const value = typeof raw === "string" && /^\s*\d{1,5}\s*$/.test(raw) ? Number(raw) : raw;
+      if (!Number.isSafeInteger(value) || value < PENDING_EXPIRY_MIN || value > PENDING_EXPIRY_MAX)
+        fail(400, `เวลารอชำระเงินต้องอยู่ระหว่าง ${PENDING_EXPIRY_MIN}–${PENDING_EXPIRY_MAX} นาที`);
+      current.pendingExpiryMinutes = value;
     }
     run(
       "INSERT INTO runtime_flags(key,value) VALUES('shop-settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
@@ -1234,6 +1269,7 @@ export function createCommerceCore({
           user.id,
         );
         if (o.status === "PREORDER") return orderDetail(user, id);
+        if (o.status === "CANCELLED" && o.expired_at) fail(409, EXPIRED_MESSAGE);
         if (o.status !== "PENDING_PAYMENT")
           fail(409, "คำสั่งซื้อนี้ไม่สามารถชำระเงินได้");
         if (
@@ -1317,6 +1353,7 @@ export function createCommerceCore({
       );
       if (!order) fail(404, "ไม่พบคำสั่งซื้อ");
       if (order.status === "DELIVERED") return orderDetail(user, id);
+      if (order.status === "CANCELLED" && order.expired_at) fail(409, EXPIRED_MESSAGE);
       if (order.status !== "PENDING_PAYMENT")
         fail(409, "คำสั่งซื้อนี้ไม่สามารถชำระเงินได้");
       if (
@@ -1421,11 +1458,12 @@ export function createCommerceCore({
   function retry(user, id) {
     requireUser(user);
     const reservation = one(
-      "SELECT status FROM reservations WHERE id=? AND user_id=?",
+      "SELECT status,expired_at FROM reservations WHERE id=? AND user_id=?",
       id,
       user.id,
     );
     if (reservation) {
+      if (reservation.status === "CANCELLED" && reservation.expired_at) fail(409, EXPIRED_MESSAGE);
       if (reservation.status !== "PENDING_PAYMENT")
         fail(409, "คำสั่งซื้อไม่อยู่ระหว่างรอชำระเงิน");
       const token = randomBytes(32).toString("hex");
@@ -1433,11 +1471,12 @@ export function createCommerceCore({
       return { ...orderDetail(user, id), paymentToken: token };
     }
     const order = one(
-      "SELECT status FROM orders WHERE id=? AND user_id=?",
+      "SELECT status,expired_at FROM orders WHERE id=? AND user_id=?",
       id,
       user.id,
     );
     if (!order) fail(404, "ไม่พบคำสั่งซื้อ");
+    if (order.status === "CANCELLED" && order.expired_at) fail(409, EXPIRED_MESSAGE);
     if (order.status !== "PENDING_PAYMENT")
       fail(409, "คำสั่งซื้อไม่อยู่ระหว่างรอชำระเงิน");
     const token = randomBytes(32).toString("hex");
@@ -2230,6 +2269,7 @@ export function createCommerceCore({
     adminResetCustomerPassword,
     adminAuditLog,
     adminCancelOrder,
+    cancelUnpaidOrder,
   } = createAdminCustomerApis({
     passwordHash,
     requireStaff,
@@ -2396,7 +2436,7 @@ export function createCommerceCore({
     adminAddOrderNote,
     replaceOrderCredential,
     resendOrderCredentials,
-    loginTotp: auth.loginTotp,
+    loginTotp: (rawInput, ctx) => auth.loginTotp(rawInput, ctx),
     confirmPassword: auth.confirmPassword,
     reauthAdmin: auth.reauthAdmin,
     totpStatus: auth.totpStatus,
@@ -2445,6 +2485,9 @@ export function createCommerceCore({
     notifications,
     markNotificationRead,
     buyerRanking,
+    listSessions: accountSessions.listSessions,
+    revokeSession: accountSessions.revokeSession,
+    revokeOtherSessions: accountSessions.revokeOtherSessions,
     mode: allowSandbox ? "sandbox" : "live",
     features: Object.freeze({
       credentialPair: true,
@@ -2471,6 +2514,8 @@ export function createCommerceCore({
       livemodeFinance: true,
       adminRefunds: true,
       creditAdjust: true,
+      pendingExpiry: true,
+      accountSessions: true,
     }),
     salesRevenueSatang,
     logout: (token) =>
@@ -2496,5 +2541,39 @@ export function createCommerceCore({
       return walletHistory(all, user.id, 500);
     },
   };
-  return withLive(service, { run, all });
+  const live = withLive(service, { run, all });
+  // Unpaid-order expiry runs lazily on these calls (pending-expiry.mjs). The bump goes
+  // through live.mjs so listeners hear "orders changed" only when something expired.
+  const expiry = createPendingExpiry({
+    one,
+    all,
+    run,
+    tx,
+    clock,
+    settings,
+    cancelUnpaidOrder,
+    bump: (topics) => live.bumpLive(topics),
+  });
+  for (const name of [
+    "orders",
+    "orderDetail",
+    "staffOrders",
+    "adminOrders",
+    "adminOrderDetail",
+    "adminOverview",
+    "createOrder",
+    "pay",
+    "retry",
+  ]) {
+    const call = live[name];
+    live[name] = (user, ...args) => {
+      if (user) {
+        expiry.maybeSweep();
+        if (name === "pay" || name === "retry") expiry.expireIfStale(user, args[0]);
+      }
+      return call(user, ...args);
+    };
+  }
+  live.sweepPendingOrders = expiry.sweep;
+  return live;
 }

@@ -135,3 +135,25 @@ export function ensureNotificationLinks(db) {
     .some((c) => c.name === "link");
   if (!has) db.exec("ALTER TABLE notifications ADD COLUMN link TEXT");
 }
+
+/**
+ * Small UX round B (idempotent, no numbered migration):
+ * - orders/reservations.expired_at: set when an unpaid order is cancelled because the
+ *   payment window ran out (server/pending-expiry.mjs). NULL for every other cancel.
+ * - sessions.device / sessions.ip_masked: a coarse device label ("Chrome · macOS") and the
+ *   IP cut to /24 (IPv6 /48), stored when the session is created, for "my devices".
+ *   Never the full User-Agent or the full IP.
+ * Run after ensureAuthHardening (which adds sessions.created_at / last_seen).
+ */
+export function ensureSmallUxB(db) {
+  const has = (table, column) =>
+    db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  const add = (table, column, ddl) => {
+    if (!has(table, column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  };
+  add("orders", "expired_at", "TEXT");
+  add("reservations", "expired_at", "TEXT");
+  add("sessions", "device", "TEXT");
+  add("sessions", "ip_masked", "TEXT");
+  db.exec("CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id)");
+}

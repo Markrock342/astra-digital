@@ -248,7 +248,12 @@ export function createAuthHardening({
     );
     if (!row) return null;
     const { session_created_at: createdAt, session_last_seen: lastSeen, ...user } = row;
-    if (!staffRole(user)) return user;
+    if (!staffRole(user)) {
+      // Customers keep the 7-day absolute life; last_seen only feeds "my devices".
+      if (t - (lastSeen ?? 0) >= LAST_SEEN_WRITE_MS)
+        run("UPDATE sessions SET last_seen=? WHERE token_hash=?", t, tokenHash);
+      return user;
+    }
     if (createdAt == null) {
       // Session issued before this change (or a customer promoted mid-session): start the
       // admin clocks now and cap the absolute lifetime.
@@ -366,7 +371,7 @@ export function createAuthHardening({
     }
     clearFailures(lockKey);
     auditDetail(user.id, "LOGIN", user.id, null);
-    return issueSession(user);
+    return issueSession(user, ctx);
   }
 
   function loginTotp(rawInput, ctx = {}) {
@@ -413,7 +418,7 @@ export function createAuthHardening({
     if (result.recovery)
       auditDetail(user.id, "RECOVERY_CODE_USED", user.id, { ...detail, remaining: recoveryLeft(user.id) });
     auditDetail(user.id, "LOGIN", user.id, { totp: true });
-    return issueSession(user);
+    return issueSession(user, ctx);
   }
 
   // ------------------------------------------------ re-confirm password for sensitive actions
