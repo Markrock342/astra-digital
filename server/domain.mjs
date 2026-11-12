@@ -169,12 +169,12 @@ export function createCommerceCore({
     variantId,
     loginId,
     password,
-    { legacy = 0 } = {},
+    { legacy = 0, cost = null } = {},
   ) => {
     run(
       `INSERT INTO inventory(
-        id, variant_id, fingerprint, login_id_enc, password_enc, legacy_single_secret, login_key
-      ) VALUES(?,?,?,?,?,?,?)`,
+        id, variant_id, fingerprint, login_id_enc, password_enc, legacy_single_secret, login_key, cost
+      ) VALUES(?,?,?,?,?,?,?,?)`,
       randomUUID(),
       variantId,
       inventoryFingerprint(loginId, password),
@@ -182,6 +182,7 @@ export function createCommerceCore({
       encrypt(password),
       legacy ? 1 : 0,
       inventoryLoginKey(legacy, loginId),
+      cost == null ? null : cost,
     );
   };
   /** Rows from before login_key existed (or written by migrations) get their key on first use. */
@@ -1984,8 +1985,14 @@ export function createCommerceCore({
       }
       const ok = lines.filter((l) => l.status === "ok");
       for (const { entry } of ok) {
-        if (entry.kind === "code") insertInventoryCredential(variantId, entry.code, "", { legacy: 1 });
-        else insertInventoryCredential(variantId, entry.loginId, entry.password, { legacy: 0 });
+        const cost = entry.cost == null ? null : entry.cost;
+        if (entry.kind === "code")
+          insertInventoryCredential(variantId, entry.code, "", { legacy: 1, cost });
+        else
+          insertInventoryCredential(variantId, entry.loginId, entry.password, {
+            legacy: 0,
+            cost,
+          });
       }
       const result = {
         imported: ok.length,
@@ -2651,7 +2658,7 @@ export function createCommerceCore({
     clean,
     randomUUID,
   });
-  const { salesReport } = createReportApis({
+  const { salesReport, profitReport } = createReportApis({
     requireAdmin,
     all,
     one,
@@ -2797,6 +2804,7 @@ export function createCommerceCore({
     setStaffActive,
     assignChatThread,
     salesReport,
+    profitReport,
     adminProductVariants,
     createVariant,
     updateVariant,

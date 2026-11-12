@@ -22,6 +22,10 @@ import {
   MIGRATION_008_NAME,
 } from "../server/migrate-008.mjs";
 import {
+  applyMigration009,
+  MIGRATION_009_NAME,
+} from "../server/migrate-009.mjs";
+import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
   ensureCoupons,
@@ -52,6 +56,7 @@ import credentialPreorder from "../server/migrations/005_credential_preorder_ind
 import ledgerMoney from "../server/migrations/006_ledger_money.sql";
 import variantStock from "../server/migrations/007_variant_stock.sql";
 import uploadsSchema from "../server/migrations/008_uploads.sql";
+import inventoryCost from "../server/migrations/009_inventory_cost.sql";
 export class Commerce extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -76,6 +81,7 @@ export class Commerce extends DurableObject {
         [MIGRATION_006_NAME, ledgerMoney],
         [MIGRATION_007_NAME, variantStock],
         [MIGRATION_008_NAME, uploadsSchema],
+        [MIGRATION_009_NAME, inventoryCost],
       ]) {
         if (
           !db
@@ -90,6 +96,8 @@ export class Commerce extends DurableObject {
             applyMigration007(db, content);
           } else if (name === MIGRATION_008_NAME) {
             applyMigration008(db, content);
+          } else if (name === MIGRATION_009_NAME) {
+            applyMigration009(db, content);
           } else {
             executeSqliteMigration(db, content);
             db.prepare("INSERT INTO schema_migrations(name) VALUES(?)").run(

@@ -471,6 +471,24 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             });
           return send(200, report);
         }
+        if (path === "/api/admin/reports/profit") {
+          const report = service.profitReport(user, {
+            from: url.searchParams.get("from") ?? undefined,
+            to: url.searchParams.get("to") ?? undefined,
+            format: url.searchParams.get("format") ?? undefined,
+          });
+          if (report.csv != null)
+            return new Response(report.csv, {
+              status: 200,
+              headers: {
+                ...securityHeaders,
+                "Content-Type": "text/csv; charset=utf-8",
+                "Cache-Control": "no-store",
+                "Content-Disposition": 'attachment; filename="profit-report.csv"',
+              },
+            });
+          return send(200, report);
+        }
         if (path === "/api/admin/coupons")
           return send(200, service.adminCoupons(user, {
             q: url.searchParams.get("q") ?? undefined,

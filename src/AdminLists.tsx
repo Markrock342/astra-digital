@@ -3782,17 +3782,41 @@ type SalesReport = {
   byProduct: SalesRow[];
   byDay: DayRow[];
 };
+type ProfitReport = {
+  totals: {
+    orders: number;
+    units: number;
+    revenue: number;
+    refunds: number;
+    cost: number;
+    profit: number;
+  };
+  byProduct: {
+    product_id: string;
+    product: string;
+    variant_id: string;
+    variant: string;
+    units: number;
+    revenue: number;
+    cost: number;
+  }[];
+};
 
 export function AdminReports() {
   const [range, setRange] = useState<{ from: string; to: string }>({ from: bangkokDay(29), to: bangkokDay(0) });
   const [report, setReport] = useState<SalesReport | null>(null);
+  const [profit, setProfit] = useState<ProfitReport | null>(null);
   const [error, setError] = useState("");
   const [tick, setTick] = useState(0);
   useLive(["orders"], () => setTick((n) => n + 1));
   useEffect(() => {
-    api<SalesReport>("/admin/reports/sales" + query(range))
-      .then((r) => {
-        setReport(r);
+    Promise.all([
+      api<SalesReport>("/admin/reports/sales" + query(range)),
+      api<ProfitReport>("/admin/reports/profit" + query(range)),
+    ])
+      .then(([sales, profitReport]) => {
+        setReport(sales);
+        setProfit(profitReport);
         setError("");
       })
       .catch((e) => setError((e as Error).message));
@@ -3810,12 +3834,18 @@ export function AdminReports() {
       <div className="reference-admin-heading">
         <div>
           <h1>รายงานยอดขาย</h1>
-          <p>นับเฉพาะออเดอร์ที่ชำระสำเร็จ · เวลาไทย · ยอดขายคือยอดที่ลูกค้าจ่ายจริงหลังหักส่วนลด · ยอดสุทธิหักคืนเงินแล้ว</p>
+          <p>นับเฉพาะออเดอร์ที่ชำระสำเร็จ · เวลาไทย · ยอดขายคือยอดที่ลูกค้าจ่ายจริงหลังหักส่วนลด · ยอดสุทธิหักคืนเงินแล้ว · กำไร = ยอดขาย − คืนเงิน − ต้นทุนสต็อก</p>
         </div>
-        <a className="button secondary" href={"/api/admin/reports/sales" + query({ ...range, format: "csv" })}>
-          <Download size={15} />
-          ดาวน์โหลด CSV
-        </a>
+        <div className="form-actions">
+          <a className="button secondary" href={"/api/admin/reports/sales" + query({ ...range, format: "csv" })}>
+            <Download size={15} />
+            CSV ยอดขาย
+          </a>
+          <a className="button secondary" href={"/api/admin/reports/profit" + query({ ...range, format: "csv" })}>
+            <Download size={15} />
+            CSV กำไร
+          </a>
+        </div>
       </div>
       <TestMoneyBanner />
       <div className="admin-filters">
@@ -3834,6 +3864,8 @@ export function AdminReports() {
           ["ยอดขาย", report ? money(report.totals.revenue) : "–"],
           ["คืนเงิน", report ? money(report.totals.refunds) : "–"],
           ["ยอดสุทธิ (หักคืนเงิน)", report ? money(report.totals.net) : "–"],
+          ["ต้นทุนสต็อก", profit ? money(profit.totals.cost) : "–"],
+          ["กำไร", profit ? money(profit.totals.profit) : "–"],
           ["ส่วนลดคูปองที่ให้ไป", report ? money(report.totals.discounts ?? 0) : "–"],
           ["ออเดอร์ที่ชำระ", report ? String(report.totals.orders) : "–"],
           ["ผู้ซื้อ", report ? String(report.totals.buyers) : "–"],

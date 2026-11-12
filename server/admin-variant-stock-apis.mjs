@@ -49,22 +49,49 @@ function textLines(text) {
     .filter((entry) => entry.raw);
 }
 
-function pairEntry(line, loginIdRaw, password) {
+/** Optional trailing cost in satang (integer ≥ 0). Empty → null. */
+export function parseOptionalCost(raw) {
+  if (raw === undefined || raw === null) return { cost: null };
+  const text = typeof raw === "number" ? String(raw) : String(raw).trim();
+  if (text === "") return { cost: null };
+  if (typeof raw === "number" && (!Number.isInteger(raw) || raw < 0 || raw > 100000000))
+    return { error: "ต้นทุนต้องเป็นจำนวนเต็มสตางค์ (≥0)" };
+  if (!/^\d+$/.test(text)) return { error: "ต้นทุนต้องเป็นจำนวนเต็มสตางค์ (≥0)" };
+  const cost = Number(text);
+  if (!Number.isInteger(cost) || cost < 0 || cost > 100000000)
+    return { error: "ต้นทุนต้องเป็นจำนวนเต็มสตางค์ (≥0)" };
+  return { cost };
+}
+
+function withCost(entry, costRaw) {
+  const parsed = parseOptionalCost(costRaw);
+  if (parsed.error) return { ...entry, cost: null, error: entry.error || parsed.error };
+  return { ...entry, cost: parsed.cost };
+}
+
+function pairEntry(line, loginIdRaw, password, costRaw) {
   const loginId = typeof loginIdRaw === "string" ? loginIdRaw.trim() : "";
-  const entry = { line, kind: "pair", loginId, password };
+  const entry = { line, kind: "pair", loginId, password, cost: null };
   if (typeof loginIdRaw !== "string" || typeof password !== "string")
     return { ...entry, password: "", error: "ไอดีและรหัสผ่านต้องเป็นข้อความ" };
   if (!loginId) return { ...entry, error: "ไม่มีไอดี" };
   if (loginId.length > 160) return { ...entry, error: "ไอดียาวเกิน 160 ตัวอักษร" };
   if (!password) return { ...entry, error: "ไม่มีรหัสผ่าน" };
   if (password.length > 500) return { ...entry, error: "รหัสผ่านยาวเกินกำหนด" };
-  return entry;
+  return withCost(entry, costRaw);
 }
 
-function codeEntry(line, code) {
+function codeEntry(line, raw) {
+  let code = raw;
+  let costRaw;
+  const comma = String(raw).lastIndexOf(",");
+  if (comma > 0 && /^\d+$/.test(String(raw).slice(comma + 1).trim())) {
+    code = String(raw).slice(0, comma).trim();
+    costRaw = String(raw).slice(comma + 1).trim();
+  }
   if (!CODE_PATTERN.test(code))
-    return { line, kind: "code", code, error: "รูปแบบโค้ดไม่ถูกต้อง" };
-  return { line, kind: "code", code };
+    return { line, kind: "code", code, cost: null, error: "รูปแบบโค้ดไม่ถูกต้อง" };
+  return withCost({ line, kind: "code", code, cost: null }, costRaw);
 }
 
 /**
@@ -82,9 +109,21 @@ export function parseImportEntries(input, fail) {
     if (!lines.some(({ raw }) => raw.includes(",")))
       return lines.map(({ raw, line }) => codeEntry(line, raw));
     return lines.map(({ raw, line }) => {
-      const comma = raw.indexOf(",");
-      if (comma < 1) return { line, kind: "pair", loginId: "", password: "", raw, error: "ต้องเป็น ไอดี,รหัสผ่าน" };
-      return pairEntry(line, raw.slice(0, comma), raw.slice(comma + 1));
+      const parts = raw.split(",");
+      if (parts.length < 2)
+        return { line, kind: "pair", loginId: "", password: "", cost: null, raw, error: "ต้องเป็น ไอดี,รหัสผ่าน" };
+      // Trailing integer field is optional cost (satang); password may contain commas.
+      let costRaw;
+      let body = parts;
+      if (parts.length >= 3 && /^\d+$/.test(parts[parts.length - 1].trim())) {
+        costRaw = parts[parts.length - 1].trim();
+        body = parts.slice(0, -1);
+      }
+      const loginId = body[0];
+      const password = body.slice(1).join(",");
+      if (!loginId.trim())
+        return { line, kind: "pair", loginId: "", password: "", cost: null, raw, error: "ต้องเป็น ไอดี,รหัสผ่าน" };
+      return pairEntry(line, loginId, password, costRaw);
     });
   }
   if (has("codes") && has("items"))
@@ -94,8 +133,8 @@ export function parseImportEntries(input, fail) {
       fail(400, "รายการคู่ต้องเป็น array 1–100 รายการ");
     return input.items.map((item, index) =>
       item && typeof item === "object"
-        ? pairEntry(index + 1, item.loginId, item.password)
-        : { line: index + 1, kind: "pair", loginId: "", password: "", error: "รายการคู่ไม่ถูกต้อง" },
+        ? pairEntry(index + 1, item.loginId, item.password, item.cost)
+        : { line: index + 1, kind: "pair", loginId: "", password: "", cost: null, error: "รายการคู่ไม่ถูกต้อง" },
     );
   }
   if (typeof input.codes !== "string" || !input.codes.trim() || input.codes.length > 20000)
