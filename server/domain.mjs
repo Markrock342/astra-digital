@@ -20,6 +20,7 @@ import {
 import { credentialFingerprint } from "./migrate-005.mjs";
 import { createAdminListApis } from "./admin-list-apis.mjs";
 import { createAdminFinanceApis } from "./admin-finance-apis.mjs";
+import { createAdminCustomerApis } from "./admin-customers.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
@@ -704,6 +705,8 @@ export function createCommerceCore({
       )
     )
       fail(401, "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+    if ((user.status ?? "ACTIVE") !== "ACTIVE")
+      fail(403, "บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อร้าน");
     audit(user, "LOGIN", user.id);
     return issueSession(user);
   }
@@ -736,7 +739,7 @@ export function createCommerceCore({
     if (!token) return null;
     return (
       one(
-        "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?",
+        "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND COALESCE(u.status,'ACTIVE')='ACTIVE'",
         hash(token),
         Date.now(),
       ) ?? null
@@ -1545,6 +1548,8 @@ export function createCommerceCore({
           preorder,
           id,
         );
+        if (preorder !== existing.preorder)
+          audit(user, preorder ? "PRODUCT_SET_PREORDER" : "PRODUCT_SET_READY", id);
         run(
           "UPDATE variants SET price=? WHERE id=(SELECT id FROM variants WHERE product_id=? ORDER BY price LIMIT 1)",
           price,
@@ -1887,6 +1892,21 @@ export function createCommerceCore({
     clean,
     bangkokDayRange,
   });
+  const {
+    adminCustomerDetail,
+    adminUpdateCustomer,
+    adminSetCustomerStatus,
+    adminSignOutCustomer,
+  } = createAdminCustomerApis({
+    requireStaff,
+    requireAdmin,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+  });
   function buyerRanking(user, query = {}) {
     requireAdmin(user);
     const rawLimit = query.limit ?? null;
@@ -1942,6 +1962,10 @@ export function createCommerceCore({
     adminCustomers,
     adminProducts,
     adminTransactions,
+    adminCustomerDetail,
+    adminUpdateCustomer,
+    adminSetCustomerStatus,
+    adminSignOutCustomer,
     getPaymentChannel,
     setPaymentChannel,
     pay,
@@ -1977,6 +2001,7 @@ export function createCommerceCore({
       adminSummaryApi: true,
       productPreorderForm: true,
       adminFinance: true,
+      adminCustomerManage: true,
     }),
     salesRevenueSatang,
     logout: (token) =>
@@ -1999,7 +2024,8 @@ export function createCommerceCore({
     ledger: (user) => {
       requireUser(user);
       return all(
-        "SELECT id,amount,label,created_at FROM ledger WHERE user_id=? ORDER BY created_at DESC,rowid DESC",
+        // Wallet shows the customer's credit only; PAYMENT_IN/FEE/WITHDRAWAL are shop-side money.
+        "SELECT id,amount,label,created_at FROM ledger WHERE user_id=? AND kind IN ('DEMO_CREDIT','TOPUP','PURCHASE','REFUND','ADJUSTMENT') ORDER BY created_at DESC,rowid DESC",
         user.id,
       );
     },

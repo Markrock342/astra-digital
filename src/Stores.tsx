@@ -149,12 +149,9 @@ export function MerchantHeader() {
                       "products",
                       "inventory",
                       "categories",
-                      "coupons",
-                      "stamps",
-                      "reviews",
                     ].includes(tab)
                   : key === "orders"
-                    ? ["orders", "rentals", "issues", "otp"].includes(tab)
+                    ? ["orders", "preorders"].includes(tab)
                     : key === "payments"
                       ? ["payments", "ledger", "top-ups"].includes(tab)
                       : key === tab;

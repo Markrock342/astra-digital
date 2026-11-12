@@ -1,0 +1,1214 @@
+// Server-filtered admin tables (FR-O2–O4, O9, C1–C6, P1). Layout follows the
+// shadcn/ui "Tasks" data-table example (MIT): filter bar → table → load more.
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  ArrowLeft,
+  Download,
+  Eye,
+  LogOut,
+  Plus,
+  RotateCcw,
+  Search,
+  ShieldBan,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
+import { Art, ErrorMessage, Link, Status, useStore } from "./App";
+import { api, dateTime, money } from "./api";
+
+type Filters = Record<string, string>;
+
+const query = (filters: Filters, cursor?: string | null) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
+  if (cursor) params.set("cursor", cursor);
+  const text = params.toString();
+  return text ? "?" + text : "";
+};
+
+/** Cursor list that refetches when filters change (search is debounced). */
+function useCursorList<T>(path: string, key: string, filters: Filters) {
+  const [rows, setRows] = useState<T[] | null>(null);
+  const [next, setNext] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [loadingMore, setLoadingMore] = useState(false);
+  const serial = JSON.stringify(filters);
+  const request = useRef(0);
+  useEffect(() => {
+    const id = ++request.current;
+    const timer = setTimeout(async () => {
+      try {
+        const data = await api<Record<string, unknown>>(path + query(filters));
+        if (id !== request.current) return;
+        setRows(data[key] as T[]);
+        setNext((data.nextCursor as string) ?? null);
+        setError("");
+      } catch (e) {
+        if (id === request.current) setError((e as Error).message);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, serial]);
+  async function more() {
+    if (!next) return;
+    setLoadingMore(true);
+    try {
+      const data = await api<Record<string, unknown>>(path + query(filters, next));
+      setRows((current) => [...(current ?? []), ...(data[key] as T[])]);
+      setNext((data.nextCursor as string) ?? null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+  return { rows, next, error, more, loadingMore };
+}
+
+function FilterBar({
+  search,
+  placeholder,
+  onSearch,
+  children,
+  onReset,
+  active,
+}: {
+  search: string;
+  placeholder: string;
+  onSearch: (value: string) => void;
+  children?: ReactNode;
+  onReset: () => void;
+  active: boolean;
+}) {
+  return (
+    <div className="admin-filters" role="search">
+      <label className="search-field">
+        <Search size={16} />
+        <input
+          aria-label={placeholder}
+          placeholder={placeholder}
+          value={search}
+          onChange={(e) => onSearch(e.target.value)}
+        />
+      </label>
+      {children}
+      {active && (
+        <button type="button" className="button ghost admin-filter-reset" onClick={onReset}>
+          <RotateCcw size={14} />
+          ล้างตัวกรอง
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Select({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: [string, string][];
+}) {
+  return (
+    <label className={"admin-filter-select" + (value ? " is-set" : "")}>
+      <span className="sr-only">{label}</span>
+      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map(([key, text]) => (
+          <option key={key} value={key}>
+            {text}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function DateRange({
+  from,
+  to,
+  onChange,
+}: {
+  from: string;
+  to: string;
+  onChange: (from: string, to: string) => void;
+}) {
+  return (
+    <span className={"admin-filter-dates" + (from || to ? " is-set" : "")}>
+      <input
+        type="date"
+        aria-label="ตั้งแต่วันที่"
+        value={from}
+        max={to || undefined}
+        onChange={(e) => onChange(e.target.value, to || e.target.value)}
+      />
+      <span aria-hidden="true">–</span>
+      <input
+        type="date"
+        aria-label="ถึงวันที่"
+        value={to}
+        min={from || undefined}
+        onChange={(e) => onChange(from || e.target.value, e.target.value)}
+      />
+    </span>
+  );
+}
+
+function MoreRow({ next, more, loading, count }: { next: string | null; more: () => void; loading: boolean; count: number }) {
+  return (
+    <div className="admin-list-footer">
+      <span>แสดง {count} รายการ</span>
+      {next && (
+        <button type="button" className="button secondary" onClick={more} disabled={loading}>
+          {loading ? "กำลังโหลด…" : "โหลดเพิ่ม"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+const shortId = (id: string) => "#" + id.slice(0, 8).toUpperCase();
+
+// ---------------------------------------------------------------- Orders
+
+type OrderRow = {
+  id: string;
+  status: string;
+  total: number;
+  quantity: number;
+  created_at: string;
+  customer_id: string;
+  customer: string;
+  customer_email: string;
+  product: string;
+  variant_label: string;
+  preorder: boolean;
+  queue_number: number | null;
+};
+
+const orderStatuses: [string, string][] = [
+  ["", "ทุกสถานะ"],
+  ["PENDING_PAYMENT", "รอชำระ"],
+  ["PREORDER", "รอส่ง (พรีออเดอร์)"],
+  ["DELIVERED", "ส่งแล้ว"],
+  ["FAILED", "ชำระไม่สำเร็จ"],
+  ["OUT_OF_STOCK", "สินค้าหมด"],
+  ["CANCELLED", "ยกเลิก"],
+];
+const emptyOrderFilters = { q: "", status: "", type: "", from: "", to: "" };
+
+export function AdminOrders() {
+  const { go } = useStore();
+  const [filters, setFilters] = useState<Filters>(emptyOrderFilters);
+  const [exporting, setExporting] = useState(false);
+  const list = useCursorList<OrderRow>("/admin/orders", "orders", { ...filters, limit: "50" });
+  const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
+  const active = Object.values(filters).some(Boolean);
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      const all: OrderRow[] = [];
+      let cursor: string | null = null;
+      do {
+        const page: { orders: OrderRow[]; nextCursor: string | null } = await api(
+          "/admin/orders" + query({ ...filters, limit: "100" }, cursor),
+        );
+        all.push(...page.orders);
+        cursor = page.nextCursor;
+      } while (cursor && all.length < 10000);
+      const cell = (v: unknown) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+      const csv = [
+        ["เลขออเดอร์", "วันที่", "ลูกค้า", "อีเมล", "สินค้า", "ตัวเลือก", "ประเภท", "คิว", "จำนวน", "ยอด (บาท)", "สถานะ"],
+        ...all.map((o) => [
+          o.id,
+          o.created_at,
+          o.customer,
+          o.customer_email,
+          o.product,
+          o.variant_label,
+          o.preorder ? "พรีออเดอร์" : "พร้อมส่ง",
+          o.queue_number ?? "",
+          o.quantity,
+          (o.total / 100).toFixed(2),
+          o.status,
+        ]),
+      ]
+        .map((row) => row.map(cell).join(","))
+        .join("\n");
+      const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "orders.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>ออเดอร์</h1>
+          <p>ออเดอร์พร้อมส่งและคิวพรีออเดอร์ทั้งหมด กรองจากเซิร์ฟเวอร์ เวลาเป็นเวลาไทย</p>
+        </div>
+        <button className="button secondary" onClick={exportCsv} disabled={exporting}>
+          <Download size={15} />
+          {exporting ? "กำลังเตรียมไฟล์…" : "ดาวน์โหลด CSV"}
+        </button>
+      </div>
+      <FilterBar
+        search={filters.q}
+        placeholder="ค้นเลขออเดอร์ ลูกค้า หรือสินค้า"
+        onSearch={(q) => set({ q })}
+        onReset={() => setFilters(emptyOrderFilters)}
+        active={active}
+      >
+        <Select label="สถานะ" value={filters.status} onChange={(status) => set({ status })} options={orderStatuses} />
+        <Select
+          label="ประเภท"
+          value={filters.type}
+          onChange={(type) => set({ type })}
+          options={[
+            ["", "ทุกประเภท"],
+            ["ready", "พร้อมส่ง"],
+            ["preorder", "พรีออเดอร์"],
+          ]}
+        />
+        <DateRange from={filters.from} to={filters.to} onChange={(from, to) => set({ from, to })} />
+      </FilterBar>
+      <ErrorMessage message={list.error} />
+      <div className="table-scroll reference-table admin-list-table">
+        <table>
+          <thead>
+            <tr>
+              <th>ออเดอร์</th>
+              <th>ลูกค้า</th>
+              <th>สถานะ</th>
+              <th className="num">ยอดรวม</th>
+              <th>วันที่</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.rows?.map((o) => (
+              <tr key={o.id} className="admin-row-link" onClick={() => go("/admin/orders/" + o.id)}>
+                <td>
+                  <Link to={"/admin/orders/" + o.id} className="order-number">
+                    {shortId(o.id)}
+                  </Link>
+                  <small>
+                    {o.product} · {o.variant_label} · {o.quantity} ชิ้น
+                    {o.preorder && <span className="admin-chip">คิว {o.queue_number ?? "–"}</span>}
+                  </small>
+                </td>
+                <td>
+                  {o.customer}
+                  <small>{o.customer_email}</small>
+                </td>
+                <td>
+                  <Status status={o.status} />
+                </td>
+                <td className="num">{money(o.total)}</td>
+                <td className="nowrap">{dateTime(o.created_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {list.rows === null && !list.error && <p className="reference-empty-text">กำลังโหลด…</p>}
+        {list.rows?.length === 0 && (
+          <p className="reference-empty-text">{active ? "ไม่พบออเดอร์ตามตัวกรอง" : "ยังไม่มีออเดอร์"}</p>
+        )}
+      </div>
+      {list.rows && <MoreRow next={list.next} more={list.more} loading={list.loadingMore} count={list.rows.length} />}
+    </>
+  );
+}
+
+type OrderDetail = {
+  id: string;
+  status: string;
+  total: number;
+  quantity: number;
+  created_at: string;
+  preorder: boolean;
+  queue_number: number | null;
+  product: { id: string; name: string; art: string; variant_label: string };
+  customer: { id: string; name: string; email: string };
+  payments: { id: string; amount: number; status: string; provider: string; provider_ref: string | null; created_at: string; finalized_at: string | null }[];
+  timeline: { at: string; event: string }[];
+  codes: string[];
+  credentials: { loginId: string; password: string }[];
+};
+
+const eventText: Record<string, string> = {
+  created: "สร้างออเดอร์",
+  paid: "ชำระเงินสำเร็จ",
+  payment_failed: "ชำระเงินไม่สำเร็จ",
+  delivered: "ส่งของแล้ว",
+  failed: "ล้มเหลว",
+  out_of_stock: "สินค้าหมด",
+};
+
+export function AdminOrderDetail({ id }: { id: string }) {
+  const { toast } = useStore();
+  const [order, setOrder] = useState<OrderDetail | null>(null);
+  const [revealed, setRevealed] = useState<Pick<OrderDetail, "codes" | "credentials"> | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setOrder(null);
+    setRevealed(null);
+    api<OrderDetail>("/admin/orders/" + id)
+      .then(setOrder)
+      .catch((e) => setError((e as Error).message));
+  }, [id]);
+  async function reveal() {
+    try {
+      setRevealed(await api("/admin/orders/" + id + "/reveal", {}));
+      toast("บันทึกการเปิดดูรหัสแล้ว");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  const shown = revealed ?? order;
+  return (
+    <>
+      <Link to="/admin/orders" className="back-link">
+        <ArrowLeft size={15} />
+        ออเดอร์
+      </Link>
+      <ErrorMessage message={error} />
+      {order && (
+        <>
+          <div className="reference-admin-heading">
+            <div>
+              <h1>ออเดอร์ {shortId(order.id)}</h1>
+              <p>
+                {dateTime(order.created_at)} · {order.preorder ? "พรีออเดอร์" : "พร้อมส่ง"}
+                {order.queue_number != null && " · คิวที่ " + order.queue_number}
+              </p>
+            </div>
+            <Status status={order.status} />
+          </div>
+          <div className="admin-detail-grid">
+            <section className="reference-admin-card admin-detail-card">
+              <h2>สินค้า</h2>
+              <div className="merchant-product-cell">
+                <div className="merchant-product-art">
+                  <Art small type={order.product.art} name={order.product.name} />
+                </div>
+                <div>
+                  <Link to={"/admin/products/" + order.product.id}>{order.product.name}</Link>
+                  <small>
+                    {order.product.variant_label} · {order.quantity} ชิ้น
+                  </small>
+                </div>
+                <strong className="num">{money(order.total)}</strong>
+              </div>
+              <h2>บัญชีที่ส่งให้ลูกค้า</h2>
+              {order.status !== "DELIVERED" ? (
+                <p className="muted">ยังไม่ได้ส่งของ</p>
+              ) : (
+                <>
+                  <ul className="admin-credential-list">
+                    {shown!.credentials.map((c, i) => (
+                      <li key={"c" + i}>
+                        <span>ID</span>
+                        <code>{c.loginId}</code>
+                        <span>รหัสผ่าน</span>
+                        <code>{c.password}</code>
+                      </li>
+                    ))}
+                    {shown!.codes.map((c, i) => (
+                      <li key={"k" + i}>
+                        <span>โค้ด</span>
+                        <code>{c}</code>
+                      </li>
+                    ))}
+                  </ul>
+                  {!revealed && (
+                    <button className="button secondary" onClick={reveal}>
+                      <Eye size={15} />
+                      แสดงรหัส (บันทึกว่าใครเปิดดู)
+                    </button>
+                  )}
+                </>
+              )}
+            </section>
+            <section className="reference-admin-card admin-detail-card">
+              <h2>ลูกค้า</h2>
+              <Link to={"/admin/customers/" + order.customer.id} className="admin-person">
+                <UserRound size={18} />
+                <span>
+                  {order.customer.name}
+                  <small>{order.customer.email}</small>
+                </span>
+              </Link>
+              <h2>ไทม์ไลน์</h2>
+              <ol className="admin-timeline">
+                {order.timeline.map((e, i) => (
+                  <li key={i} className={"event-" + e.event}>
+                    <strong>{eventText[e.event] ?? e.event}</strong>
+                    <time>{dateTime(e.at)}</time>
+                  </li>
+                ))}
+              </ol>
+              <h2>การชำระเงิน</h2>
+              {order.payments.length === 0 && <p className="muted">ยังไม่มีรายการชำระ</p>}
+              {order.payments.map((p) => (
+                <div className="settings-row" key={p.id}>
+                  <span>
+                    {p.provider}
+                    <small>{p.provider_ref ?? shortId(p.id)} · {dateTime(p.finalized_at ?? p.created_at)}</small>
+                  </span>
+                  <strong>
+                    {money(p.amount)} · {p.status === "SUCCEEDED" ? "สำเร็จ" : p.status === "FAILED" ? "ไม่สำเร็จ" : "รอ"}
+                  </strong>
+                </div>
+              ))}
+            </section>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Customers
+
+type CustomerRow = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  status: string;
+  created_at: string;
+  spentSatang?: number;
+  orderCount: number;
+};
+
+const statusText: Record<string, string> = { ACTIVE: "ปกติ", SUSPENDED: "ระงับ", BANNED: "แบน" };
+const CustomerStatus = ({ status }: { status: string }) => (
+  <span className={"status customer-status-" + status.toLowerCase()}>{statusText[status] ?? status}</span>
+);
+const emptyCustomerFilters = { q: "", status: "", hasOrders: "", sort: "created_at", from: "", to: "" };
+
+export function AdminCustomers() {
+  const { go, user } = useStore();
+  const admin = user?.role === "ADMIN";
+  const [filters, setFilters] = useState<Filters>(emptyCustomerFilters);
+  const list = useCursorList<CustomerRow>("/admin/customers", "customers", { ...filters, limit: "50" });
+  const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
+  const active = Object.entries(filters).some(([k, v]) => v && !(k === "sort" && v === "created_at"));
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>ลูกค้า</h1>
+          <p>กดที่ลูกค้าเพื่อดูยอดเงิน ออเดอร์ แก้ข้อมูล หรือระงับบัญชี</p>
+        </div>
+      </div>
+      <FilterBar
+        search={filters.q}
+        placeholder="ค้นชื่อ อีเมล หรือชื่อผู้ใช้"
+        onSearch={(q) => set({ q })}
+        onReset={() => setFilters(emptyCustomerFilters)}
+        active={active}
+      >
+        <Select
+          label="สถานะบัญชี"
+          value={filters.status}
+          onChange={(status) => set({ status })}
+          options={[
+            ["", "ทุกสถานะ"],
+            ["ACTIVE", "ปกติ"],
+            ["SUSPENDED", "ระงับ"],
+            ["BANNED", "แบน"],
+          ]}
+        />
+        <Select
+          label="ออเดอร์"
+          value={filters.hasOrders}
+          onChange={(hasOrders) => set({ hasOrders })}
+          options={[
+            ["", "มีหรือไม่มีออเดอร์"],
+            ["true", "เคยสั่งซื้อ"],
+            ["false", "ยังไม่เคยสั่ง"],
+          ]}
+        />
+        <Select
+          label="เรียงตาม"
+          value={filters.sort}
+          onChange={(sort) => set({ sort })}
+          options={[
+            ["created_at", "สมัครล่าสุด"],
+            ...(admin ? ([["spent", "ยอดซื้อสูงสุด"]] as [string, string][]) : []),
+            ["orders", "ออเดอร์มากสุด"],
+            ["name", "ชื่อ ก–ฮ"],
+          ]}
+        />
+        <DateRange from={filters.from} to={filters.to} onChange={(from, to) => set({ from, to })} />
+      </FilterBar>
+      <ErrorMessage message={list.error} />
+      <div className="table-scroll reference-table admin-list-table">
+        <table>
+          <thead>
+            <tr>
+              <th>ลูกค้า</th>
+              <th>สถานะ</th>
+              <th className="num">ออเดอร์</th>
+              {admin && <th className="num">ยอดซื้อสะสม</th>}
+              <th>สมัครเมื่อ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.rows?.map((c) => (
+              <tr key={c.id} className="admin-row-link" onClick={() => go("/admin/customers/" + c.id)}>
+                <td>
+                  <div className="merchant-customer-cell">
+                    <span className="avatar">{c.name.slice(0, 2)}</span>
+                    <span>
+                      <Link to={"/admin/customers/" + c.id}>{c.name}</Link>
+                      <small>{c.email.endsWith(".local") ? "—" : c.email}</small>
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <CustomerStatus status={c.status} />
+                </td>
+                <td className="num">{c.orderCount}</td>
+                {admin && <td className="num">{money(c.spentSatang ?? 0)}</td>}
+                <td className="nowrap">{dateTime(c.created_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {list.rows === null && !list.error && <p className="reference-empty-text">กำลังโหลด…</p>}
+        {list.rows?.length === 0 && (
+          <p className="reference-empty-text">{active ? "ไม่พบลูกค้าตามตัวกรอง" : "ยังไม่มีลูกค้า"}</p>
+        )}
+      </div>
+      {list.rows && <MoreRow next={list.next} more={list.more} loading={list.loadingMore} count={list.rows.length} />}
+    </>
+  );
+}
+
+type CustomerDetail = {
+  customer: {
+    id: string;
+    name: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    username: string | null;
+    phone: string | null;
+    note: string | null;
+    status: string;
+    statusReason: string | null;
+    statusChangedAt: string | null;
+    created_at: string;
+  };
+  orderCount: number;
+  activeSessions: number;
+  orders: { id: string; status: string; total: number; quantity: number; created_at: string; product: string; preorder: boolean }[];
+  history: { id: number; action: string; detail: Record<string, unknown> | null; created_at: string; actor: string | null }[];
+  spentSatang?: number;
+  creditSatang?: number;
+  ledger?: { id: string; amount: number; label: string; created_at: string }[];
+};
+
+const historyText = (h: CustomerDetail["history"][number]) => {
+  const d = (h.detail ?? {}) as Record<string, { from?: unknown; to?: unknown } | unknown>;
+  if (h.action === "CUSTOMER_STATUS") {
+    const s = h.detail as { to: string; reason?: string };
+    return "เปลี่ยนสถานะเป็น " + (statusText[s.to] ?? s.to) + (s.reason ? " · " + s.reason : "");
+  }
+  if (h.action === "CUSTOMER_SIGN_OUT") return "บังคับออกจากระบบทุกอุปกรณ์";
+  if (h.action === "CUSTOMER_UPDATE") {
+    const labels: Record<string, string> = { firstName: "ชื่อ", lastName: "นามสกุล", email: "อีเมล", phone: "เบอร์โทร", note: "หมายเหตุ" };
+    return "แก้ " + Object.keys(d).map((k) => labels[k] ?? k).join(", ");
+  }
+  return h.action;
+};
+
+export function AdminCustomerDetail({ id }: { id: string }) {
+  const { toast, user } = useStore();
+  const admin = user?.role === "ADMIN";
+  const [data, setData] = useState<CustomerDetail | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [statusDraft, setStatusDraft] = useState<"" | "SUSPENDED" | "BANNED">("");
+  const [reason, setReason] = useState("");
+  async function load() {
+    try {
+      setData(await api<CustomerDetail>("/admin/customers/" + id));
+      setError("");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  useEffect(() => {
+    setData(null);
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+  async function act(path: string, body: unknown, message: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/admin/customers/" + id + path, body);
+      toast(message);
+      setStatusDraft("");
+      setReason("");
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  function saveProfile(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    void act("", Object.fromEntries(new FormData(e.currentTarget)), "บันทึกข้อมูลลูกค้าแล้ว");
+  }
+  const c = data?.customer;
+  return (
+    <>
+      <Link to="/admin/customers" className="back-link">
+        <ArrowLeft size={15} />
+        ลูกค้า
+      </Link>
+      <ErrorMessage message={error} />
+      {data && c && (
+        <>
+          <div className="reference-admin-heading">
+            <div>
+              <h1>{c.name}</h1>
+              <p>
+                {c.email.endsWith(".local") ? c.username ?? "—" : c.email} · สมัคร {dateTime(c.created_at)}
+              </p>
+            </div>
+            <CustomerStatus status={c.status} />
+          </div>
+          {c.status !== "ACTIVE" && (
+            <p className="admin-callout danger">
+              บัญชีนี้ถูก{statusText[c.status]}
+              {c.statusReason && " · เหตุผล: " + c.statusReason}
+              {c.statusChangedAt && " · " + dateTime(c.statusChangedAt)} ลูกค้าเข้าสู่ระบบและสั่งซื้อไม่ได้
+            </p>
+          )}
+          <div className="admin-stat-row">
+            <div className="reference-admin-card">
+              <small>ออเดอร์</small>
+              <strong>{data.orderCount}</strong>
+            </div>
+            {admin && (
+              <>
+                <div className="reference-admin-card">
+                  <small>ยอดซื้อสะสม</small>
+                  <strong>{money(data.spentSatang ?? 0)}</strong>
+                </div>
+                <div className="reference-admin-card">
+                  <small>เครดิตคงเหลือ</small>
+                  <strong>{money(data.creditSatang ?? 0)}</strong>
+                </div>
+              </>
+            )}
+            <div className="reference-admin-card">
+              <small>อุปกรณ์ที่เข้าระบบอยู่</small>
+              <strong>{data.activeSessions}</strong>
+            </div>
+          </div>
+          <div className="admin-detail-grid">
+            <section className="reference-admin-card admin-detail-card">
+              <h2>ข้อมูลลูกค้า</h2>
+              <form onSubmit={saveProfile} className="admin-form-grid" key={c.email + c.name + c.phone + c.note}>
+                <label className="field">
+                  ชื่อ
+                  <input name="firstName" required maxLength={40} defaultValue={c.firstName} disabled={!admin} />
+                </label>
+                <label className="field">
+                  นามสกุล
+                  <input name="lastName" maxLength={40} defaultValue={c.lastName} disabled={!admin} />
+                </label>
+                <label className="field span-2">
+                  อีเมล
+                  <input name="email" type="email" required maxLength={160} defaultValue={c.email} disabled={!admin} />
+                </label>
+                <label className="field span-2">
+                  เบอร์โทร
+                  <input name="phone" type="tel" maxLength={20} defaultValue={c.phone ?? ""} disabled={!admin} />
+                </label>
+                <label className="field span-2">
+                  หมายเหตุภายใน (ลูกค้าไม่เห็น)
+                  <textarea name="note" maxLength={1000} defaultValue={c.note ?? ""} disabled={!admin} />
+                </label>
+                {admin && (
+                  <button className="button primary span-2" disabled={busy}>
+                    บันทึกข้อมูล
+                  </button>
+                )}
+              </form>
+            </section>
+            <section className="reference-admin-card admin-detail-card">
+              <h2>สถานะบัญชี</h2>
+              {!admin && <p className="muted">เฉพาะแอดมินเปลี่ยนสถานะบัญชีได้</p>}
+              {admin && c.status === "ACTIVE" && !statusDraft && (
+                <div className="admin-action-row">
+                  <button className="button secondary" onClick={() => setStatusDraft("SUSPENDED")}>
+                    ระงับชั่วคราว
+                  </button>
+                  <button className="button danger" onClick={() => setStatusDraft("BANNED")}>
+                    <ShieldBan size={15} />
+                    แบนบัญชี
+                  </button>
+                </div>
+              )}
+              {admin && statusDraft && (
+                <form
+                  className="admin-reason-form"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void act("/status", { status: statusDraft, reason }, statusDraft === "BANNED" ? "แบนบัญชีแล้ว" : "ระงับบัญชีแล้ว");
+                  }}
+                >
+                  <label className="field">
+                    เหตุผล (บันทึกภายใน ลูกค้าไม่เห็น)
+                    <input required minLength={3} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
+                  </label>
+                  <p className="field-help">ลูกค้าจะถูกออกจากระบบทุกอุปกรณ์ทันที และเข้าสู่ระบบหรือสั่งซื้อไม่ได้</p>
+                  <div className="admin-action-row">
+                    <button type="button" className="button secondary" onClick={() => setStatusDraft("")}>
+                      ยกเลิก
+                    </button>
+                    <button className={"button " + (statusDraft === "BANNED" ? "danger" : "primary")} disabled={busy}>
+                      ยืนยัน{statusDraft === "BANNED" ? "แบน" : "ระงับ"}
+                    </button>
+                  </div>
+                </form>
+              )}
+              {admin && c.status !== "ACTIVE" && (
+                <button className="button primary" disabled={busy} onClick={() => act("/status", { status: "ACTIVE" }, "เปิดใช้บัญชีแล้ว")}>
+                  <ShieldCheck size={15} />
+                  ยกเลิกการ{statusText[c.status]}
+                </button>
+              )}
+              {admin && c.status === "ACTIVE" && data.activeSessions > 0 && (
+                <button className="button ghost" disabled={busy} onClick={() => act("/sign-out", {}, "ออกจากระบบทุกอุปกรณ์แล้ว")}>
+                  <LogOut size={15} />
+                  บังคับออกจากระบบ ({data.activeSessions})
+                </button>
+              )}
+              <h2>ประวัติการแก้ไข</h2>
+              {data.history.length === 0 && <p className="muted">ยังไม่มีการแก้ไขจากแอดมิน</p>}
+              <ol className="admin-timeline">
+                {data.history.map((h) => (
+                  <li key={h.id}>
+                    <strong>{historyText(h)}</strong>
+                    <time>
+                      {h.actor ?? "ระบบ"} · {dateTime(h.created_at)}
+                    </time>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          </div>
+          <section className="reference-admin-card admin-detail-card">
+            <h2>ออเดอร์ล่าสุด</h2>
+            {data.orders.length === 0 && <p className="muted">ยังไม่มีออเดอร์</p>}
+            {data.orders.map((o) => (
+              <Link to={"/admin/orders/" + o.id} className="settings-row admin-order-line" key={o.id}>
+                <span>
+                  <strong className="order-number">{shortId(o.id)}</strong>
+                  <small>
+                    {o.product} · {o.quantity} ชิ้น · {dateTime(o.created_at)}
+                  </small>
+                </span>
+                <span className="admin-order-line-end">
+                  <Status status={o.status} />
+                  <strong>{money(o.total)}</strong>
+                </span>
+              </Link>
+            ))}
+          </section>
+          {admin && data.ledger && (
+            <section className="reference-admin-card admin-detail-card">
+              <h2>รายการเครดิต</h2>
+              {data.ledger.length === 0 && <p className="muted">ยังไม่มีรายการ</p>}
+              {data.ledger.map((l) => (
+                <div className="settings-row" key={l.id}>
+                  <span>
+                    {l.label}
+                    <small>{dateTime(l.created_at)}</small>
+                  </span>
+                  <strong className={l.amount > 0 ? "positive" : ""}>
+                    {l.amount > 0 ? "+" : "−"}
+                    {money(Math.abs(l.amount))}
+                  </strong>
+                </div>
+              ))}
+            </section>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Products
+
+type ProductRow = {
+  id: string;
+  name: string;
+  category: string;
+  art: string;
+  active: boolean;
+  preorder: boolean;
+  stock: number;
+  stockStatus: "out" | "low" | "in";
+  sold: number;
+};
+const emptyProductFilters = { q: "", category: "", status: "", type: "", stock: "", sort: "name" };
+const stockText = { out: "หมด", low: "ใกล้หมด", in: "มีสต็อก" };
+
+export function AdminProducts({
+  categories,
+  priceOf,
+  onStock,
+}: {
+  categories: { id: string; name: string }[];
+  priceOf: (id: string) => string;
+  onStock: (name: string) => void;
+}) {
+  const { go } = useStore();
+  const [filters, setFilters] = useState<Filters>(emptyProductFilters);
+  const list = useCursorList<ProductRow>("/admin/products", "products", { ...filters, limit: "50" });
+  const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
+  const active = Object.entries(filters).some(([k, v]) => v && !(k === "sort" && v === "name"));
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>สินค้า</h1>
+          <p>สินค้าแต่ละชิ้นมีได้หลายตัวเลือกราคา และแต่ละตัวเลือกมีสต็อกของตัวเอง</p>
+        </div>
+        <Link to="/admin/products/new" className="button primary">
+          <Plus size={16} />
+          เพิ่มสินค้า
+        </Link>
+      </div>
+      <FilterBar
+        search={filters.q}
+        placeholder="ค้นชื่อสินค้า"
+        onSearch={(q) => set({ q })}
+        onReset={() => setFilters(emptyProductFilters)}
+        active={active}
+      >
+        <Select
+          label="หมวดหมู่"
+          value={filters.category}
+          onChange={(category) => set({ category })}
+          options={[["", "ทุกหมวด"], ...categories.map((c) => [c.id, c.name] as [string, string])]}
+        />
+        <Select
+          label="สถานะ"
+          value={filters.status}
+          onChange={(status) => set({ status })}
+          options={[
+            ["", "ทุกสถานะ"],
+            ["active", "เปิดขาย"],
+            ["inactive", "ฉบับร่าง / ปิดขาย"],
+          ]}
+        />
+        <Select
+          label="ประเภท"
+          value={filters.type}
+          onChange={(type) => set({ type })}
+          options={[
+            ["", "ทุกประเภท"],
+            ["ready", "พร้อมส่ง"],
+            ["preorder", "พรีออเดอร์"],
+          ]}
+        />
+        <Select
+          label="สต็อก"
+          value={filters.stock}
+          onChange={(stock) => set({ stock })}
+          options={[
+            ["", "ทุกสต็อก"],
+            ["in", "มีสต็อก"],
+            ["low", "ใกล้หมด"],
+            ["out", "หมด"],
+          ]}
+        />
+        <Select
+          label="เรียงตาม"
+          value={filters.sort}
+          onChange={(sort) => set({ sort })}
+          options={[
+            ["name", "ชื่อ ก–ฮ"],
+            ["sold", "ขายดีสุด"],
+            ["stock", "สต็อกมากสุด"],
+          ]}
+        />
+      </FilterBar>
+      <ErrorMessage message={list.error} />
+      <div className="table-scroll reference-table admin-list-table">
+        <table>
+          <thead>
+            <tr>
+              <th>สินค้า</th>
+              <th>ราคา</th>
+              <th className="num">สต็อก</th>
+              <th className="num">ขายแล้ว</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.rows?.map((p) => (
+              <tr key={p.id} className="admin-row-link" onClick={() => go("/admin/products/" + p.id)}>
+                <td>
+                  <div className="merchant-product-cell">
+                    <div className="merchant-product-art">
+                      <Art small type={p.art} name={p.name} />
+                    </div>
+                    <div>
+                      <Link to={"/admin/products/" + p.id}>{p.name}</Link>
+                      <span className="product-state">
+                        <span>{p.active ? "เปิดขาย" : "ฉบับร่าง"}</span>
+                        {p.preorder && <span>พรีออเดอร์</span>}
+                      </span>
+                    </div>
+                  </div>
+                </td>
+                <td className="nowrap">{priceOf(p.id)}</td>
+                <td className="num">
+                  {p.preorder ? (
+                    <span className="muted">ส่งตามคิว</span>
+                  ) : (
+                    <button
+                      className={"stock-link stock-" + p.stockStatus}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStock(p.name);
+                      }}
+                    >
+                      {p.stock} · {stockText[p.stockStatus]}
+                    </button>
+                  )}
+                </td>
+                <td className="num">{p.sold}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {list.rows === null && !list.error && <p className="reference-empty-text">กำลังโหลด…</p>}
+        {list.rows?.length === 0 && (
+          <p className="reference-empty-text">{active ? "ไม่พบสินค้าตามตัวกรอง" : "ยังไม่มีสินค้า"}</p>
+        )}
+      </div>
+      {list.rows && <MoreRow next={list.next} more={list.more} loading={list.loadingMore} count={list.rows.length} />}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Finance (FR-F2–F4, F9)
+
+type Txn = {
+  id: string;
+  customer: string;
+  customer_email: string;
+  user_id: string;
+  amount: number;
+  label: string;
+  kind: string;
+  direction: "in" | "out";
+  fee: number;
+  net: number;
+  status: string;
+  order_id: string | null;
+  provider_ref: string | null;
+  reference: string;
+  created_at: string;
+  finalized_at: string | null;
+};
+type TxnSummary = { in: number; out: number; net: number; pending: number; count: number };
+
+const kindText: Record<string, string> = {
+  PAYMENT_IN: "รับชำระ",
+  TOPUP: "เติมเครดิต",
+  PURCHASE: "ตัดเครดิตซื้อของ",
+  REFUND: "คืนเงิน",
+  ADJUSTMENT: "ปรับยอด",
+  WITHDRAWAL: "ถอน",
+  FEE: "ค่าธรรมเนียม",
+  DEMO_CREDIT: "เครดิตทดลอง",
+};
+const txnStatusText: Record<string, string> = {
+  PENDING: "รอยืนยัน",
+  SUCCEEDED: "สำเร็จ",
+  FAILED: "ไม่สำเร็จ",
+  REFUNDED: "คืนเงินแล้ว",
+};
+/** Bangkok calendar day, n days before today. */
+const bangkokDay = (daysAgo = 0) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date(Date.now() - daysAgo * 86400000));
+const emptyFinanceFilters = { q: "", kind: "", direction: "", status: "", from: "", to: "" };
+
+export function AdminFinance() {
+  const [filters, setFilters] = useState<Filters>(emptyFinanceFilters);
+  const [summary, setSummary] = useState<TxnSummary | null>(null);
+  const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
+  const list = useCursorList<Txn>("/admin/transactions", "transactions", { ...filters, limit: "50" });
+  const serial = JSON.stringify(filters);
+  useEffect(() => {
+    api<{ summary: TxnSummary }>("/admin/transactions" + query({ ...filters, limit: "1" }))
+      .then((d) => setSummary(d.summary))
+      .catch(() => setSummary(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serial]);
+  const active = Object.values(filters).some(Boolean);
+  const preset = (days: number | null) =>
+    days == null ? set({ from: "", to: "" }) : set({ from: bangkokDay(days), to: bangkokDay(0) });
+  const presetActive = (days: number | null) =>
+    days == null ? !filters.from : filters.from === bangkokDay(days) && filters.to === bangkokDay(0);
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>การเงิน</h1>
+          <p>ทุกรายการเงินเข้าและออก พร้อมเวลา ลูกค้า และออเดอร์ที่เกี่ยวข้อง รายการเงินแก้หรือลบไม่ได้</p>
+        </div>
+        <a className="button secondary" href={"/api/admin/transactions" + query({ ...filters, format: "csv", limit: "100" })}>
+          <Download size={15} />
+          ดาวน์โหลด CSV
+        </a>
+      </div>
+      <div className="reference-status-tabs" role="group" aria-label="ช่วงเวลา">
+        {(
+          [
+            [null, "ทั้งหมด"],
+            [0, "วันนี้"],
+            [6, "7 วัน"],
+            [29, "30 วัน"],
+          ] as [number | null, string][]
+        ).map(([days, label]) => (
+          <button key={label} className={presetActive(days) ? "active" : ""} onClick={() => preset(days)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="admin-stat-row finance-stats">
+        <div className="reference-admin-card">
+          <small>เงินเข้า</small>
+          <strong className="positive">{summary ? money(summary.in) : "–"}</strong>
+        </div>
+        <div className="reference-admin-card">
+          <small>เงินออก (คืนเงิน ถอน ค่าธรรมเนียม)</small>
+          <strong>{summary ? money(summary.out) : "–"}</strong>
+        </div>
+        <div className="reference-admin-card">
+          <small>สุทธิ</small>
+          <strong>{summary ? money(summary.net) : "–"}</strong>
+        </div>
+        <div className="reference-admin-card">
+          <small>รอยืนยัน · ทั้งหมด</small>
+          <strong>
+            {summary ? summary.pending + " · " + summary.count : "–"}
+          </strong>
+        </div>
+      </div>
+      <FilterBar
+        search={filters.q}
+        placeholder="ค้นเลขออเดอร์ เลขอ้างอิง หรือเลขรายการ"
+        onSearch={(q) => set({ q })}
+        onReset={() => setFilters(emptyFinanceFilters)}
+        active={active}
+      >
+        <Select
+          label="ประเภทรายการ"
+          value={filters.kind}
+          onChange={(kind) => set({ kind })}
+          options={[
+            ["", "ทุกประเภท (ไม่รวมทดลอง)"],
+            ...Object.entries(kindText).filter(([k]) => k !== "DEMO_CREDIT"),
+            ["DEMO_CREDIT", "เครดิตทดลองเท่านั้น"],
+          ]}
+        />
+        <Select
+          label="ทิศทาง"
+          value={filters.direction}
+          onChange={(direction) => set({ direction })}
+          options={[
+            ["", "เข้าและออก"],
+            ["in", "เงินเข้า"],
+            ["out", "เงินออก"],
+          ]}
+        />
+        <Select
+          label="สถานะรายการ"
+          value={filters.status}
+          onChange={(status) => set({ status })}
+          options={[["", "ทุกสถานะ"], ...Object.entries(txnStatusText)]}
+        />
+        <DateRange from={filters.from} to={filters.to} onChange={(from, to) => set({ from, to })} />
+      </FilterBar>
+      <ErrorMessage message={list.error} />
+      <div className="table-scroll reference-table admin-list-table">
+        <table>
+          <thead>
+            <tr>
+              <th>เวลา</th>
+              <th>รายการ</th>
+              <th>ลูกค้า</th>
+              <th>สถานะ</th>
+              <th className="num">ยอด</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.rows?.map((t) => (
+              <tr key={t.id}>
+                <td className="nowrap">
+                  {dateTime(t.created_at)}
+                  {t.finalized_at && t.finalized_at !== t.created_at && <small>ยืนยัน {dateTime(t.finalized_at)}</small>}
+                </td>
+                <td>
+                  <span className={"txn-kind txn-" + t.direction}>{kindText[t.kind] ?? t.kind}</span>
+                  <small>
+                    {t.order_id ? (
+                      <Link to={"/admin/orders/" + t.order_id}>ออเดอร์ {shortId(t.order_id)}</Link>
+                    ) : (
+                      t.label
+                    )}
+                    {t.provider_ref && " · " + t.provider_ref}
+                  </small>
+                </td>
+                <td>
+                  <Link to={"/admin/customers/" + t.user_id}>{t.customer}</Link>
+                  <small>{t.customer_email}</small>
+                </td>
+                <td>
+                  <span className={"status txn-status-" + t.status.toLowerCase()}>{txnStatusText[t.status] ?? t.status}</span>
+                </td>
+                <td className={"num " + (t.direction === "in" ? "positive" : "")}>
+                  {t.direction === "in" ? "+" : "−"}
+                  {money(Math.abs(t.net))}
+                  {t.fee > 0 && <small>ค่าธรรมเนียม {money(t.fee)}</small>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {list.rows === null && !list.error && <p className="reference-empty-text">กำลังโหลด…</p>}
+        {list.rows?.length === 0 && (
+          <p className="reference-empty-text">
+            {active ? "ไม่พบรายการตามตัวกรอง" : "ยังไม่มีรายการเงินจริง (รายการเครดิตทดลองดูได้จากตัวกรองประเภท)"}
+          </p>
+        )}
+      </div>
+      {list.rows && <MoreRow next={list.next} more={list.more} loading={list.loadingMore} count={list.rows.length} />}
+    </>
+  );
+}

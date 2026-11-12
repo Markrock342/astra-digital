@@ -914,11 +914,13 @@ test("ADMIN-FR-W2: customers and products list filters + RBAC", (t) => {
   );
   assert.equal(s.adminCustomers(staff, { status: "BANNED" }).customers.length, 0);
 
-  const adminCustomers = s.adminCustomers(merchant, {
-    q: "QA Buyer",
-    hasOrders: "true",
-  });
-  const spent = adminCustomers.customers.find((c) => c.id === user.id).spentSatang;
+  // NFR-3: STAFF gets no money figures; ADMIN does.
+  assert.equal(customers.customers.find((c) => c.id === user.id).spentSatang, undefined);
+  assert.throws(() => s.adminCustomers(staff, { sort: "spent" }), (e) => e.status === 403);
+  assert.throws(() => s.adminCustomers(staff, { minSpent: "1" }), (e) => e.status === 403);
+  const spent = s
+    .adminCustomers(merchant, { q: "QA Buyer" })
+    .customers.find((c) => c.id === user.id).spentSatang;
   assert.ok(spent > 0);
 
   assert.throws(() => s.adminProducts(user), (e) => e.status === 403);
@@ -1169,4 +1171,131 @@ test("ADMIN-FR-W3: ledger 006 + transactions exclude DEMO; STAFF 403", async (t)
 
   const csvPage = s.adminTransactions(merchant, { format: "csv", limit: 10 });
   assert.match(csvPage.csv, /^id,kind,direction/);
+});
+
+test("ADMIN-FR-W2 fixes: Bangkok day filter, literal search, preorder sold", (t) => {
+  const { s, user, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const order = s.createOrder(user, {
+    variantId: "stream-plus-30",
+    quantity: 1,
+    requestKey: "w2-fix-tz",
+  });
+  // 02:00 Bangkok on 12 Nov = 19:00 UTC on 11 Nov.
+  s.db.prepare("UPDATE orders SET created_at='2026-11-11 19:00:00' WHERE id=?").run(order.id);
+  const on12 = s.adminOrders(merchant, { from: "2026-11-12", to: "2026-11-12" });
+  assert.ok(on12.orders.some((o) => o.id === order.id));
+  const on11 = s.adminOrders(merchant, { from: "2026-11-11", to: "2026-11-11" });
+  assert.ok(!on11.orders.some((o) => o.id === order.id));
+  assert.throws(
+    () => s.adminOrders(merchant, { from: "2026/11/12", to: "2026-11-12" }),
+    (e) => e.status === 400,
+  );
+  // % and _ are literal, not wildcards.
+  assert.equal(s.adminCustomers(merchant, { q: "%" }).customers.length, 0);
+  assert.equal(s.adminProducts(merchant, { q: "_" }).products.length, 0);
+  // A paid preorder counts as sold.
+  const before = s.adminProducts(merchant, { type: "preorder" }).products.find((p) => p.id === "cinema-max");
+  const reservation = s.createOrder(user, {
+    variantId: "cinema-max-90",
+    quantity: 1,
+    requestKey: "w2-fix-sold",
+  });
+  s.pay(user, reservation.id, { paymentToken: reservation.paymentToken, outcome: "success" });
+  const after = s.adminProducts(merchant, { type: "preorder" }).products.find((p) => p.id === "cinema-max");
+  assert.equal(after.sold, before.sold + 1);
+});
+
+test("FR-C3–C6: admin views, edits, bans and signs out a customer", async (t) => {
+  const { s, user, staff, merchant, token, merchantToken } = fixture(t);
+  s.topup(user, { amount: 300, requestKey: "fr-c-topup-0001" });
+  // Staff can look but not change, and sees no money.
+  const staffView = s.adminCustomerDetail(staff, user.id);
+  assert.equal(staffView.creditSatang, undefined);
+  assert.throws(() => s.adminUpdateCustomer(staff, user.id, { firstName: "X", email: "x@example.invalid" }), (e) => e.status === 403);
+  assert.throws(() => s.adminCustomerDetail(user, user.id), (e) => e.status === 403);
+  assert.throws(() => s.adminCustomerDetail(merchant, merchant.id), (e) => e.status === 404);
+  const view = s.adminCustomerDetail(merchant, user.id);
+  assert.equal(view.customer.firstName, "QA");
+  assert.equal(view.customer.lastName, "Buyer");
+  assert.ok(view.creditSatang >= 30000);
+
+  const updated = s.adminUpdateCustomer(merchant, user.id, {
+    firstName: "สมชาย",
+    lastName: "ใจดี",
+    email: "Somchai@Example.invalid",
+    phone: "081-234-5678",
+    note: "ลูกค้าประจำ",
+  });
+  assert.equal(updated.customer.name, "สมชาย ใจดี");
+  assert.equal(updated.customer.email, "somchai@example.invalid");
+  assert.throws(
+    () => s.adminUpdateCustomer(merchant, user.id, { firstName: "A", email: "staff@example.invalid" }),
+    (e) => e.status === 409,
+  );
+  const history = s.adminCustomerDetail(merchant, user.id).history;
+  assert.equal(history[0].action, "CUSTOMER_UPDATE");
+  assert.equal(history[0].detail.lastName.to, "ใจดี");
+
+  // Ban: reason required, sessions dropped, login refused, list filter works.
+  assert.throws(() => s.adminSetCustomerStatus(merchant, user.id, { status: "BANNED" }), (e) => e.status === 400);
+  s.adminSetCustomerStatus(merchant, user.id, { status: "BANNED", reason: "โกงคืนเงิน" });
+  assert.equal(s.session(token), null);
+  assert.throws(
+    () => s.login({ email: "somchai@example.invalid", password: "Test-only-Password-123" }),
+    (e) => e.status === 403,
+  );
+  assert.ok(s.adminCustomers(merchant, { status: "BANNED" }).customers.some((c) => c.id === user.id));
+  assert.ok(!s.adminCustomers(merchant, { status: "ACTIVE" }).customers.some((c) => c.id === user.id));
+  assert.throws(() => s.adminSetCustomerStatus(merchant, merchant.id, { status: "BANNED", reason: "ทดสอบแบนแอดมิน" }), (e) => e.status === 404);
+  s.adminSetCustomerStatus(merchant, user.id, { status: "ACTIVE" });
+  const again = s.login({ email: "somchai@example.invalid", password: "Test-only-Password-123" });
+  assert.ok(s.session(again.token));
+  assert.equal(s.adminSignOutCustomer(merchant, user.id).removed, 1);
+  assert.equal(s.session(again.token), null);
+
+  // HTTP routes.
+  const handle = createAPIHandler(s);
+  const res = await handle(
+    new Request("http://local.test/api/admin/customers/" + user.id + "/status", {
+      method: "POST",
+      headers: {
+        Cookie: "astra_session=" + merchantToken,
+        "Content-Type": "application/json",
+        "X-Astra-Request": "1",
+      },
+      body: JSON.stringify({ status: "SUSPENDED", reason: "ตรวจสอบบัญชี" }),
+    }),
+  );
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).customer.status, "SUSPENDED");
+});
+
+test("wallet and customer credit exclude shop-side PAYMENT_IN rows", (t) => {
+  const { s, user, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const before = s.adminCustomerDetail(merchant, user.id).creditSatang;
+  const order = s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: "wallet-payin-0001" });
+  s.pay(user, order.id, { paymentToken: order.paymentToken, outcome: "success" });
+  assert.ok(!s.ledger(user).some((l) => l.label.startsWith("รับชำระ")));
+  const after = s.adminCustomerDetail(merchant, user.id);
+  assert.equal(after.creditSatang, before - order.total);
+  assert.ok(after.ledger.every((l) => !l.reference.startsWith("payment-in:")));
+});
+
+test("transactions summary works with a date range and a cursor", (t) => {
+  const { s, user, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  for (const key of ["txn-range-0001", "txn-range-0002"]) {
+    const order = s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: key });
+    s.pay(user, order.id, { paymentToken: order.paymentToken, outcome: "success" });
+  }
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+  const first = s.adminTransactions(merchant, { from: today, to: today, limit: 1 });
+  assert.equal(first.transactions.length, 1);
+  assert.equal(first.summary.count, 2);
+  const second = s.adminTransactions(merchant, { from: today, to: today, limit: 1, cursor: first.nextCursor });
+  assert.equal(second.transactions.length, 1);
+  assert.equal(second.summary.count, 2);
+  assert.equal(second.summary.in, first.summary.in);
 });

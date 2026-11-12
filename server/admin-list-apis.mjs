@@ -336,9 +336,8 @@ export function createAdminListApis({
       query.status != null && String(query.status).trim() !== ""
         ? clean(query.status, 1, 40, "สถานะ")
         : null;
-    // Until Work 5 / FR-C5 every account is effectively ACTIVE.
-    if (status && status !== "ACTIVE")
-      return { customers: [], nextCursor: null };
+    if (status && !["ACTIVE", "SUSPENDED", "BANNED"].includes(status))
+      fail(400, "สถานะไม่ถูกต้อง");
     const range = dayBounds(query.from, query.to);
     const adminViewer = isAdmin(user);
     const minSpent =
@@ -368,6 +367,9 @@ export function createAdminListApis({
         : "created_at";
     if (!["created_at", "spent", "orders", "name"].includes(sortRaw))
       fail(400, "การเรียงไม่ถูกต้อง");
+    // NFR-3: STAFF cannot probe money through spend filters either.
+    if (!adminViewer && (minSpent != null || maxSpent != null))
+      fail(403, "เฉพาะแอดมินดูยอดเงินได้");
     if (!adminViewer && sortRaw === "spent")
       fail(403, "เฉพาะผู้ดูแลร้านเท่านั้นที่เรียงตามยอดใช้จ่ายได้");
     const cursorParts = decodeCursor(query.cursor, fail, 2);
@@ -377,6 +379,10 @@ export function createAdminListApis({
 
     const where = ["u.role = 'CUSTOMER'"];
     const params = [];
+    if (status) {
+      where.push("COALESCE(u.status,'ACTIVE') = ?");
+      params.push(status);
+    }
     if (q) {
       where.push(
         "(u.name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\' OR IFNULL(u.username,'') LIKE ? ESCAPE '\\')",
@@ -432,7 +438,7 @@ export function createAdminListApis({
             : "orderCount DESC, u.id DESC";
 
     const rows = all(
-      `SELECT u.id,u.name,u.email,u.username,u.role,u.created_at,
+      `SELECT u.id,u.name,u.email,u.username,u.role,u.created_at,COALESCE(u.status,'ACTIVE') AS status,u.phone,
               (${spentExpr}) AS spentSatang,
               (${orderCountExpr}) AS orderCount
        FROM users u
@@ -449,7 +455,8 @@ export function createAdminListApis({
         email: row.email,
         username: row.username,
         role: row.role,
-        status: "ACTIVE",
+        status: row.status,
+        phone: row.phone ?? null,
         created_at: row.created_at,
         orderCount: row.orderCount,
       };

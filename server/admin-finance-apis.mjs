@@ -157,6 +157,9 @@ export function createAdminFinanceApis({
       const like = likeContains(q);
       params.push(like, like, like, like);
     }
+    // Summary covers the whole filtered range, so build it before the cursor clause.
+    const sumSql = where.length ? " WHERE " + where.join(" AND ") : "";
+    const sumParams = [...params];
     if (cursorParts) {
       const [created, id] = cursorParts;
       where.push("(l.created_at < ? OR (l.created_at = ? AND l.id < ?))");
@@ -175,11 +178,6 @@ export function createAdminFinanceApis({
       lim + 1,
     );
 
-    const sumWhere = where.filter(
-      (clause) => !clause.includes("l.created_at <"),
-    );
-    const sumParams = cursorParts ? params.slice(0, -3) : [...params];
-    const sumSql = sumWhere.length ? " WHERE " + sumWhere.join(" AND ") : "";
 
     const agg = one(
       `SELECT

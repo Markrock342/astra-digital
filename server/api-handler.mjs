@@ -247,6 +247,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           }));
         if (/^\/api\/admin\/orders\/[^/]+$/.test(path))
           return send(200, service.adminOrderDetail(user, path.split("/")[4]));
+        if (/^\/api\/admin\/customers\/[^/]+$/.test(path))
+          return send(200, service.adminCustomerDetail(user, path.split("/")[4]));
         if (path === "/api/admin/customers")
           return send(200, service.adminCustomers(user, {
             q: url.searchParams.get("q") ?? undefined,
@@ -315,6 +317,12 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             200,
             service.adminRevealOrderCredentials(user, path.split("/")[4]),
           );
+        if (/^\/api\/admin\/customers\/[^/]+$/.test(path))
+          return send(200, service.adminUpdateCustomer(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/customers\/[^/]+\/status$/.test(path))
+          return send(200, service.adminSetCustomerStatus(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/customers\/[^/]+\/sign-out$/.test(path))
+          return send(200, service.adminSignOutCustomer(user, path.split("/")[4]));
         if (path === "/api/admin/payment-channel")
           return send(200, {
             channel: service.setPaymentChannel(user, input),
