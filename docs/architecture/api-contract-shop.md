@@ -64,6 +64,46 @@
 
 - `GET /api/health` และ `GET /api/me` ส่ง `features` ชุดเดียวกัน
 - หลังงาน 1 มีอย่างน้อย: `credentialPair`, `preorderDelivery`, `adminChatInbox`, `adminOpsNotifications`, `salesRevenueFromPayments` (boolean)
+- หลังงาน 2 เพิ่ม: `adminOrdersApi`, `adminCustomersApi`, `adminProductsApi`, `adminSummaryApi` (boolean)
+
+### สรุปยอดตามช่วงวัน (Admin FR งาน 2 เพิ่ม · FR-F10 / FR-R2)
+
+`GET /api/admin/summary?from&to` — **ADMIN only** (STAFF/CUSTOMER → 403)
+
+- `from` / `to` เป็น `YYYY-MM-DD` ตีความเป็นวันปฏิทิน **Asia/Bangkok** (ส่งคู่กัน หรือไม่ส่งทั้งคู่ = ทั้งช่วง)
+- คืน `{ from, to, timezone: "Asia/Bangkok", revenue, orderCount, newCustomers }`
+- `revenue` = สูตร FR-F10 ในช่วง (`payments SUCCEEDED` ตาม `COALESCE(finalized_at,created_at)` − `ledger REFUND`)
+- `orderCount` = จำนวนแถว `orders` + `reservations` ที่ `created_at` ในช่วง
+- `newCustomers` = ผู้ใช้ `role=CUSTOMER` ที่สมัครในช่วง
+- ให้แบงค์เลิกคำนวณยอดจาก blob ใน `Admin.tsx` แล้วใช้เลขนี้
+
+### รายการหลังบ้านแบบแบ่งหน้า (Admin FR งาน 2 · NFR-1)
+
+สิทธิ์: STAFF หรือ ADMIN · CUSTOMER → 403  
+ยังคง `GET /api/admin` (blob สรุป) ไว้จนกว่าแบงค์ย้ายหน้าจอ (งาน 2.5 เลื่อน)
+
+`GET /api/admin/orders?status&from&to&product&customer&type=ready|preorder&q&cursor&limit`
+
+- คืน `{ orders[], nextCursor }` · เรียง `created_at DESC, id DESC`
+- แต่ละแถว: id, status, total, quantity, created_at, customer_*, product_*, variant_*, type, queue_number
+
+`GET /api/admin/orders/:id`
+
+- สินค้า · ลูกค้า · payments[] · timeline[] · บัญชีที่ส่งแบบ**ปิดบัง** (`credentialsMasked: true`)
+
+`POST /api/admin/orders/:id/reveal`
+
+- คืน plaintext codes/credentials · บันทึก audit `REVEAL_ORDER_CREDENTIALS` ใน transaction ทุกครั้ง · ยังไม่ DELIVERED → 409
+
+`GET /api/admin/customers?q&status&from&to&minSpent&maxSpent&hasOrders&sort&cursor&limit`
+
+- `status` นอกจาก `ACTIVE` คืนรายการว่าง (ยังไม่มีแบนจนกว่างาน 5) · `sort` = created_at|spent|orders|name
+- คืน `{ customers[], nextCursor }` · มี `spentSatang`, `orderCount`, `status: "ACTIVE"`
+
+`GET /api/admin/products?q&category&status=active|inactive&type=ready|preorder&stock=out|low|in&sort&cursor&limit`
+
+- `sort` = name|stock|sold|id · คืน `{ products[], nextCursor }` · มี stock / stockStatus / sold  
+- `POST /api/admin/products` (บันทึกสินค้า) ยังเป็นของเดิม ไม่เปลี่ยน
 
 ### สต็อกที่หน้าร้านเห็น
 

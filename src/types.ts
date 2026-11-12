@@ -109,6 +109,10 @@ export type Features = {
   adminChatInbox?: boolean;
   adminOpsNotifications?: boolean;
   salesRevenueFromPayments?: boolean;
+  adminOrdersApi?: boolean;
+  adminCustomersApi?: boolean;
+  adminProductsApi?: boolean;
+  adminSummaryApi?: boolean;
 };
 export type QueueItem = {
   id: string;

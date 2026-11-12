@@ -2,6 +2,12 @@
 
 อัปเดตล่าสุด: 2026-11-12
 
+## Admin FR Backend — งาน 2 พร้อม PR (ห้าม deploy)
+- ฐาน `main` @ `6b37c4a` · branch `feat/admin-fr-work2-list-apis` · PR https://github.com/Markrock342/astra-digital/pull/26
+- เสร็จ: list APIs + reveal/audit · **`GET /api/admin/summary`** (Bangkok + FR-F10) · คืนสเปก Sharp|Animations ใน e2e · **ยังไม่ตัด** blob `/api/admin` · แชท `order_id` เลื่อน
+- หลักฐาน: `npm test` 67/67 · `test:e2e` 14/14 · รายงาน [MARK_REPORT_ADMIN_FR_WORK2](../database/MARK_REPORT_ADMIN_FR_WORK2.md)
+- **ห้าม deploy** · งาน 3–5 รอ Mark ผ่านงาน 2
+
 ## Deploy 12 พ.ย. — งวด 2 (ล่าสุด)
 - Worker `2aa1ce33` + Pages `302a34d2` จาก main `65e8cfe`
   - รวม PR #22, #24 (#23 เข้าผ่าน #24) และ PR #25
@@ -10,11 +16,8 @@
   - ก่อนเปิดขายจริง: ลบค่านี้ แล้วล้างข้อมูลทดสอบ
 - สถานะเทียบ SOW: [INSTALLMENT-2-READINESS](INSTALLMENT-2-READINESS.md)
 
-## Admin FR Backend — งาน 1 พร้อม PR (ห้าม deploy)
-- อ้างอิง [ADMIN-FR-20261111](../requirements/ADMIN-FR-20261111.md) · Roadmap [NOTT-ADMIN-FR-20261111](../roadmaps/NOTT-ADMIN-FR-20261111.md)
-- งาน 1 เสร็จในเครื่อง: สัญญาแชท/แจ้งเตือน/อันดับ + unread inbox + admin ops notify + features ใน `/api/me` + FR-F10 `salesRevenueSatang` · branch `feat/admin-fr-work1-api-contract-revenue`
-- หลักฐาน: `npm test` 63/63 · `npm run test:e2e` 11/11 · รายงาน [MARK_REPORT_ADMIN_FR_WORK1](../database/MARK_REPORT_ADMIN_FR_WORK1.md)
-- **ห้าม deploy** · รอ Mark รีวิว/merge ก่อนเริ่มงาน 2 · งาน 5 ร่าง docs อย่างเดียว
+## Admin FR Backend — งาน 1 merge แล้ว
+- PR #25 merge · รวมใน deploy งวด 2 · รายงาน [MARK_REPORT_ADMIN_FR_WORK1](../database/MARK_REPORT_ADMIN_FR_WORK1.md)
 
 ## Deploy Worker 11 พ.ย. (ล่าสุด)
 - Worker `15392db2` จาก main (`009ef0a` + worker fix) + Pages `40ae3b40` — **migration 005 รันบนร้านจริงแล้ว** · `features` ทั้งคู่ `true` (ปุ่มส่งของพรีออเดอร์ + นำเข้าไอดี/รหัสผ่านเปิดใช้)
