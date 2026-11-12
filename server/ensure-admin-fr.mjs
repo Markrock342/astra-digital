@@ -1,4 +1,50 @@
 /** Idempotent schema helpers for Admin FR Work 1 (no numbered migration — 006 reserved for ledger). */
+import { ACCOUNT_SHOP_CATEGORIES, DEFAULT_CATEGORIES } from "./catalog.mjs";
+
+/**
+ * Product categories (idempotent, no numbered migration). products.category holds the id.
+ * - First run on an existing shop: the five built-in categories (same ids, so every product
+ *   stays valid). First run on a fresh shop (no products yet): those five plus the
+ *   account-shop defaults ai / productivity / vpn. INSERT OR IGNORE, so nothing is
+ *   overwritten, and a category the admin deleted later is never brought back.
+ * - Every run: a product whose category has no row (data written outside the app) gets a
+ *   plain row named after its id, so saveProduct / the storefront never meet an unknown id.
+ */
+export function ensureCategories(db) {
+  const existed = !!db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='categories'")
+    .get();
+  db.exec(`CREATE TABLE IF NOT EXISTS categories (
+    id TEXT PRIMARY KEY,
+    name_th TEXT NOT NULL,
+    name_en TEXT,
+    icon TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0,1)),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_products_category ON products(category)");
+  if (!existed) {
+    const fresh = !db.prepare("SELECT id FROM products LIMIT 1").get();
+    const seed = fresh ? [...DEFAULT_CATEGORIES, ...ACCOUNT_SHOP_CATEGORIES] : DEFAULT_CATEGORIES;
+    const insert = db.prepare(
+      "INSERT OR IGNORE INTO categories(id,name_th,name_en,icon,sort_order,hidden) VALUES(?,?,?,?,?,0)",
+    );
+    seed.forEach((c, i) => insert.run(c.id, c.name, c.name_en ?? null, c.icon ?? null, (i + 1) * 10));
+  }
+  const orphans = db
+    .prepare(
+      "SELECT DISTINCT category AS id FROM products WHERE category IS NOT NULL AND category NOT IN (SELECT id FROM categories)",
+    )
+    .all();
+  if (orphans.length) {
+    let next = db.prepare("SELECT COALESCE(MAX(sort_order),0) AS n FROM categories").get().n;
+    const insert = db.prepare(
+      "INSERT OR IGNORE INTO categories(id,name_th,sort_order,hidden) VALUES(?,?,?,0)",
+    );
+    for (const { id } of orphans) insert.run(id, String(id).slice(0, 40) || "หมวดหมู่", (next += 10));
+  }
+}
 
 export function ensureChatThreadReads(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS chat_thread_reads (

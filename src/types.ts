@@ -90,7 +90,8 @@ export type Overview = {
   customers: number;
   products: number;
   orders: number;
-  categories: { id: string; name: string }[];
+  /** Visible categories with at least one product on sale (count = products on sale). */
+  categories: PublicCategory[];
   activity: {
     kind: string;
     name: string;
@@ -100,11 +101,29 @@ export type Overview = {
     time: string;
   }[];
 };
+export type PublicCategory = {
+  id: string;
+  name: string;
+  name_en: string | null;
+  /** Image library slug (/library/<slug>.webp) or null. */
+  icon: string | null;
+  count: number;
+};
+export type AdminCategory = PublicCategory & {
+  name_th: string;
+  sort_order: number;
+  hidden: boolean;
+  created_at: string;
+  /** Products on sale (count = every product in the category). */
+  active: number;
+};
 export type AdminData = {
   revenue: number;
   orderCount: number;
   delivered: number;
   stock: number;
+  /** Every category, hidden ones too. */
+  categories?: AdminCategory[];
   products: AdminProduct[];
   orders: {
     id: string;

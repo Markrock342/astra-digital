@@ -24,6 +24,7 @@ import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
   ensureCoupons,
+  ensureCategories,
   ensureCustomerAdmin,
   ensureOrderExtras,
   ensureOrderHistory,
@@ -90,6 +91,7 @@ export function createCommerce(options = {}) {
   ensureSmallUxB(db);
   ensureOrderExtras(db);
   ensureCoupons(db);
+  ensureCategories(db);
   ensureEmailAndReset(db);
   ensureLiveVersions(db);
   ensureAppendOnlyMoney(db);

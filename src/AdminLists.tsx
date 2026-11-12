@@ -6,6 +6,7 @@ import {
   Copy,
   Download,
   Eye,
+  FolderInput,
   Images,
   LoaderCircle,
   LogOut,
@@ -1685,7 +1686,7 @@ export function AdminProducts({
   onStock,
   onDuplicate,
 }: {
-  categories: { id: string; name: string }[];
+  categories: { id: string; name: string; hidden?: boolean }[];
   priceOf: (id: string) => string;
   onStock: (name: string) => void;
   onDuplicate: (id: string) => Promise<void>;
@@ -1695,9 +1696,11 @@ export function AdminProducts({
   const list = useCursorList<ProductRow>("/admin/products", "products", { ...filters, limit: "50" }, ["catalog", "orders"]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   // Bulk changes touch many products at once, so each one asks again before running.
-  const [confirming, setConfirming] = useState<BulkAction | "duplicate" | null>(null);
+  const [confirming, setConfirming] = useState<BulkAction | "duplicate" | "move" | null>(null);
+  const [moveTo, setMoveTo] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const categoryLabel = (id: string) => categories.find((c) => c.id === id)?.name ?? id;
   const set = (patch: Filters) => {
     setFilters((f) => ({ ...f, ...patch }));
     setPicked(new Set());
@@ -1726,6 +1729,30 @@ export function AdminProducts({
           (result.updated < pickedIds.length ? ` (เปลี่ยนจริง ${result.updated})` : ""),
       );
       setPicked(new Set());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      setConfirming(null);
+    }
+  }
+  /** "ย้ายหมวด…": every picked product goes to one category in one request. */
+  async function moveCategory() {
+    if (!moveTo) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ updated: number }>("/admin/products/bulk", {
+        action: "move",
+        ids: pickedIds,
+        category: moveTo,
+      });
+      toast(
+        `ย้าย ${pickedIds.length} สินค้าไปหมวด ${categoryLabel(moveTo)} แล้ว` +
+          (result.updated < pickedIds.length ? ` (เปลี่ยนจริง ${result.updated})` : ""),
+      );
+      setPicked(new Set());
+      setMoveTo("");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1815,7 +1842,41 @@ export function AdminProducts({
       {pickedIds.length > 0 && (
         <div className="bulk-action-bar" role="region" aria-label="จัดการสินค้าที่เลือก">
           <strong>เลือก {pickedIds.length} สินค้า</strong>
-          {confirming ? (
+          {confirming === "move" ? (
+            <span className="queue-confirm bulk-move-confirm">
+              <label className="bulk-move-select">
+                <span className="sr-only">ย้ายไปหมวด</span>
+                <select
+                  aria-label="ย้ายไปหมวด"
+                  value={moveTo}
+                  disabled={busy}
+                  onChange={(e) => setMoveTo(e.target.value)}
+                >
+                  <option value="">เลือกหมวดปลายทาง…</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.hidden ? " (ซ่อนอยู่)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="button primary"
+                disabled={busy || !moveTo}
+                onClick={() => void moveCategory()}
+              >
+                {busy && <LoaderCircle className="spin" size={15} />}
+                {moveTo
+                  ? `ยืนยันย้าย ${pickedIds.length} สินค้าไป ${categoryLabel(moveTo)}`
+                  : `ย้าย ${pickedIds.length} สินค้า`}
+              </button>
+              <button type="button" className="button secondary" disabled={busy} onClick={() => setConfirming(null)}>
+                ยกเลิก
+              </button>
+            </span>
+          ) : confirming ? (
             <span className="queue-confirm">
               <button
                 type="button"
@@ -1839,6 +1900,17 @@ export function AdminProducts({
                   {bulkText[action][0]}
                 </button>
               ))}
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => {
+                  setMoveTo("");
+                  setConfirming("move");
+                }}
+              >
+                <FolderInput size={14} />
+                ย้ายหมวด…
+              </button>
               {pickedIds.length === 1 && (
                 <button type="button" className="button secondary" onClick={() => setConfirming("duplicate")}>
                   <Copy size={14} />
@@ -1918,6 +1990,7 @@ export function AdminProducts({
                     <div>
                       <Link to={"/admin/products/" + p.id}>{p.name}</Link>
                       <span className="product-state">
+                        <span className="product-category-tag">{categoryLabel(p.category)}</span>
                         <span>{p.active ? "เปิดขาย" : "ฉบับร่าง"}</span>
                         {p.preorder && <span>พรีออเดอร์</span>}
                         {p.featured && <span className="featured-tag">แนะนำ</span>}

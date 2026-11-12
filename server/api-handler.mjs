@@ -471,6 +471,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             });
           return send(200, report);
         }
+        if (path === "/api/categories")
+          return send(200, { categories: service.publicCategories() });
+        if (path === "/api/admin/categories")
+          return send(200, service.adminCategories(user));
         if (path === "/api/admin/coupons")
           return send(200, service.adminCoupons(user, {
             q: url.searchParams.get("q") ?? undefined,
@@ -549,6 +553,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             }),
           );
       } else if (request.method === "PATCH") {
+        if (/^\/api\/admin\/categories\/[^/]+$/.test(path))
+          return send(200, service.adminUpdateCategory(user, path.split("/")[4], input));
         if (/^\/api\/admin\/coupons\/[^/]+$/.test(path))
           return send(200, service.adminUpdateCoupon(user, path.split("/")[4], input));
         if (/^\/api\/admin\/products\/[^/]+\/images$/.test(path))
@@ -576,6 +582,14 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
               : {},
           );
         }
+        // ?moveTo=<id>: move the category's products there, then delete (one transaction).
+        if (/^\/api\/admin\/categories\/[^/]+$/.test(path))
+          return send(
+            200,
+            service.adminDeleteCategory(user, path.split("/")[4], {
+              moveTo: url.searchParams.get("moveTo") ?? undefined,
+            }),
+          );
         if (/^\/api\/admin\/product-images\/[^/]+$/.test(path))
           return send(
             200,
@@ -611,6 +625,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             assertCouponRate(request, env, user);
           return send(201, service.createOrder(user, input));
         }
+        if (path === "/api/admin/categories")
+          return send(201, service.adminCreateCategory(user, input));
+        if (path === "/api/admin/categories/reorder")
+          return send(200, service.adminReorderCategories(user, input));
         if (path === "/api/admin/coupons")
           return send(201, service.adminCreateCoupon(user, input));
         if (/^\/api\/admin\/coupons\/[^/]+\/disable$/.test(path))

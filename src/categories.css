@@ -1,0 +1,534 @@
+/* Product categories.
+   Storefront: chips on /products + the home category row. shadcn/ui Toggle Group / Card
+   patterns (MIT) on the storefront tokens (--surface, --border, --accent, --radius…), so
+   every accent (blue · yellow · duo · mono) works in light and dark.
+   Admin: สินค้า › หมวดหมู่, shadcn/ui data table + dialog patterns on the admin pass
+   (white cards on cool grey, --brand). */
+
+/* ---------- Shared icon tile ---------- */
+.category-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--raised, #f1f3f6);
+  color: var(--muted, #64748b);
+}
+/* Library covers are 1200² with the logo in the middle ~65%: zoom past the padding so the
+   mark stays readable at icon size. */
+.category-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(1.45);
+}
+
+/* ---------- Storefront: chips on /products ---------- */
+.storefront-category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  margin: 4px 0 8px;
+}
+.storefront-category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 12px 6px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn, 12px);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.storefront-category-chip:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--hover);
+}
+.storefront-category-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.storefront-category-chip .category-icon {
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 999px;
+}
+.storefront-category-chip .category-icon img {
+  transform: scale(1.7);
+}
+.storefront-category-chip .chip-count {
+  min-width: 22px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+.storefront-category-chip.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+.storefront-category-chip.selected .chip-count {
+  background: color-mix(in srgb, var(--accent-ink) 18%, transparent);
+  color: var(--accent-ink);
+}
+.storefront-category-chip.selected .category-icon-all {
+  background: color-mix(in srgb, var(--accent-ink) 18%, transparent);
+  color: var(--accent-ink);
+}
+/* Phones: one swipeable row inside the page (the page itself never scrolls sideways). */
+@media (max-width: 700px) {
+  .storefront-category-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    margin-inline: -16px;
+    padding: 2px 16px 6px;
+    scroll-padding-inline: 16px;
+  }
+  .storefront-category-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .storefront-category-chip {
+    min-height: 38px;
+    font-size: 13px;
+  }
+}
+
+/* ---------- Storefront: home category row ---------- */
+.home-categories {
+  margin-top: 48px;
+}
+.home-categories-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.home-categories-head h2 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+}
+.home-categories-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-text);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.home-category-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.home-category-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 100%;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 14px);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  transition:
+    transform 0.35s var(--ease-out-expo, ease),
+    border-color 0.25s ease,
+    box-shadow 0.3s ease;
+}
+.home-category-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow: var(--shadow);
+}
+.home-category-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.home-category-card .category-icon {
+  border-radius: var(--radius-sm, 10px);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.home-category-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.home-category-text strong {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.home-category-text small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.home-category-arrow {
+  flex: none;
+  color: var(--muted);
+  transition: transform 0.25s ease, color 0.25s ease;
+}
+.home-category-card:hover .home-category-arrow {
+  color: var(--accent-text);
+  transform: translateX(3px);
+}
+.home-categories + .reference-catalog {
+  margin-top: 48px;
+}
+@media (max-width: 600px) {
+  .home-categories {
+    margin-top: 36px;
+  }
+  .home-category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .home-category-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+  }
+  .home-category-arrow {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-category-card,
+  .home-category-card:hover {
+    transform: none;
+  }
+}
+
+/* ---------- Admin: สินค้า › หมวดหมู่ ---------- */
+.merchant-shell .category-admin {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.merchant-shell .category-admin .reference-admin-heading {
+  margin-bottom: 0;
+}
+.merchant-shell .category-table td {
+  vertical-align: middle;
+}
+.merchant-shell .category-order-col {
+  width: 92px;
+}
+.merchant-shell .category-order {
+  display: inline-flex;
+  gap: 4px;
+}
+.merchant-shell .category-order .icon-button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.merchant-shell .category-order .icon-button:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.merchant-shell .category-order .icon-button:disabled {
+  opacity: 0.35;
+}
+.merchant-shell .category-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.merchant-shell .category-cell .category-icon {
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.merchant-shell .category-cell > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.merchant-shell .category-cell strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.merchant-shell .category-cell small {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.merchant-shell .category-cell code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--raised);
+  color: var(--text);
+}
+.merchant-shell .category-count {
+  display: inline-grid;
+  justify-items: end;
+  gap: 1px;
+}
+.merchant-shell .category-count small {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.merchant-shell .category-visibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.merchant-shell .category-visibility::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.merchant-shell .category-visibility.shown {
+  background: #ecfdf3;
+  color: #15803d;
+}
+.merchant-shell .category-visibility.hidden {
+  background: #f1f3f6;
+  color: #4b5563;
+}
+.merchant-shell .category-visibility.empty {
+  background: #fff7ed;
+  color: #b45309;
+}
+.merchant-shell .category-table tr.is-hidden .category-cell strong {
+  color: var(--muted);
+}
+.merchant-shell .category-actions-col {
+  text-align: right;
+}
+.merchant-shell .category-row-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.merchant-shell .category-row-actions .button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.merchant-shell .category-admin-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.merchant-shell .category-admin-note a {
+  color: var(--brand);
+  font-weight: 500;
+}
+/* Dialogs (shadcn/ui Dialog: header, body, right-aligned footer). */
+.category-dialog .category-icon-field {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--raised);
+}
+.category-dialog .category-icon-field .category-icon {
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.category-dialog .category-field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+.category-dialog .category-icon-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.category-dialog .field input {
+  width: 100%;
+}
+.category-dialog .category-slug-warning {
+  display: block;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+}
+.category-dialog .category-hidden-field {
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.category-delete-dialog .category-delete-body {
+  padding: 0 24px 24px;
+}
+.category-delete-dialog .category-delete-body p {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--text);
+}
+.category-delete-dialog .field {
+  margin-top: 16px;
+}
+.category-delete-dialog .field select {
+  width: 100%;
+}
+.category-delete-dialog .form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+/* Products list: category tag + the bulk "ย้ายหมวด…" select. */
+.merchant-shell .product-state .product-category-tag {
+  color: var(--text);
+  background: var(--raised);
+  border-radius: 4px;
+  padding: 0 6px;
+}
+.merchant-shell .bulk-move-confirm {
+  flex-wrap: wrap;
+}
+.merchant-shell .bulk-move-select select {
+  height: 36px;
+  min-width: 180px;
+  max-width: 100%;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+/* Phones: one compact card per category (name + order on top, count + status, actions)
+   instead of the generic one-cell-per-line table card. */
+@media (max-width: 600px) {
+  .merchant-shell .category-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name order"
+      "meta meta"
+      "actions actions";
+    gap: 10px 12px;
+    padding: 14px;
+  }
+  .merchant-shell .category-table tbody td {
+    height: auto;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    justify-content: flex-start;
+  }
+  .merchant-shell .category-table tbody td::before {
+    content: none !important;
+  }
+  .merchant-shell .category-table tbody td:nth-child(1) {
+    grid-area: order;
+    justify-content: flex-end;
+  }
+  .merchant-shell .category-table tbody td:nth-child(2) {
+    grid-area: name;
+  }
+  .merchant-shell .category-table tbody td:nth-child(3) {
+    grid-area: meta;
+  }
+  .merchant-shell .category-table tbody td:nth-child(4) {
+    grid-area: meta;
+    justify-content: flex-end;
+  }
+  .merchant-shell .category-table tbody td:nth-child(5) {
+    grid-area: actions;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+  }
+  .merchant-shell .category-table .category-count {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .merchant-shell .category-table .category-count::before {
+    content: "สินค้า";
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .merchant-shell .category-table .category-row-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+  .merchant-shell .category-table .category-row-actions .button {
+    justify-content: center;
+  }
+  .merchant-shell .category-table .category-visibility {
+    max-width: 100%;
+    text-align: right;
+  }
+}
+@media (max-width: 700px) {
+  .merchant-shell .category-order-col,
+  .merchant-shell .category-actions-col {
+    width: auto;
+    text-align: left;
+  }
+  .merchant-shell .category-row-actions {
+    justify-content: flex-start;
+  }
+  .merchant-shell .category-count {
+    justify-items: start;
+  }
+  .merchant-shell .bulk-move-confirm,
+  .merchant-shell .bulk-move-select,
+  .merchant-shell .bulk-move-select select {
+    width: 100%;
+  }
+  .category-delete-dialog .category-delete-body {
+    padding: 0 16px 20px;
+  }
+}

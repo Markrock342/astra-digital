@@ -1,10 +1,14 @@
 // Optional short pages.dev frontend. The existing Worker remains the only API/database owner.
 // Besides forwarding /api/* it serves /robots.txt and /sitemap.xml and rewrites the <head>
-// of "/" and "/products/<id>" so link previews show the shop / product (HTMLRewriter).
+// of "/", "/products/<id>" and "/products?category=<id>" so link previews show the shop /
+// product / category (HTMLRewriter).
 // Bundled to dist-pages/_worker.js by scripts/build-pages.mjs.
 import {
   REPLACED_HEAD_SELECTORS,
+  categoryIdFromQuery,
+  categoryMeta,
   homeMeta,
+  isListedCategory,
   metaTags,
   productIdFromPath,
   productMeta,
@@ -64,11 +68,16 @@ function rewriteHead(response, meta) {
   return out;
 }
 
-async function pageMeta(env, origin, pathname) {
-  const shop = await publicApi(env, origin, "/api/overview")
-    .then((data) => data?.shop ?? null)
-    .catch(() => null);
+async function pageMeta(env, origin, pathname, search) {
+  const overview = await publicApi(env, origin, "/api/overview").catch(() => null);
+  const shop = overview?.shop ?? null;
   if (pathname === "/") return homeMeta(origin, shop);
+  if (pathname === "/products") {
+    // "/products?category=x": same cached overview call, nothing extra per request.
+    const id = categoryIdFromQuery(new URLSearchParams(search).get("category"));
+    const category = id && (overview?.categories ?? []).find((c) => c.id === id);
+    return category && isListedCategory(category) ? categoryMeta(origin, category, shop) : null;
+  }
   const id = productIdFromPath(pathname);
   if (!id) return null;
   const data = await publicApi(env, origin, "/api/products/" + encodeURIComponent(id));
@@ -84,14 +93,20 @@ export default {
       return textResponse(robotsTxt(url.origin), "text/plain; charset=utf-8", request, 3600);
     if (read && url.pathname === "/sitemap.xml") {
       let products = [];
+      let categories = [];
       let maxAge = 600;
       try {
-        products = (await publicApi(env, url.origin, "/api/products")).products ?? [];
+        const [list, overview] = await Promise.all([
+          publicApi(env, url.origin, "/api/products"),
+          publicApi(env, url.origin, "/api/overview"),
+        ]);
+        products = list.products ?? [];
+        categories = overview?.categories ?? [];
       } catch {
         maxAge = 60; // list the static pages now, retry products soon
       }
       return textResponse(
-        sitemapXml(url.origin, products),
+        sitemapXml(url.origin, products, categories),
         "application/xml; charset=utf-8",
         request,
         maxAge,
@@ -99,7 +114,10 @@ export default {
     }
     const response = await env.ASSETS.fetch(request);
     const wantsMeta =
-      read && (url.pathname === "/" || productIdFromPath(url.pathname) !== null);
+      read &&
+      (url.pathname === "/" ||
+        productIdFromPath(url.pathname) !== null ||
+        (url.pathname === "/products" && url.searchParams.has("category")));
     if (
       !wantsMeta ||
       response.status !== 200 ||
@@ -107,7 +125,7 @@ export default {
     )
       return response;
     try {
-      const meta = await pageMeta(env, url.origin, url.pathname);
+      const meta = await pageMeta(env, url.origin, url.pathname, url.search);
       return meta ? rewriteHead(response, meta) : response;
     } catch {
       return response; // product missing or API down: plain SPA HTML

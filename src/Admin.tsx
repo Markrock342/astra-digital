@@ -74,6 +74,7 @@ import { libraryBlob, suggestFromName, type LibraryItem } from "./image-library"
 import { uploadImage } from "./image-upload";
 import { AdminAlerts, AdminBackup } from "./AdminAlerts";
 import { AdminCoupons } from "./AdminCoupons";
+import { AdminCategories } from "./AdminCategories";
 import { AdminIntegrations } from "./AdminIntegrations";
 import { LegalSettings } from "./Legal";
 import type { AdminData, Features, Product, QueueItem } from "./types";
@@ -193,6 +194,9 @@ export default function Admin() {
     ? (pickedCover ?? (library.items ? suggestFromName(library.items, formValues?.name ?? "") : null))
     : null;
   const realProducts = data?.products ?? [];
+  // Every category (hidden ones too); the public overview lists only the visible ones.
+  const categories = data?.categories ?? [];
+  const defaultCategory = categories.find((c) => !c.hidden)?.id ?? categories[0]?.id ?? "streaming";
   const setupSteps: [string, string, boolean][] = [
     ["ใส่ชื่อร้านและช่องทางติดต่อ", "settings", !!overview?.shop?.shopName],
     ["เพิ่มสินค้าชิ้นแรก", "products", realProducts.length > 0],
@@ -239,7 +243,7 @@ export default function Admin() {
         preorder: type === "preorder",
         name: values.name,
         description: values.description,
-        category: values.category ?? "streaming",
+        category: values.category ?? defaultCategory,
         price: Math.round(Number(values.price ?? 1) * 100),
         firstWarrantyDays: firstWarrantyValue(values.firstWarrantyDays),
         active: newProduct ? false : values.active === "on",
@@ -462,9 +466,10 @@ export default function Admin() {
             </AdminDashboard>
           </>
         ) : null}
+        {tab === "categories" && <AdminCategories />}
         {tab === "products" && !formOpen && (
           <AdminProducts
-            categories={overview?.categories ?? []}
+            categories={categories}
             priceOf={(id) => {
               const p = data.products.find((x) => x.id === id);
               if (!p || !p.variants.length) return "–";
@@ -524,14 +529,14 @@ export default function Admin() {
             <aside className="product-preview-col" aria-label="ตัวอย่างบนหน้าร้าน">
               <ProductPreview
                 categoryName={
-                  overview?.categories.find(
-                    (c) => c.id === (formValues?.category ?? editingProduct?.category ?? "streaming"),
+                  categories.find(
+                    (c) => c.id === (formValues?.category ?? editingProduct?.category ?? defaultCategory),
                   )?.name ?? ""
                 }
                 draft={{
                   name: formValues?.name ?? editingProduct?.name ?? "",
                   description: formValues?.description ?? editingProduct?.description ?? "",
-                  category: formValues?.category ?? editingProduct?.category ?? "streaming",
+                  category: formValues?.category ?? editingProduct?.category ?? defaultCategory,
                   preorder: formValues ? formValues.type === "preorder" : !!editingProduct?.preorder,
                   active: formValues ? formValues.active === "on" : !!editingProduct?.active,
                   featured: formValues ? formValues.featured === "on" : !!editingProduct?.featured,
@@ -694,11 +699,12 @@ export default function Admin() {
                   หมวดหมู่
                   <select
                     name="category"
-                    defaultValue={editingProduct?.category ?? "streaming"}
+                    defaultValue={editingProduct?.category ?? defaultCategory}
                   >
-                    {overview?.categories.map((c) => (
+                    {categories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
+                        {c.hidden ? " (ซ่อนอยู่)" : ""}
                       </option>
                     ))}
                   </select>
@@ -913,6 +919,7 @@ export default function Admin() {
           "orders",
           "preorders",
           "coupons",
+          "categories",
           "customers",
           "payments",
           "top-ups",
@@ -929,17 +936,7 @@ export default function Admin() {
                 ([key]) => key === tab,
               )?.[1] ?? "รายการ"}
             </h1>
-            {tab !== "categories" && <p>ไม่พบหน้านี้</p>}
-            {tab === "categories" &&
-              overview?.categories.map((c) => (
-                <div className="settings-row" key={c.id}>
-                  <span>{c.name}</span>
-                  <strong>
-                    {data.products.filter((p) => p.category === c.id).length}{" "}
-                    สินค้า
-                  </strong>
-                </div>
-              ))}
+            <p>ไม่พบหน้านี้</p>
           </section>
         )}
         {importing && (

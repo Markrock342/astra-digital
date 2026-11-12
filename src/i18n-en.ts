@@ -513,4 +513,9 @@ export const EN_STRINGS: Record<string, string> = {
   "สรุปยอด": "Price summary",
   "ราคาสินค้า": "Item price",
   "ยอดชำระ": "Amount paid",
+  // Categories (Categories.tsx, ReferenceStore.tsx)
+  "หมวดหมู่สินค้า": "Product categories",
+  "เลือกตามหมวดหมู่": "Shop by category",
+  "ดูสินค้าทั้งหมด": "See all products",
+  "สินค้าหมวด {name} ทั้งหมดของร้าน": "All {name} products in the store",
 };

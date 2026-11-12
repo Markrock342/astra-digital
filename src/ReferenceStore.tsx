@@ -34,16 +34,27 @@ import { WarrantyDays } from "./Warranty";
 import { api, dateTime, money } from "./api";
 import type { Order, Product, Review } from "./types";
 import { MAX_PER_ORDER } from "./types";
+import { CategoryChips, categoryName, useCategoryParam } from "./Categories";
 import { ForgotPassword, TURNSTILE_WAIT, TurnstileBox, useAuthConfig } from "./AccountRecovery";
-export function ReferenceCatalog() {
-  const { products, loading } = useStore();
+/**
+ * Product list with search + sort. On /products (`routed`) it also shows the category chips
+ * and filters by ?category=<id>; the URL loads filtered and works with search and sort.
+ * An unknown or hidden category id falls back to all products.
+ */
+export function ReferenceCatalog({ routed = false }: { routed?: boolean }) {
+  const { products, loading, overview } = useStore();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("featured");
+  const param = useCategoryParam();
+  const categories = routed ? (overview?.categories ?? []) : [];
+  const category = categories.find((c) => c.id === param) ?? null;
   const filtered = products
-    .filter((p) =>
-      (p.name + " " + p.description)
-        .toLowerCase()
-        .includes(query.toLowerCase()),
+    .filter(
+      (p) =>
+        (!category || p.category === category.id) &&
+        (p.name + " " + p.description)
+          .toLowerCase()
+          .includes(query.toLowerCase()),
     )
     .sort((a, b) =>
       sort === "low"
@@ -57,7 +68,7 @@ export function ReferenceCatalog() {
   return (
     <section className="reference-catalog">
       <div className="reference-catalog-title">
-        <h2>{t("สินค้าทั้งหมด")}</h2>
+        <h2>{category ? categoryName(category) : t("สินค้าทั้งหมด")}</h2>
         <p>{filtered.length}{" "}{t("รายการ")}</p>
       </div>
       <div className="reference-catalog-tools">
@@ -91,6 +102,9 @@ export function ReferenceCatalog() {
           </select>
         </label>
       </div>
+      {routed && (
+        <CategoryChips categories={categories} selected={category?.id ?? ""} total={products.length} />
+      )}
       {loading ? (
         <div className="product-grid">
           {[1, 2].map((i) => (
@@ -125,13 +139,23 @@ export function ReferenceCatalog() {
   );
 }
 export function ReferenceCatalogPage() {
+  const { overview } = useStore();
+  const param = useCategoryParam();
+  const category = overview?.categories.find((c) => c.id === param);
+  // Title: "<หมวด> — <ร้าน>" for a category, like the Pages proxy link preview.
+  usePageTitle(
+    category ? categoryName(category) : t("สินค้าทั้งหมด"),
+    category
+      ? t("สินค้าหมวด {name} ทั้งหมดของร้าน", { name: categoryName(category) })
+      : t("สินค้าดิจิทัลทั้งหมดของร้าน"),
+  );
   return (
     <main className="container page-main reference-catalog-page">
       <div className="page-heading">
         <h1>{t("สินค้า")}</h1>
         <p>{t("สินค้าทั้งหมดของร้าน")}</p>
       </div>
-      <ReferenceCatalog />
+      <ReferenceCatalog routed />
     </main>
   );
 }
