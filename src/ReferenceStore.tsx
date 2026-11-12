@@ -272,7 +272,10 @@ export function ReferenceProduct({ id }: { id: string }) {
     product?.variants.find((v) => v.id === selected) ??
     product?.variants.find((v) => v.stock > 0) ??
     product?.variants[0];
-  usePageTitle(product?.name ?? (loading ? t("สินค้า") : t("ไม่พบสินค้า")));
+  usePageTitle(
+    product?.name ?? (loading ? t("สินค้า") : t("ไม่พบสินค้า")),
+    product?.description,
+  );
   const [reviews, setReviews] = useState<Review[]>([]);
   useEffect(() => {
     api<{ reviews: Review[] }>("/reviews")
@@ -284,7 +287,14 @@ export function ReferenceProduct({ id }: { id: string }) {
   if (loading)
     return (
       <main className="container page-main reference-product-page">
-        <div className="product-skeleton" />
+        <div className="skeleton-product" aria-busy="true" aria-label={t("กำลังโหลดสินค้า")}>
+          <div className="skeleton-block skeleton-media" />
+          <div>
+            <div className="skeleton-block skeleton-line" />
+            <div className="skeleton-block skeleton-line short" />
+            <div className="skeleton-block skeleton-panel short" />
+          </div>
+        </div>
       </main>
     );
   if (!product || !variant)
