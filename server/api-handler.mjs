@@ -468,7 +468,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (/^\/api\/admin\/orders\/[^/]+\/reveal$/.test(path))
           return send(
             200,
-            service.adminRevealOrderCredentials(user, path.split("/")[4]),
+            service.adminRevealOrderCredentials(user, path.split("/")[4], input),
           );
         if (/^\/api\/admin\/customers\/[^/]+$/.test(path))
           return send(200, service.adminUpdateCustomer(user, path.split("/")[4], input));

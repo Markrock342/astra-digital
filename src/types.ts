@@ -87,14 +87,8 @@ export type AdminData = {
     product_id: string;
     product: string;
   }[];
-  customers: (Omit<User, "balance"> & { created_at: string })[];
-  ledger: (Ledger & { name: string })[];
-  audit: {
-    id: number;
-    action: string;
-    entity_id: string;
-    created_at: string;
-  }[];
+  pendingPayment: number;
+  preorderQueue: number;
 };
 
 export type Review = {

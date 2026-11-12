@@ -870,7 +870,9 @@ test("ADMIN-FR-W2: order detail masks credentials; reveal audits", (t) => {
   assert.equal(detail.credentialsMasked, true);
   assert.ok(detail.customer.email);
   assert.ok(detail.product.name);
-  assert.ok(detail.payments.some((p) => p.status === "SUCCEEDED"));
+  // Team members don't see payment records (NFR-3); the admin view does.
+  assert.deepEqual(detail.payments, []);
+  assert.ok(s.adminOrderDetail(merchant, order.id).payments.some((p) => p.status === "SUCCEEDED"));
   assert.ok(detail.timeline.some((e) => e.event === "paid"));
   assert.ok(detail.timeline.some((e) => e.event === "delivered"));
   assert.ok(Array.isArray(detail.units));
@@ -882,8 +884,9 @@ test("ADMIN-FR-W2: order detail masks credentials; reveal audits", (t) => {
     assert.ok(!blob.includes(cred.password));
   }
 
-  assert.throws(() => s.adminRevealOrderCredentials(user, order.id), (e) => e.status === 403);
-  const revealed = s.adminRevealOrderCredentials(staff, order.id);
+  assert.throws(() => s.adminRevealOrderCredentials(user, order.id, { reason: "ทดสอบ" }), (e) => e.status === 403);
+  assert.throws(() => s.adminRevealOrderCredentials(staff, order.id), (e) => e.status === 400);
+  const revealed = s.adminRevealOrderCredentials(staff, order.id, { reason: "ลูกค้าแจ้งว่าเข้าใช้งานไม่ได้" });
   assert.equal(revealed.credentialsMasked, false);
   if (paid.codes?.length) assert.deepEqual(revealed.codes, paid.codes);
   const audit = s.db
@@ -1761,7 +1764,7 @@ test("ADMIN-FR-W5-O5: replace after preorder deliver; empty stock 409", (t) => {
   assert.ok(out.newInventoryId);
   assert.equal(s.orderDetail(user, order.id).credentials[0].loginId, "spare-pre");
   assert.equal(
-    s.adminRevealOrderCredentials(merchant, order.id).credentials[0].loginId,
+    s.adminRevealOrderCredentials(merchant, order.id, { reason: "ตรวจหลังเปลี่ยนบัญชี" }).credentials[0].loginId,
     "spare-pre",
   );
 
@@ -1817,4 +1820,67 @@ test("an existing customer can be given staff or admin rights and taken back to 
   // A banned customer must be re-enabled first.
   s.adminSetCustomerStatus(merchant, user.id, { status: "BANNED", reason: "ทดสอบ" });
   assert.throws(() => s.setMemberRole(merchant, user.id, { role: "STAFF" }), (e) => e.status === 409);
+});
+
+test("going live keeps every real customer, even one who signed up without an email", () => {
+  const dir = mkdtempSync(join(tmpdir(), "astra-golive-"));
+  const path = join(dir, "shop.db");
+  const key = randomBytes(32);
+  const testing = createCommerce({ path, key, allowSandbox: true, allowDemoAdmin: true, seed: false });
+  const noEmail = testing.register({ name: "ลูกค้าไม่มีอีเมล", username: "realbuyer01", password: "Real-buyer-Password-123" });
+  assert.match(testing.session(noEmail.token).email, /@no-email\.asiax\.local$/);
+  testing.register({ name: "ลูกค้าจริง", email: "real@example.invalid", password: "Real-buyer-Password-123" });
+  const visitor = testing.demo();
+  const demoOwner = testing.demoMerchant();
+  const ownerId = testing.session(demoOwner.token).id;
+  testing.db.close();
+
+  const live = createCommerce({ path, key, allowSandbox: false, allowDemoAdmin: false, seed: false });
+  try {
+    const ids = live.db.prepare("SELECT id,status FROM users").all();
+    assert.ok(live.login({ username: "realbuyer01", password: "Real-buyer-Password-123" }).token, "no-email customer kept");
+    assert.ok(live.login({ email: "real@example.invalid", password: "Real-buyer-Password-123" }).token, "email customer kept");
+    assert.equal(live.session(visitor.token), null);
+    assert.equal(ids.find((u) => u.id === ownerId)?.status, "SUSPENDED");
+  } finally {
+    live.db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("test credit is capped so free credit cannot drain stock", (t) => {
+  const { s, user } = fixture(t);
+  let n = 0;
+  const top = (amount) => s.topup(user, { amount, requestKey: "cap-test-key-" + ++n });
+  // Welcome credit is 500 THB; nine 1,000 top-ups and one 500 reach the 10,000 cap.
+  for (let i = 0; i < 9; i++) top(1000);
+  top(500);
+  assert.throws(() => top(100), (e) => e.status === 409 && /10000/.test(e.message));
+});
+
+test("credential reveals are budgeted per hour and admins are told when someone hits the limit", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.topup(user, { amount: 100, requestKey: "reveal-budget-topup" });
+  const order = s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: "reveal-budget-order" });
+  s.pay(user, order.id, { paymentToken: order.paymentToken, outcome: "success" });
+  for (let i = 0; i < 20; i++) s.adminRevealOrderCredentials(staff, order.id, { reason: "ตรวจซ้ำ " + i });
+  assert.throws(() => s.adminRevealOrderCredentials(staff, order.id, { reason: "อีกครั้ง" }), (e) => e.status === 429);
+  assert.throws(() => s.adminRevealOrderCredentials(staff, order.id, { reason: "อีกครั้ง" }), (e) => e.status === 429);
+  // One alert per hour, not one per blocked try.
+  assert.equal(s.notifications(merchant).filter((n) => n.kind === "security").length, 1);
+  const last = s.adminAuditLog(merchant, { action: "REVEAL_ORDER_CREDENTIALS", limit: 1 }).entries[0];
+  assert.equal(last.detail.reason, "ตรวจซ้ำ 19");
+  // Admins keep their own, larger budget.
+  assert.doesNotThrow(() => s.adminRevealOrderCredentials(merchant, order.id, { reason: "แอดมินตรวจ" }));
+});
+
+test("team members see the order but not its payment records", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.topup(user, { amount: 100, requestKey: "staff-pay-topup" });
+  const order = s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: "staff-pay-order" });
+  s.pay(user, order.id, { paymentToken: order.paymentToken, outcome: "success" });
+  assert.ok(s.adminOrderDetail(merchant, order.id).payments.length > 0);
+  const seen = s.adminOrderDetail(staff, order.id);
+  assert.deepEqual(seen.payments, []);
+  assert.equal(seen.status, "DELIVERED");
 });

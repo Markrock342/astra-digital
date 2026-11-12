@@ -51,6 +51,7 @@ import {
   AdminReports,
   AdminTeam,
   StaffBackOffice,
+  TestModeStockWarning,
   VariantManager,
   AdminCustomerDetail,
   AdminFinance,
@@ -436,8 +437,8 @@ export default function Admin() {
               )}
             </section>
             <AdminDashboard
-              pendingPayment={data.orders.filter((o) => o.status === "PENDING_PAYMENT").length}
-              preorderQueue={data.orders.filter((o) => o.status === "PREORDER").length}
+              pendingPayment={data.pendingPayment}
+              preorderQueue={data.preorderQueue}
             >
               <BuyerRankingCard />
               {recent}
@@ -855,6 +856,7 @@ export default function Admin() {
                   <X size={18} />
                 </button>
               </div>
+              <TestModeStockWarning />
               <form onSubmit={importCodes}>
                 <ErrorMessage message={error} />
                 <label className="field">

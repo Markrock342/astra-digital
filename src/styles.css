@@ -9305,3 +9305,14 @@ a.reference-bestseller {
 .merchant-shell .admin-detail-grid > .span-2 {
   grid-column: 1 / -1;
 }
+.merchant-shell .admin-test-warning {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #f59e0b;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 500;
+}

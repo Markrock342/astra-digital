@@ -460,12 +460,18 @@ export function AdminOrderDetail({ id }: { id: string }) {
         บัญชีเสีย · เปลี่ยนให้ลูกค้า
       </button>
     ) : null;
-  async function reveal() {
+  // Reveals need a reason (kept in the audit log) and are budgeted per hour on the server.
+  const [revealReason, setRevealReason] = useState<string | null>(null);
+  async function reveal(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const values = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
+    const reason = values.reason === "อื่นๆ" ? (values.other ?? "").trim() : values.reason;
     try {
-      setRevealed(await api("/admin/orders/" + id + "/reveal", {}));
+      setRevealed(await api("/admin/orders/" + id + "/reveal", { reason }));
+      setRevealReason(null);
       toast("บันทึกการเปิดดูรหัสแล้ว");
-    } catch (e) {
-      setError((e as Error).message);
+    } catch (err) {
+      setError((err as Error).message);
     }
   }
   const shown = revealed ?? order;
@@ -576,11 +582,43 @@ export function AdminOrderDetail({ id }: { id: string }) {
                       </div>
                     </form>
                   )}
-                  {!revealed && (
-                    <button className="button secondary" onClick={reveal}>
+                  {!revealed && revealReason === null && (
+                    <button className="button secondary" onClick={() => setRevealReason("")}>
                       <Eye size={15} />
                       แสดงรหัส (บันทึกว่าใครเปิดดู)
                     </button>
+                  )}
+                  {!revealed && revealReason !== null && (
+                    <form className="admin-reveal-form" onSubmit={reveal}>
+                      <label className="field">
+                        เหตุผลที่เปิดดูรหัส
+                        <select name="reason" required value={revealReason} onChange={(e) => setRevealReason(e.target.value)}>
+                          <option value="" disabled>
+                            เลือกเหตุผล
+                          </option>
+                          <option>ลูกค้าแจ้งว่าเข้าใช้งานไม่ได้</option>
+                          <option>ลูกค้าขอให้ส่งรหัสอีกครั้ง</option>
+                          <option>ตรวจสอบก่อนเปลี่ยนบัญชีให้ลูกค้า</option>
+                          <option>อื่นๆ</option>
+                        </select>
+                      </label>
+                      {revealReason === "อื่นๆ" && (
+                        <label className="field">
+                          ระบุเหตุผล
+                          <input name="other" required minLength={3} maxLength={200} />
+                        </label>
+                      )}
+                      <p className="field-help">ทุกครั้งที่เปิดดูจะบันทึกชื่อคนเปิดและเหตุผลไว้ในประวัติการทำงาน</p>
+                      <div className="admin-action-row">
+                        <button type="button" className="button ghost" onClick={() => setRevealReason(null)}>
+                          ยกเลิก
+                        </button>
+                        <button className="button primary" disabled={!revealReason}>
+                          <Eye size={15} />
+                          แสดงรหัส
+                        </button>
+                      </div>
+                    </form>
                   )}
                 </>
               )}
@@ -604,7 +642,8 @@ export function AdminOrderDetail({ id }: { id: string }) {
                 ))}
               </ol>
               <h2>การชำระเงิน</h2>
-              {order.payments.length === 0 && <p className="muted">ยังไม่มีรายการชำระ</p>}
+              {user?.role !== "ADMIN" && <p className="muted">รายละเอียดการชำระเงินดูได้เฉพาะแอดมิน</p>}
+              {user?.role === "ADMIN" && order.payments.length === 0 && <p className="muted">ยังไม่มีรายการชำระ</p>}
               {order.payments.map((p) => (
                 <div className="settings-row" key={p.id}>
                   <span>
@@ -1537,7 +1576,37 @@ const actionText: Record<string, string> = {
   CHAT_MESSAGE: "ส่งข้อความแชท",
   CLOSE_CHAT: "ปิดแชท",
   DEMO_TOPUP: "เติมเครดิตทดลอง",
+  REVEAL_LIMIT: "เปิดดูรหัสครบโควตาต่อชั่วโมง",
+  TEAM_ROLE: "เปลี่ยนสิทธิ์ทีมงาน",
+  STAFF_CREATE: "เพิ่มบัญชีทีมงาน",
+  STAFF_UPDATE: "แก้ชื่อทีมงาน",
+  STAFF_ENABLE: "เปิดบัญชีทีมงาน",
+  STAFF_DISABLE: "ปิดบัญชีทีมงาน",
+  CHAT_ASSIGN: "มอบหมายแชท",
+  ORDER_NOTE: "เขียนหมายเหตุออเดอร์",
+  CANCEL_ORDER: "ยกเลิกออเดอร์",
+  PRODUCT_IMAGE_ADD: "เพิ่มรูปสินค้า",
+  PRODUCT_IMAGE_REMOVE: "ลบรูปสินค้า",
+  PRODUCT_IMAGE_REORDER: "เรียงรูปสินค้า",
 };
+const roleText: Record<string, string> = { ADMIN: "แอดมิน", STAFF: "ทีมงาน", CUSTOMER: "ลูกค้า" };
+/** Readable one-liner for the audit detail JSON instead of raw braces. */
+function auditDetailText(detail: Record<string, unknown>) {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(detail)) {
+    if (value == null || value === "") continue;
+    if (key === "reason") parts.push("เหตุผล: " + value);
+    else if (key === "from" && typeof value === "string") parts.push("จาก " + (roleText[value] ?? value));
+    else if (key === "to" && typeof value === "string") parts.push("เป็น " + (roleText[value] ?? value));
+    else if (key === "role" && typeof value === "string") parts.push("สิทธิ์ " + (roleText[value] ?? value));
+    else if (key === "limit") parts.push("โควตา " + value + " ครั้ง/ชม.");
+    else if (key === "changed" && value && typeof value === "object")
+      for (const [field, diff] of Object.entries(value as Record<string, { from: unknown; to: unknown }>))
+        parts.push(field + ": " + String(diff.from ?? "—") + " → " + String(diff.to ?? "—"));
+    else parts.push(key + ": " + (typeof value === "object" ? JSON.stringify(value) : String(value)));
+  }
+  return parts.join(" · ");
+}
 
 export function AdminAudit() {
   const [scope, setScope] = useState("staff");
@@ -1546,7 +1615,7 @@ export function AdminAudit() {
   const entityLink = (e: AuditEntry) => {
     if (!e.entity_id) return null;
     if (e.action.startsWith("CUSTOMER_")) return "/admin/customers/" + e.entity_id;
-    if (["REVEAL_ORDER_CREDENTIALS", "DELIVER_RESERVATION", "CREATE_ORDER", "CREATE_PREORDER", "PAYMENT_AND_DELIVERY", "PREORDER_PAID"].includes(e.action))
+    if (["REVEAL_ORDER_CREDENTIALS", "REVEAL_LIMIT", "ORDER_NOTE", "CANCEL_ORDER", "DELIVER_RESERVATION", "CREATE_ORDER", "CREATE_PREORDER", "PAYMENT_AND_DELIVERY", "PREORDER_PAID"].includes(e.action))
       return "/admin/orders/" + e.entity_id;
     if (e.action.startsWith("PRODUCT_") || e.action === "SAVE_PRODUCT") return "/admin/products/" + e.entity_id;
     return null;
@@ -1609,7 +1678,7 @@ export function AdminAudit() {
                   <td>{actionText[e.action] ?? e.action}</td>
                   <td>
                     {link ? <Link to={link}>{shortId(e.entity_id!)}</Link> : e.entity_id ? shortId(e.entity_id) : "–"}
-                    {e.detail && <small className="audit-detail">{JSON.stringify(e.detail)}</small>}
+                    {e.detail && <small className="audit-detail">{auditDetailText(e.detail)}</small>}
                   </td>
                 </tr>
               );
@@ -1627,6 +1696,24 @@ export function AdminAudit() {
 // ---------------------------------------------------------------- Settings: team (FR-S4)
 
 type Member = { id: string; name: string; email: string; role: string; active: boolean; owner?: boolean; created_at: string };
+
+let healthMode: Promise<string> | null = null;
+/** While test payments are on, anyone can buy with free test credit, so real accounts must not go into stock. */
+export function TestModeStockWarning() {
+  const [sandbox, setSandbox] = useState(false);
+  useEffect(() => {
+    healthMode ??= api<{ mode?: string }>("/health")
+      .then((h) => h.mode ?? "")
+      .catch(() => "");
+    void healthMode.then((m) => setSandbox(m === "sandbox"));
+  }, []);
+  if (!sandbox) return null;
+  return (
+    <p className="admin-test-warning" role="note">
+      โหมดทดสอบเปิดอยู่: ใครสมัครก็ใช้เครดิตทดลองซื้อได้ ใส่เฉพาะบัญชีทดสอบ ห้ามใส่บัญชีจริงจนกว่าจะปิดโหมดทดสอบ
+    </p>
+  );
+}
 
 type TeamRole = "ADMIN" | "STAFF" | "CUSTOMER";
 const ROLE_ACTION: Record<TeamRole, string> = {
@@ -2189,6 +2276,7 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
   }
   return (
     <div className="variant-stock">
+      <TestModeStockWarning />
       <form onSubmit={add} className="variant-stock-add">
         <label className="field">
           เติมสต็อก: ID และรหัสผ่าน บรรทัดละ 1 บัญชี

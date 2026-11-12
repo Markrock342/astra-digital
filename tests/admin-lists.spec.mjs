@@ -98,6 +98,8 @@ test("orders filter on the server and the detail page reveals credentials with a
   // Seed stock is a license code: masked until revealed.
   await expect(page.locator(".admin-credential-list")).toContainText("***");
   await page.getByRole("button", { name: /แสดงรหัส/ }).click();
+  await page.getByLabel("เหตุผลที่เปิดดูรหัส").selectOption("ลูกค้าแจ้งว่าเข้าใช้งานไม่ได้");
+  await page.getByRole("button", { name: "แสดงรหัส", exact: true }).click();
   await expect(page.locator(".admin-credential-list")).not.toContainText("***");
   const audit = service.db
     .prepare("SELECT COUNT(*) AS n FROM audit WHERE action='REVEAL_ORDER_CREDENTIALS' AND entity_id=?")
