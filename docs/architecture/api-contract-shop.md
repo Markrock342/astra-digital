@@ -69,6 +69,7 @@
 - หลังงาน 3: `adminFinance` (boolean) — `GET /api/admin/transactions` พร้อม
 - หลังงาน 4: `adminVariantCrud`, `adminStockApi` (boolean)
 - หลังงาน 5 (FR-O5): `adminReplaceCredential` (boolean) — `POST /api/admin/orders/:id/replace`
+- หลังงาน 5 (UP-1 uploads): `uploads` (boolean) — รูปสินค้า + `GET /api/files/:key`
 
 ### สินค้า — ตั้งพรีออเดอร์จากฟอร์ม (FR-P3)
 
@@ -188,6 +189,20 @@ Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์
 - ตอบ metadata เท่านั้น เช่น `{ "id", "status": "DELIVERED", "delivered_at", "delivered_by", "delivered": n }` ไม่มีรหัส
 - เรียกซ้ำหลังส่งแล้วตอบ metadata เดิม 200 · ไม่ใช่ PREORDER ตอบ 409 · ของไม่พอตอบ 409
 - กระดานคิวใช้ `GET /api/queue` เดิม
+
+**อัปโหลดรูปสินค้า (W5 UP-1)** — flag `uploads`
+
+| Method | Path | สิทธิ์ |
+|--------|------|--------|
+| GET | `/api/files/:key` | สาธารณะ |
+| POST | `/api/admin/products/:id/images` | ADMIN · body = ไบต์รูป · `Content-Type: image/jpeg\|png\|webp` |
+| PATCH | `/api/admin/products/:id/images` | ADMIN · JSON `{ "order": [imageId…] }` ครบชุด |
+| DELETE | `/api/admin/product-images/:id` | ADMIN |
+
+- เก็บผ่าน `file-store`: R2 `UPLOADS` ถ้ามี · ไม่มีใช้ตาราง `files` (BLOB)
+- ตรวจ magic bytes + Content-Type · ≤2MB · ห้าม SVG/GIF · key = UUID · rate 30 ครั้ง/10 นาที · audit `PRODUCT_IMAGE_*`
+- `GET /api/files/:key` → `Content-Type` ตามไฟล์ · `nosniff` · `Content-Disposition: inline` · `Cache-Control: public, max-age=31536000, immutable`
+- `products` / `productDetail` / admin products / admin overview ส่ง `images: [{ id, url }]` + `imageUrl` (รูปแรกหรือ null)
 
 **เปลี่ยนบัญชีที่เสีย (FR-O5)** — `POST /api/admin/orders/:id/replace` (ADMIN)
 

@@ -2,13 +2,14 @@
 
 อัปเดตล่าสุด: 2026-11-12
 
-## Hotfix DO `run().changes` (ด่วน — ก่อน deploy)
-- PR #37 · branch `fix/do-sql-run-changes` · รวม FR-O5 (#35) + แก้ adapter + `units[]` ใน admin order detail
-- Root cause: DO cursor ไม่มี `.changes` → deliver/replace 409 บน Cloudflare
-- หลักฐาน: Miniflare deliver+replace · `wrangler dev --local` smoke 11/11 · `npm test` 86+
-- รายงาน [MARK_REPORT_DO_SQL_RUN_CHANGES](../database/MARK_REPORT_DO_SQL_RUN_CHANGES.md)
-- DoD บังคับเทส workerd + wrangler local เมื่อแตะ DO path
-- **ห้าม deploy** จนกว่ามาร์คสั่ง
+## Admin FR W5 UP-1 — อัปโหลดรูปสินค้า (กำลังทำ / PR)
+- branch `feat/admin-fr-w5-up1-product-images` จาก main หลัง #37/#38
+- file-store + MIG-008 + product images APIs + `uploads` flag · ห้ามแตะ src/ · ห้าม UP-2/3 ใน PR นี้
+- รายงาน [MARK_REPORT_ADMIN_FR_W5_UPLOADS](../database/MARK_REPORT_ADMIN_FR_W5_UPLOADS.md)
+- **ห้าม deploy**
+
+## Hotfix DO `run().changes` — merge แล้ว
+- PR #37 ใน main · รายงาน [MARK_REPORT_DO_SQL_RUN_CHANGES](../database/MARK_REPORT_DO_SQL_RUN_CHANGES.md)
 
 ## Admin FR — งาน 5 FR-O5 (อยู่ใน hotfix ด้านบน)
 - รายงาน [MARK_REPORT_ADMIN_FR_WORK5_O5](../database/MARK_REPORT_ADMIN_FR_WORK5_O5.md)
