@@ -3,8 +3,8 @@
 อัปเดตล่าสุด: 2026-11-12
 
 ## Admin FR — งาน 5 FR-O5 พร้อม PR (ห้าม deploy)
-- branch `feat/admin-fr-work5-o5-replace-credential` จาก `main` @ `4a8c33f`
-- `POST /api/admin/orders/:id/replace` · flag `adminReplaceCredential` · รายงาน [MARK_REPORT_ADMIN_FR_WORK5_O5](../database/MARK_REPORT_ADMIN_FR_WORK5_O5.md)
+- PR #35 · branch `feat/admin-fr-work5-o5-replace-credential` จาก `main` @ `4a8c33f`
+- `POST /api/admin/orders/:id/replace` · flag `adminReplaceCredential` · 85/85 + e2e 30/30 · รายงาน [MARK_REPORT_ADMIN_FR_WORK5_O5](../database/MARK_REPORT_ADMIN_FR_WORK5_O5.md)
 - **ห้าม deploy**
 
 ## Admin FR — งาน 4 + polish + round2 merge แล้ว

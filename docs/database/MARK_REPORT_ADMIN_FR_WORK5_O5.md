@@ -3,6 +3,7 @@
 **ถึง:** มาร์ค  
 **จาก:** น็อต  
 **วันที่:** 2026-11-12  
+**PR:** https://github.com/Markrock342/astra-digital/pull/35  
 **Branch:** `feat/admin-fr-work5-o5-replace-credential`  
 **ฐาน:** `main` @ `4a8c33f` (#31+#32+#34 merge แล้ว)  
 **Deploy:** **ยังไม่ทำ**
