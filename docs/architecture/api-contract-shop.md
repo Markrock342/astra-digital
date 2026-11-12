@@ -64,7 +64,18 @@
 
 - `GET /api/health` และ `GET /api/me` ส่ง `features` ชุดเดียวกัน
 - หลังงาน 1 มีอย่างน้อย: `credentialPair`, `preorderDelivery`, `adminChatInbox`, `adminOpsNotifications`, `salesRevenueFromPayments` (boolean)
-- หลังงาน 2 เพิ่ม: `adminOrdersApi`, `adminCustomersApi`, `adminProductsApi` (boolean)
+- หลังงาน 2 เพิ่ม: `adminOrdersApi`, `adminCustomersApi`, `adminProductsApi`, `adminSummaryApi` (boolean)
+
+### สรุปยอดตามช่วงวัน (Admin FR งาน 2 เพิ่ม · FR-F10 / FR-R2)
+
+`GET /api/admin/summary?from&to` — **ADMIN only** (STAFF/CUSTOMER → 403)
+
+- `from` / `to` เป็น `YYYY-MM-DD` ตีความเป็นวันปฏิทิน **Asia/Bangkok** (ส่งคู่กัน หรือไม่ส่งทั้งคู่ = ทั้งช่วง)
+- คืน `{ from, to, timezone: "Asia/Bangkok", revenue, orderCount, newCustomers }`
+- `revenue` = สูตร FR-F10 ในช่วง (`payments SUCCEEDED` ตาม `COALESCE(finalized_at,created_at)` − `ledger REFUND`)
+- `orderCount` = จำนวนแถว `orders` + `reservations` ที่ `created_at` ในช่วง
+- `newCustomers` = ผู้ใช้ `role=CUSTOMER` ที่สมัครในช่วง
+- ให้แบงค์เลิกคำนวณยอดจาก blob ใน `Admin.tsx` แล้วใช้เลขนี้
 
 ### รายการหลังบ้านแบบแบ่งหน้า (Admin FR งาน 2 · NFR-1)
 

@@ -3,9 +3,9 @@
 อัปเดตล่าสุด: 2026-11-12
 
 ## Admin FR Backend — งาน 2 พร้อม PR (ห้าม deploy)
-- ฐาน `main` @ `6b37c4a` · branch `feat/admin-fr-work2-list-apis` · Task Spec [ADMIN-FR-WORK2](../prompts/ADMIN-FR-WORK2-list-apis.md)
-- เสร็จ: orders list/detail/reveal · customers · products · features flags · สัญญา · **ยังไม่ตัด** blob `/api/admin` (2.5 เลื่อน)
-- หลักฐาน: `npm test` 66/66 · `test:e2e` 14/14 · รายงาน [MARK_REPORT_ADMIN_FR_WORK2](../database/MARK_REPORT_ADMIN_FR_WORK2.md)
+- ฐาน `main` @ `6b37c4a` · branch `feat/admin-fr-work2-list-apis` · PR https://github.com/Markrock342/astra-digital/pull/26
+- เสร็จ: list APIs + reveal/audit · **`GET /api/admin/summary`** (Bangkok + FR-F10) · คืนสเปก Sharp|Animations ใน e2e · **ยังไม่ตัด** blob `/api/admin` · แชท `order_id` เลื่อน
+- หลักฐาน: `npm test` 67/67 · `test:e2e` 14/14 · รายงาน [MARK_REPORT_ADMIN_FR_WORK2](../database/MARK_REPORT_ADMIN_FR_WORK2.md)
 - **ห้าม deploy** · งาน 3–5 รอ Mark ผ่านงาน 2
 
 ## Deploy 12 พ.ย. — งวด 2 (ล่าสุด)
