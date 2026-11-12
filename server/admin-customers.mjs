@@ -238,6 +238,24 @@ export function createAdminCustomerApis({
     return { entries: page, nextCursor: rows.length > limit ? String(page[page.length - 1].id) : null };
   }
 
+  /**
+   * Shared by the admin cancel below and the unpaid-order expiry (pending-expiry.mjs).
+   * Call inside a transaction. Only an unpaid row changes (conditional UPDATE), so a paid
+   * order is never touched. Unpaid orders hold no inventory (units are bound at payment
+   * or preorder delivery), so there is no stock to release. Returns true when this call
+   * cancelled the row; the audit row is written only then. `actor` null = the system.
+   */
+  function cancelUnpaidOrder({ table, orderId, actor, action, detail, expiredAt = null }) {
+    if (table !== "orders" && table !== "reservations") throw new Error("unknown order table");
+    const changed = run(
+      `UPDATE ${table} SET status='CANCELLED'${expiredAt ? ", expired_at=?" : ""} WHERE id=? AND status='PENDING_PAYMENT'`,
+      ...(expiredAt ? [expiredAt, orderId] : [orderId]),
+    ).changes;
+    if (!changed) return false;
+    auditDetail(actor, action, orderId, detail);
+    return true;
+  }
+
   /** FR-O6 (unpaid only): paid orders need a refund flow, which is not built yet. */
   function adminCancelOrder(user, id, input = {}) {
     requireAdmin(user);
@@ -253,8 +271,7 @@ export function createAdminCustomerApis({
       const row = one(`SELECT status FROM ${table} WHERE id=?`, orderId);
       if (row.status !== "PENDING_PAYMENT")
         fail(409, "ยกเลิกได้เฉพาะออเดอร์ที่ยังไม่ชำระ ออเดอร์ที่ชำระแล้วต้องใช้การคืนเงิน");
-      run(`UPDATE ${table} SET status='CANCELLED' WHERE id=? AND status='PENDING_PAYMENT'`, orderId);
-      auditDetail(user, "CANCEL_ORDER", orderId, { reason });
+      cancelUnpaidOrder({ table, orderId, actor: user, action: "CANCEL_ORDER", detail: { reason } });
       return { id: orderId, status: "CANCELLED" };
     });
   }
@@ -262,6 +279,7 @@ export function createAdminCustomerApis({
   // Internal order notes moved to admin-order-history.mjs (append-only order_notes).
 
   return {
+    cancelUnpaidOrder,
     adminCancelOrder,
     adminAuditLog,
     adminResetCustomerPassword,

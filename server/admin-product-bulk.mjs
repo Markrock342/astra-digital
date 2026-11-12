@@ -83,6 +83,8 @@ export function createAdminProductBulkApis({
         source.art,
         source.preorder ? 1 : 0,
       );
+      if (source.usage_instructions)
+        run("UPDATE products SET usage_instructions=? WHERE id=?", source.usage_instructions, id);
       const variants = all(
         "SELECT * FROM variants WHERE product_id=? ORDER BY sort_order ASC, id ASC",
         sourceId,

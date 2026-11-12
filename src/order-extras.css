@@ -1,0 +1,585 @@
+/* Order extras (src/OrderExtras.tsx): usage instructions, report-issue draft in the chat,
+   receipt page, admin editor fields. Storefront parts use the theme tokens from
+   brand.css; the receipt paper is always a white A4 document. */
+
+/* ---------- Usage instructions (storefront order page) ---------- */
+.storefront-shell .usage-guide {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--raised);
+}
+.storefront-shell .usage-guide h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.storefront-shell .usage-guide h3 svg {
+  color: var(--accent-text);
+  flex: none;
+}
+.usage-text {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.usage-text p,
+.usage-text ul,
+.usage-text ol {
+  margin: 0;
+}
+.usage-text > * + * {
+  margin-top: 8px;
+}
+.usage-text ul,
+.usage-text ol {
+  padding-left: 22px;
+}
+.usage-text li + li {
+  margin-top: 2px;
+}
+.storefront-shell .order-help-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.storefront-shell .report-issue-button {
+  min-height: 44px;
+  gap: 8px;
+}
+.storefront-shell .receipt-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--accent-text);
+  font-weight: 500;
+}
+.storefront-shell .order-meta .receipt-link {
+  min-height: 0;
+  margin-left: auto;
+}
+.storefront-shell .history-item {
+  display: grid;
+}
+.storefront-shell .history-item-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 6px 0;
+}
+
+/* ---------- Report draft inside the shop chat ---------- */
+.storefront-shell .report-draft {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--raised);
+}
+.storefront-shell .report-draft-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+.storefront-shell .report-draft-head svg {
+  color: var(--accent-text);
+  flex: none;
+}
+.storefront-shell .report-draft-head strong {
+  flex: 1;
+  font-weight: 600;
+}
+.storefront-shell .report-draft-head .icon-button {
+  width: 32px;
+  height: 32px;
+}
+.storefront-shell .report-draft small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.report-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.storefront-shell .report-reason {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn, 999px);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.storefront-shell .report-reason:hover {
+  border-color: var(--accent);
+}
+.storefront-shell .report-reason.selected {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.report-reason input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.storefront-shell .report-reason:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Order link on a reported chat message (shop chat + admin inbox). */
+.chat-order-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 4px 0 2px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.06);
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.chat-order-tag:hover {
+  text-decoration: underline;
+}
+.chat-bubble.mine .chat-order-tag {
+  background: rgb(255 255 255 / 0.18);
+}
+:root[data-theme="dark"] .storefront-shell .chat-bubble:not(.mine) .chat-order-tag {
+  background: rgb(255 255 255 / 0.08);
+}
+.merchant-shell .chat-bubble:not(.mine) .chat-order-tag {
+  background: var(--brand-soft, #eef1ff);
+  color: var(--brand, #1534ff);
+}
+.admin-chat-thread-text .chat-thread-order {
+  display: block;
+  color: var(--brand, #1534ff);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ---------- Receipt (outside the storefront shell: no nav) ---------- */
+.receipt-shell {
+  --r-backdrop: #eef0f3;
+  --r-paper: #ffffff;
+  --r-ink: #111318;
+  --r-muted: #5b616e;
+  --r-line: #e3e6eb;
+  --r-soft: #f6f7f9;
+  --r-accent: #1534ff;
+  --r-accent-ink: #ffffff;
+  /* Rule on the white paper; stays dark in mono so it shows in both modes. */
+  --r-rule: var(--r-accent);
+  --r-tool: #ffffff;
+  --r-tool-ink: #111318;
+  min-height: 100vh;
+  padding: 24px 16px 48px;
+  background: var(--r-backdrop);
+  color: var(--r-ink);
+  font-family: "Noto Thai", Tahoma, sans-serif;
+}
+:root[data-theme="dark"] .receipt-shell:not(.is-admin) {
+  --r-backdrop: #0a0a0a;
+  --r-tool: #18181a;
+  --r-tool-ink: #f4f4f5;
+}
+:root[data-accent="yellow"] .receipt-shell:not(.is-admin) {
+  --r-accent: #ffcc00;
+  --r-accent-ink: #0b0b0c;
+}
+:root[data-accent="mono"] .receipt-shell:not(.is-admin) {
+  --r-accent: #0b0b0c;
+  --r-accent-ink: #ffffff;
+  --r-rule: #111318;
+}
+:root[data-theme="dark"][data-accent="mono"] .receipt-shell:not(.is-admin) {
+  --r-accent: #f4f4f5;
+  --r-accent-ink: #0a0a0a;
+}
+.receipt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  max-width: 794px;
+  margin: 0 auto 16px;
+}
+.receipt-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--r-tool);
+  color: var(--r-tool-ink);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.08);
+}
+.receipt-print {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--r-accent);
+  color: var(--r-accent-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.12), 0 6px 16px -6px rgb(16 24 40 / 0.3);
+}
+.receipt-print:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.receipt-paper {
+  max-width: 794px; /* A4 width at 96 dpi */
+  margin: 0 auto;
+  padding: 40px 44px;
+  border-radius: 12px;
+  background: var(--r-paper);
+  color: var(--r-ink);
+  font-size: 14px;
+  line-height: 1.6;
+  box-shadow: 0 1px 3px rgb(16 24 40 / 0.08), 0 16px 40px -16px rgb(16 24 40 / 0.22);
+}
+.receipt-paper p,
+.receipt-paper h1,
+.receipt-paper h2,
+.receipt-paper dl,
+.receipt-paper dd {
+  margin: 0;
+}
+.receipt-message {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 48px 24px;
+  color: var(--r-muted);
+  text-align: center;
+}
+.receipt-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 20px;
+  border-bottom: 3px solid var(--r-rule);
+}
+.receipt-shop {
+  display: grid;
+  gap: 2px;
+  color: var(--r-muted);
+  font-size: 13px;
+}
+.receipt-shop-name {
+  color: var(--r-ink);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.receipt-address {
+  white-space: pre-line;
+}
+.receipt-title {
+  display: grid;
+  gap: 8px;
+  max-width: 300px;
+  text-align: right;
+}
+.receipt-title h1 {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.receipt-title dl,
+.receipt-facts {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+.receipt-title dl > div,
+.receipt-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.receipt-title dt,
+.receipt-facts dt {
+  color: var(--r-muted);
+}
+.receipt-title dd {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.receipt-parties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 20px 0;
+}
+.receipt-parties h2 {
+  margin-bottom: 6px;
+  color: var(--r-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.receipt-muted {
+  color: var(--r-muted);
+  overflow-wrap: anywhere;
+}
+.receipt-facts dd {
+  text-align: right;
+}
+.receipt-pill {
+  display: inline-block;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--r-soft);
+  color: var(--r-ink);
+  font-size: 12px;
+  font-weight: 600;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.receipt-pill.is-paid {
+  background: #e7f6ec;
+  color: #146c34;
+}
+.receipt-pill.is-pending {
+  background: #fff4d6;
+  color: #7a5200;
+}
+.receipt-pill.is-refund,
+.receipt-pill.is-cancelled,
+.receipt-pill.is-unpaid {
+  background: #fdecec;
+  color: #a1251b;
+}
+.receipt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.receipt-table th {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--r-line);
+  background: var(--r-soft);
+  color: var(--r-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.receipt-table td {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--r-line);
+  vertical-align: top;
+}
+.receipt-table td strong {
+  display: block;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.receipt-table td small {
+  color: var(--r-muted);
+  font-size: 12px;
+}
+.receipt-table .num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.receipt-paper .receipt-totals {
+  display: grid;
+  gap: 4px;
+  width: min(320px, 100%);
+  margin: 16px 0 0 auto;
+}
+.receipt-totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.receipt-totals dt {
+  color: var(--r-muted);
+}
+.receipt-totals dd {
+  font-variant-numeric: tabular-nums;
+}
+.receipt-totals .receipt-grand {
+  margin: 4px 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--r-line);
+  font-size: 16px;
+  font-weight: 700;
+}
+.receipt-totals .receipt-grand dt {
+  color: var(--r-ink);
+}
+.receipt-foot {
+  display: grid;
+  gap: 4px;
+  margin-top: 28px;
+  padding-top: 14px;
+  border-top: 1px solid var(--r-line);
+  color: var(--r-muted);
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .receipt-shell {
+    padding: 16px 16px 40px;
+  }
+  .receipt-paper {
+    padding: 22px 18px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+  .receipt-head {
+    flex-direction: column;
+    gap: 14px;
+  }
+  .receipt-title {
+    max-width: none;
+    text-align: left;
+  }
+  .receipt-parties {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .receipt-table th,
+  .receipt-table td {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .receipt-table {
+    font-size: 12px;
+  }
+}
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  .skip-link,
+  .toast,
+  .receipt-toolbar {
+    display: none !important;
+  }
+  .receipt-shell {
+    min-height: 0;
+    padding: 0;
+    background: #fff;
+  }
+  .receipt-paper {
+    max-width: none;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .receipt-head {
+    border-bottom-color: #111318;
+  }
+  .receipt-table tr {
+    break-inside: avoid;
+  }
+}
+
+/* ---------- Admin product editor ---------- */
+.first-option-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.first-option-fields > .field {
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .first-option-fields {
+    grid-template-columns: 1fr;
+  }
+}
+.usage-field-help {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.usage-field-help .num {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.usage-preview {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #e4e4e7;
+  border-radius: 12px;
+  background: #fff;
+  color: #18181b;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 4px 12px rgba(16, 24, 40, 0.05);
+}
+.usage-preview .usage-text {
+  color: #18181b;
+  font-size: 13px;
+}
+.usage-preview-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.usage-preview-head svg {
+  color: var(--brand, #1534ff);
+}
+.usage-preview-head span {
+  margin-left: auto;
+  color: #71717a;
+  font-size: 12px;
+}
+.usage-preview-empty {
+  margin: 0;
+  color: #a1a1aa;
+  font-size: 13px;
+}
+.reference-heading-actions:has(> .admin-receipt-link) {
+  align-items: center;
+}

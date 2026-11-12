@@ -22,6 +22,8 @@ function maskLogin(value) {
 const AUDIT_EVENTS = {
   DELIVER_RESERVATION: "delivered",
   CANCEL_ORDER: "cancelled",
+  // Unpaid order cancelled by the payment window (actor null = system, reason in detail).
+  ORDER_EXPIRED: "cancelled",
   REVEAL_ORDER_CREDENTIALS: "revealed",
   REPLACE_ORDER_CREDENTIAL: "replaced",
   RESEND_CREDENTIALS: "resent",

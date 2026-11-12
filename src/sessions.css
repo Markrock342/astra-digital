@@ -1,0 +1,137 @@
+/* "My devices" card (Sessions.tsx) and the expired-order state on the storefront.
+   Uses the theme tokens of whichever shell it sits in (storefront or .merchant-shell). */
+.sessions-card {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+.sessions-card-store {
+  padding: 25px;
+}
+.sessions-head h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+.sessions-head p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.sessions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.sessions-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+}
+.sessions-row + .sessions-row {
+  border-top: 1px solid var(--border);
+}
+.sessions-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--raised);
+  color: var(--text);
+}
+.sessions-row.is-current .sessions-icon {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.sessions-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 180px;
+}
+.sessions-info strong {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text);
+}
+.sessions-info small {
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.sessions-current {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--green);
+  background: var(--green-bg);
+  border: 1px solid color-mix(in srgb, var(--green) 25%, transparent);
+}
+.sessions-row .sessions-revoke {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 12px;
+  gap: 6px;
+  margin-left: auto;
+}
+.sessions-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.sessions-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--raised);
+}
+.sessions-confirm p {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+@media (max-width: 520px) {
+  .sessions-card-store {
+    padding: 18px;
+  }
+  .sessions-row .sessions-revoke {
+    margin-left: 48px;
+  }
+  .sessions-actions .button,
+  .sessions-confirm .button {
+    flex: 1 1 100%;
+  }
+}
+
+/* Unpaid order cancelled because the payment window ran out. */
+.status-expired {
+  color: #d39595;
+  background: #64202020;
+  border-color: #71373766;
+}
+.expired-note .button {
+  margin-top: 12px;
+}
+.pay-deadline {
+  font-size: 12px;
+  color: var(--muted);
+}

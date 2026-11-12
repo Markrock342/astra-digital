@@ -42,6 +42,12 @@ import { Art, Empty, ErrorMessage, Link, Status, useStore } from "./App";
 import { useDialog } from "./dialog";
 import { api, dateTime, money } from "./api";
 import { AdminDashboard } from "./AdminDashboard";
+import {
+  FirstOptionFields,
+  firstWarrantyValue,
+  UsageInstructionsField,
+  UsageInstructionsPreview,
+} from "./OrderExtras";
 import { AdminChat, BuyerRanking, BuyerRankingCard, PaymentChannelSettings } from "./Ops";
 import {
   PreorderQueue,
@@ -144,6 +150,9 @@ export default function Admin() {
     (p) => p.id === (editing ?? productId),
   );
   const newProduct = tab === "products" && productId === "new";
+  const editingProductUsage = newProduct
+    ? ""
+    : ((editingProduct as { usage_instructions?: string | null } | undefined)?.usage_instructions ?? "");
   const formOpen = newProduct || !!editingProduct;
   const [formValues, setFormValues] = useState<Record<string, string> | null>(null);
   useEffect(() => setFormValues(null), [editingProduct?.id, newProduct]);
@@ -203,6 +212,7 @@ export default function Admin() {
         description: values.description,
         category: values.category ?? "streaming",
         price: Math.round(Number(values.price ?? 1) * 100),
+        firstWarrantyDays: firstWarrantyValue(values.firstWarrantyDays),
         active: newProduct ? false : values.active === "on",
         ...(editingProduct ? { id: editingProduct.id } : {}),
       });
@@ -493,12 +503,15 @@ export default function Admin() {
                     : [
                         {
                           id: "new",
-                          label: "ตัวเลือกแรก",
+                          label: formValues?.firstLabel?.trim() || "ตัวเลือกแรก",
                           price: Math.round(Number(formValues?.price || 0) * 100),
                           stock: 0,
                         },
                       ],
                 }}
+              />
+              <UsageInstructionsPreview
+                text={formValues?.usageInstructions ?? editingProductUsage ?? ""}
               />
             </aside>
             <div className="product-editor-col">
@@ -610,11 +623,13 @@ export default function Admin() {
                   </select>
                 </label>
                 {newProduct && (
-                  <label className="field">
-                    ราคาตัวเลือกแรก (บาท)
-                    <input name="price" type="number" step="0.01" min="1" max="100000" required />
-                    <small>เพิ่มตัวเลือกอื่น (เช่น 30 วัน / 90 วัน) และเติมสต็อกได้หลังสร้าง</small>
-                  </label>
+                  <FirstOptionFields>
+                    <label className="field">
+                      ราคาตัวเลือกแรก (บาท)
+                      <input name="price" type="number" step="0.01" min="1" max="100000" required />
+                      <small>เพิ่มตัวเลือกอื่น (เช่น 30 วัน / 90 วัน) และเติมสต็อกได้หลังสร้าง</small>
+                    </label>
+                  </FirstOptionFields>
                 )}
                 <label className="checkbox-label">
                   <input
@@ -628,6 +643,7 @@ export default function Admin() {
                   แสดงในส่วน “สินค้าแนะนำ” บนหน้าแรกของร้าน
                 </p>
               </section>
+              <UsageInstructionsField defaultValue={editingProductUsage} />
               {!newProduct && (
                 <>
                   <section className="reference-admin-card editor-panel">
@@ -1135,7 +1151,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
       </div>
       <form
         className="reference-settings-form"
-        key={shop?.shopName + "|" + shop?.line + "|" + shop?.email}
+        key={shop?.shopName + "|" + shop?.line + "|" + shop?.email + "|" + shop?.pendingExpiryMinutes}
         onSubmit={save}
       >
         <ErrorMessage message={error} />
@@ -1241,6 +1257,27 @@ function ReferenceSettings({ sub }: { sub: string }) {
               <option value="random">สุ่ม · หยิบชิ้นไหนก็ได้ในสต็อก</option>
             </select>
           </label>
+        </section>
+        <section className="reference-admin-card editor-panel">
+          <h2>เวลารอชำระเงิน</h2>
+          <p>
+            ออเดอร์และพรีออเดอร์ที่ยังไม่ชำระเกินเวลานี้ ระบบยกเลิกให้อัตโนมัติ
+            (เหตุผล “หมดเวลาชำระเงิน”) ออเดอร์ที่ชำระแล้วไม่ถูกแตะต้อง
+          </p>
+          <label className="field">
+            ยกเลิกออเดอร์ที่ยังไม่ชำระหลัง (นาที)
+            <input
+              name="pendingExpiryMinutes"
+              type="number"
+              inputMode="numeric"
+              min={5}
+              max={1440}
+              step={1}
+              required
+              defaultValue={shop?.pendingExpiryMinutes ?? 30}
+            />
+          </label>
+          <p className="field-help">ตั้งได้ 5–1440 นาที (สูงสุด 24 ชั่วโมง) · ค่าเริ่มต้น 30 นาที</p>
         </section>
         <div className="editor-save-bar">
           <span>
