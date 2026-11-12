@@ -1538,3 +1538,49 @@ test('ADMIN-FR-W4: inventory list defect delete CSV and lowStockAt', async (t) =
   const again = applyMigration007(s.db);
   assert.equal(again.skipped, true);
 });
+
+test("ADMIN-FR-W3 polish: daily buckets use Bangkok day and CSV exports all pages", (t) => {
+  const { s, user, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  // 17:30 UTC = 00:30 next calendar day in Bangkok (+7).
+  const lateUtc = "2026-11-10 17:30:00";
+  const earlyUtc = "2026-11-10 10:00:00";
+  for (const [id, created] of [
+    ["pay-bkk-early", earlyUtc],
+    ["pay-bkk-late", lateUtc],
+  ]) {
+    s.db
+      .prepare(
+        `INSERT INTO ledger(
+          id,user_id,amount,reference,label,kind,direction,fee,net,status,finalized_at,created_at
+        ) VALUES(?,?,?,?,?,'PAYMENT_IN','in',0,?,'SUCCEEDED',?,?)`,
+      )
+      .run(id, user.id, 10000, id, "ทดสอบวันไทย", 10000, created, created);
+  }
+  const summary = s.adminTransactions(merchant, {
+    from: "2026-11-10",
+    to: "2026-11-11",
+  }).summary;
+  const days = summary.daily.map((d) => d.day).sort();
+  assert.deepEqual(days, ["2026-11-10", "2026-11-11"]);
+
+  for (let i = 0; i < 5; i++) {
+    const order = s.createOrder(user, {
+      variantId: "stream-plus-30",
+      quantity: 1,
+      requestKey: "csv-full-" + String(i).padStart(4, "0"),
+    });
+    s.pay(user, order.id, {
+      paymentToken: order.paymentToken,
+      outcome: "success",
+    });
+  }
+  const paged = s.adminTransactions(merchant, { limit: 2 });
+  assert.equal(paged.transactions.length, 2);
+  assert.ok(paged.nextCursor);
+  const csv = s.adminTransactions(merchant, { format: "csv" });
+  const dataLines = csv.csv.trim().split(/\n/).slice(1);
+  assert.ok(dataLines.length >= paged.summary.count);
+  assert.equal(dataLines.length, csv.summary.count);
+  assert.equal(csv.nextCursor, null);
+});

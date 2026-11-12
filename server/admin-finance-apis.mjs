@@ -45,6 +45,10 @@ const MONEY_KINDS = new Set([
   "FEE",
 ]);
 
+/** created_at is stored as UTC wall-clock; +7h yields Asia/Bangkok calendar day. */
+const BANGKOK_DAY_SQL = "substr(datetime(l.created_at, '+7 hours'), 1, 10)";
+const CSV_MAX_ROWS = 10000;
+
 export function createAdminFinanceApis({
   requireAdmin,
   one,
@@ -191,19 +195,19 @@ export function createAdminFinanceApis({
       ...sumParams,
     );
     const daily = all(
-      `SELECT substr(datetime(l.created_at,'+7 hours'),1,10) AS day,
+      `SELECT ${BANGKOK_DAY_SQL} AS day,
               COALESCE(SUM(CASE WHEN l.direction='in' AND l.status='SUCCEEDED' THEN l.net ELSE 0 END),0) AS inflow,
               COALESCE(SUM(CASE WHEN l.direction='out' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS outflow,
               COUNT(*) AS count
        FROM ledger l
        JOIN users u ON u.id = l.user_id
        ${sumSql}
-       GROUP BY substr(datetime(l.created_at,'+7 hours'),1,10)
+       GROUP BY ${BANGKOK_DAY_SQL}
        ORDER BY day ASC`,
       ...sumParams,
     );
 
-    const page = rows.slice(0, lim).map((row) => ({
+    const mapRow = (row) => ({
       id: row.id,
       user_id: row.user_id,
       customer: row.customer_name,
@@ -223,14 +227,7 @@ export function createAdminFinanceApis({
       reference: row.reference,
       created_at: row.created_at,
       finalized_at: row.finalized_at,
-    }));
-    const nextCursor =
-      rows.length > lim
-        ? encodeCursor([
-            page[page.length - 1].created_at,
-            page[page.length - 1].id,
-          ])
-        : null;
+    });
 
     const summary = {
       in: agg.inflow,
@@ -248,6 +245,22 @@ export function createAdminFinanceApis({
     };
 
     if (String(query.format || "").toLowerCase() === "csv") {
+      const csvRows = all(
+        `SELECT l.*, u.name AS customer_name, u.email AS customer_email
+         FROM ledger l
+         JOIN users u ON u.id = l.user_id
+         ${sumSql}
+         ORDER BY l.created_at DESC, l.id DESC
+         LIMIT ?`,
+        ...sumParams,
+        CSV_MAX_ROWS + 1,
+      );
+      if (csvRows.length > CSV_MAX_ROWS)
+        fail(
+          400,
+          "รายการเกิน " + CSV_MAX_ROWS + " แถว กรุณาแคบตัวกรองก่อนดาวน์โหลด",
+        );
+      const page = csvRows.map(mapRow);
       const header = [
         "id",
         "kind",
@@ -295,8 +308,17 @@ export function createAdminFinanceApis({
             .join(","),
         );
       }
-      return { csv: lines.join("\n") + "\n", summary, nextCursor };
+      return { csv: lines.join("\n") + "\n", summary, nextCursor: null };
     }
+
+    const page = rows.slice(0, lim).map(mapRow);
+    const nextCursor =
+      rows.length > lim
+        ? encodeCursor([
+            page[page.length - 1].created_at,
+            page[page.length - 1].id,
+          ])
+        : null;
 
     return { transactions: page, summary, nextCursor };
   }
