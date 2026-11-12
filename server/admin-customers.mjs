@@ -4,7 +4,10 @@ const STATUSES = ["ACTIVE", "SUSPENDED", "BANNED"];
 /** Customer credit; PAYMENT_IN / FEE / WITHDRAWAL are shop-side money. */
 const CREDIT_KINDS = "('DEMO_CREDIT','TOPUP','PURCHASE','REFUND','ADJUSTMENT')";
 
+import { randomBytes } from "node:crypto";
+
 export function createAdminCustomerApis({
+  passwordHash,
   requireStaff,
   requireAdmin,
   one,
@@ -183,7 +186,87 @@ export function createAdminCustomerApis({
     });
   }
 
+  /** FR-C6: no email reset yet, so the admin issues a one-time temporary password. */
+  function adminResetCustomerPassword(user, id) {
+    requireAdmin(user);
+    return tx(() => {
+      const row = loadCustomer(id);
+      const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+      const bytes = randomBytes(12);
+      const temporary = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+      run("UPDATE users SET password_hash=? WHERE id=?", passwordHash(temporary), row.id);
+      run("DELETE FROM sessions WHERE user_id=?", row.id);
+      auditDetail(user, "CUSTOMER_PASSWORD_RESET", row.id, null);
+      return { temporaryPassword: temporary };
+    });
+  }
+
+  /** FR-S5: who did what, newest first. Cursor = audit id. */
+  function adminAuditLog(user, query = {}) {
+    requireAdmin(user);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 50));
+    const where = ["a.action <> 'LOGIN'"];
+    const params = [];
+    const action = optional(query.action, 60, "การกระทำ");
+    if (action) {
+      if (!/^[A-Z_]+$/.test(action)) fail(400, "การกระทำไม่ถูกต้อง");
+      where.push("a.action LIKE ?");
+      params.push(action + "%");
+    }
+    if (query.scope === "staff") where.push("u.role IN ('ADMIN','STAFF')");
+    const actor = optional(query.actor, 80, "ผู้ทำ");
+    if (actor) {
+      where.push("a.user_id = ?");
+      params.push(actor);
+    }
+    const entity = optional(query.entity, 80, "รายการ");
+    if (entity) {
+      where.push("a.entity_id = ?");
+      params.push(entity);
+    }
+    if (query.cursor) {
+      const before = Number(query.cursor);
+      if (!Number.isInteger(before)) fail(400, "cursor ไม่ถูกต้อง");
+      where.push("a.id < ?");
+      params.push(before);
+    }
+    const rows = all(
+      `SELECT a.id,a.action,a.entity_id,a.detail,a.created_at,a.user_id,u.name AS actor,u.role AS actor_role
+       FROM audit a LEFT JOIN users u ON u.id=a.user_id
+       WHERE ${where.join(" AND ")}
+       ORDER BY a.id DESC LIMIT ?`,
+      ...params,
+      limit + 1,
+    );
+    const page = rows.slice(0, limit).map((r) => ({ ...r, detail: r.detail ? JSON.parse(r.detail) : null }));
+    return { entries: page, nextCursor: rows.length > limit ? String(page[page.length - 1].id) : null };
+  }
+
+  /** FR-O6 (unpaid only): paid orders need a refund flow, which is not built yet. */
+  function adminCancelOrder(user, id, input = {}) {
+    requireAdmin(user);
+    const orderId = clean(id, 1, 80, "คำสั่งซื้อ");
+    const reason = clean(input.reason, 3, 300, "เหตุผล");
+    return tx(() => {
+      const table = one("SELECT id FROM orders WHERE id=?", orderId)
+        ? "orders"
+        : one("SELECT id FROM reservations WHERE id=?", orderId)
+          ? "reservations"
+          : null;
+      if (!table) fail(404, "ไม่พบคำสั่งซื้อ");
+      const row = one(`SELECT status FROM ${table} WHERE id=?`, orderId);
+      if (row.status !== "PENDING_PAYMENT")
+        fail(409, "ยกเลิกได้เฉพาะออเดอร์ที่ยังไม่ชำระ ออเดอร์ที่ชำระแล้วต้องใช้การคืนเงิน");
+      run(`UPDATE ${table} SET status='CANCELLED' WHERE id=? AND status='PENDING_PAYMENT'`, orderId);
+      auditDetail(user, "CANCEL_ORDER", orderId, { reason });
+      return { id: orderId, status: "CANCELLED" };
+    });
+  }
+
   return {
+    adminCancelOrder,
+    adminAuditLog,
+    adminResetCustomerPassword,
     adminCustomerDetail,
     adminUpdateCustomer,
     adminSetCustomerStatus,

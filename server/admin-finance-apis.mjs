@@ -191,14 +191,14 @@ export function createAdminFinanceApis({
       ...sumParams,
     );
     const daily = all(
-      `SELECT substr(l.created_at,1,10) AS day,
+      `SELECT substr(datetime(l.created_at,'+7 hours'),1,10) AS day,
               COALESCE(SUM(CASE WHEN l.direction='in' AND l.status='SUCCEEDED' THEN l.net ELSE 0 END),0) AS inflow,
               COALESCE(SUM(CASE WHEN l.direction='out' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS outflow,
               COUNT(*) AS count
        FROM ledger l
        JOIN users u ON u.id = l.user_id
        ${sumSql}
-       GROUP BY substr(l.created_at,1,10)
+       GROUP BY substr(datetime(l.created_at,'+7 hours'),1,10)
        ORDER BY day ASC`,
       ...sumParams,
     );

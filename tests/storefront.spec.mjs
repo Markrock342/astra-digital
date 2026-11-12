@@ -97,6 +97,7 @@ test("registration and profile settings work", async ({ page }) => {
   await page
     .getByLabel("ยืนยันรหัสผ่าน", { exact: true })
     .fill("UI-test-only-12345");
+  await page.getByLabel(/ฉันยอมรับ/).check();
   await page.getByRole("button", { name: "สมัครสมาชิก", exact: true }).click();
   await expect(page).toHaveURL(base + "/account");
   await page.getByLabel("ชื่อที่แสดง").fill("Updated Customer");

@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import { createCommerce } from "../server/commerce.mjs";
 import { createAPIHandler } from "../server/api-handler.mjs";
 import { ROLES } from "../server/auth-policy.mjs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomBytes } from "node:crypto";
 // applyMigration006 imported inside W3 test to keep sync fixtures light
 
 function fixture(t) {
@@ -1298,4 +1302,50 @@ test("transactions summary works with a date range and a cursor", (t) => {
   assert.equal(second.transactions.length, 1);
   assert.equal(second.summary.count, 2);
   assert.equal(second.summary.in, first.summary.in);
+});
+
+test("admin password changed in the back office survives a restart; rotating the secret still applies", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "admin-pw-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, "shop.db");
+  const key = randomBytes(32);
+  const boot = (adminPassword) => createCommerce({ path: file, key, adminPassword });
+  let s = boot("Env-secret-One-123");
+  let admin = s.session(s.login({ email: "admin", password: "Env-secret-One-123" }).token);
+  s.profile(admin, { name: admin.name, currentPassword: "Env-secret-One-123", newPassword: "Changed-in-UI-456" });
+  s.db.close();
+  s = boot("Env-secret-One-123");
+  assert.ok(s.login({ email: "admin", password: "Changed-in-UI-456" }).token);
+  s.db.close();
+  s = boot("Env-secret-Two-789");
+  assert.ok(s.login({ email: "admin", password: "Env-secret-Two-789" }).token);
+  s.db.close();
+});
+
+test("admin cancels only unpaid orders, issues a temporary password, and reads the audit log", (t) => {
+  const { s, user, staff, merchant, token } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const unpaid = s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: "cancel-0001" });
+  assert.throws(() => s.adminCancelOrder(staff, unpaid.id, { reason: "ทดสอบ" }), (e) => e.status === 403);
+  assert.throws(() => s.adminCancelOrder(merchant, unpaid.id, {}), (e) => e.status === 400);
+  assert.equal(s.adminCancelOrder(merchant, unpaid.id, { reason: "ลูกค้าขอยกเลิก" }).status, "CANCELLED");
+  const paid = s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: "cancel-0002" });
+  s.pay(user, paid.id, { paymentToken: paid.paymentToken, outcome: "success" });
+  assert.throws(() => s.adminCancelOrder(merchant, paid.id, { reason: "ทดสอบ" }), (e) => e.status === 409);
+
+  const { temporaryPassword } = s.adminResetCustomerPassword(merchant, user.id);
+  assert.equal(temporaryPassword.length, 12);
+  assert.equal(s.session(token), null);
+  assert.ok(s.login({ email: "buyer@example.invalid", password: temporaryPassword }).token);
+  assert.throws(() => s.adminResetCustomerPassword(staff, user.id), (e) => e.status === 403);
+
+  assert.throws(() => s.adminAuditLog(staff), (e) => e.status === 403);
+  const log = s.adminAuditLog(merchant, { scope: "staff", limit: 2 });
+  assert.equal(log.entries[0].action, "CUSTOMER_PASSWORD_RESET");
+  assert.equal(log.entries[1].action, "CANCEL_ORDER");
+  assert.equal(log.entries[1].detail.reason, "ลูกค้าขอยกเลิก");
+  assert.ok(log.nextCursor);
+  const next = s.adminAuditLog(merchant, { scope: "staff", cursor: log.nextCursor });
+  assert.ok(next.entries.every((e) => e.id < log.entries[1].id));
+  assert.ok(s.adminAuditLog(merchant, { action: "CUSTOMER_" }).entries.every((e) => e.action.startsWith("CUSTOMER_")));
 });

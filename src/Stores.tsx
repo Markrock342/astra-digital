@@ -60,31 +60,23 @@ export function MerchantHeader() {
   async function logout() {
     await api("/logout", {});
     await refresh();
-    go("/stores");
+    go("/login?next=%2Fadmin");
   }
   return (
     <>
       <header className="reference-merchant-header">
         <div className="reference-merchant-identity">
-          <Link to="/stores" className="platform-mark" aria-label="ASTRA">
-            A
+          <Link to="/admin" className="platform-mark" aria-label="ASIA EXTRA หลังบ้าน">
+            AX
           </Link>
           <span className="header-slash">/</span>
           {admin ? (
             <>
-              <span className="merchant-shop-avatar">AS</span>
-              <Link to="/stores">{shop}</Link>
-              <span className="owner-badge">เจ้าของ</span>
-              <button
-                className="icon-button"
-                aria-label="เปลี่ยนร้าน"
-                onClick={() => go("/stores")}
-              >
-                <ChevronsUpDown size={15} />
-              </button>
+              <Link to="/admin">{shop}</Link>
+              <span className="owner-badge">หลังบ้าน</span>
             </>
           ) : (
-            <Link to="/stores">ร้านค้าของฉัน</Link>
+            <span>หลังบ้าน</span>
           )}
         </div>
         <div className="reference-merchant-actions">
@@ -98,10 +90,6 @@ export function MerchantHeader() {
                 <span>ค้นหาการตั้งค่า...</span>
                 <kbd>⌘K</kbd>
               </button>
-              <Link to="/admin/guide" className="header-quiet">
-                <Sparkles size={18} />
-                มีอะไรใหม่
-              </Link>
               <Link to="/admin/guide" className="header-quiet">
                 <BookOpen size={18} />
                 คู่มือ
@@ -123,7 +111,7 @@ export function MerchantHeader() {
             </button>
             {menu && (
               <div className="account-menu">
-                <Link to="/stores">ร้านค้าของฉัน</Link>
+                <Link to="/admin/settings/account">บัญชีแอดมิน</Link>
                 <Link to="/">หน้าร้าน</Link>
                 {user ? (
                   <button onClick={logout}>
@@ -131,7 +119,7 @@ export function MerchantHeader() {
                     ออกจากระบบ
                   </button>
                 ) : (
-                  <Link to="/login?next=%2Fstores">เข้าสู่ระบบ</Link>
+                  <Link to="/login?next=%2Fadmin">เข้าสู่ระบบ</Link>
                 )}
               </div>
             )}
@@ -259,68 +247,11 @@ export function DemoMerchantButton({
     </>
   );
 }
+/** Single-shop install: the old multi-store picker just forwards to the back office. */
 export default function Stores() {
-  const { user, overview } = useStore();
-  const active = user?.role === "ADMIN";
-  const shop = overview?.shop?.shopName || "ร้านค้า";
-  return (
-    <main className="container stores-main reference-stores">
-      <div className="stores-heading">
-        <div>
-          <h1>ร้านค้าของฉัน</h1>
-          <p>
-            ร้านทั้งหมดที่คุณเป็นเจ้าของหรือเป็นทีมงาน · เป็นเจ้าของ{" "}
-            {active ? "1" : "0"}/10 ร้าน
-          </p>
-        </div>
-        {active ? (
-          <Link to="/admin" className="button primary">
-            <Plus size={15} />
-            จัดการร้าน
-          </Link>
-        ) : (
-          <Link to="/login?next=%2Fadmin" className="button primary">
-            เข้าสู่ระบบผู้ดูแล
-          </Link>
-        )}
-      </div>
-      <section className="stores-grid">
-        <article className="store-card">
-          <div className="store-card-top">
-            <span className="store-avatar">AS</span>
-            <div>
-              {active ? (
-                <Link to="/admin" className="store-name">
-                  {shop}
-                </Link>
-              ) : (
-                <h2>{shop}</h2>
-              )}
-              <span className="store-domain">{location.host}</span>
-            </div>
-            <Link
-              to="/"
-              className="icon-button"
-              aria-label="เปิดหน้าร้าน"
-            >
-              <ArrowUpRight size={17} />
-            </Link>
-          </div>
-          <div className="store-card-meta">
-            <span className="store-active">
-              <span className="service-dot" />
-              ใช้งาน
-            </span>
-            <span>{active ? "เจ้าของ" : "ร้านเดียว"}</span>
-            <span>สร้างเมื่อ วันนี้</span>
-          </div>
-        </article>
-      </section>
-      {!active && (
-        <p className="reference-store-note">
-          เข้าสู่ระบบด้วยบัญชีผู้ดูแลเพื่อจัดการสินค้า รหัสสินค้า และคำสั่งซื้อ
-        </p>
-      )}
-    </main>
-  );
+  const { go } = useStore();
+  useEffect(() => {
+    go("/admin");
+  }, [go]);
+  return null;
 }

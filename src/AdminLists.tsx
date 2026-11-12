@@ -173,6 +173,22 @@ function MoreRow({ next, more, loading, count }: { next: string | null; more: ()
 
 const shortId = (id: string) => "#" + id.slice(0, 8).toUpperCase();
 
+/** CSV with a BOM for Excel; cells starting with = + - @ are quoted as text. */
+function downloadCsv(name: string, rows: unknown[][]) {
+  const cell = (v: unknown) => {
+    let text = String(v ?? "");
+    if (/^[=+\-@\t\r]/.test(text)) text = "'" + text;
+    return '"' + text.replace(/"/g, '""') + '"';
+  };
+  const csv = rows.map((row) => row.map(cell).join(",")).join("\r\n");
+  const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ---------------------------------------------------------------- Orders
 
 type OrderRow = {
@@ -220,8 +236,7 @@ export function AdminOrders() {
         all.push(...page.orders);
         cursor = page.nextCursor;
       } while (cursor && all.length < 10000);
-      const cell = (v: unknown) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
-      const csv = [
+      downloadCsv("orders.csv", [
         ["เลขออเดอร์", "วันที่", "ลูกค้า", "อีเมล", "สินค้า", "ตัวเลือก", "ประเภท", "คิว", "จำนวน", "ยอด (บาท)", "สถานะ"],
         ...all.map((o) => [
           o.id,
@@ -236,15 +251,7 @@ export function AdminOrders() {
           (o.total / 100).toFixed(2),
           o.status,
         ]),
-      ]
-        .map((row) => row.map(cell).join(","))
-        .join("\n");
-      const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "orders.csv";
-      a.click();
-      URL.revokeObjectURL(url);
+      ]);
     } finally {
       setExporting(false);
     }
@@ -354,7 +361,20 @@ const eventText: Record<string, string> = {
 };
 
 export function AdminOrderDetail({ id }: { id: string }) {
-  const { toast } = useStore();
+  const { toast, user } = useStore();
+  const [cancelling, setCancelling] = useState(false);
+  const [reason, setReason] = useState("");
+  async function cancel(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    try {
+      await api("/admin/orders/" + id + "/cancel", { reason });
+      toast("ยกเลิกออเดอร์แล้ว");
+      setCancelling(false);
+      setOrder(await api<OrderDetail>("/admin/orders/" + id));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [revealed, setRevealed] = useState<Pick<OrderDetail, "codes" | "credentials"> | null>(null);
   const [error, setError] = useState("");
@@ -393,6 +413,31 @@ export function AdminOrderDetail({ id }: { id: string }) {
             </div>
             <Status status={order.status} />
           </div>
+          {order.status === "PENDING_PAYMENT" && user?.role === "ADMIN" && (
+            <section className="reference-admin-card admin-detail-card">
+              {cancelling ? (
+                <form className="admin-reason-form" onSubmit={cancel}>
+                  <label className="field">
+                    เหตุผลที่ยกเลิก (บันทึกภายใน)
+                    <input required minLength={3} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
+                  </label>
+                  <div className="admin-action-row">
+                    <button type="button" className="button secondary" onClick={() => setCancelling(false)}>
+                      ไม่ยกเลิก
+                    </button>
+                    <button className="button danger">ยืนยันยกเลิกออเดอร์</button>
+                  </div>
+                </form>
+              ) : (
+                <div className="admin-action-row">
+                  <span className="muted">ออเดอร์นี้ยังไม่ชำระ</span>
+                  <button className="button secondary" onClick={() => setCancelling(true)}>
+                    ยกเลิกออเดอร์
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
           <div className="admin-detail-grid">
             <section className="reference-admin-card admin-detail-card">
               <h2>สินค้า</h2>
@@ -503,6 +548,35 @@ export function AdminCustomers() {
   const list = useCursorList<CustomerRow>("/admin/customers", "customers", { ...filters, limit: "50" });
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
   const active = Object.entries(filters).some(([k, v]) => v && !(k === "sort" && v === "created_at"));
+  const [exporting, setExporting] = useState(false);
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      const rows: CustomerRow[] = [];
+      let cursor: string | null = null;
+      do {
+        const page: { customers: CustomerRow[]; nextCursor: string | null } = await api(
+          "/admin/customers" + query({ ...filters, limit: "100" }, cursor),
+        );
+        rows.push(...page.customers);
+        cursor = page.nextCursor;
+      } while (cursor && rows.length < 20000);
+      downloadCsv("customers.csv", [
+        ["ชื่อ", "อีเมล", "เบอร์โทร", "สถานะ", "ออเดอร์", ...(admin ? ["ยอดซื้อสะสม (บาท)"] : []), "สมัครเมื่อ"],
+        ...rows.map((c) => [
+          c.name,
+          c.email,
+          c.phone ?? "",
+          statusText[c.status] ?? c.status,
+          c.orderCount,
+          ...(admin ? [((c.spentSatang ?? 0) / 100).toFixed(2)] : []),
+          c.created_at,
+        ]),
+      ]);
+    } finally {
+      setExporting(false);
+    }
+  }
   return (
     <>
       <div className="reference-admin-heading">
@@ -510,6 +584,10 @@ export function AdminCustomers() {
           <h1>ลูกค้า</h1>
           <p>กดที่ลูกค้าเพื่อดูยอดเงิน ออเดอร์ แก้ข้อมูล หรือระงับบัญชี</p>
         </div>
+        <button className="button secondary" onClick={exportCsv} disabled={exporting}>
+          <Download size={15} />
+          {exporting ? "กำลังเตรียมไฟล์…" : "ดาวน์โหลด CSV"}
+        </button>
       </div>
       <FilterBar
         search={filters.q}
@@ -627,6 +705,7 @@ const historyText = (h: CustomerDetail["history"][number]) => {
     return "เปลี่ยนสถานะเป็น " + (statusText[s.to] ?? s.to) + (s.reason ? " · " + s.reason : "");
   }
   if (h.action === "CUSTOMER_SIGN_OUT") return "บังคับออกจากระบบทุกอุปกรณ์";
+  if (h.action === "CUSTOMER_PASSWORD_RESET") return "ตั้งรหัสผ่านชั่วคราว";
   if (h.action === "CUSTOMER_UPDATE") {
     const labels: Record<string, string> = { firstName: "ชื่อ", lastName: "นามสกุล", email: "อีเมล", phone: "เบอร์โทร", note: "หมายเหตุ" };
     return "แก้ " + Object.keys(d).map((k) => labels[k] ?? k).join(", ");
@@ -642,6 +721,20 @@ export function AdminCustomerDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [statusDraft, setStatusDraft] = useState<"" | "SUSPENDED" | "BANNED">("");
   const [reason, setReason] = useState("");
+  const [temporary, setTemporary] = useState("");
+  async function resetPassword() {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ temporaryPassword: string }>("/admin/customers/" + id + "/reset-password", {});
+      setTemporary(result.temporaryPassword);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function load() {
     try {
       setData(await api<CustomerDetail>("/admin/customers/" + id));
@@ -801,6 +894,24 @@ export function AdminCustomerDetail({ id }: { id: string }) {
                   <LogOut size={15} />
                   บังคับออกจากระบบ ({data.activeSessions})
                 </button>
+              )}
+              {admin && (
+                <>
+                  <h2>ลูกค้าลืมรหัสผ่าน</h2>
+                  {temporary ? (
+                    <div className="admin-temp-password">
+                      <p>รหัสผ่านชั่วคราว (แสดงครั้งเดียว ส่งให้ลูกค้าทางช่องทางที่ยืนยันตัวตนแล้ว แล้วให้ลูกค้าเปลี่ยนในหน้าบัญชี)</p>
+                      <code>{temporary}</code>
+                      <button className="button secondary" onClick={() => void navigator.clipboard?.writeText(temporary)}>
+                        คัดลอก
+                      </button>
+                    </div>
+                  ) : (
+                    <button className="button secondary" disabled={busy} onClick={resetPassword}>
+                      ตั้งรหัสผ่านชั่วคราว
+                    </button>
+                  )}
+                </>
               )}
               <h2>ประวัติการแก้ไข</h2>
               {data.history.length === 0 && <p className="muted">ยังไม่มีการแก้ไขจากแอดมิน</p>}
@@ -1207,6 +1318,197 @@ export function AdminFinance() {
             {active ? "ไม่พบรายการตามตัวกรอง" : "ยังไม่มีรายการเงินจริง (รายการเครดิตทดลองดูได้จากตัวกรองประเภท)"}
           </p>
         )}
+      </div>
+      {list.rows && <MoreRow next={list.next} more={list.more} loading={list.loadingMore} count={list.rows.length} />}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Settings: account + audit (FR-S3, FR-S5)
+
+export function AdminAccount() {
+  const { user, toast, refresh, go } = useStore();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
+    if (form.newPassword && form.newPassword !== form.confirmPassword) {
+      setError("รหัสผ่านใหม่สองช่องไม่ตรงกัน");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await api("/profile", {
+        name: form.name,
+        ...(form.newPassword ? { currentPassword: form.currentPassword, newPassword: form.newPassword } : {}),
+      });
+      if (form.newPassword) {
+        toast("เปลี่ยนรหัสผ่านแล้ว กรุณาเข้าสู่ระบบใหม่");
+        await refresh();
+        go("/login?next=%2Fadmin");
+      } else {
+        toast("บันทึกแล้ว");
+        await refresh();
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>บัญชีแอดมิน</h1>
+          <p>เปลี่ยนชื่อที่แสดงและรหัสผ่านของบัญชีผู้ดูแล รหัสใหม่มีผลทันทีและอยู่ถาวร</p>
+        </div>
+      </div>
+      <section className="reference-admin-card admin-detail-card admin-account-card">
+        <form onSubmit={submit} className="admin-form-grid">
+          <ErrorMessage message={error} />
+          <label className="field span-2">
+            ชื่อที่แสดง
+            <input name="name" required minLength={2} maxLength={60} defaultValue={user?.name} />
+          </label>
+          <label className="field span-2">
+            รหัสผ่านปัจจุบัน
+            <input name="currentPassword" type="password" autoComplete="current-password" maxLength={128} />
+          </label>
+          <label className="field">
+            รหัสผ่านใหม่
+            <input name="newPassword" type="password" autoComplete="new-password" minLength={10} maxLength={128} />
+          </label>
+          <label className="field">
+            ยืนยันรหัสผ่านใหม่
+            <input name="confirmPassword" type="password" autoComplete="new-password" minLength={10} maxLength={128} />
+          </label>
+          <p className="field-help span-2">เว้นช่องรหัสผ่านว่างถ้าต้องการเปลี่ยนแค่ชื่อ · รหัสใหม่อย่างน้อย 10 ตัวอักษร · เปลี่ยนแล้วทุกอุปกรณ์จะถูกออกจากระบบ</p>
+          <button className="button primary span-2" disabled={busy}>
+            บันทึก
+          </button>
+        </form>
+      </section>
+    </>
+  );
+}
+
+type AuditEntry = {
+  id: number;
+  action: string;
+  entity_id: string | null;
+  detail: Record<string, unknown> | null;
+  created_at: string;
+  actor: string | null;
+  actor_role: string | null;
+};
+const actionText: Record<string, string> = {
+  SAVE_PRODUCT: "บันทึกสินค้า",
+  PRODUCT_SET_PREORDER: "ตั้งสินค้าเป็นพรีออเดอร์",
+  PRODUCT_SET_READY: "ตั้งสินค้าเป็นพร้อมส่ง",
+  IMPORT_CODES: "เติมสต็อก",
+  DELIVER_RESERVATION: "ส่งของพรีออเดอร์",
+  REVEAL_ORDER_CREDENTIALS: "เปิดดูรหัสในออเดอร์",
+  SAVE_SETTINGS: "แก้ตั้งค่าร้าน",
+  SET_PAYMENT_CHANNEL: "แก้ช่องทางรับเงิน",
+  CUSTOMER_UPDATE: "แก้ข้อมูลลูกค้า",
+  CUSTOMER_STATUS: "เปลี่ยนสถานะลูกค้า",
+  CUSTOMER_SIGN_OUT: "บังคับลูกค้าออกจากระบบ",
+  CUSTOMER_PASSWORD_RESET: "ตั้งรหัสผ่านชั่วคราวให้ลูกค้า",
+  UPDATE_PROFILE: "แก้บัญชีตัวเอง",
+  CREATE_ORDER: "สร้างออเดอร์",
+  CREATE_PREORDER: "สร้างพรีออเดอร์",
+  PAYMENT_AND_DELIVERY: "ชำระและส่งของ",
+  PREORDER_PAID: "ชำระพรีออเดอร์",
+  PAYMENT_FAILED: "ชำระไม่สำเร็จ",
+  ADD_REVIEW: "เขียนรีวิว",
+  OPEN_CHAT: "เปิดแชท",
+  CHAT_MESSAGE: "ส่งข้อความแชท",
+  CLOSE_CHAT: "ปิดแชท",
+  DEMO_TOPUP: "เติมเครดิตทดลอง",
+};
+
+export function AdminAudit() {
+  const [scope, setScope] = useState("staff");
+  const [action, setAction] = useState("");
+  const list = useCursorList<AuditEntry>("/admin/audit", "entries", { scope: scope === "staff" ? "staff" : "", action, limit: "50" });
+  const entityLink = (e: AuditEntry) => {
+    if (!e.entity_id) return null;
+    if (e.action.startsWith("CUSTOMER_")) return "/admin/customers/" + e.entity_id;
+    if (["REVEAL_ORDER_CREDENTIALS", "DELIVER_RESERVATION", "CREATE_ORDER", "CREATE_PREORDER", "PAYMENT_AND_DELIVERY", "PREORDER_PAID"].includes(e.action))
+      return "/admin/orders/" + e.entity_id;
+    if (e.action.startsWith("PRODUCT_") || e.action === "SAVE_PRODUCT") return "/admin/products/" + e.entity_id;
+    return null;
+  };
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>ประวัติการทำงาน</h1>
+          <p>ทุกการกระทำในหลังบ้านถูกบันทึกและแก้ไขไม่ได้ ใคร ทำอะไร กับอะไร เมื่อไหร่</p>
+        </div>
+      </div>
+      <div className="admin-filters">
+        <Select
+          label="ผู้ทำ"
+          value={scope}
+          onChange={setScope}
+          options={[
+            ["staff", "เฉพาะแอดมินและทีมงาน"],
+            ["all", "ทุกคน (รวมลูกค้า)"],
+          ]}
+        />
+        <Select
+          label="การกระทำ"
+          value={action}
+          onChange={setAction}
+          options={[
+            ["", "ทุกการกระทำ"],
+            ["CUSTOMER_", "จัดการลูกค้า"],
+            ["PRODUCT_", "เปลี่ยนวิธีส่งของ"],
+            ["SAVE_PRODUCT", "บันทึกสินค้า"],
+            ["IMPORT_CODES", "เติมสต็อก"],
+            ["DELIVER_RESERVATION", "ส่งของพรีออเดอร์"],
+            ["REVEAL_ORDER_CREDENTIALS", "เปิดดูรหัส"],
+            ["SAVE_SETTINGS", "ตั้งค่าร้าน"],
+          ]}
+        />
+      </div>
+      <ErrorMessage message={list.error} />
+      <div className="table-scroll reference-table admin-list-table">
+        <table>
+          <thead>
+            <tr>
+              <th>เวลา</th>
+              <th>ผู้ทำ</th>
+              <th>การกระทำ</th>
+              <th>รายละเอียด</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.rows?.map((e) => {
+              const link = entityLink(e);
+              return (
+                <tr key={e.id}>
+                  <td className="nowrap">{dateTime(e.created_at)}</td>
+                  <td>
+                    {e.actor ?? "ระบบ"}
+                    <small>{e.actor_role === "ADMIN" ? "แอดมิน" : e.actor_role === "STAFF" ? "ทีมงาน" : e.actor_role ? "ลูกค้า" : ""}</small>
+                  </td>
+                  <td>{actionText[e.action] ?? e.action}</td>
+                  <td>
+                    {link ? <Link to={link}>{shortId(e.entity_id!)}</Link> : e.entity_id ? shortId(e.entity_id) : "–"}
+                    {e.detail && <small className="audit-detail">{JSON.stringify(e.detail)}</small>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {list.rows === null && !list.error && <p className="reference-empty-text">กำลังโหลด…</p>}
+        {list.rows?.length === 0 && <p className="reference-empty-text">ยังไม่มีรายการ</p>}
       </div>
       {list.rows && <MoreRow next={list.next} more={list.more} loading={list.loadingMore} count={list.rows.length} />}
     </>

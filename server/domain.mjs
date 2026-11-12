@@ -1,5 +1,6 @@
 import {
   createHash,
+  createHmac,
   randomBytes,
   randomUUID,
   scryptSync,
@@ -605,13 +606,18 @@ export function createCommerceCore({
     const email = "admin@astra.local";
     const existing = one("SELECT id FROM users WHERE email=?", email);
     const adminId = existing?.id ?? randomUUID();
-    if (existing)
+    // Apply the env password only when the secret itself changes, so a password the
+    // owner changed in the back office survives restarts. Rotating the secret still wins.
+    const secretMark = createHmac("sha256", key).update("admin-secret:" + adminPassword).digest("hex");
+    const appliedMark = one("SELECT value FROM runtime_flags WHERE key='admin-secret'")?.value;
+    if (existing && appliedMark !== secretMark)
       run(
         "UPDATE users SET password_hash=?,role=? WHERE id=?",
         passwordHash(adminPassword),
         ROLES.ADMIN,
         existing.id,
       );
+    else if (existing) run("UPDATE users SET role=? WHERE id=?", ROLES.ADMIN, existing.id);
     else
       run(
         "INSERT INTO users(id,email,name,password_hash,role) VALUES(?,?,?,?,?)",
@@ -621,6 +627,10 @@ export function createCommerceCore({
         passwordHash(adminPassword),
         ROLES.ADMIN,
       );
+    run(
+      "INSERT INTO runtime_flags(key,value) VALUES('admin-secret',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+      secretMark,
+    );
     // Owner can sign in with the short name "admin" too, unless a customer took it.
     if (!one("SELECT id FROM users WHERE username='admin' AND id<>?", adminId))
       run("UPDATE users SET username='admin' WHERE id=?", adminId);
@@ -1897,7 +1907,11 @@ export function createCommerceCore({
     adminUpdateCustomer,
     adminSetCustomerStatus,
     adminSignOutCustomer,
+    adminResetCustomerPassword,
+    adminAuditLog,
+    adminCancelOrder,
   } = createAdminCustomerApis({
+    passwordHash,
     requireStaff,
     requireAdmin,
     one,
@@ -1966,6 +1980,9 @@ export function createCommerceCore({
     adminUpdateCustomer,
     adminSetCustomerStatus,
     adminSignOutCustomer,
+    adminResetCustomerPassword,
+    adminAuditLog,
+    adminCancelOrder,
     getPaymentChannel,
     setPaymentChannel,
     pay,

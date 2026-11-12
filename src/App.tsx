@@ -1095,6 +1095,18 @@ function Auth({ register = false }: { register?: boolean }) {
     </main>
   );
 }
+/** Server test mode (ASTRA_TEST_PAYMENTS): sandbox pay + test credit until a real provider is live. */
+let testModeCache: Promise<boolean> | null = null;
+function useTestPayments() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    testModeCache ??= api<{ mode?: string }>("/health")
+      .then((h) => h.mode === "sandbox")
+      .catch(() => false);
+    void testModeCache.then(setOn);
+  }, []);
+  return on;
+}
 function RequireLogin() {
   return (
     <Empty
@@ -1176,7 +1188,7 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
                 <strong>{money(variant.price)}</strong>
                 <Quantity
                   value={basket.quantity}
-                  max={Math.min(10, variant.stock)}
+                  max={p.preorder ? 10 : Math.min(10, variant.stock)}
                   onChange={(quantity) => setBasket({ ...basket, quantity })}
                 />
               </div>
@@ -1210,7 +1222,7 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
             <ErrorMessage message={error} />
             <button
               className="button primary full"
-              disabled={busy || variant.stock < basket.quantity}
+              disabled={busy || (!p.preorder && variant.stock < basket.quantity)}
               onClick={checkout ? order : () => go("/checkout")}
             >
               {busy ? (
@@ -1222,12 +1234,11 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
               )}
               <ArrowRight size={17} />
             </button>
-            <p className="sandbox-note">
-              {t("การชำระเงินจะเชื่อมต่อภายหลัง ตอนนี้ยังไม่ส่งโค้ด")}
-            </p>
             {user && (
               <p className="balance-note">
-                {t("คำสั่งซื้อจะถูกบันทึกไว้ก่อน โค้ดจะส่งหลังยืนยันการชำระเงิน")}
+                {p.preorder
+                  ? t("สินค้าพรีออเดอร์: ชำระแล้วได้เลขคิว ร้านจะส่ง ID และรหัสผ่านให้ภายหลัง")
+                  : t("ชำระแล้วได้รับ ID และรหัสผ่านทันทีในหน้าคำสั่งซื้อ")}
               </p>
             )}
           </aside>
@@ -1242,6 +1253,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const testPayments = useTestPayments();
   useEffect(() => {
     if (user)
       api<Order>("/orders/" + id)
@@ -1263,6 +1275,12 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
         outcome,
       });
       setOrder(result);
+      if (result.status === "PREORDER") {
+        setBasket(null);
+        sessionStorage.removeItem("astra-pay-" + id);
+        await refresh();
+        toast(t("ชำระเงินสำเร็จ ได้เลขคิวแล้ว"));
+      }
       if (result.status === "DELIVERED") {
         setBasket(null);
         sessionStorage.removeItem("astra-pay-" + id);
@@ -1324,14 +1342,18 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                     ? t("บันทึกคำสั่งซื้อแล้ว")
                     : order.status === "FAILED"
                       ? t("การชำระเงินไม่สำเร็จ")
-                      : t("สินค้าหมดก่อนทำรายการ")}
+                      : order.status === "CANCELLED"
+                        ? t("คำสั่งซื้อถูกยกเลิก")
+                        : t("สินค้าหมดก่อนทำรายการ")}
             </h1>
             <p>
               {order.status === "DELIVERED"
-                ? t("โค้ดของคุณอยู่ด้านล่าง")
+                ? t("ID และรหัสผ่านของคุณอยู่ด้านล่าง")
                 : order.status === "PENDING_PAYMENT"
-                  ? t("การชำระเงินจะเชื่อมต่อภายหลัง ระบบยังไม่ส่งโค้ด")
-                  : t("รายการนี้ยังไม่ส่งโค้ด")}
+                  ? t("ชำระเงินเพื่อรับสินค้า")
+                  : order.status === "PREORDER"
+                    ? t("ร้านจะส่งสินค้าให้ตามลำดับคิว และแจ้งเตือนในเว็บเมื่อส่งแล้ว")
+                    : t("รายการนี้ไม่มีการส่งสินค้า")}
             </p>
           </div>
           <section className="panel delivery-panel">
@@ -1355,10 +1377,12 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               <div className="note-box">
                 <Clock size={20} />
                 <div>
-                  <strong>{t("สินค้าสั่งจอง · รอส่งตามกำหนด")}</strong>
-                  <p>
-                    {t("บันทึกการสั่งจองแล้ว ยังไม่ส่งโค้ด")}
-                  </p>
+                  <strong>
+                    {order.queueNumber != null
+                      ? t("คิวที่ {n}", { n: order.queueNumber })
+                      : t("สินค้าสั่งจอง · รอส่งตามคิว")}
+                  </strong>
+                  <p>{t("ชำระเงินแล้ว ร้านจะส่ง ID และรหัสผ่านมาที่หน้านี้ และแจ้งเตือนเมื่อส่งแล้ว")}</p>
                 </div>
               </div>
             ) : order.status === "DELIVERED" ? (
@@ -1366,7 +1390,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                 <div className="code-heading">
                   <strong>
                     <KeyRound size={17} />
-                    {t("โค้ดสินค้าของคุณ")}
+                    {order.credentials?.length ? t("บัญชีของคุณ") : t("โค้ดสินค้าของคุณ")}
                   </strong>
                   <button
                     className="text-button"
@@ -1416,7 +1440,31 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                   <Clock size={20} />
                   <div>
                     <strong>{t("ยอดคำสั่งซื้อ")}{" "}{money(order.total)}</strong>
-                    <p>{t("รอเชื่อมช่องทางชำระเงิน โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น")}</p>
+                    {testPayments ? (
+                      <>
+                        <p>
+                          {t("โหมดทดสอบ: ชำระด้วยเครดิตทดลอง")} · {t("เครดิตคงเหลือ")} {money(user.balance)}
+                        </p>
+                        <ErrorMessage message={error} />
+                        <div className="pay-actions">
+                          <button
+                            className="button primary"
+                            disabled={busy || user.balance < order.total}
+                            onClick={() => pay("success")}
+                          >
+                            {busy ? <LoaderCircle className="spin" size={17} /> : <CreditCard size={17} />}
+                            {t("ชำระเงิน")} {money(order.total)}
+                          </button>
+                          {user.balance < order.total && (
+                            <Link to="/wallet" className="button secondary">
+                              {t("เติมเครดิตทดลอง")}
+                            </Link>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <p>{t("รอเชื่อมช่องทางชำระเงิน ระบบจะส่ง ID และรหัสผ่านหลังยืนยันยอดแล้วเท่านั้น")}</p>
+                    )}
                   </div>
                 </div>
               )
@@ -1438,19 +1486,18 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               </Link>
               <p>
                 <ShieldCheck size={16} />
-                {t("เปิดดูโค้ดซ้ำได้เสมอในประวัติการซื้อ")}
+                {t("เปิดดู ID และรหัสผ่านซ้ำได้เสมอในประวัติการซื้อ")}
               </p>
-              <Link to={"/reviews?order=" + id} className="subtle-link">
-                <Star size={16} />
-                {t("รีวิวคำสั่งซื้อนี้")}
-              </Link>
+              {/* The server only accepts reviews for ready-stock orders. */}
+              {!order.preorder && (
+                <Link to={"/reviews?order=" + id} className="subtle-link">
+                  <Star size={16} />
+                  {t("รีวิวคำสั่งซื้อนี้")}
+                </Link>
+              )}
             </div>
           )}
-          {order.status === "PENDING_PAYMENT" && (
-            <p className="sandbox-note">
-              {t("คำสั่งซื้อนี้ถูกบันทึกแล้ว และยังไม่มีการส่งโค้ด")}
-            </p>
-          )}
+
         </>
       )}
     </main>
@@ -1485,6 +1532,7 @@ function HistoryPage() {
             {[
               ["all", t("ทั้งหมด")],
               ["DELIVERED", t("จัดส่งสำเร็จ")],
+              ["PREORDER", t("รอส่ง (พรีออเดอร์)")],
               ["PENDING_PAYMENT", t("รอชำระเงิน")],
               ["FAILED", t("ไม่สำเร็จ")],
             ].map(([value, label]) => (
@@ -1570,9 +1618,24 @@ function HistoryPage() {
   );
 }
 function WalletPage() {
-  const { user } = useStore();
-  const [entries, setEntries] = useState<Ledger[]>([]);
+  const { user, refresh, toast } = useStore();
+  const [entries, setEntries] = useState<Ledger[] | null>(null);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(0);
+  const testPayments = useTestPayments();
+  async function topup(amount: number) {
+    setBusy(amount);
+    setError("");
+    try {
+      await api("/topup", { amount, requestKey: crypto.randomUUID() });
+      await Promise.all([refresh(), load()]);
+      toast(t("เติมเครดิตทดลองแล้ว"));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(0);
+    }
+  }
   const load = () =>
     api<{ entries: Ledger[] }>("/ledger")
       .then((r) => setEntries(r.entries))
@@ -1583,9 +1646,13 @@ function WalletPage() {
   return (
     <main className="container page-main reference-wallet-page">
       <div className="page-heading">
-        <span className="eyebrow">ORDERS</span>
-        <h1>{t("บัญชีของร้าน")}</h1>
-        <p>{t("ช่องทางจ่ายยังไม่เปิด โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น")}</p>
+        <span className="eyebrow">{t("กระเป๋าเงิน")}</span>
+        <h1>{t("เครดิตของฉัน")}</h1>
+        <p>
+          {testPayments
+            ? t("โหมดทดสอบ: เติมเครดิตทดลองเพื่อลองสั่งซื้อได้ ไม่ใช่เงินจริง")
+            : t("ยอดเครดิตและประวัติการใช้งานของคุณ")}
+        </p>
       </div>
       {!user ? (
         <RequireLogin />
@@ -1598,20 +1665,41 @@ function WalletPage() {
                 {t("เครดิตคงเหลือ")}
               </span>
               <strong>{money(user.balance)}</strong>
-              <small>{t("ช่องทางจ่ายยังไม่เปิด")}</small>
+              <small>{testPayments ? t("เครดิตทดลอง") : t("ใช้ชำระคำสั่งซื้อในร้าน")}</small>
             </section>
-            <section className="panel topup-panel">
-              <h2>{t("ช่องทางชำระเงิน")}</h2>
-              <p>{t("ยังไม่เปิดรับเงิน โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น")}</p>
-              <ErrorMessage message={error} />
-            </section>
+            {testPayments && (
+              <section className="panel topup-panel">
+                <h2>{t("เติมเครดิตทดลอง")}</h2>
+                <p>{t("สำหรับทดสอบระบบเท่านั้น ไม่มีการเก็บเงินจริง")}</p>
+                <div className="topup-amounts">
+                  {[100, 300, 500, 1000].map((amount) => (
+                    <button
+                      key={amount}
+                      className="button secondary"
+                      disabled={!!busy}
+                      onClick={() => topup(amount)}
+                    >
+                      {busy === amount ? <LoaderCircle className="spin" size={16} /> : <Plus size={16} />}
+                      {money(amount * 100)}
+                    </button>
+                  ))}
+                </div>
+                <ErrorMessage message={error} />
+              </section>
+            )}
+            {!testPayments && <ErrorMessage message={error} />}
           </div>
           <section className="panel wallet-history">
             <div className="panel-heading">
               <h2>{t("ประวัติเครดิต")}</h2>
               <History size={18} />
             </div>
-            {entries.length ? (
+            {entries === null ? (
+              <div className="loading-row">
+                <LoaderCircle className="spin" />
+                {t("กำลังโหลด")}
+              </div>
+            ) : entries.length ? (
               entries.map((e) => (
                 <div className="ledger-row" key={e.id}>
                   <span

@@ -1801,3 +1801,45 @@ html.lang-swap .storefront-shell .main-nav {
     transition: none;
   }
 }
+.storefront-shell .pay-actions,
+.storefront-shell .topup-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.storefront-shell .topup-amounts .button {
+  flex: 1 1 120px;
+}
+.storefront-shell .preorder-how {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius, 10px);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.storefront-shell .consent-check,
+.reference-auth-form .consent-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.reference-auth-help {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 380px;
+  margin: 12px auto 0;
+  line-height: 1.6;
+}
+.reference-auth-form .field-hint {
+  display: block;
+  margin-top: -6px;
+  font-size: 12px;
+  color: var(--muted);
+}
