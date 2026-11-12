@@ -1058,3 +1058,325 @@ html.lang-swap .storefront-shell .site-footer,
 html.lang-swap .storefront-shell .main-nav {
   animation: rise 0.6s var(--ease-out-expo) both;
 }
+
+/* ---------- Credits / reviews ---------- */
+.storefront-shell .reference-credit-page::before {
+  height: 420px;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-color: transparent;
+  mask-image: radial-gradient(ellipse at 30% 0%, #000 10%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at 30% 0%, #000 10%, transparent 70%);
+}
+.storefront-shell .reference-credit-hero {
+  animation: rise 0.7s var(--ease-out-expo) both;
+}
+.storefront-shell .reference-credit-hero h1 {
+  letter-spacing: -0.04em;
+}
+.storefront-shell .verified-pill,
+.storefront-shell .credit-trust-badges > span {
+  background: var(--surface);
+  border-color: var(--border);
+  border-radius: var(--radius-btn);
+  font-size: 13px;
+}
+.storefront-shell .verified-pill svg,
+.storefront-shell .credit-trust-badges svg,
+.storefront-shell .credit-score-ring .review-stars,
+.storefront-shell .credit-rating-bars .rating-bar svg,
+.storefront-shell .credit-filter-bar svg,
+.storefront-shell .credit-review-card > .review-stars,
+.storefront-shell .credit-review-owner small {
+  color: var(--accent-text);
+}
+.storefront-shell .credit-summary,
+.storefront-shell .credit-review-card,
+.storefront-shell .reference-credit-page .review-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.storefront-shell .credit-score-ring {
+  border-color: var(--accent);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.storefront-shell .credit-score-ring small,
+.storefront-shell .credit-review-card time,
+.storefront-shell .credit-review-product small,
+.storefront-shell .credit-filter-bar button small {
+  font-size: 12px;
+}
+.storefront-shell .credit-rating-bars .rating-bar i {
+  background: var(--hover);
+  border-radius: var(--radius-sm);
+}
+.storefront-shell .credit-rating-bars .rating-bar b {
+  background: var(--accent);
+}
+.storefront-shell .credit-filter-bar {
+  background: var(--raised);
+  border-color: var(--border);
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.storefront-shell .credit-filter-bar button {
+  min-height: 44px;
+  border-radius: var(--radius-btn);
+  transition:
+    background 0.2s var(--ease-out-expo),
+    color 0.2s var(--ease-out-expo),
+    transform 0.25s var(--spring);
+}
+.storefront-shell .credit-filter-bar button.selected {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.storefront-shell .credit-filter-bar button.selected svg {
+  color: var(--accent-ink);
+}
+.storefront-shell .credit-filter-bar button:hover:not(.selected) {
+  background: var(--hover);
+  transform: translateY(-1px);
+}
+.storefront-shell .credit-review-card {
+  transition: transform 0.3s var(--spring), border-color 0.2s ease;
+}
+.storefront-shell .credit-review-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+}
+.storefront-shell .credit-review-owner > .avatar {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.storefront-shell .credit-review-product {
+  background: var(--raised);
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+}
+@media (max-width: 700px) {
+  .storefront-shell .credit-summary {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .storefront-shell .credit-score-ring {
+    align-self: center;
+  }
+  .storefront-shell .credit-trust-badges {
+    flex-wrap: wrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .storefront-shell .credit-review-card:hover,
+  .storefront-shell .credit-filter-bar button:hover:not(.selected) {
+    transform: none;
+  }
+}
+
+/* ---------- Product catalog ---------- */
+.storefront-shell .reference-catalog-page {
+  position: relative;
+  isolation: isolate;
+}
+.storefront-shell .reference-catalog-page::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 340px;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at 20% 0%, #000 12%, transparent 72%);
+  -webkit-mask-image: radial-gradient(ellipse at 20% 0%, #000 12%, transparent 72%);
+}
+.storefront-shell .reference-catalog-page > .page-heading {
+  animation: rise 0.7s var(--ease-out-expo) both;
+}
+.storefront-shell .reference-catalog-page > .page-heading h1 {
+  font-size: clamp(36px, 5vw, 48px);
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+.storefront-shell .reference-catalog-page .reference-catalog {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 480px);
+  gap: 16px 24px;
+  align-items: end;
+  margin-top: 8px;
+}
+.storefront-shell .reference-catalog-page .reference-catalog > * {
+  grid-column: 1 / -1;
+}
+.storefront-shell .reference-catalog-page .reference-catalog-title,
+.storefront-shell .reference-catalog-page .reference-catalog-tools {
+  margin: 0;
+}
+.storefront-shell .reference-catalog-page .reference-catalog-title {
+  grid-column: 1;
+}
+.storefront-shell .reference-catalog-page .reference-catalog-tools {
+  grid-column: 2;
+}
+.storefront-shell .reference-catalog-page .search-field,
+.storefront-shell .reference-catalog-page .sort-field {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  min-height: 44px;
+}
+.storefront-shell .reference-catalog-page .search-field {
+  height: auto;
+  max-width: none;
+}
+.storefront-shell .reference-catalog-page .sort-field {
+  margin-left: 0;
+}
+.storefront-shell .reference-catalog-page .sort-field select {
+  width: 100%;
+  max-width: none;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-btn);
+  font-size: 13px;
+}
+.storefront-shell .reference-catalog-page .empty-state {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.storefront-shell .reference-catalog-page .empty-icon {
+  color: var(--accent-text);
+  border-color: var(--border);
+  background: var(--raised);
+}
+@media (max-width: 700px) {
+  .storefront-shell .reference-catalog-page .reference-catalog {
+    grid-template-columns: 1fr;
+  }
+  .storefront-shell .reference-catalog-page .reference-catalog-title,
+  .storefront-shell .reference-catalog-page .reference-catalog-tools {
+    grid-column: 1;
+  }
+  .storefront-shell .reference-catalog-page .reference-catalog-tools {
+    flex-direction: column;
+  }
+  .storefront-shell .reference-catalog-page .sort-field {
+    width: 100%;
+  }
+}
+
+/* ---------- Product detail ---------- */
+.storefront-shell .reference-product-page {
+  position: relative;
+  isolation: isolate;
+}
+.storefront-shell .reference-product-page::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 420px;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at 30% 0%, #000 12%, transparent 72%);
+  -webkit-mask-image: radial-gradient(ellipse at 30% 0%, #000 12%, transparent 72%);
+}
+.storefront-shell .reference-product-page .back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--muted);
+}
+.storefront-shell .reference-product-grid {
+  animation: rise 0.7s var(--ease-out-expo) both;
+}
+.storefront-shell .reference-main-image,
+.storefront-shell .reference-product-description,
+.storefront-shell .reference-faq,
+.storefront-shell .reference-product-reviews,
+.storefront-shell .reference-product-page .empty-state {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.storefront-shell .reference-main-image {
+  overflow: hidden;
+}
+.storefront-shell .reference-thumbnails button {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-sm);
+  background: var(--raised);
+}
+.storefront-shell .reference-thumbnails button.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.storefront-shell .reference-product-info h1 {
+  letter-spacing: -0.04em;
+}
+.storefront-shell .reference-product-rating,
+.storefront-shell .reference-product-page .review-stars,
+.storefront-shell .reference-guarantee svg,
+.storefront-shell .reference-product-page .empty-icon {
+  color: var(--accent-text);
+}
+.storefront-shell .reference-price {
+  color: var(--text);
+}
+.storefront-shell .preorder-dates,
+.storefront-shell .reference-variants button {
+  border-radius: var(--radius-sm);
+}
+.storefront-shell .preorder-dates {
+  background: var(--surface);
+  overflow: hidden;
+}
+.storefront-shell .reference-product-description,
+.storefront-shell .reference-faq,
+.storefront-shell .reference-product-reviews {
+  padding: 24px;
+  margin-top: 24px;
+}
+.storefront-shell .reference-faq summary {
+  min-height: 44px;
+}
+.storefront-shell .reference-faq summary svg {
+  transition: transform 0.25s var(--spring);
+}
+.storefront-shell .reference-product-page .rating-bar b {
+  background: var(--accent);
+}
+@media (max-width: 700px) {
+  .storefront-shell .reference-buy-row {
+    flex-wrap: wrap;
+  }
+  .storefront-shell .reference-buy-row .quantity,
+  .storefront-shell .reference-buy-row .button {
+    flex: 1 1 140px;
+    min-height: 44px;
+  }
+  .storefront-shell .reference-rating-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .storefront-shell .reference-variants button:hover:not(:disabled) {
+    transform: none;
+  }
+}
