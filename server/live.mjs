@@ -20,7 +20,7 @@ const LIVE_METHODS = {
   deleteInventoryUnit: ["catalog"],
   deliverReservation: ["orders", "notify"],
   adminCancelOrder: ["orders"],
-  adminSetOrderNote: ["orders"],
+  adminAddOrderNote: ["orders"],
   replaceOrderCredential: ["orders", "catalog", "notify"],
   addProductImage: ["catalog"],
   reorderProductImages: ["catalog"],

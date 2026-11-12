@@ -21,7 +21,7 @@ import {
   applyMigration008,
   MIGRATION_008_NAME,
 } from "../server/migrate-008.mjs";
-import { ensureChatThreadReads, ensureCustomerAdmin } from "../server/ensure-admin-fr.mjs";
+import { ensureChatThreadReads, ensureCustomerAdmin, ensureOrderHistory } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
 import {
   createAPIHandler,
@@ -89,6 +89,7 @@ export class Commerce extends DurableObject {
       ensureChatThreadReads(db);
       ensureCustomerAdmin(db);
       ensureAuthHardening(db);
+      ensureOrderHistory(db);
       ensureLiveVersions(db);
     });
     this.db = db;

@@ -27,6 +27,7 @@ import { createTeamApis } from "./admin-team.mjs";
 import { createReportApis } from "./admin-reports.mjs";
 import { createAdminVariantStockApis } from "./admin-variant-stock-apis.mjs";
 import { createAdminOrderReplaceApis } from "./admin-order-replace.mjs";
+import { createOrderHistoryApis } from "./admin-order-history.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createFileStore } from "./file-store.mjs";
 import { createAuthHardening } from "./auth-hardening.mjs";
@@ -1940,6 +1941,18 @@ export function createCommerceCore({
     if (period === "week") start -= ((local.getUTCDay() + 6) % 7) * 86400000;
     return new Date(start - offset).toISOString().slice(0, 19).replace("T", " ");
   }
+  const orderHistory = createOrderHistoryApis({
+    requireStaff,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    decrypt,
+    randomUUID,
+  });
+  const { adminAddOrderNote } = orderHistory;
   const listApis = createAdminListApis({
     requireStaff,
     one,
@@ -1955,6 +1968,7 @@ export function createCommerceCore({
     getLowStockAt,
     bangkokDayRange,
     isAdmin,
+    history: orderHistory,
   });
   const { adminOrders, adminRevealOrderCredentials, adminCustomers } = listApis;
   // NFR-3: team members handle orders but never see money movement (payment rows,
@@ -1994,7 +2008,6 @@ export function createCommerceCore({
     adminResetCustomerPassword,
     adminAuditLog,
     adminCancelOrder,
-    adminSetOrderNote,
   } = createAdminCustomerApis({
     passwordHash,
     requireStaff,
@@ -2059,6 +2072,7 @@ export function createCommerceCore({
     inventoryAvailableSql,
     notify,
     maybeNotifyStockLow,
+    recordReplacement: orderHistory.recordReplacement,
   });
   function buyerRanking(user, query = {}) {
     requireAdmin(user);
@@ -2122,7 +2136,7 @@ export function createCommerceCore({
     adminResetCustomerPassword,
     adminAuditLog,
     adminCancelOrder,
-    adminSetOrderNote,
+    adminAddOrderNote,
     replaceOrderCredential,
     loginTotp: auth.loginTotp,
     confirmPassword: auth.confirmPassword,

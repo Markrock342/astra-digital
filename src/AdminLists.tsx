@@ -20,6 +20,18 @@ import { AdminChat as AdminChatLazy, BuyerRankingCard as BuyerRankingInline } fr
 import { Art, ErrorMessage, Link, Status, useStore } from "./App";
 import { api, dateTime, money } from "./api";
 import { checkSource, toWebp, uploadImage } from "./image-upload";
+import {
+  ORDER_TABS,
+  OrderActivity,
+  OrderNotes,
+  OrderStatusTabs,
+  ReplacementHistory,
+  type ActivityEvent,
+  type OrderCounts,
+  type OrderNoteItem,
+  type OrderTab,
+  type ReplacementItem,
+} from "./OrderHistory";
 
 type Filters = Record<string, string>;
 
@@ -37,6 +49,7 @@ function useCursorList<T>(path: string, key: string, filters: Filters, topics: L
   useLive(topics, () => setTick((n) => n + 1));
   const [rows, setRows] = useState<T[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
+  const [meta, setMeta] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
   const [loadingMore, setLoadingMore] = useState(false);
   const serial = JSON.stringify(filters);
@@ -49,6 +62,7 @@ function useCursorList<T>(path: string, key: string, filters: Filters, topics: L
         if (id !== request.current) return;
         setRows(data[key] as T[]);
         setNext((data.nextCursor as string) ?? null);
+        setMeta(data);
         setError("");
       } catch (e) {
         if (id === request.current) setError((e as Error).message);
@@ -70,7 +84,7 @@ function useCursorList<T>(path: string, key: string, filters: Filters, topics: L
       setLoadingMore(false);
     }
   }
-  return { rows, next, error, more, loadingMore };
+  return { rows, next, error, more, loadingMore, meta };
 }
 
 function FilterBar({
@@ -213,24 +227,51 @@ type OrderRow = {
   queue_number: number | null;
 };
 
-const orderStatuses: [string, string][] = [
-  ["", "ทุกสถานะ"],
-  ["PENDING_PAYMENT", "รอชำระ"],
-  ["PREORDER", "รอส่ง (พรีออเดอร์)"],
-  ["DELIVERED", "ส่งแล้ว"],
-  ["FAILED", "ชำระไม่สำเร็จ"],
-  ["OUT_OF_STOCK", "สินค้าหมด"],
-  ["CANCELLED", "ยกเลิก"],
-];
-const emptyOrderFilters = { q: "", status: "", type: "", from: "", to: "" };
+const emptyOrderFilters = { q: "", type: "", from: "", to: "" };
+const ORDER_LIST_QUERY = "astra-admin-orders-query";
+
+/** Tab + filters live in the URL so reload and back keep them. */
+function readOrderUrl(defaultTab: OrderTab): { tab: OrderTab; filters: Filters } {
+  const params = new URLSearchParams(location.search);
+  const raw = params.get("tab") as OrderTab | null;
+  const tab = raw && ORDER_TABS.includes(raw) ? raw : defaultTab;
+  const filters: Filters = { ...emptyOrderFilters };
+  for (const key of Object.keys(emptyOrderFilters)) filters[key] = params.get(key) ?? "";
+  return { tab, filters };
+}
+
+/** Where the order detail "back" link returns to (same tab and filters). */
+export function ordersListHref() {
+  try {
+    return "/admin/orders" + (sessionStorage.getItem(ORDER_LIST_QUERY) ?? "");
+  } catch {
+    return "/admin/orders";
+  }
+}
 
 export function AdminOrders() {
-  const { go } = useStore();
-  const [filters, setFilters] = useState<Filters>(emptyOrderFilters);
+  const { go, user } = useStore();
+  const staff = user?.role === "STAFF";
+  const defaultTab: OrderTab = staff ? "todo" : "all";
+  const [initial] = useState(() => readOrderUrl(defaultTab));
+  const [tab, setTab] = useState<OrderTab>(initial.tab);
+  const [filters, setFilters] = useState<Filters>(initial.filters);
   const [exporting, setExporting] = useState(false);
-  const list = useCursorList<OrderRow>("/admin/orders", "orders", { ...filters, limit: "50" }, ["orders"]);
+  const serverFilters: Filters = { ...filters, group: tab === "all" ? "" : tab };
+  const list = useCursorList<OrderRow>("/admin/orders", "orders", { ...serverFilters, limit: "50" }, ["orders"]);
+  const counts = (list.meta?.counts as OrderCounts | undefined) ?? null;
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
   const active = Object.values(filters).some(Boolean);
+  useEffect(() => {
+    const search = query({ ...filters, tab: tab === defaultTab ? "" : tab });
+    if (location.pathname === "/admin/orders" && location.search !== search)
+      history.replaceState(history.state, "", "/admin/orders" + search);
+    try {
+      sessionStorage.setItem(ORDER_LIST_QUERY, search);
+    } catch {
+      // private mode: the back link just opens the default view
+    }
+  }, [filters, tab, defaultTab]);
   async function exportCsv() {
     setExporting(true);
     try {
@@ -238,7 +279,7 @@ export function AdminOrders() {
       let cursor: string | null = null;
       do {
         const page: { orders: OrderRow[]; nextCursor: string | null } = await api(
-          "/admin/orders" + query({ ...filters, limit: "100" }, cursor),
+          "/admin/orders" + query({ ...serverFilters, limit: "100" }, cursor),
         );
         all.push(...page.orders);
         cursor = page.nextCursor;
@@ -282,7 +323,6 @@ export function AdminOrders() {
         onReset={() => setFilters(emptyOrderFilters)}
         active={active}
       >
-        <Select label="สถานะ" value={filters.status} onChange={(status) => set({ status })} options={orderStatuses} />
         <Select
           label="ประเภท"
           value={filters.type}
@@ -295,6 +335,7 @@ export function AdminOrders() {
         />
         <DateRange from={filters.from} to={filters.to} onChange={(from, to) => set({ from, to })} />
       </FilterBar>
+      <OrderStatusTabs value={tab} counts={counts} staff={staff} onChange={setTab} />
       <ErrorMessage message={list.error} />
       <div className="table-scroll reference-table admin-list-table">
         <table>
@@ -334,7 +375,13 @@ export function AdminOrders() {
         </table>
         {list.rows === null && !list.error && <p className="reference-empty-text">กำลังโหลด…</p>}
         {list.rows?.length === 0 && (
-          <p className="reference-empty-text">{active ? "ไม่พบออเดอร์ตามตัวกรอง" : "ยังไม่มีออเดอร์"}</p>
+          <p className="reference-empty-text">
+            {tab === "todo" && !active
+              ? "ไม่มีงานค้าง พรีออเดอร์ที่ชำระแล้วส่งครบหมดแล้ว"
+              : active || tab !== "all"
+                ? "ไม่พบออเดอร์ในแท็บนี้ตามตัวกรอง"
+                : "ยังไม่มีออเดอร์"}
+          </p>
         )}
       </div>
       {list.rows && <MoreRow next={list.next} more={list.more} loading={list.loadingMore} count={list.rows.length} />}
@@ -353,63 +400,12 @@ type OrderDetail = {
   product: { id: string; name: string; art: string; variant_label: string };
   customer: { id: string; name: string; email: string };
   payments: { id: string; amount: number; status: string; provider: string; provider_ref: string | null; created_at: string; finalized_at: string | null }[];
-  timeline: { at: string; event: string }[];
+  timeline: ActivityEvent[];
   codes: string[];
   credentials: { loginId: string; password: string }[];
   units?: { id: string; kind: "pair" | "code" }[];
-  note?: string | null;
-};
-
-function OrderNote({ id, note }: { id: string; note: string | null }) {
-  const { toast } = useStore();
-  const [text, setText] = useState(note ?? "");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  useEffect(() => setText(note ?? ""), [note]);
-  async function save(e: FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError("");
-    try {
-      await api("/admin/orders/" + id + "/note", { note: text });
-      toast("บันทึกหมายเหตุแล้ว");
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  }
-  return (
-    <section className="reference-admin-card admin-detail-card">
-      <h2>หมายเหตุภายใน</h2>
-      <form onSubmit={save} className="admin-note-form">
-        <label className="field">
-          <span className="sr-only">หมายเหตุภายใน</span>
-          <textarea
-            aria-label="หมายเหตุภายใน"
-            maxLength={2000}
-            rows={3}
-            placeholder="เช่น ลูกค้าแจ้งทางแชทว่า… · ลูกค้าไม่เห็นข้อความนี้"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-        </label>
-        <ErrorMessage message={error} />
-        <button className="button secondary" disabled={saving || text === (note ?? "")}>
-          บันทึกหมายเหตุ
-        </button>
-      </form>
-    </section>
-  );
-}
-
-const eventText: Record<string, string> = {
-  created: "สร้างออเดอร์",
-  paid: "ชำระเงินสำเร็จ",
-  payment_failed: "ชำระเงินไม่สำเร็จ",
-  delivered: "ส่งของแล้ว",
-  failed: "ล้มเหลว",
-  out_of_stock: "สินค้าหมด",
+  notes?: OrderNoteItem[];
+  replacements?: ReplacementItem[];
 };
 
 export function AdminOrderDetail({ id }: { id: string }) {
@@ -489,7 +485,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
   const shown = revealed ?? order;
   return (
     <>
-      <Link to="/admin/orders" className="back-link">
+      <Link to={ordersListHref()} className="back-link">
         <ArrowLeft size={15} />
         ออเดอร์
       </Link>
@@ -531,7 +527,11 @@ export function AdminOrderDetail({ id }: { id: string }) {
               )}
             </section>
           )}
-          <OrderNote id={order.id} note={order.note ?? null} />
+          <OrderNotes
+            id={order.id}
+            notes={order.notes ?? []}
+            onAdded={() => void reload()}
+          />
           <div className="admin-detail-grid">
             <section className="reference-admin-card admin-detail-card">
               <h2>สินค้า</h2>
@@ -594,6 +594,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
                       </div>
                     </form>
                   )}
+                  <ReplacementHistory items={order.replacements ?? []} />
                   {!revealed && revealReason === null && (
                     <button className="button secondary" onClick={() => setRevealReason("")}>
                       <Eye size={15} />
@@ -644,15 +645,8 @@ export function AdminOrderDetail({ id }: { id: string }) {
                   <small>{order.customer.email}</small>
                 </span>
               </Link>
-              <h2>ไทม์ไลน์</h2>
-              <ol className="admin-timeline">
-                {order.timeline.map((e, i) => (
-                  <li key={i} className={"event-" + e.event}>
-                    <strong>{eventText[e.event] ?? e.event}</strong>
-                    <time>{dateTime(e.at)}</time>
-                  </li>
-                ))}
-              </ol>
+              <h2>ความเคลื่อนไหว</h2>
+              <OrderActivity events={order.timeline} />
               <h2>การชำระเงิน</h2>
               {user?.role !== "ADMIN" && <p className="muted">รายละเอียดการชำระเงินดูได้เฉพาะแอดมิน</p>}
               {user?.role === "ADMIN" && order.payments.length === 0 && <p className="muted">ยังไม่มีรายการชำระ</p>}
