@@ -17,6 +17,10 @@ import {
   applyMigration007,
   MIGRATION_007_NAME,
 } from "../server/migrate-007.mjs";
+import {
+  applyMigration008,
+  MIGRATION_008_NAME,
+} from "../server/migrate-008.mjs";
 import { ensureChatThreadReads, ensureCustomerAdmin } from "../server/ensure-admin-fr.mjs";
 import {
   createAPIHandler,
@@ -30,6 +34,7 @@ import commerceOps from "../server/migrations/004_commerce_ops.sql";
 import credentialPreorder from "../server/migrations/005_credential_preorder_indexes.sql";
 import ledgerMoney from "../server/migrations/006_ledger_money.sql";
 import variantStock from "../server/migrations/007_variant_stock.sql";
+import uploadsSchema from "../server/migrations/008_uploads.sql";
 export class Commerce extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -53,6 +58,7 @@ export class Commerce extends DurableObject {
         [MIGRATION_005_NAME, credentialPreorder],
         [MIGRATION_006_NAME, ledgerMoney],
         [MIGRATION_007_NAME, variantStock],
+        [MIGRATION_008_NAME, uploadsSchema],
       ]) {
         if (
           !db
@@ -65,6 +71,8 @@ export class Commerce extends DurableObject {
             applyMigration006(db, content);
           } else if (name === MIGRATION_007_NAME) {
             applyMigration007(db, content);
+          } else if (name === MIGRATION_008_NAME) {
+            applyMigration008(db, content);
           } else {
             executeSqliteMigration(db, content);
             db.prepare("INSERT INTO schema_migrations(name) VALUES(?)").run(
@@ -96,6 +104,8 @@ export class Commerce extends DurableObject {
       allowDemoAdmin: false,
       allowSandbox: testPayments,
       seed: false,
+      // R2 binding UPLOADS when Mark creates the bucket; otherwise SQLite files BLOB.
+      uploads: env.UPLOADS,
       adminPassword:
         typeof adminPassword === "string" && adminPassword.length >= 8
           ? adminPassword
@@ -114,12 +124,15 @@ export class Commerce extends DurableObject {
     });
     this.presentation = false;
     this.handle = createAPIHandler(this.service, {
-      rateLimit: (key) =>
-        this.consumeLimit(
-          "auth:" + createHash("sha256").update(key).digest("hex"),
-          20,
-          60000,
-        ),
+      rateLimit: (key, max, windowMs) => {
+        if (max == null)
+          return this.consumeLimit(
+            "auth:" + createHash("sha256").update(key).digest("hex"),
+            20,
+            60000,
+          );
+        return this.consumeLimit(key, max, windowMs);
+      },
     });
   }
   consumeLimit(key, max = 60, windowMs = 600000) {

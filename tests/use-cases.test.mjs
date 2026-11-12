@@ -296,6 +296,7 @@ test("UC7 live shop refuses demo accounts, demo credit and sandbox payment", asy
   assert.equal(health.body.features.adminVariantCrud, true);
   assert.equal(health.body.features.adminStockApi, true);
   assert.equal(health.body.features.adminReplaceCredential, true);
+  assert.equal(health.body.features.uploads, true);
   assert.equal((await api.get("/api/products")).body.products.length, 0, "starts empty");
   assert.equal((await api.post("/api/demo", null, {})).status, 403);
   assert.equal((await api.post("/api/demo-merchant", null, {})).status, 403);
