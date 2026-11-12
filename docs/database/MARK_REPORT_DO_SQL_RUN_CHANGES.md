@@ -3,6 +3,8 @@
 **ถึง:** มาร์ค  
 **จาก:** น็อต  
 **วันที่:** 2026-11-12  
+**PR:** https://github.com/Markrock342/astra-digital/pull/37  
+**Branch:** `fix/do-sql-run-changes` (รวม FR-O5 จาก #35 + hotfix + `units[]`)  
 **สาเหตุ:** มาร์คแจ้งบน Cloudflare — `db.prepare().run()` คืน cursor ไม่มี `.changes` → `if (!x.changes)` fail เสมอ (deliver ตั้งแต่ DB-005 + replace #35)
 
 ---

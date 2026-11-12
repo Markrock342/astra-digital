@@ -3,7 +3,7 @@
 อัปเดตล่าสุด: 2026-11-12
 
 ## Hotfix DO `run().changes` (ด่วน — ก่อน deploy)
-- branch `fix/do-sql-run-changes` · รวม FR-O5 (#35) + แก้ adapter + `units[]` ใน admin order detail
+- PR #37 · branch `fix/do-sql-run-changes` · รวม FR-O5 (#35) + แก้ adapter + `units[]` ใน admin order detail
 - Root cause: DO cursor ไม่มี `.changes` → deliver/replace 409 บน Cloudflare
 - หลักฐาน: Miniflare deliver+replace · `wrangler dev --local` smoke 11/11 · `npm test` 86+
 - รายงาน [MARK_REPORT_DO_SQL_RUN_CHANGES](../database/MARK_REPORT_DO_SQL_RUN_CHANGES.md)
