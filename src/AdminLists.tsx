@@ -1619,14 +1619,16 @@ export function AdminAudit() {
 
 // ---------------------------------------------------------------- Settings: team (FR-S4)
 
-type Member = { id: string; name: string; email: string; role: string; active: boolean; created_at: string };
+type Member = { id: string; name: string; email: string; role: string; active: boolean; owner?: boolean; created_at: string };
 
 export function AdminTeam() {
   const { toast, user } = useStore();
   const [team, setTeam] = useState<Member[] | null>(null);
   const [error, setError] = useState("");
-  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [created, setCreated] = useState<{ email: string; password: string; role: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  // Granting or removing admin rights is asked once more, like other irreversible-feeling actions.
+  const [confirming, setConfirming] = useState<string | null>(null);
   const load = () =>
     api<{ team: Member[] }>("/admin/team")
       .then((r) => setTeam(r.team))
@@ -1643,9 +1645,9 @@ export function AdminTeam() {
     setError("");
     try {
       const result = await api<{ member: Member; temporaryPassword: string }>("/admin/team", values);
-      setCreated({ email: result.member.email, password: result.temporaryPassword });
+      setCreated({ email: result.member.email, password: result.temporaryPassword, role: result.member.role });
       form.reset();
-      toast("เพิ่มทีมงานแล้ว");
+      toast(result.member.role === "ADMIN" ? "เพิ่มแอดมินแล้ว" : "เพิ่มทีมงานแล้ว");
       await load();
     } catch (err) {
       setError((err as Error).message);
@@ -1654,20 +1656,37 @@ export function AdminTeam() {
     }
   }
   async function toggle(m: Member) {
+    setError("");
     try {
       await api("/admin/team/" + m.id + "/active", { active: !m.active });
-      toast(m.active ? "ปิดบัญชีทีมงานแล้ว" : "เปิดบัญชีทีมงานแล้ว");
+      toast(m.active ? "ปิดบัญชีแล้ว" : "เปิดบัญชีแล้ว");
       await load();
     } catch (err) {
       setError((err as Error).message);
     }
   }
+  async function changeRole(m: Member) {
+    const role = m.role === "ADMIN" ? "STAFF" : "ADMIN";
+    setConfirming(null);
+    setError("");
+    try {
+      await api("/admin/team", { id: m.id, name: m.name, role });
+      toast(role === "ADMIN" ? m.name + " เป็นแอดมินแล้ว" : m.name + " เป็นทีมงานแล้ว");
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  const locked = (m: Member) => m.id === user?.id || !!m.owner;
   return (
     <>
       <div className="reference-admin-heading">
         <div>
           <h1>ทีมงาน</h1>
-          <p>ทีมงานตอบแชท ดูออเดอร์ ส่งของพรีออเดอร์ และดูลูกค้าได้ · ไม่เห็นการเงิน ตั้งค่า และแก้สินค้าไม่ได้</p>
+          <p>
+            แอดมินทำได้ทุกอย่าง รวมถึงการเงินและเพิ่มแอดมินคนอื่น · ทีมงานตอบแชท ดูออเดอร์ ส่งของพรีออเดอร์ และดูลูกค้าได้
+            แต่ไม่เห็นการเงิน ตั้งค่า และแก้สินค้าไม่ได้
+          </p>
         </div>
       </div>
       <ErrorMessage message={error} />
@@ -1680,20 +1699,40 @@ export function AdminTeam() {
               <span>
                 {m.name} {m.id === user?.id && <span className="admin-chip">ฉัน</span>}
                 <small>
-                  {m.email} · {m.role === "ADMIN" ? "แอดมิน (เจ้าของ)" : "ทีมงาน"}
+                  {m.email} · {m.owner ? "เจ้าของร้าน" : m.role === "ADMIN" ? "แอดมิน" : "ทีมงาน"}
                   {!m.active && " · ปิดอยู่"}
                 </small>
               </span>
-              {m.role === "STAFF" && (
-                <button className={"button " + (m.active ? "ghost" : "secondary")} onClick={() => void toggle(m)}>
-                  {m.active ? "ปิดบัญชี" : "เปิดบัญชี"}
-                </button>
+              {!locked(m) && (
+                <span className="admin-row-actions">
+                  {confirming === m.id ? (
+                    <>
+                      <button className="button primary" onClick={() => void changeRole(m)}>
+                        {m.role === "ADMIN" ? "ยืนยันถอดสิทธิ์แอดมิน" : "ยืนยันให้สิทธิ์แอดมิน"}
+                      </button>
+                      <button className="button ghost" onClick={() => setConfirming(null)}>
+                        ยกเลิก
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {m.active && (
+                        <button className="button secondary" onClick={() => setConfirming(m.id)}>
+                          {m.role === "ADMIN" ? "ถอดสิทธิ์แอดมิน" : "ให้สิทธิ์แอดมิน"}
+                        </button>
+                      )}
+                      <button className={"button " + (m.active ? "ghost" : "secondary")} onClick={() => void toggle(m)}>
+                        {m.active ? "ปิดบัญชี" : "เปิดบัญชี"}
+                      </button>
+                    </>
+                  )}
+                </span>
               )}
             </div>
           ))}
         </section>
         <section className="reference-admin-card admin-detail-card">
-          <h2>เพิ่มทีมงาน</h2>
+          <h2>เพิ่มแอดมินหรือทีมงาน</h2>
           <form onSubmit={add} className="admin-form-grid">
             <label className="field span-2">
               ชื่อ
@@ -1703,13 +1742,23 @@ export function AdminTeam() {
               อีเมลสำหรับเข้าสู่ระบบ
               <input name="email" type="email" required maxLength={160} />
             </label>
+            <label className="field span-2">
+              สิทธิ์
+              <select name="role" defaultValue="STAFF">
+                <option value="STAFF">ทีมงาน (ไม่เห็นการเงิน)</option>
+                <option value="ADMIN">แอดมิน (ทำได้ทุกอย่าง)</option>
+              </select>
+            </label>
             <button className="button primary span-2" disabled={busy}>
-              เพิ่มทีมงาน
+              เพิ่มบัญชี
             </button>
           </form>
           {created && (
             <div className="admin-temp-password">
-              <p>ส่งข้อมูลนี้ให้ทีมงาน (แสดงครั้งเดียว) แล้วให้เปลี่ยนรหัสผ่านหลังเข้าสู่ระบบ</p>
+              <p>
+                ส่งข้อมูลนี้ให้{created.role === "ADMIN" ? "แอดมินคนใหม่" : "ทีมงาน"} (แสดงครั้งเดียว)
+                แล้วให้เปลี่ยนรหัสผ่านหลังเข้าสู่ระบบ
+              </p>
               <span>อีเมล: {created.email}</span>
               <code>{created.password}</code>
             </div>

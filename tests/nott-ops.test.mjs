@@ -1371,7 +1371,35 @@ test("team accounts and chat assignment", (t) => {
   s.setStaffActive(merchant, second.id, { active: false });
   assert.throws(() => s.login({ email: "second@example.invalid", password: created.temporaryPassword }), (e) => e.status === 403);
   assert.equal(s.chatThreads(merchant).find((th) => th.id === opened.thread.id).assigned_to, null);
-  assert.throws(() => s.setStaffActive(merchant, merchant.id, { active: false }), (e) => e.status === 404);
+  assert.throws(() => s.setStaffActive(merchant, merchant.id, { active: false }), (e) => e.status === 400);
+});
+
+test("admins can add admins and grant or remove admin rights, never locking the shop out", (t) => {
+  const { s, staff, merchant } = fixture(t);
+  assert.throws(() => s.saveStaff(staff, { name: "X", email: "x2@example.invalid", role: "ADMIN" }), (e) => e.status === 403);
+  assert.throws(() => s.saveStaff(merchant, { name: "X", email: "x3@example.invalid", role: "CUSTOMER" }), (e) => e.status === 400);
+  const made = s.saveStaff(merchant, { name: "แอดมินใหม่", email: "new-admin@example.invalid", role: "ADMIN" });
+  assert.equal(made.member.role, "ADMIN");
+  const secondToken = s.login({ email: "new-admin@example.invalid", password: made.temporaryPassword }).token;
+  const second = s.session(secondToken);
+  // The new admin really has admin powers (finance is admin-only).
+  assert.doesNotThrow(() => s.adminTransactions(second, {}));
+  assert.throws(() => s.adminTransactions(staff, {}), (e) => e.status === 403);
+
+  // Promote a staff member; the role applies to their open session at once.
+  s.saveStaff(merchant, { id: staff.id, name: staff.name, role: "ADMIN" });
+  assert.equal(s.session(s.login({ email: staff.email, password: "Staff-only-Password-123" }).token)?.role, "ADMIN");
+  s.saveStaff(second, { id: staff.id, name: staff.name, role: "STAFF" });
+  const log = s.adminAuditLog(merchant, { action: "TEAM_ROLE" }).entries;
+  assert.deepEqual(log.map((e) => e.detail.to), ["STAFF", "ADMIN"]);
+
+  // Nobody changes their own role or switches themselves off.
+  assert.throws(() => s.saveStaff(second, { id: second.id, name: "x", role: "STAFF" }), (e) => e.status === 400);
+  assert.throws(() => s.setStaffActive(second, second.id, { active: false }), (e) => e.status === 400);
+  // Another admin can be suspended; then the last active admin stays protected.
+  s.setStaffActive(merchant, second.id, { active: false });
+  assert.throws(() => s.login({ email: "new-admin@example.invalid", password: made.temporaryPassword }), (e) => e.status === 403);
+  assert.equal(s.session(secondToken), null);
 });
 
 test("live versions bump on mutations", (t) => {

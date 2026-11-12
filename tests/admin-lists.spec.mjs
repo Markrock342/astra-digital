@@ -239,3 +239,32 @@ test("product images UI resizes to webp and sends raw bytes (upload API mocked u
   await expect(page.getByRole("alert")).toContainText("รองรับเฉพาะไฟล์ JPG, PNG หรือ WebP");
   expect(uploads.length).toBe(1);
 });
+
+test("admin adds another admin, grants and removes admin rights with a confirm step", async ({ page, browser }) => {
+  await as(page, adminToken);
+  await page.goto(base + "/admin/settings/team");
+  await expect(page.getByText("เจ้าของร้าน")).toBeVisible();
+  await page.getByLabel("ชื่อ", { exact: true }).fill("แอดมินสำรอง");
+  await page.getByLabel("อีเมลสำหรับเข้าสู่ระบบ").fill("backup-admin@example.invalid");
+  await page.getByLabel("สิทธิ์").selectOption("ADMIN");
+  await page.getByRole("button", { name: "เพิ่มบัญชี" }).click();
+  const temp = (await page.locator(".admin-temp-password code").textContent()).trim();
+  const row = page.locator(".settings-row", { hasText: "backup-admin@example.invalid" });
+  await expect(row).toContainText("แอดมิน");
+
+  // The new admin can open finance, which staff never see.
+  const other = await browser.newPage();
+  const token = service.login({ email: "backup-admin@example.invalid", password: temp }).token;
+  await other.context().addCookies([{ name: "astra_session", value: token, url: base, httpOnly: true, sameSite: "Lax" }]);
+  await other.goto(base + "/admin/payments");
+  await expect(other.getByRole("heading", { name: "การเงิน", exact: true })).toBeVisible();
+  await other.close();
+
+  // Remove admin rights: first click only asks, the second applies.
+  await row.getByRole("button", { name: "ถอดสิทธิ์แอดมิน" }).click();
+  await row.getByRole("button", { name: "ยืนยันถอดสิทธิ์แอดมิน" }).click();
+  await expect(row).toContainText("ทีมงาน");
+  await expect(row.getByRole("button", { name: "ให้สิทธิ์แอดมิน" })).toBeVisible();
+  // The owner row and the signed-in admin have no role buttons.
+  await expect(page.locator(".settings-row", { hasText: "admin@astra.local" }).getByRole("button")).toHaveCount(0);
+});

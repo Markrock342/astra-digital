@@ -9272,3 +9272,11 @@ a.reference-bestseller {
   height: 100%;
   object-fit: cover;
 }
+
+/* Team: role + account actions on one row, wrap on narrow screens. */
+.merchant-shell .admin-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
