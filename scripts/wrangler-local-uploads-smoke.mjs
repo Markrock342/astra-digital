@@ -22,17 +22,23 @@ function loadAdminPassword() {
   return match[1].trim();
 }
 
+// Real 1×1 images (not magic-only stubs). Fake RIFF/WEBP stubs make browsers show a broken icon.
 function webpBytes() {
-  const bytes = new Uint8Array(64);
-  bytes.set([0x52, 0x49, 0x46, 0x46], 0);
-  bytes.set([0x57, 0x45, 0x42, 0x50], 8);
-  return bytes;
+  return Uint8Array.from(
+    Buffer.from(
+      "UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=",
+      "base64",
+    ),
+  );
 }
 
 function pngBytes() {
-  const bytes = new Uint8Array(64);
-  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
-  return bytes;
+  return Uint8Array.from(
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  );
 }
 
 const adminPassword = loadAdminPassword();

@@ -16,10 +16,13 @@ function jpegBytes() {
 }
 
 function webpBytes() {
-  const bytes = new Uint8Array(32);
-  bytes.set([0x52, 0x49, 0x46, 0x46], 0);
-  bytes.set([0x57, 0x45, 0x42, 0x50], 8);
-  return bytes;
+  // Real 1×1 webp so GET /api/files is browser-decodable (smoke stubs used to break <img>).
+  return Uint8Array.from(
+    Buffer.from(
+      "UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=",
+      "base64",
+    ),
+  );
 }
 
 function svgBytes() {
@@ -162,6 +165,33 @@ test("UP-2: set and remove logo; settings/overview expose logoUrl", async (t) =>
     .map((r) => r.action);
   assert.ok(logoAudits.includes("LOGO_SET"));
   assert.ok(logoAudits.includes("LOGO_REMOVE"));
+});
+
+test("UP-2: admin team list and customer detail expose avatarUrl", async (t) => {
+  const { s, merchant, buyer, buyerToken } = fixture(t);
+  const set = await s.setAvatar(buyer, {
+    bytes: webpBytes(),
+    contentType: "image/webp",
+  });
+  const detail = s.adminCustomerDetail(merchant, buyer.id);
+  assert.equal(detail.customer.avatarUrl, set.avatarUrl);
+
+  const listed = s.adminCustomers(merchant, { q: "avatar-buyer" });
+  const row = listed.customers.find((c) => c.id === buyer.id);
+  assert.ok(row);
+  assert.equal(row.avatarUrl, set.avatarUrl);
+
+  await s.setAvatar(merchant, {
+    bytes: webpBytes(),
+    contentType: "image/webp",
+  });
+  const members = s.team(merchant);
+  const self = members.find((m) => m.id === merchant.id);
+  assert.ok(self);
+  assert.match(self.avatarUrl, /^\/api\/files\//);
+
+  // buyer still sees own avatar on /api/me
+  assert.equal(s.publicUser(s.session(buyerToken)).avatarUrl, set.avatarUrl);
 });
 
 test("UP-2: GET /api/files headers match contract", async (t) => {

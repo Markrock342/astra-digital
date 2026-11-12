@@ -2363,7 +2363,7 @@ export function createCommerceCore({
     outstandingCredit,
   });
   const {
-    adminCustomerDetail,
+    adminCustomerDetail: adminCustomerDetailRaw,
     adminUpdateCustomer,
     adminSetCustomerStatus,
     adminSignOutCustomer,
@@ -2383,7 +2383,28 @@ export function createCommerceCore({
     clean,
     moneyScope,
   });
-  const { team, saveStaff, setMemberRole, setStaffActive, assignChatThread } = createTeamApis({
+  // Attach avatarUrl without editing admin-customers.mjs (MUST_NOT).
+  function adminCustomerDetail(user, id) {
+    const detail = adminCustomerDetailRaw(user, id);
+    const key = one(
+      "SELECT avatar_key FROM users WHERE id=?",
+      detail.customer.id,
+    )?.avatar_key;
+    return {
+      ...detail,
+      customer: {
+        ...detail.customer,
+        avatarUrl: key ? "/api/files/" + key : null,
+      },
+    };
+  }
+  const {
+    team: teamRaw,
+    saveStaff,
+    setMemberRole,
+    setStaffActive,
+    assignChatThread,
+  } = createTeamApis({
     passwordHash,
     requireAdmin,
     requireStaff,
@@ -2396,6 +2417,20 @@ export function createCommerceCore({
     notify,
     confirmPassword: auth.confirmPassword,
   });
+  // Attach avatarUrl without editing admin-team.mjs (MUST_NOT). Team lists stay small.
+  function team(user) {
+    const members = teamRaw(user);
+    if (!members.length) return members;
+    const keys = all(
+      `SELECT id, avatar_key FROM users WHERE id IN (${members.map(() => "?").join(",")})`,
+      ...members.map((m) => m.id),
+    );
+    const byId = new Map(keys.map((r) => [r.id, r.avatar_key]));
+    return members.map((m) => ({
+      ...m,
+      avatarUrl: byId.get(m.id) ? "/api/files/" + byId.get(m.id) : null,
+    }));
+  }
   const {
     adminProductVariants,
     createVariant,
