@@ -2,14 +2,15 @@ import { locale, t } from "./i18n";
 export async function api<T = unknown>(
   path: string,
   body?: unknown,
+  method?: "PATCH" | "DELETE",
 ): Promise<T> {
+  const write = body !== undefined || method !== undefined;
   const response = await fetch("/api" + path, {
     credentials: "same-origin",
-    headers:
-      body === undefined
-        ? {}
-        : { "Content-Type": "application/json", "X-Astra-Request": "1" },
-    method: body === undefined ? "GET" : "POST",
+    headers: write
+      ? { "Content-Type": "application/json", "X-Astra-Request": "1" }
+      : {},
+    method: method ?? (body === undefined ? "GET" : "POST"),
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await response

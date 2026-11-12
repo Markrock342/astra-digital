@@ -77,10 +77,10 @@ test("admin creates a product, prices it, opens it and imports codes", async ({
   await page
     .getByLabel("รายละเอียด", { exact: true })
     .fill("ไลเซนส์สำหรับตรวจระบบร้านจริงแบบอัตโนมัติ");
+  await page.getByLabel("ราคาตัวเลือกแรก (บาท)").fill("125");
   await page.getByRole("button", { name: "สร้างฉบับร่าง", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("สร้างฉบับร่างแล้ว");
 
-  await page.getByLabel("ราคา (บาท)").fill("125");
   await page.getByRole("checkbox", { name: "เปิดขายสินค้า", exact: true }).check();
   await page.getByRole("button", { name: "บันทึก", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("บันทึกสินค้าแล้ว");

@@ -24,6 +24,7 @@ import { createAdminFinanceApis } from "./admin-finance-apis.mjs";
 import { createAdminCustomerApis } from "./admin-customers.mjs";
 import { withLive } from "./live.mjs";
 import { createTeamApis } from "./admin-team.mjs";
+import { createReportApis } from "./admin-reports.mjs";
 import { createAdminVariantStockApis } from "./admin-variant-stock-apis.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
@@ -1972,6 +1973,7 @@ export function createCommerceCore({
     getLowStockAt,
     randomUUID,
   });
+  const { salesReport } = createReportApis({ requireAdmin, all, one, fail, bangkokDayRange });
   function buyerRanking(user, query = {}) {
     requireAdmin(user);
     const rawLimit = query.limit ?? null;
@@ -2038,6 +2040,7 @@ export function createCommerceCore({
     saveStaff,
     setStaffActive,
     assignChatThread,
+    salesReport,
     adminProductVariants,
     createVariant,
     updateVariant,

@@ -14,7 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useLive, type LiveTopic } from "./live";
-import { AdminChat as AdminChatLazy } from "./Ops";
+import { AdminChat as AdminChatLazy, BuyerRankingCard as BuyerRankingInline } from "./Ops";
 import { Art, ErrorMessage, Link, Status, useStore } from "./App";
 import { api, dateTime, money } from "./api";
 
@@ -1727,5 +1727,406 @@ export function StaffBackOffice({ tab, sub, detailId }: { tab: string; sub: stri
         ไปที่แชท
       </Link>
     </section>
+  );
+}
+
+// ---------------------------------------------------------------- Product variants + stock (FR-P2, FR-P7)
+
+type Variant = {
+  id: string;
+  label: string;
+  price: number;
+  active: boolean;
+  sort_order: number;
+  stock: number;
+  stockStatus: "out" | "low" | "in";
+};
+type StockUnit = {
+  id: string;
+  status: "available" | "sold" | "defective";
+  loginIdMasked?: string;
+  codeMasked?: string;
+  created_at: string;
+  sold_at?: string | null;
+  order_id?: string | null;
+  reservation_id?: string | null;
+  defective_reason?: string | null;
+};
+
+function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () => void }) {
+  const { toast } = useStore();
+  const [status, setStatus] = useState("available");
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const list = useCursorList<StockUnit>(
+    "/admin/variants/" + variant.id + "/inventory",
+    "inventory",
+    { status, limit: "50" },
+    ["catalog", "orders"],
+  );
+  // Excel/Sheets paste uses tabs; "id:password" and "id password" also accepted.
+  const rows = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^([^\t,:\s]+)[\t,:\s]+(.+)$/);
+      return match ? { loginId: match[1], password: match[2].trim() } : null;
+    });
+  const bad = rows.filter((r) => !r).length;
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    if (!rows.length || bad) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api("/admin/inventory", { variantId: variant.id, items: rows });
+      toast("เติมสต็อก " + rows.length + " บัญชีแล้ว");
+      setText("");
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function defect(unit: StockUnit) {
+    const reason = prompt("เหตุผลที่บัญชีนี้ใช้ไม่ได้");
+    if (!reason) return;
+    try {
+      await api("/admin/inventory/" + unit.id + "/defect", { reason });
+      toast("ทำเครื่องหมายว่าเสียแล้ว");
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  async function remove(unit: StockUnit) {
+    if (!confirm("ลบบัญชีนี้ออกจากสต็อก?")) return;
+    try {
+      await api("/admin/inventory/" + unit.id, {}, "DELETE");
+      toast("ลบออกจากสต็อกแล้ว");
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  return (
+    <div className="variant-stock">
+      <form onSubmit={add} className="variant-stock-add">
+        <label className="field">
+          เติมสต็อก: ID และรหัสผ่าน บรรทัดละ 1 บัญชี
+          <textarea
+            aria-label={"เติมสต็อก " + variant.label}
+            rows={4}
+            placeholder={"user1@mail.com,password1\nuser2@mail.com,password2"}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </label>
+        <p className="field-help">
+          วางจาก Excel ได้ (2 คอลัมน์) · คั่นด้วย , หรือ : ก็ได้ · รหัสผ่านเก็บแบบเข้ารหัส ลูกค้าเห็นหลังจ่ายเงินเท่านั้น
+          {rows.length > 0 && !bad && ` · พร้อมเติม ${rows.length} บัญชี`}
+          {bad > 0 && <strong className="danger-text"> · {bad} บรรทัดไม่มีรหัสผ่าน</strong>}
+        </p>
+        <ErrorMessage message={error} />
+        <button className="button primary" disabled={busy || !rows.length || bad > 0}>
+          <Plus size={15} />
+          เติม {rows.length || ""} บัญชี
+        </button>
+      </form>
+      <div className="variant-stock-list">
+        <div className="reference-status-tabs" role="group" aria-label="สถานะสต็อก">
+          {[
+            ["available", "พร้อมขาย"],
+            ["sold", "ขายแล้ว"],
+            ["defective", "เสีย"],
+          ].map(([key, label]) => (
+            <button key={key} type="button" className={status === key ? "active" : ""} onClick={() => setStatus(key)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {list.rows?.length === 0 && <p className="muted">ไม่มีรายการ</p>}
+        {list.rows?.map((u) => (
+          <div className="settings-row" key={u.id}>
+            <span>
+              <code>{u.loginIdMasked ?? u.codeMasked ?? "•••"}</code>
+              <small>
+                เติมเมื่อ {dateTime(u.created_at)}
+                {u.sold_at && " · ขาย " + dateTime(u.sold_at)}
+                {(u.order_id || u.reservation_id) && (
+                  <>
+                    {" · "}
+                    <Link to={"/admin/orders/" + (u.order_id ?? u.reservation_id)}>ออเดอร์</Link>
+                  </>
+                )}
+                {u.defective_reason && " · " + u.defective_reason}
+              </small>
+            </span>
+            {u.status === "available" && (
+              <span className="admin-action-row">
+                <button type="button" className="button ghost" onClick={() => void defect(u)}>
+                  เสีย
+                </button>
+                <button type="button" className="button ghost" onClick={() => void remove(u)}>
+                  ลบ
+                </button>
+              </span>
+            )}
+            {u.status === "sold" && (
+              <button type="button" className="button ghost" onClick={() => void defect(u)}>
+                แจ้งเสีย
+              </button>
+            )}
+          </div>
+        ))}
+        {list.next && (
+          <button type="button" className="button secondary" onClick={list.more}>
+            โหลดเพิ่ม
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function VariantManager({ productId, preorder }: { productId: string; preorder: boolean }) {
+  const { toast } = useStore();
+  const [variants, setVariants] = useState<Variant[] | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const load = () =>
+    api<{ variants: Variant[] }>("/admin/products/" + productId + "/variants")
+      .then((r) => setVariants(r.variants))
+      .catch((e) => setError((e as Error).message));
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId]);
+  useLive(["catalog", "orders"], () => void load());
+  const baht = (value: FormDataEntryValue | null) => Math.round(Number(value ?? 0) * 100);
+  async function create(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const data = new FormData(form);
+    try {
+      await api("/admin/products/" + productId + "/variants", { label: data.get("label"), price: baht(data.get("price")) });
+      toast("เพิ่มตัวเลือกแล้ว");
+      form.reset();
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  async function update(v: Variant, patch: Partial<Variant>) {
+    try {
+      await api("/admin/variants/" + v.id, patch, "PATCH");
+      toast("บันทึกตัวเลือกแล้ว");
+      setEditing(null);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  async function remove(v: Variant) {
+    if (!confirm("ลบตัวเลือก " + v.label + "? ถ้าเคยมีออเดอร์ ระบบจะให้ปิดแทน")) return;
+    try {
+      await api("/admin/variants/" + v.id, {}, "DELETE");
+      toast("ลบตัวเลือกแล้ว");
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  return (
+    <section className="reference-admin-card editor-panel variant-manager">
+      <h2>ตัวเลือก ราคา และสต็อก</h2>
+      <p className="field-help">
+        {preorder
+          ? "สินค้าพรีออเดอร์: ลูกค้าจ่ายแล้วได้คิว เติมสต็อกเมื่อของพร้อม แล้วกดส่งในคิวพรีออเดอร์"
+          : "ลูกค้าจ่ายแล้วได้ ID และรหัสผ่านจากสต็อกของตัวเลือกนั้นทันที สต็อกหมดหน้าร้านขึ้นว่าหมดเอง"}
+      </p>
+      <ErrorMessage message={error} />
+      {variants?.map((v) => (
+        <div className={"variant-row" + (v.active ? "" : " inactive")} key={v.id}>
+          {editing === v.id ? (
+            <form
+              className="variant-edit"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const data = new FormData(e.currentTarget);
+                void update(v, { label: String(data.get("label")), price: baht(data.get("price")) });
+              }}
+            >
+              <input name="label" aria-label="ชื่อตัวเลือก" defaultValue={v.label} required maxLength={80} />
+              <input name="price" aria-label="ราคา (บาท)" type="number" min="1" step="0.01" defaultValue={v.price / 100} required />
+              <button className="button primary">บันทึก</button>
+              <button type="button" className="button ghost" onClick={() => setEditing(null)}>
+                ยกเลิก
+              </button>
+            </form>
+          ) : (
+            <div className="variant-summary">
+              <span>
+                <strong>{v.label}</strong>
+                <small>
+                  {money(v.price)} · {v.active ? "เปิดขาย" : "ปิดอยู่"}
+                </small>
+              </span>
+              <button
+                type="button"
+                className={"stock-link stock-" + v.stockStatus}
+                aria-expanded={open === v.id}
+                onClick={() => setOpen(open === v.id ? null : v.id)}
+              >
+                สต็อก {v.stock} {open === v.id ? "▲" : "▼"}
+              </button>
+              <span className="admin-action-row">
+                <button type="button" className="button ghost" onClick={() => setEditing(v.id)}>
+                  แก้
+                </button>
+                <button type="button" className="button ghost" onClick={() => void update(v, { active: !v.active })}>
+                  {v.active ? "ปิด" : "เปิด"}
+                </button>
+                <button type="button" className="button ghost" onClick={() => void remove(v)}>
+                  ลบ
+                </button>
+              </span>
+            </div>
+          )}
+          {open === v.id && <VariantStock variant={v} onChanged={() => void load()} />}
+        </div>
+      ))}
+      <form className="variant-edit variant-new" onSubmit={create}>
+        <input name="label" aria-label="ชื่อตัวเลือกใหม่" placeholder="ชื่อตัวเลือก เช่น 30 วัน จอส่วนตัว" required maxLength={80} />
+        <input name="price" aria-label="ราคาตัวเลือกใหม่ (บาท)" type="number" min="1" step="0.01" placeholder="ราคา (บาท)" required />
+        <button className="button secondary">
+          <Plus size={15} />
+          เพิ่มตัวเลือก
+        </button>
+      </form>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- Reports (FR-R)
+
+type SalesRow = { product_id: string; product: string; variant_id: string; variant: string; preorder: boolean; orders: number; units: number; revenue: number };
+type DayRow = { day: string; orders: number; units: number; revenue: number; buyers: number };
+type SalesReport = {
+  totals: { orders: number; units: number; revenue: number; buyers: number; refunds: number; net: number };
+  byProduct: SalesRow[];
+  byDay: DayRow[];
+};
+
+export function AdminReports() {
+  const [range, setRange] = useState<{ from: string; to: string }>({ from: bangkokDay(29), to: bangkokDay(0) });
+  const [report, setReport] = useState<SalesReport | null>(null);
+  const [error, setError] = useState("");
+  const [tick, setTick] = useState(0);
+  useLive(["orders"], () => setTick((n) => n + 1));
+  useEffect(() => {
+    api<SalesReport>("/admin/reports/sales" + query(range))
+      .then((r) => {
+        setReport(r);
+        setError("");
+      })
+      .catch((e) => setError((e as Error).message));
+  }, [range.from, range.to, tick]);
+  const presets: [string, string, string][] = [
+    ["วันนี้", bangkokDay(0), bangkokDay(0)],
+    ["7 วัน", bangkokDay(6), bangkokDay(0)],
+    ["30 วัน", bangkokDay(29), bangkokDay(0)],
+    ["เดือนนี้", bangkokDay(0).slice(0, 8) + "01", bangkokDay(0)],
+    ["ทั้งหมด", "", ""],
+  ];
+  const peak = Math.max(1, ...(report?.byDay ?? []).map((d) => d.revenue));
+  const exportCsv = () =>
+    report &&
+    downloadCsv("sales-report.csv", [
+      ["สินค้า", "ตัวเลือก", "ประเภท", "ออเดอร์", "ชิ้น", "ยอดขาย (บาท)"],
+      ...report.byProduct.map((r) => [r.product, r.variant, r.preorder ? "พรีออเดอร์" : "พร้อมส่ง", r.orders, r.units, (r.revenue / 100).toFixed(2)]),
+      [],
+      ["วัน", "ออเดอร์", "ชิ้น", "ผู้ซื้อ", "ยอดขาย (บาท)"],
+      ...report.byDay.map((d) => [d.day, d.orders, d.units, d.buyers, (d.revenue / 100).toFixed(2)]),
+    ]);
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>รายงานยอดขาย</h1>
+          <p>นับเฉพาะออเดอร์ที่ชำระสำเร็จ · เวลาไทย · ยอดสุทธิหักคืนเงินแล้ว</p>
+        </div>
+        <button className="button secondary" onClick={exportCsv} disabled={!report}>
+          <Download size={15} />
+          ดาวน์โหลด CSV
+        </button>
+      </div>
+      <div className="admin-filters">
+        <div className="reference-status-tabs" role="group" aria-label="ช่วงรายงาน">
+          {presets.map(([label, from, to]) => (
+            <button key={label} className={range.from === from && range.to === to ? "active" : ""} onClick={() => setRange({ from, to })}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <DateRange from={range.from} to={range.to} onChange={(from, to) => setRange({ from, to })} />
+      </div>
+      <ErrorMessage message={error} />
+      <div className="admin-stat-row">
+        {[
+          ["ยอดขาย", report ? money(report.totals.revenue) : "–"],
+          ["ยอดสุทธิ (หักคืนเงิน)", report ? money(report.totals.net) : "–"],
+          ["ออเดอร์ที่ชำระ", report ? String(report.totals.orders) : "–"],
+          ["ผู้ซื้อ", report ? String(report.totals.buyers) : "–"],
+        ].map(([label, value]) => (
+          <div className="reference-admin-card" key={label}>
+            <small>{label}</small>
+            <strong>{value}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="admin-detail-grid">
+        <section className="reference-admin-card admin-detail-card">
+          <h2>ยอดขายตามสินค้า</h2>
+          {report?.byProduct.length === 0 && <p className="muted">ยังไม่มียอดขายในช่วงนี้</p>}
+          {report?.byProduct.map((r) => (
+            <div className="report-bar-row" key={r.variant_id}>
+              <span>
+                <Link to={"/admin/products/" + r.product_id}>{r.product}</Link>
+                <small>
+                  {r.variant} · {r.units} ชิ้น · {r.orders} ออเดอร์{r.preorder ? " · พรีออเดอร์" : ""}
+                </small>
+              </span>
+              <strong>{money(r.revenue)}</strong>
+              <i style={{ width: (r.revenue / Math.max(1, report.byProduct[0].revenue)) * 100 + "%" }} />
+            </div>
+          ))}
+        </section>
+        <section className="reference-admin-card admin-detail-card">
+          <h2>ยอดขายรายวัน</h2>
+          {report?.byDay.length === 0 && <p className="muted">ยังไม่มียอดขายในช่วงนี้</p>}
+          {report?.byDay
+            .slice()
+            .reverse()
+            .map((d) => (
+              <div className="report-bar-row" key={d.day}>
+                <span>
+                  {new Date(d.day + "T12:00:00+07:00").toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" })}
+                  <small>
+                    {d.orders} ออเดอร์ · {d.buyers} ผู้ซื้อ
+                  </small>
+                </span>
+                <strong>{money(d.revenue)}</strong>
+                <i style={{ width: (d.revenue / peak) * 100 + "%" }} />
+              </div>
+            ))}
+        </section>
+      </div>
+      <BuyerRankingInline />
+    </>
   );
 }

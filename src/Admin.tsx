@@ -45,8 +45,10 @@ import { AdminChat, BuyerRanking, BuyerRankingCard, PaymentChannelSettings } fro
 import {
   AdminAccount,
   AdminAudit,
+  AdminReports,
   AdminTeam,
   StaffBackOffice,
+  VariantManager,
   AdminCustomerDetail,
   AdminFinance,
   AdminCustomers,
@@ -375,7 +377,8 @@ export default function Admin() {
         }
       >
         {!importing && <ErrorMessage message={error} />}
-        {tab === "" || tab === "reports" ? (
+        {tab === "reports" && <AdminReports />}
+        {tab === "" ? (
           <>
             <div className="reference-overview-title">
               <div>
@@ -604,6 +607,13 @@ export default function Admin() {
                     ))}
                   </select>
                 </label>
+                {newProduct && (
+                  <label className="field">
+                    ราคาตัวเลือกแรก (บาท)
+                    <input name="price" type="number" step="0.01" min="1" max="100000" required />
+                    <small>เพิ่มตัวเลือกอื่น (เช่น 30 วัน / 90 วัน) และเติมสต็อกได้หลังสร้าง</small>
+                  </label>
+                )}
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
@@ -627,46 +637,16 @@ export default function Admin() {
                       />
                     </div>
                   </section>
-                  <section className="reference-admin-card editor-panel">
-                    <h2>ตัวเลือกราคาและสต็อก</h2>
-                    <label className="field">
-                      ราคา (บาท)
-                      <input
-                        name="price"
-                        type="number"
-                        step="0.01"
-                        min="1"
-                        max="100000"
-                        required
-                        defaultValue={
-                          Math.max(
-                            1,
-                            editingProduct!.variants.find((v) => v.price > 0)
-                              ?.price ?? 100,
-                          ) / 100
-                        }
-                      />
-                    </label>
-                    <div className="editor-variant-list">
-                      {editingProduct!.variants.map((v) => (
-                        <div key={v.id}>
-                          <span>
-                            {v.label}
-                            <small>{money(v.price)}</small>
-                          </span>
-                          <strong>{v.stock} ชิ้น</strong>
-                        </div>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      className="button secondary"
-                      onClick={() => setImporting(true)}
-                    >
-                      <Plus size={15} />
-                      เติมสต็อก
-                    </button>
-                  </section>
+                  <input
+                    type="hidden"
+                    name="price"
+                    value={
+                      Math.max(
+                        100,
+                        Math.min(...editingProduct!.variants.map((v) => v.price).filter((p) => p > 0), 1e9),
+                      ) / 100
+                    }
+                  />
                   <section className="reference-admin-card editor-panel">
                     <h2>สถานะสินค้า</h2>
                     <label className="checkbox-label">
@@ -683,8 +663,8 @@ export default function Admin() {
               <div className="editor-save-bar">
                 <span>
                   {newProduct
-                    ? "ขั้นถัดไป: รูปภาพ ตัวเลือกราคา และสต็อก แล้วกดเปิดขาย"
-                    : "มีการแก้ไขที่ยังไม่บันทึก"}
+                    ? "สร้างแล้วจะไปหน้าตัวเลือกและสต็อก จากนั้นเติมบัญชีแล้วกดเปิดขาย"
+                    : "บันทึกข้อมูลสินค้า (ตัวเลือกและสต็อกบันทึกทันทีด้านล่าง)"}
                 </span>
                 <Link className="button secondary" to="/admin/products">
                   ยกเลิก
@@ -695,6 +675,9 @@ export default function Admin() {
                 </button>
               </div>
             </form>
+            {editingProduct && !newProduct && (
+              <VariantManager productId={editingProduct.id} preorder={!!editingProduct.preorder} />
+            )}
           </>
         )}
         {tab === "inventory" && (

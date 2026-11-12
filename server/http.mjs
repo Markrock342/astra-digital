@@ -25,7 +25,7 @@ export function createApp(service, { production = false, d1Catalog } = {}) {
         const request = new Request(url, {
           method: req.method,
           headers,
-          ...(req.method === "POST"
+          ...(["POST", "PATCH", "DELETE"].includes(req.method)
             ? { body: Readable.toWeb(req), duplex: "half" }
             : {}),
         });

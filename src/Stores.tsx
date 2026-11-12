@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  BarChart3,
   ArrowRight,
   ArrowUpRight,
   BookOpen,
@@ -25,8 +26,19 @@ import { ErrorMessage, Link, useStore } from "./App";
 import { useDialog } from "./dialog";
 import { api } from "./api";
 import { NotificationBell } from "./Ops";
+import { useLiveStatus } from "./live";
+
+function LiveDot() {
+  const on = useLiveStatus();
+  return (
+    <span className={"live-dot" + (on ? " on" : "")} title={on ? "ข้อมูลอัปเดตทันที" : "อัปเดตทุก 3 วินาที"}>
+      {on ? "สด" : "ซิงก์"}
+    </span>
+  );
+}
 const nav = [
   ["", "ภาพรวม", LayoutDashboard],
+  ["reports", "รายงาน", BarChart3],
   ["products", "สินค้า", Package],
   ["orders", "ออเดอร์", Receipt],
   ["chat", "แชท", MessageCircle],
@@ -103,6 +115,7 @@ export function MerchantHeader() {
               </Link>
             </>
           )}
+          {admin && <LiveDot />}
           {admin && <NotificationBell admin />}
           <div className="merchant-profile-wrap">
             <button
@@ -134,7 +147,7 @@ export function MerchantHeader() {
           {navItems.map(([key, label, Icon]) => {
             const active =
               key === ""
-                ? tab === "" || tab === "reports" || tab === "rankings"
+                ? tab === "" || tab === "rankings"
                 : key === "products"
                   ? [
                       "products",

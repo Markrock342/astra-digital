@@ -1584,3 +1584,22 @@ test("ADMIN-FR-W3 polish: daily buckets use Bangkok day and CSV exports all page
   assert.equal(dataLines.length, csv.summary.count);
   assert.equal(csv.nextCursor, null);
 });
+
+test("sales report groups paid orders by variant and Bangkok day", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  for (const key of ["report-0001", "report-0002"]) {
+    const o = s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: key });
+    s.pay(user, o.id, { paymentToken: o.paymentToken, outcome: "success" });
+  }
+  s.createOrder(user, { variantId: "stream-plus-30", quantity: 1, requestKey: "report-unpaid" });
+  assert.throws(() => s.salesReport(staff), (e) => e.status === 403);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+  const report = s.salesReport(merchant, { from: today, to: today });
+  const row = report.byProduct.find((r) => r.variant_id === "stream-plus-30");
+  assert.equal(row.orders, 2);
+  assert.equal(report.totals.orders, 2);
+  assert.equal(report.byDay[0].day, today);
+  assert.equal(report.totals.revenue, row.revenue);
+  assert.equal(s.salesReport(merchant, { from: "2000-01-01", to: "2000-01-01" }).totals.orders, 0);
+});
