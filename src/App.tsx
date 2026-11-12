@@ -2026,6 +2026,7 @@ function ReviewsPage() {
 }
 function Account() {
   const { user, refresh, toast, go } = useStore();
+  const testPayments = useTestPayments();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function save(e: FormEvent<HTMLFormElement>) {
@@ -2071,11 +2072,13 @@ function Account() {
               <span>{t("ประวัติการซื้อ")}</span>
               <ArrowUpRight size={17} />
             </Link>
-            <Link to="/wallet" className="panel">
-              <Wallet size={21} />
-              <span>{money(user.balance)}</span>
-              <ArrowUpRight size={17} />
-            </Link>
+            {testPayments && (
+              <Link to="/wallet" className="panel">
+                <Wallet size={21} />
+                <span>{money(user.balance)}</span>
+                <ArrowUpRight size={17} />
+              </Link>
+            )}
           </div>
           <form className="panel profile-form" onSubmit={save}>
             <h2>{t("ข้อมูลส่วนตัว")}</h2>
@@ -2283,6 +2286,8 @@ export function usePageTitle(page: string, description = "") {
 }
 function Router() {
   const { path } = useStore();
+  const testPayments = useTestPayments();
+  const walletHidden = (path === "/wallet" || path === "/top-up") && !testPayments;
   const titles: Record<string, string> = {
     "/": t("หน้าร้าน"),
     "/products": t("สินค้าทั้งหมด"),
@@ -2323,10 +2328,19 @@ function Router() {
     path.startsWith("/checkout/");
   const page = dynamic
     ? ""
-    : path.startsWith("/admin")
-      ? t("แดชบอร์ด")
-      : (titles[path] ?? t("ไม่พบหน้านี้"));
-  usePageTitle(page, dynamic ? "" : (descriptions[path] ?? t("หน้านี้อาจถูกย้าย หรือที่อยู่ไม่ถูกต้อง")));
+    : walletHidden
+      ? t("ไม่พบหน้านี้")
+      : path.startsWith("/admin")
+        ? t("แดชบอร์ด")
+        : (titles[path] ?? t("ไม่พบหน้านี้"));
+  usePageTitle(
+    page,
+    dynamic
+      ? ""
+      : walletHidden
+        ? t("หน้านี้อาจถูกย้าย หรือที่อยู่ไม่ถูกต้อง")
+        : (descriptions[path] ?? t("หน้านี้อาจถูกย้าย หรือที่อยู่ไม่ถูกต้อง")),
+  );
   if (path === "/stores") return <Stores />;
   if (path === "/") return <Home />;
   if (path === "/products") return <ReferenceCatalogPage />;
@@ -2347,7 +2361,8 @@ function Router() {
       />
     );
   if (path === "/orders") return <HistoryPage />;
-  if (path === "/wallet" || path === "/top-up") return <WalletPage />;
+  if (path === "/wallet" || path === "/top-up")
+    return testPayments ? <WalletPage /> : <NotFound />;
   if (path === "/reviews" || path === "/credits") return <ReferenceReviews />;
   if (path === "/account") return <Account />;
   if (path.startsWith("/admin"))
