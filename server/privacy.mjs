@@ -38,6 +38,10 @@ export function createPrivacyApis({
        FROM users WHERE id=?`,
       user.id,
     );
+    if (!profile) fail(404, "ไม่พบผู้ใช้");
+    // Re-read status from DB — session object may be stale after PDPA approve.
+    if ((profile.status ?? "ACTIVE") !== "ACTIVE")
+      fail(403, "บัญชีนี้ถูกปิดการใช้งาน");
     const orders = all(
       `SELECT id, status, total, quantity, variant_id, created_at, warranty_until
        FROM orders WHERE user_id=? ORDER BY created_at DESC`,
@@ -106,7 +110,9 @@ export function createPrivacyApis({
   function requestAccountDeletion(user, input = {}) {
     requireUser(user);
     if (user.role !== "CUSTOMER") fail(403, "ใช้ได้เฉพาะบัญชีลูกค้า");
-    if (user.status === "BANNED" || user.status === "DELETED")
+    const live = one("SELECT status FROM users WHERE id=?", user.id);
+    if (!live) fail(404, "ไม่พบผู้ใช้");
+    if ((live.status ?? "ACTIVE") !== "ACTIVE")
       fail(409, "บัญชีนี้ปิดการใช้งานแล้ว");
     const reason =
       input.reason == null || String(input.reason).trim() === ""
@@ -195,11 +201,8 @@ export function createPrivacyApis({
         subject.id,
       );
       if (previousAvatar && typeof deleteFile === "function") {
-        try {
-          deleteFile(previousAvatar);
-        } catch {
-          // File may already be gone; identity link is cleared either way.
-        }
+        // file-store delete is async on R2; fire-and-forget after identity cleared.
+        Promise.resolve(deleteFile(previousAvatar)).catch(() => {});
       }
       run(
         `UPDATE privacy_requests SET status='APPROVED', resolved_at=?, resolved_by=? WHERE id=?`,

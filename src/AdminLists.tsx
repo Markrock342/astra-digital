@@ -3939,24 +3939,50 @@ type HealthReport = {
   checks: HealthCheck[];
 };
 
+type PrivacyRequestRow = {
+  id: string;
+  user_id: string;
+  status: string;
+  reason: string | null;
+  created_at: string;
+  email: string;
+  name: string;
+};
+
 export function AdminSystemHealth() {
+  const { toast } = useStore();
   const [report, setReport] = useState<HealthReport | null>(null);
+  const [privacy, setPrivacy] = useState<PrivacyRequestRow[]>([]);
   const [error, setError] = useState("");
   const [tick, setTick] = useState(0);
   useEffect(() => {
-    api<HealthReport>("/admin/health")
-      .then((r) => {
-        setReport(r);
+    Promise.all([
+      api<HealthReport>("/admin/health"),
+      api<{ requests: PrivacyRequestRow[] }>("/admin/privacy/requests?status=PENDING"),
+    ])
+      .then(([health, reqs]) => {
+        setReport(health);
+        setPrivacy(reqs.requests);
         setError("");
       })
       .catch((e) => setError((e as Error).message));
   }, [tick]);
+  async function approve(id: string) {
+    if (!confirm("อนุมัติลบ/ปิดบังข้อมูลลูกค้าคนนี้? ออเดอร์และ ledger จะถูกเก็บไว้")) return;
+    try {
+      await api("/admin/privacy/requests/" + id + "/approve", {});
+      toast("อนุมัติและปิดบังข้อมูลแล้ว");
+      setTick((n) => n + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
   return (
     <>
       <div className="reference-admin-heading">
         <div>
           <h1>ตรวจระบบ</h1>
-          <p>ตรวจ migration · append-only · เครดิต/ledger · สต็อกค้าง และคอลัมน์สำคัญ</p>
+          <p>ตรวจ migration · append-only · เครดิต/ledger · สต็อกค้าง และคำขอ PDPA</p>
         </div>
         <button type="button" className="button secondary" onClick={() => setTick((n) => n + 1)}>
           ตรวจอีกครั้ง
@@ -3992,6 +4018,24 @@ export function AdminSystemHealth() {
           </section>
         </>
       )}
+      <section className="reference-admin-card" style={{ marginTop: "1rem" }}>
+        <h2>คำขอลบบัญชี (PDPA) ที่รออนุมัติ</h2>
+        {privacy.length === 0 && <p className="muted">ไม่มีคำขอค้าง</p>}
+        {privacy.map((r) => (
+          <div className="settings-row" key={r.id}>
+            <span>
+              <strong>{r.name}</strong>
+              <small>
+                {r.email} · {dateTime(r.created_at)}
+                {r.reason ? " · " + r.reason : ""}
+              </small>
+            </span>
+            <button type="button" className="button primary" onClick={() => void approve(r.id)}>
+              อนุมัติปิดบังข้อมูล
+            </button>
+          </div>
+        ))}
+      </section>
     </>
   );
 }

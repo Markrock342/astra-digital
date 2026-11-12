@@ -7,7 +7,7 @@ import { createCommerce } from "../server/commerce.mjs";
 import { ROLES } from "../server/auth-policy.mjs";
 import { openLocalCommerce } from "../server/commerce.mjs";
 
-test("local .data migrate applies through 008 and keeps product API free of codes", (t) => {
+test("local .data migrate applies through 011 and keeps product API free of codes", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "astra-data-"));
   const dbPath = join(dir, "commerce.sqlite");
   const s = createCommerce({ path: dbPath, seed: true });
@@ -28,7 +28,22 @@ test("local .data migrate applies through 008 and keeps product API free of code
     "006_ledger_money.sql",
     "007_variant_stock.sql",
     "008_uploads.sql",
+    "009_inventory_cost.sql",
+    "010_inventory_expires.sql",
+    "011_perf_indexes.sql",
   ]);
+  assert.ok(
+    s.db
+      .prepare("PRAGMA table_info(inventory)")
+      .all()
+      .some((c) => c.name === "cost"),
+  );
+  assert.ok(
+    s.db
+      .prepare("PRAGMA table_info(inventory)")
+      .all()
+      .some((c) => c.name === "expires_at"),
+  );
   assert.ok(
     s.db
       .prepare("PRAGMA table_info(ledger)")
