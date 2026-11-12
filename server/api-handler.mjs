@@ -24,8 +24,19 @@ function sameLocalOrigin(origin, pageOrigin) {
     return false;
   }
 }
+const MAX_JSON_BYTES = 32768;
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+function isImageUploadPath(method, path) {
+  if (method !== "POST") return false;
+  return (
+    /^\/api\/admin\/products\/[^/]+\/images$/.test(path) ||
+    path === "/api/profile/avatar" ||
+    path === "/api/admin/settings/logo"
+  );
+}
 export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
   const attempts = new Map();
+  const uploadAttempts = new Map();
   function localLimit(key) {
     const now = Date.now();
     if (attempts.size > 1000)
@@ -34,6 +45,16 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
     if (!hit || hit.expires < now) hit = { n: 0, expires: now + 60000 };
     attempts.set(key, hit);
     return ++hit.n <= 20;
+  }
+  function localUploadLimit(key) {
+    const now = Date.now();
+    if (uploadAttempts.size > 1000)
+      for (const [k, v] of uploadAttempts)
+        if (v.expires < now) uploadAttempts.delete(k);
+    let hit = uploadAttempts.get(key);
+    if (!hit || hit.expires < now) hit = { n: 0, expires: now + 600000 };
+    uploadAttempts.set(key, hit);
+    return ++hit.n <= 30;
   }
   return async function handle(request) {
     const url = new URL(request.url),
@@ -47,6 +68,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
       if (!["GET", "POST", "PATCH", "DELETE"].includes(request.method))
         return send(405, { error: "Method not allowed" });
       const mutating = ["POST", "PATCH", "DELETE"].includes(request.method);
+      const imageUpload = isImageUploadPath(request.method, path);
       if (mutating) {
         if (request.headers.get("X-Astra-Request") !== "1")
           throw new ApiError(403, "ข้อมูลคำขอไม่ถูกต้อง");
@@ -55,6 +77,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           throw new ApiError(403, "ไม่อนุญาตคำขอจากเว็บไซต์อื่น");
         if (
           request.method !== "DELETE" &&
+          !imageUpload &&
           !request.headers.get("Content-Type")?.startsWith("application/json")
         )
           throw new ApiError(415, "ต้องส่งข้อมูลแบบ JSON");
@@ -85,10 +108,48 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
       )?.[1];
       const user = service.session(token);
       let input = {};
+      let uploadBytes = null;
       if (mutating) {
         const length = Number(request.headers.get("Content-Length") ?? 0);
-        if (length > 32768) throw new ApiError(413, "ข้อมูลมีขนาดใหญ่เกินไป");
-        if (request.method === "DELETE" && length === 0) {
+        const maxBytes = imageUpload ? MAX_UPLOAD_BYTES : MAX_JSON_BYTES;
+        if (Number.isFinite(length) && length > maxBytes)
+          throw new ApiError(413, "ข้อมูลมีขนาดใหญ่เกินไป");
+        if (imageUpload) {
+          if (!user) throw new ApiError(401, "กรุณาเข้าสู่ระบบ");
+          const uploadKey = "upload:" + user.id;
+          const allowed = rateLimit
+            ? rateLimit(uploadKey, 30, 600000)
+            : localUploadLimit(uploadKey);
+          if (!allowed)
+            throw new ApiError(
+              429,
+              "อัปโหลดบ่อยเกินไป กรุณาลองอีกครั้งในอีกสักครู่",
+            );
+          const chunks = [];
+          let bytes = 0;
+          const reader = request.body?.getReader();
+          if (reader)
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              bytes += value.byteLength;
+              if (bytes > MAX_UPLOAD_BYTES) {
+                await reader.cancel();
+                throw new ApiError(413, "ข้อมูลมีขนาดใหญ่เกินไป");
+              }
+              chunks.push(value);
+            }
+          uploadBytes = new Uint8Array(bytes);
+          let offset = 0;
+          for (const chunk of chunks) {
+            uploadBytes.set(chunk, offset);
+            offset += chunk.byteLength;
+          }
+          input = {
+            bytes: uploadBytes,
+            contentType: request.headers.get("Content-Type") ?? "",
+          };
+        } else if (request.method === "DELETE" && length === 0) {
           input = {};
         } else {
           const reader = request.body?.getReader();
@@ -100,7 +161,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
               const { done, value } = await reader.read();
               if (done) break;
               bytes += value.byteLength;
-              if (bytes > 32768) {
+              if (bytes > MAX_JSON_BYTES) {
                 await reader.cancel();
                 throw new ApiError(413, "ข้อมูลมีขนาดใหญ่เกินไป");
               }
@@ -140,6 +201,19 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         );
       }
       if (request.method === "GET") {
+        if (/^\/api\/files\/[^/]+$/.test(path)) {
+          const file = await service.getFile(path.split("/")[3]);
+          return new Response(file.bytes, {
+            status: 200,
+            headers: {
+              ...securityHeaders,
+              "Content-Type": file.mime,
+              "X-Content-Type-Options": "nosniff",
+              "Content-Disposition": "inline",
+              "Cache-Control": "public, max-age=31536000, immutable",
+            },
+          });
+        }
         if (path === "/api/health")
           return send(200, {
             ok: true,
@@ -311,6 +385,11 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             }),
           );
       } else if (request.method === "PATCH") {
+        if (/^\/api\/admin\/products\/[^/]+\/images$/.test(path))
+          return send(
+            200,
+            service.reorderProductImages(user, path.split("/")[4], input),
+          );
         if (/^\/api\/admin\/variants\/[^/]+$/.test(path))
           return send(
             200,
@@ -318,6 +397,11 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           );
         return send(404, { error: "ไม่พบหน้าที่ร้องขอ" });
       } else if (request.method === "DELETE") {
+        if (/^\/api\/admin\/product-images\/[^/]+$/.test(path))
+          return send(
+            200,
+            await service.deleteProductImage(user, path.split("/")[4]),
+          );
         if (/^\/api\/admin\/variants\/[^/]+$/.test(path))
           return send(200, service.deleteVariant(user, path.split("/")[4]));
         if (/^\/api\/admin\/inventory\/[^/]+$/.test(path))
@@ -417,6 +501,11 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.saveSettings(user, input));
         if (path === "/api/admin/products")
           return send(200, service.saveProduct(user, input));
+        if (/^\/api\/admin\/products\/[^/]+\/images$/.test(path))
+          return send(
+            200,
+            await service.addProductImage(user, path.split("/")[4], input),
+          );
       }
       return send(404, { error: "ไม่พบหน้าที่ร้องขอ" });
     } catch (error) {

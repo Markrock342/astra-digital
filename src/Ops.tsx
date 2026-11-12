@@ -252,11 +252,44 @@ export function CustomerChat() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const openRef = useRef(open);
+  openRef.current = open;
+  const loadUnread = useCallback(async () => {
+    if (!user) {
+      setUnread(0);
+      return;
+    }
+    try {
+      const { notifications } = await api<{ notifications: Notice[] }>("/notifications");
+      const pending = notifications.filter(
+        (n) => n.kind === "chat" && !n.read_at && n.title === "มีข้อความใหม่จากทีมงาน",
+      );
+      if (openRef.current && pending.length) {
+        setUnread(0);
+        await Promise.all(
+          pending.map((n) => api("/notifications/" + n.id + "/read", {}).catch(() => {})),
+        );
+      } else setUnread(pending.length);
+    } catch {
+      /* keep the last count; the badge is not critical */
+    }
+  }, [user?.id]);
   useEffect(() => {
-    const show = () => setOpen(true);
-    addEventListener("open-chat", show);
-    return () => removeEventListener("open-chat", show);
-  }, []);
+    void loadUnread();
+  }, [loadUnread]);
+  useLive(["notify", "chat"], () => {
+    void loadUnread();
+  });
+  function reveal() {
+    openRef.current = true;
+    setOpen(true);
+    void loadUnread();
+  }
+  useEffect(() => {
+    addEventListener("open-chat", reveal);
+    return () => removeEventListener("open-chat", reveal);
+  }, [loadUnread]);
   useEffect(() => {
     if (!user) {
       setThread(null);
@@ -315,11 +348,20 @@ export function CustomerChat() {
     <>
       <button
         className={open ? "chat-fab open" : "chat-fab"}
-        aria-label={open ? t("ปิดแชท") : t("แชทกับร้าน")}
+        aria-label={
+          open
+            ? t("ปิดแชท")
+            : unread
+              ? t("แชทกับร้าน") + ", " + t("ยังไม่อ่าน {n}", { n: unread })
+              : t("แชทกับร้าน")
+        }
         aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        onClick={() => (open ? setOpen(false) : reveal())}
       >
         {open ? <X size={22} /> : <MessageCircle size={22} />}
+        {!open && unread > 0 && (
+          <span className="chat-unread">{unread > 99 ? "99+" : unread}</span>
+        )}
       </button>
       {open && (
         <section className="chat-panel" role="dialog" aria-label={t("แชทกับร้าน")}>
