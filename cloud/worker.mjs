@@ -72,12 +72,15 @@ export class Commerce extends DurableObject {
       typeof env.ASTRA_ADMIN_PASSWORD === "string"
         ? env.ASTRA_ADMIN_PASSWORD.trim()
         : "";
+    // Client acceptance testing on the demo URL: test credit + test payments.
+    // Remove ASTRA_TEST_PAYMENTS from wrangler.jsonc before the real launch.
+    const testPayments = env.ASTRA_TEST_PAYMENTS === "on";
     this.service = createCommerceCore({
       db,
       key,
       transaction,
       allowDemoAdmin: false,
-      allowSandbox: false,
+      allowSandbox: testPayments,
       seed: false,
       adminPassword:
         typeof adminPassword === "string" && adminPassword.length >= 8

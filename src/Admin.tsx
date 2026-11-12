@@ -38,6 +38,7 @@ import {
 import { Art, Empty, ErrorMessage, Link, Status, useStore } from "./App";
 import { useDialog } from "./dialog";
 import { api, dateTime, money } from "./api";
+import { AdminChat, BuyerRanking, BuyerRankingCard, PaymentChannelSettings } from "./Ops";
 import type { AdminData, Credential, Features, Product, QueueItem } from "./types";
 const productTabs = [
   ["products", "สินค้าทั้งหมด"],
@@ -667,6 +668,7 @@ export default function Admin() {
                   </p>
                 )}
               </section>
+              <BuyerRankingCard />
               {recent}
             </div>
           </>
@@ -1318,7 +1320,14 @@ export default function Admin() {
             </div>
           </>
         )}
-        {tab === "settings" && <ReferenceSettings sub={sub} />}
+        {tab === "settings" &&
+          (sub === "settings/payment" ? (
+            <PaymentChannelSettings />
+          ) : (
+            <ReferenceSettings sub={sub} />
+          ))}
+        {tab === "chat" && <AdminChat />}
+        {tab === "rankings" && <BuyerRanking />}
         {tab === "guide" && (
           <div className="reference-admin-card editor-panel">
             <h1>คู่มือร้านค้า</h1>
@@ -1346,6 +1355,8 @@ export default function Admin() {
           "ledger",
           "settings",
           "guide",
+          "chat",
+          "rankings",
         ].includes(tab) && (
           <section className="reference-admin-card editor-panel">
             <h1>

@@ -69,6 +69,7 @@ import type {
   Review,
 } from "./types";
 import Stores, { MerchantHeader } from "./Stores";
+import { CustomerChat, NotificationBell } from "./Ops";
 import { CountUp, useRouteMotion } from "./motion";
 import {
   ReferenceCatalog,
@@ -286,6 +287,7 @@ function Header() {
           <div className="header-actions">
             <LanguageToggle lang={lang} onChange={changeLang} />
             <ThemePanel />
+            <NotificationBell />
             <Link
               to="/cart"
               className="icon-button cart-button"
@@ -2315,6 +2317,7 @@ export default function App() {
           )}
         </div>
         {!merchant && <Footer />}
+        {!merchant && <CustomerChat />}
       </div>
       {toast && (
         <div className="toast" role="status">

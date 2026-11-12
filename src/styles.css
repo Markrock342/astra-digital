@@ -7886,3 +7886,388 @@ td small {
     position: static;
   }
 }
+
+/* ── In-web notifications, chat and buyer ranking (src/Ops.tsx) ── */
+.notice-wrap {
+  position: relative;
+}
+.notice-button {
+  position: relative;
+}
+.notice-count {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.notice-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 60;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(480px, 70vh);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.18);
+  overflow: hidden;
+  animation: notice-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+.notice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.notice-read-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.notice-read-all:hover {
+  color: var(--text);
+}
+.notice-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+}
+.notice-item {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.notice-item:hover,
+.notice-item:focus-visible {
+  background: var(--raised);
+}
+.notice-item span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.notice-item strong {
+  font-size: 14px;
+}
+.notice-item small {
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.notice-item time {
+  color: var(--muted);
+  font-size: 12px;
+}
+.notice-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+}
+.notice-item.unread .notice-dot {
+  background: #e5484d;
+}
+.notice-empty {
+  margin: 0;
+  padding: 28px 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Chat bubbles and composer are shared by the storefront panel and admin inbox. */
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.chat-bubble {
+  align-self: flex-start;
+  max-width: 82%;
+  padding: 9px 12px;
+  border-radius: 14px 14px 14px 4px;
+  background: var(--raised);
+  animation: bubble-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.chat-bubble.mine {
+  align-self: flex-end;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--button);
+  color: var(--button-text);
+}
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.chat-bubble small {
+  display: block;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.chat-bubble p,
+.chat-bubble small,
+.chat-bubble time {
+  color: inherit;
+}
+.chat-bubble p {
+  margin: 2px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-bubble time {
+  display: block;
+  font-size: 11px;
+  opacity: 0.6;
+  text-align: right;
+}
+.chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+.chat-composer textarea {
+  flex: 1;
+  min-height: 42px;
+  max-height: 140px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+.chat-composer .button {
+  flex: none;
+  min-height: 42px;
+}
+.chat-closed-note {
+  margin: 0;
+  padding: 10px 16px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  border-top: 1px solid var(--border);
+}
+
+/* Admin inbox: list + room side by side, one at a time on phones. */
+.admin-chat {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  height: min(680px, calc(100vh - 220px));
+  min-height: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.admin-chat-list {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+.admin-chat-list .reference-status-tabs {
+  padding: 10px 12px;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+}
+.admin-chat-thread {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.admin-chat-thread:hover,
+.admin-chat-thread.active {
+  background: var(--raised);
+}
+.admin-chat-thread-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.admin-chat-thread-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-chat-thread-text small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.admin-chat-unread {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 12px;
+  line-height: 22px;
+  text-align: center;
+}
+.admin-chat-room {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.admin-chat-placeholder {
+  margin: auto;
+}
+.admin-chat-room-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.admin-chat-room-head > div {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.admin-chat-room-head small {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.admin-chat-back {
+  display: none;
+}
+@media (max-width: 760px) {
+  .admin-chat {
+    grid-template-columns: 1fr;
+    height: calc(100vh - 200px);
+  }
+  .admin-chat-list {
+    border-right: 0;
+  }
+  .admin-chat.has-thread .admin-chat-list,
+  .admin-chat:not(.has-thread) .admin-chat-room {
+    display: none;
+  }
+  .admin-chat-back {
+    display: inline-flex;
+  }
+}
+
+/* Buyer ranking */
+.rank-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--raised);
+  font-size: 13px;
+  font-weight: 700;
+}
+.rank-badge.rank-1 {
+  background: #f5c542;
+  color: #3d2c00;
+}
+.rank-badge.rank-2 {
+  background: #cfd5dd;
+  color: #262b33;
+}
+.rank-badge.rank-3 {
+  background: #e3a575;
+  color: #3a1f0b;
+}
+.ranking-card .reference-card-heading h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ranking-card .reference-status-tabs {
+  margin: 0 16px 6px;
+}
+.ranking-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 16px 12px;
+}
+.ranking-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ranking-list li:last-child {
+  border-bottom: 0;
+}
+.ranking-name {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.ranking-name small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.payment-channel-card {
+  display: grid;
+  gap: 12px;
+  max-width: 560px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .notice-panel,
+  .chat-bubble {
+    animation: none;
+  }
+}

@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LoaderCircle,
   LogOut,
+  MessageCircle,
   Package,
   Plus,
   Receipt,
@@ -23,10 +24,12 @@ import {
 import { ErrorMessage, Link, useStore } from "./App";
 import { useDialog } from "./dialog";
 import { api } from "./api";
+import { NotificationBell } from "./Ops";
 const nav = [
   ["", "ภาพรวม", LayoutDashboard],
   ["products", "สินค้า", Package],
   ["orders", "ออเดอร์", Receipt],
+  ["chat", "แชท", MessageCircle],
   ["payments", "การเงิน", Wallet],
   ["customers", "ลูกค้า", Users],
   ["settings", "ตั้งค่า", Settings],
@@ -109,6 +112,7 @@ export function MerchantHeader() {
               </Link>
             </>
           )}
+          {admin && <NotificationBell admin />}
           <div className="merchant-profile-wrap">
             <button
               className="merchant-profile"
@@ -139,7 +143,7 @@ export function MerchantHeader() {
           {nav.map(([key, label, Icon]) => {
             const active =
               key === ""
-                ? tab === "" || tab === "reports"
+                ? tab === "" || tab === "reports" || tab === "rankings"
                 : key === "products"
                   ? [
                       "products",

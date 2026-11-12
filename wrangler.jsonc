@@ -33,6 +33,11 @@
       "fallthrough": true,
     },
   ],
+  // Client acceptance testing only. Delete before opening the real shop
+  // (turns off test credit and test payments).
+  "vars": {
+    "ASTRA_TEST_PAYMENTS": "on",
+  },
   "observability": {
     "enabled": true,
   },

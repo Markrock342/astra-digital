@@ -1,0 +1,757 @@
+// In-web chat, notifications and buyer ranking (SOW items). API: docs/architecture/api-contract-shop.md
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  ArrowLeft,
+  Bell,
+  CheckCheck,
+  LoaderCircle,
+  MessageCircle,
+  Send,
+  Trophy,
+  X,
+} from "lucide-react";
+import { ErrorMessage, Link, useStore } from "./App";
+import { api, dateTime, money, relativeTime } from "./api";
+import { t } from "./i18n";
+
+export type ChatThread = {
+  id: string;
+  status: "OPEN" | "CLOSED";
+  customer?: string;
+  customer_email?: string;
+  messages: number;
+  lastMessageAt: string;
+  unreadCount: number;
+  created_at: string;
+};
+export type ChatMessage = {
+  id: string;
+  thread_id: string;
+  sender_type: "USER" | "STAFF" | "ADMIN";
+  body: string;
+  created_at: string;
+};
+export type Notice = {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  read_at: string | null;
+  created_at: string;
+};
+export type Buyer = {
+  rank: number;
+  name: string;
+  email: string;
+  orders: number;
+  spentSatang: number;
+};
+
+/** Runs `fn` now and every `ms` while the tab is visible. */
+function usePoll(fn: () => void, ms: number, enabled = true) {
+  const saved = useRef(fn);
+  saved.current = fn;
+  useEffect(() => {
+    if (!enabled) return;
+    saved.current();
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") saved.current();
+    }, ms);
+    const wake = () => document.visibilityState === "visible" && saved.current();
+    document.addEventListener("visibilitychange", wake);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", wake);
+    };
+  }, [ms, enabled]);
+}
+
+const time = (value: string) =>
+  dateTime(value).split(" ").slice(-1)[0] ?? "";
+
+function noticeText(n: Notice) {
+  const queue = n.body.match(/^คิวของคุณคือ #(\d+)$/);
+  const code = n.body.match(/^คำสั่งซื้อ (\S+) ได้รับโค้ดแล้ว$/);
+  return {
+    title: t(n.title),
+    body: queue
+      ? t("คิวของคุณคือ #{n}", { n: queue[1] })
+      : code
+        ? t("คำสั่งซื้อ {id} ได้รับโค้ดแล้ว", { id: code[1].toUpperCase() })
+        : t(n.body),
+  };
+}
+
+function noticeTarget(n: Notice, admin: boolean) {
+  if (admin)
+    return (
+      {
+        chat: "/admin/chat",
+        order_new: "/admin/orders",
+        preorder_queue_admin: "/admin/preorders",
+        stock_low: "/admin/inventory",
+      }[n.kind] ?? "/admin"
+    );
+  return n.kind === "chat" ? "#chat" : "/orders";
+}
+
+/** Bell with unread count; used in both the storefront and admin headers. */
+export function NotificationBell({ admin = false }: { admin?: boolean }) {
+  const { user, go } = useStore();
+  const [items, setItems] = useState<Notice[]>([]);
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  const load = useCallback(async () => {
+    try {
+      setItems(
+        (await api<{ notifications: Notice[] }>("/notifications")).notifications,
+      );
+    } catch {
+      /* keep the last list; the bell is not critical */
+    }
+  }, []);
+  usePoll(load, 20000, !!user);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !wrap.current?.contains(e.target as Node))
+        setOpen(false);
+    };
+    addEventListener("mousedown", close);
+    addEventListener("keydown", close);
+    return () => {
+      removeEventListener("mousedown", close);
+      removeEventListener("keydown", close);
+    };
+  }, [open]);
+  if (!user) return null;
+  const unread = items.filter((n) => !n.read_at);
+  async function read(n: Notice) {
+    setItems((list) =>
+      list.map((x) => (x.id === n.id ? { ...x, read_at: x.read_at ?? "now" } : x)),
+    );
+    if (!n.read_at) void api("/notifications/" + n.id + "/read", {}).catch(() => {});
+  }
+  async function readAll() {
+    const ids = unread.map((n) => n.id);
+    setItems((list) => list.map((x) => ({ ...x, read_at: x.read_at ?? "now" })));
+    await Promise.all(
+      ids.map((id) => api("/notifications/" + id + "/read", {}).catch(() => {})),
+    );
+  }
+  const label = admin ? "แจ้งเตือน" : t("แจ้งเตือน");
+  return (
+    <div className="notice-wrap" ref={wrap}>
+      <button
+        className="icon-button notice-button"
+        aria-label={
+          unread.length
+            ? label + " " + (admin ? `ยังไม่อ่าน ${unread.length}` : t("ยังไม่อ่าน {n}", { n: unread.length }))
+            : label
+        }
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <Bell size={admin ? 18 : 20} />
+        {unread.length > 0 && (
+          <span className="notice-count">{unread.length > 99 ? "99+" : unread.length}</span>
+        )}
+      </button>
+      {open && (
+        <div className="notice-panel" role="dialog" aria-label={label}>
+          <div className="notice-head">
+            <strong>{label}</strong>
+            {unread.length > 0 && (
+              <button className="notice-read-all" onClick={() => void readAll()}>
+                <CheckCheck size={15} />
+                {admin ? "อ่านทั้งหมด" : t("อ่านทั้งหมด")}
+              </button>
+            )}
+          </div>
+          {items.length ? (
+            <ul className="notice-list">
+              {items.slice(0, 30).map((n) => {
+                const text = admin ? { title: n.title, body: n.body } : noticeText(n);
+                return (
+                  <li key={n.id}>
+                    <button
+                      className={n.read_at ? "notice-item" : "notice-item unread"}
+                      onClick={() => {
+                        void read(n);
+                        setOpen(false);
+                        const to = noticeTarget(n, admin);
+                        if (to === "#chat") dispatchEvent(new Event("open-chat"));
+                        else go(to);
+                      }}
+                    >
+                      <span className="notice-dot" aria-hidden="true" />
+                      <span>
+                        <strong>{text.title}</strong>
+                        <small>{text.body}</small>
+                        <time>{relativeTime(n.created_at)}</time>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="notice-empty">
+              {admin ? "ยังไม่มีแจ้งเตือน" : t("ยังไม่มีแจ้งเตือน")}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MessageList({
+  messages,
+  mine,
+  customerName,
+}: {
+  messages: ChatMessage[];
+  mine: (m: ChatMessage) => boolean;
+  customerName: (m: ChatMessage) => string;
+}) {
+  const end = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: "end" });
+  }, [messages.length]);
+  return (
+    <div className="chat-messages" aria-live="polite">
+      {messages.map((m) => (
+        <div key={m.id} className={mine(m) ? "chat-bubble mine" : "chat-bubble"}>
+          <small>{customerName(m)}</small>
+          <p>{m.body}</p>
+          <time>{time(m.created_at)}</time>
+        </div>
+      ))}
+      <div ref={end} />
+    </div>
+  );
+}
+
+/** Floating chat for customers on the storefront. */
+export function CustomerChat() {
+  const { user, path } = useStore();
+  const [open, setOpen] = useState(false);
+  const [thread, setThread] = useState<ChatThread | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    const show = () => setOpen(true);
+    addEventListener("open-chat", show);
+    return () => removeEventListener("open-chat", show);
+  }, []);
+  useEffect(() => {
+    if (!user) {
+      setThread(null);
+      setMessages([]);
+      setLoaded(false);
+    }
+  }, [user?.id]);
+  const load = useCallback(async () => {
+    try {
+      const { threads } = await api<{ threads: ChatThread[] }>("/chat/threads");
+      const latest = threads.find((x) => x.status === "OPEN") ?? threads[0] ?? null;
+      setThread(latest);
+      setMessages(
+        latest
+          ? (await api<{ messages: ChatMessage[] }>("/chat/threads/" + latest.id + "/messages")).messages
+          : [],
+      );
+      setError("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoaded(true);
+    }
+  }, []);
+  usePoll(load, 8000, open && !!user);
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    const body = text.trim();
+    if (!body || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (thread?.status === "OPEN") {
+        setMessages(
+          (await api<{ messages: ChatMessage[] }>("/chat/threads/" + thread.id + "/messages", { body })).messages,
+        );
+      } else {
+        const opened = await api<{ thread: ChatThread; messages: ChatMessage[] }>("/chat/threads", { body });
+        setThread(opened.thread);
+        setMessages(opened.messages);
+      }
+      setText("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (
+    path.startsWith("/admin") ||
+    path === "/stores" ||
+    new URLSearchParams(location.search).has("shop-preview")
+  )
+    return null;
+  return (
+    <>
+      <button
+        className={open ? "chat-fab open" : "chat-fab"}
+        aria-label={open ? t("ปิดแชท") : t("แชทกับร้าน")}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        {open ? <X size={22} /> : <MessageCircle size={22} />}
+      </button>
+      {open && (
+        <section className="chat-panel" role="dialog" aria-label={t("แชทกับร้าน")}>
+          <header className="chat-panel-head">
+            <span className="chat-status-dot" aria-hidden="true" />
+            <div>
+              <strong>{t("แชทกับร้าน")}</strong>
+              <small>{t("ทีมงานจะตอบกลับในเว็บนี้")}</small>
+            </div>
+            <button className="icon-button" aria-label={t("ปิดแชท")} onClick={() => setOpen(false)}>
+              <X size={18} />
+            </button>
+          </header>
+          {!user ? (
+            <div className="chat-login">
+              <MessageCircle size={28} />
+              <p>{t("เข้าสู่ระบบเพื่อแชทกับร้าน ข้อความจะถูกเก็บไว้ในบัญชีของคุณ")}</p>
+              <Link to={"/login?next=" + encodeURIComponent(path)} className="button primary">
+                {t("เข้าสู่ระบบ")}
+              </Link>
+            </div>
+          ) : !loaded ? (
+            <div className="chat-login">
+              <LoaderCircle className="spin" size={22} />
+            </div>
+          ) : (
+            <>
+              {messages.length ? (
+                <MessageList
+                  messages={messages}
+                  mine={(m) => m.sender_type === "USER"}
+                  customerName={(m) => (m.sender_type === "USER" ? t("คุณ") : t("ทีมงาน"))}
+                />
+              ) : (
+                <div className="chat-login">
+                  <p>{t("สอบถามเรื่องสินค้าหรือคำสั่งซื้อได้เลย กรุณาอย่าส่งรหัสผ่านในแชท")}</p>
+                </div>
+              )}
+              {thread?.status === "CLOSED" && (
+                <p className="chat-closed-note">{t("แชทก่อนหน้าปิดแล้ว ส่งข้อความเพื่อเริ่มแชทใหม่")}</p>
+              )}
+              <ErrorMessage message={error} />
+              <form className="chat-composer" onSubmit={send}>
+                <textarea
+                  aria-label={t("ข้อความ")}
+                  placeholder={t("พิมพ์ข้อความ…")}
+                  value={text}
+                  maxLength={1000}
+                  rows={1}
+                  onChange={(e) => setText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      void send(e);
+                    }
+                  }}
+                />
+                <button className="button primary" disabled={busy || !text.trim()} aria-label={t("ส่ง")}>
+                  {busy ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}
+                </button>
+              </form>
+            </>
+          )}
+        </section>
+      )}
+    </>
+  );
+}
+
+/** /admin/chat — every customer thread, newest message first. */
+export function AdminChat() {
+  const { toast } = useStore();
+  const [threads, setThreads] = useState<ChatThread[] | null>(null);
+  const [current, setCurrent] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [filter, setFilter] = useState<"OPEN" | "ALL">("OPEN");
+  const loadThreads = useCallback(async () => {
+    try {
+      setThreads((await api<{ threads: ChatThread[] }>("/chat/threads")).threads);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
+  const loadMessages = useCallback(async () => {
+    if (!current) return;
+    try {
+      setMessages(
+        (await api<{ messages: ChatMessage[] }>("/chat/threads/" + current + "/messages")).messages,
+      );
+      // Opening a thread marks it read on the server.
+      setThreads((list) => list?.map((x) => (x.id === current ? { ...x, unreadCount: 0 } : x)) ?? list);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, [current]);
+  usePoll(loadThreads, 10000);
+  usePoll(loadMessages, 6000, !!current);
+  const thread = threads?.find((x) => x.id === current);
+  const shown = (threads ?? []).filter((x) => filter === "ALL" || x.status === "OPEN");
+  async function reply(e: FormEvent) {
+    e.preventDefault();
+    const body = text.trim();
+    if (!current || !body || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      setMessages(
+        (await api<{ messages: ChatMessage[] }>("/chat/threads/" + current + "/messages", { body })).messages,
+      );
+      setText("");
+      void loadThreads();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function close() {
+    if (!current) return;
+    setBusy(true);
+    try {
+      await api("/chat/threads/" + current + "/close", {});
+      toast("ปิดแชทแล้ว");
+      await loadThreads();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const unreadTotal = (threads ?? []).reduce((n, x) => n + x.unreadCount, 0);
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>แชท</h1>
+          <p>
+            ข้อความจากลูกค้าในเว็บ
+            {unreadTotal > 0 ? ` · ยังไม่อ่าน ${unreadTotal} ข้อความ` : ""}
+          </p>
+        </div>
+      </div>
+      <ErrorMessage message={error} />
+      <div className={current ? "admin-chat has-thread" : "admin-chat"}>
+        <aside className="admin-chat-list" aria-label="รายการแชท">
+          <div className="reference-status-tabs">
+            {(
+              [
+                ["OPEN", "เปิดอยู่"],
+                ["ALL", "ทั้งหมด"],
+              ] as const
+            ).map(([key, label]) => (
+              <button key={key} className={filter === key ? "active" : ""} onClick={() => setFilter(key)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {!threads ? (
+            <p className="reference-empty-text">กำลังโหลดแชท…</p>
+          ) : !shown.length ? (
+            <p className="reference-empty-text">
+              {filter === "OPEN" ? "ไม่มีแชทที่เปิดอยู่" : "ยังไม่มีลูกค้าทักแชท"}
+            </p>
+          ) : (
+            shown.map((x) => (
+              <button
+                key={x.id}
+                className={x.id === current ? "admin-chat-thread active" : "admin-chat-thread"}
+                onClick={() => {
+                  setCurrent(x.id);
+                  setMessages([]);
+                }}
+              >
+                <span className="avatar">{(x.customer ?? "?").slice(0, 2)}</span>
+                <span className="admin-chat-thread-text">
+                  <strong>{x.customer ?? "ลูกค้า"}</strong>
+                  <small>
+                    {x.status === "CLOSED" ? "ปิดแล้ว · " : ""}
+                    {relativeTime(x.lastMessageAt)}
+                  </small>
+                </span>
+                {x.unreadCount > 0 && <b className="admin-chat-unread">{x.unreadCount}</b>}
+              </button>
+            ))
+          )}
+        </aside>
+        <section className="admin-chat-room" aria-label="ข้อความ">
+          {!thread ? (
+            <p className="reference-empty-text admin-chat-placeholder">เลือกแชททางซ้ายเพื่ออ่านและตอบ</p>
+          ) : (
+            <>
+              <header className="admin-chat-room-head">
+                <button className="icon-button admin-chat-back" aria-label="กลับไปรายการแชท" onClick={() => setCurrent(null)}>
+                  <ArrowLeft size={17} />
+                </button>
+                <div>
+                  <strong>{thread.customer ?? "ลูกค้า"}</strong>
+                  <small>
+                    {thread.customer_email?.endsWith(".local") ? "" : thread.customer_email}
+                    {" · เปิดเมื่อ "}
+                    {dateTime(thread.created_at)}
+                  </small>
+                </div>
+                {thread.status === "OPEN" ? (
+                  <button className="button secondary" disabled={busy} onClick={() => void close()}>
+                    ปิดแชท
+                  </button>
+                ) : (
+                  <span className="status">ปิดแล้ว</span>
+                )}
+              </header>
+              <MessageList
+                messages={messages}
+                mine={(m) => m.sender_type !== "USER"}
+                customerName={(m) =>
+                  m.sender_type === "USER" ? (thread.customer ?? "ลูกค้า") : m.sender_type === "ADMIN" ? "แอดมิน" : "ทีมงาน"
+                }
+              />
+              {thread.status === "OPEN" ? (
+                <form className="chat-composer" onSubmit={reply}>
+                  <textarea
+                    aria-label="ข้อความตอบกลับ"
+                    placeholder="พิมพ์ข้อความตอบลูกค้า…"
+                    value={text}
+                    maxLength={1000}
+                    rows={2}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        void reply(e);
+                      }
+                    }}
+                  />
+                  <button className="button primary" disabled={busy || !text.trim()}>
+                    {busy ? <LoaderCircle className="spin" size={16} /> : <Send size={16} />}
+                    ส่ง
+                  </button>
+                </form>
+              ) : (
+                <p className="chat-closed-note">แชทนี้ปิดแล้ว ลูกค้าส่งข้อความใหม่จะเปิดเป็นแชทใหม่</p>
+              )}
+            </>
+          )}
+        </section>
+      </div>
+    </>
+  );
+}
+
+const PERIODS = [
+  ["day", "วันนี้"],
+  ["week", "สัปดาห์นี้"],
+  ["month", "เดือนนี้"],
+  ["all", "ทั้งหมด"],
+] as const;
+type Period = (typeof PERIODS)[number][0];
+
+function useRanking(period: Period, limit: number) {
+  const [buyers, setBuyers] = useState<Buyer[] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let live = true;
+    setBuyers(null);
+    api<{ buyers: Buyer[] }>(`/rankings/buyers?period=${period}&limit=${limit}`)
+      .then((r) => live && setBuyers(r.buyers))
+      .catch((e: Error) => live && setError(e.message));
+    return () => {
+      live = false;
+    };
+  }, [period, limit]);
+  return { buyers, error };
+}
+
+function PeriodTabs({ value, onChange }: { value: Period; onChange: (p: Period) => void }) {
+  return (
+    <div className="reference-status-tabs" role="tablist" aria-label="ช่วงเวลา">
+      {PERIODS.map(([key, label]) => (
+        <button key={key} role="tab" aria-selected={value === key} className={value === key ? "active" : ""} onClick={() => onChange(key)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** /admin/rankings — buyers ranked by paid spend (Asia/Bangkok periods). */
+export function BuyerRanking() {
+  const [period, setPeriod] = useState<Period>("month");
+  const { buyers, error } = useRanking(period, 50);
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>อันดับผู้ซื้อ</h1>
+          <p>เรียงตามยอดซื้อที่ชำระแล้ว (รวมพรีออเดอร์ที่จ่ายแล้ว) ตัดรอบตามเวลาไทย สัปดาห์เริ่มวันจันทร์</p>
+        </div>
+      </div>
+      <PeriodTabs value={period} onChange={setPeriod} />
+      <ErrorMessage message={error} />
+      <div className="table-scroll reference-table">
+        <table>
+          <thead>
+            <tr>
+              <th>อันดับ</th>
+              <th>ลูกค้า</th>
+              <th>ออเดอร์</th>
+              <th>ยอดซื้อ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(buyers ?? []).map((b) => (
+              <tr key={b.rank + b.email}>
+                <td>
+                  <span className={"rank-badge rank-" + Math.min(b.rank, 4)}>{b.rank}</span>
+                </td>
+                <td>
+                  {b.name}
+                  <small>{b.email.endsWith(".local") ? "" : b.email}</small>
+                </td>
+                <td>{b.orders}</td>
+                <td>
+                  <strong>{money(b.spentSatang)}</strong>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!buyers && !error && <p className="reference-empty-text">กำลังโหลดอันดับ…</p>}
+        {buyers && !buyers.length && <p className="reference-empty-text">ยังไม่มียอดซื้อในช่วงนี้</p>}
+      </div>
+    </>
+  );
+}
+
+/** Dashboard card: top five buyers for the chosen period. */
+export function BuyerRankingCard() {
+  const [period, setPeriod] = useState<Period>("month");
+  const { buyers } = useRanking(period, 5);
+  return (
+    <section className="reference-admin-card ranking-card">
+      <div className="reference-card-heading">
+        <h2>
+          <Trophy size={17} /> อันดับผู้ซื้อ
+        </h2>
+        <Link to="/admin/rankings">ดูทั้งหมด</Link>
+      </div>
+      <PeriodTabs value={period} onChange={setPeriod} />
+      {!buyers ? (
+        <p className="reference-empty-text">กำลังโหลด…</p>
+      ) : buyers.length ? (
+        <ol className="ranking-list">
+          {buyers.map((b) => (
+            <li key={b.rank + b.email}>
+              <span className={"rank-badge rank-" + Math.min(b.rank, 4)}>{b.rank}</span>
+              <span className="ranking-name">
+                {b.name}
+                <small>{b.orders} ออเดอร์</small>
+              </span>
+              <strong>{money(b.spentSatang)}</strong>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="reference-empty-text">ยังไม่มียอดซื้อในช่วงนี้</p>
+      )}
+    </section>
+  );
+}
+
+type Channel = { provider: string; active: boolean; note: string; sandboxOnly: boolean };
+
+/** Settings › รับเงิน — the single payment channel (provider not chosen yet). */
+export function PaymentChannelSettings() {
+  const { toast } = useStore();
+  const [channel, setChannel] = useState<Channel | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api<{ channel: Channel }>("/payment-channel")
+      .then((r) => setChannel(r.channel))
+      .catch((e: Error) => setError(e.message));
+  }, []);
+  async function toggle() {
+    if (!channel) return;
+    setBusy(true);
+    setError("");
+    try {
+      const next = await api<{ channel: Channel }>("/admin/payment-channel", {
+        provider: "sandbox",
+        active: !(channel.provider === "sandbox" && channel.active),
+      });
+      setChannel(next.channel);
+      toast("บันทึกช่องทางรับเงินแล้ว");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const name =
+    { unset: "ยังไม่เลือกผู้ให้บริการ", sandbox: "ทดสอบ (ไม่ใช่เงินจริง)", slipok: "ตรวจสลิปอัตโนมัติ", gateway: "เกตเวย์ชำระเงิน" }[
+      channel?.provider ?? "unset"
+    ] ?? channel?.provider;
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>รับเงิน</h1>
+          <p>ร้านรับเงินได้หนึ่งช่องทาง ผู้ให้บริการจริงจะเปิดหลังลูกค้าเลือกและยืนยัน</p>
+        </div>
+      </div>
+      <ErrorMessage message={error} />
+      <section className="reference-admin-card editor-panel payment-channel-card">
+        {!channel ? (
+          <p className="reference-empty-text">กำลังโหลด…</p>
+        ) : (
+          <>
+            <div className="settings-row">
+              <span>ผู้ให้บริการ</span>
+              <strong>{name}</strong>
+            </div>
+            <div className="settings-row">
+              <span>สถานะ</span>
+              <span className={channel.active ? "status status-delivered" : "status"}>
+                {channel.active ? "เปิดใช้งาน" : "ปิดอยู่"}
+              </span>
+            </div>
+            <p className="muted">{channel.note}</p>
+            {channel.sandboxOnly && (
+              <button className="button secondary" disabled={busy} onClick={() => void toggle()}>
+                {busy && <LoaderCircle className="spin" size={15} />}
+                {channel.provider === "sandbox" && channel.active ? "ปิดช่องทางทดสอบ" : "เปิดช่องทางทดสอบ"}
+              </button>
+            )}
+          </>
+        )}
+      </section>
+    </>
+  );
+}
