@@ -2,9 +2,10 @@
 
 อัปเดตล่าสุด: 2026-11-12
 
-## Admin FR W5 UP-1 — อัปโหลดรูปสินค้า (กำลังทำ / PR)
-- branch `feat/admin-fr-w5-up1-product-images` จาก main หลัง #37/#38
+## Admin FR W5 UP-1 — อัปโหลดรูปสินค้า (PR พร้อม)
+- PR #40 · branch `feat/admin-fr-w5-up1-product-images` จาก main หลัง #37/#38
 - file-store + MIG-008 + product images APIs + `uploads` flag · ห้ามแตะ src/ · ห้าม UP-2/3 ใน PR นี้
+- หลักฐาน: npm test 91/91 · e2e 31/31 · wrangler local smoke 10/10
 - รายงาน [MARK_REPORT_ADMIN_FR_W5_UPLOADS](../database/MARK_REPORT_ADMIN_FR_W5_UPLOADS.md)
 - **ห้าม deploy**
 

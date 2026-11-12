@@ -3,7 +3,7 @@
 **ถึง:** มาร์ค  
 **จาก:** น็อต  
 **วันที่:** 2026-11-12  
-**PR:** (ใส่หลังเปิด)  
+**PR:** https://github.com/Markrock342/astra-digital/pull/40  
 **Branch:** `feat/admin-fr-w5-up1-product-images`  
 **ฐาน:** `main` หลัง #37 (DO `.changes`) + #38  
 **Deploy:** **ห้าม** จนกว่ามาร์คสั่ง
