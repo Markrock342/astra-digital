@@ -21,7 +21,11 @@ import {
   applyMigration008,
   MIGRATION_008_NAME,
 } from "../server/migrate-008.mjs";
-import { ensureChatThreadReads, ensureCustomerAdmin } from "../server/ensure-admin-fr.mjs";
+import {
+  ensureAppendOnlyMoney,
+  ensureChatThreadReads,
+  ensureCustomerAdmin,
+} from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
 import {
   createAPIHandler,
@@ -90,6 +94,7 @@ export class Commerce extends DurableObject {
       ensureCustomerAdmin(db);
       ensureAuthHardening(db);
       ensureLiveVersions(db);
+      ensureAppendOnlyMoney(db);
     });
     this.db = db;
     const adminPassword =

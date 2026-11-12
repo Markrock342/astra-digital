@@ -21,6 +21,8 @@ const LIVE_METHODS = {
   deliverReservation: ["orders", "notify"],
   adminCancelOrder: ["orders"],
   adminSetOrderNote: ["orders"],
+  refundOrder: ["orders", "customers", "catalog", "notify"],
+  adjustCustomerCredit: ["customers", "notify"],
   replaceOrderCredential: ["orders", "catalog", "notify"],
   addProductImage: ["catalog"],
   reorderProductImages: ["catalog"],

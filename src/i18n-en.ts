@@ -457,4 +457,14 @@ export const EN_STRINGS: Record<string, string> = {
   "กลับไปกรอกรหัสผ่าน": "Back to password",
   "เข้าสู่ระบบไม่สำเร็จหลายครั้ง ระบบพักการเข้าสู่ระบบชั่วคราว กรุณาลองใหม่ภายหลัง":
     "Too many failed sign-in attempts. Sign-in is paused for a while; please try again later.",
+  "คืนเงินแล้ว": "Refunded",
+  "คืนเงินบางส่วน": "Partially refunded",
+  "ร้านคืนเงินคำสั่งซื้อนี้แล้ว": "The shop refunded this order",
+  "ร้านคืนเงินบางส่วนแล้ว": "The shop refunded part of this order",
+  "ดูรายละเอียดได้ที่การแจ้งเตือนและหน้าเครดิตของฉัน": "See your notifications and My credit for details.",
+  "เติม": "Top-up",
+  "ซื้อ": "Purchase",
+  "คืนเงิน": "Refund",
+  "ปรับยอด": "Adjustment",
+  "คงเหลือ": "Balance",
 };
