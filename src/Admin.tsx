@@ -62,6 +62,7 @@ import {
   AdminProducts,
 } from "./AdminLists";
 import { StockImport } from "./StockImport";
+import { AdminIntegrations } from "./AdminIntegrations";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 const productTabs = [
   ["products", "สินค้าทั้งหมด"],
@@ -1235,6 +1236,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
           <button className="button primary">บันทึก</button>
         </div>
       </form>
+      <AdminIntegrations />
     </>
   );
 }

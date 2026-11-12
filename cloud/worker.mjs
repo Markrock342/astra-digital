@@ -27,13 +27,18 @@ import {
   ensureCustomerAdmin,
   ensureOrderHistory,
   ensureProductsStock,
+  ensureEmailAndReset,
 } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
 import {
   createAPIHandler,
   securityHeaders,
   authenticationPaths,
+  accountRecoveryPaths,
+  pageSecurityHeaders,
 } from "../server/api-handler.mjs";
+import { createEmailSender } from "../server/email.mjs";
+import { createTurnstile } from "../server/turnstile.mjs";
 import initial from "../server/migrations/001_initial.sql";
 import reviews from "../server/migrations/002_reviews.sql";
 import referenceLayout from "../server/migrations/003_reference_layout.sql";
@@ -97,6 +102,7 @@ export class Commerce extends DurableObject {
       ensureAuthHardening(db);
       ensureOrderHistory(db);
       ensureProductsStock(db);
+      ensureEmailAndReset(db);
       ensureLiveVersions(db);
       ensureAppendOnlyMoney(db);
     });
@@ -121,6 +127,12 @@ export class Commerce extends DurableObject {
         typeof adminPassword === "string" && adminPassword.length >= 8
           ? adminPassword
           : undefined,
+      // Email: `send_email` binding EMAIL (or RESEND_API_KEY) + EMAIL_FROM. Turnstile:
+      // TURNSTILE_SITE_KEY + TURNSTILE_SECRET. Each stays off until its config is present.
+      email: createEmailSender(env),
+      turnstile: createTurnstile(env),
+      publicBaseUrl: env.PUBLIC_BASE_URL,
+      waitUntil: (promise) => ctx.waitUntil?.(promise),
     });
     this.service.storageKind = "cloudflare-durable-sqlite";
     this.service.onLive((topics) => {
@@ -193,7 +205,8 @@ export default {
         const shop = env.COMMERCE.getByName("shop");
         if (
           request.method === "POST" &&
-          authenticationPaths.includes(url.pathname)
+          (authenticationPaths.includes(url.pathname) ||
+            accountRecoveryPaths.includes(url.pathname))
         ) {
           const origin = request.headers.get("Origin");
           if (
@@ -227,7 +240,13 @@ export default {
           });
         response = await env.ASSETS.fetch(request);
         response = new Response(response.body, response);
-        for (const [key, value] of Object.entries(securityHeaders))
+        // Storefront pages allow the Turnstile script/frame only when Turnstile is configured.
+        for (const [key, value] of Object.entries(
+          pageSecurityHeaders(
+            url.pathname,
+            !!(env.TURNSTILE_SITE_KEY && env.TURNSTILE_SECRET),
+          ),
+        ))
           response.headers.set(key, value);
       }
       response = new Response(response.body, response);

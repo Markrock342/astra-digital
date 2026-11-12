@@ -38,6 +38,7 @@ import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createFileStore } from "./file-store.mjs";
 import { createAuthHardening } from "./auth-hardening.mjs";
 import { createAdminMoneyApis } from "./admin-money.mjs";
+import { createAccountEmail } from "./account-email.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -82,6 +83,11 @@ export function createCommerceCore({
   uploads,
   // Injected clock for session / lockout / TOTP tests.
   clock = () => Date.now(),
+  // Email + Turnstile (server/email.mjs, server/turnstile.mjs). Both off when omitted.
+  email: mailer = null,
+  turnstile = null,
+  publicBaseUrl = "",
+  waitUntil,
 } = {}) {
   const one = (sql, ...params) => db.prepare(sql).get(...params);
   const all = (sql, ...params) => db.prepare(sql).all(...params);
@@ -2340,6 +2346,22 @@ export function createCommerceCore({
       spentSatang: row.spent_satang,
     }));
   }
+  const accountEmail = createAccountEmail({
+    one,
+    all,
+    run,
+    fail,
+    key,
+    clock,
+    passwordHash,
+    settings,
+    requireAdmin,
+    clearLockout: auth.clearLockout,
+    mailer,
+    turnstile,
+    publicBaseUrl,
+    waitUntil,
+  });
   const service = {
     db,
     reviews,
@@ -2449,7 +2471,17 @@ export function createCommerceCore({
       livemodeFinance: true,
       adminRefunds: true,
       creditAdjust: true,
+      // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
+      email: accountEmail.enabled,
+      passwordReset: accountEmail.enabled,
+      turnstile: !!turnstile?.enabled,
     }),
+    turnstile: turnstile?.enabled ? turnstile : null,
+    requestPasswordReset: accountEmail.requestPasswordReset,
+    resetPassword: accountEmail.resetPassword,
+    sendOrderConfirmation: accountEmail.sendOrderConfirmation,
+    adminIntegrations: accountEmail.integrationsStatus,
+    emailIdle: accountEmail.idle,
     salesRevenueSatang,
     logout: (token) =>
       run("DELETE FROM sessions WHERE token_hash=?", hash(token ?? "")),
@@ -2474,5 +2506,7 @@ export function createCommerceCore({
       return walletHistory(all, user.id, 500);
     },
   };
+  // Order emails run after pay / deliverReservation returned; money logic is untouched.
+  accountEmail.hookOrderEmails(service);
   return withLive(service, { run, all });
 }

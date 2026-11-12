@@ -75,6 +75,7 @@ import Stores, { MerchantHeader } from "./Stores";
 import { CustomerChat, NotificationBell } from "./Ops";
 import { CountUp, useRouteMotion } from "./motion";
 import { WarrantyStatus } from "./Warranty";
+import { ResetPasswordPage } from "./AccountRecovery";
 import {
   ReferenceCatalog,
   ReferenceCatalogPage,
@@ -2334,6 +2335,7 @@ function Router() {
     "/products": t("สินค้าทั้งหมด"),
     "/login": t("เข้าสู่ระบบ"),
     "/register": t("สมัครสมาชิก"),
+    "/reset-password": t("ตั้งรหัสผ่านใหม่"),
     "/orders": t("ประวัติการซื้อ"),
     "/cart": t("ตะกร้าสินค้า"),
     "/checkout": t("ตรวจสอบคำสั่งซื้อ"),
@@ -2352,6 +2354,7 @@ function Router() {
     "/": t("ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที"),
     "/products": t("สินค้าดิจิทัลทั้งหมดของร้าน"),
     "/cart": t("สินค้าที่คุณเลือกไว้ พร้อมเมื่อคุณพร้อม"),
+    "/reset-password": t("ตั้งรหัสผ่านใหม่สำหรับบัญชีของคุณ"),
     "/checkout": t("ตรวจสอบข้อมูลให้ครบ ระบบจะบันทึกคำสั่งซื้อไว้ก่อน"),
     "/orders": t("ติดตามคำสั่งซื้อและเปิดดูโค้ดสินค้าของคุณ"),
     "/account": t("ข้อมูลและการตั้งค่าบัญชีของคุณ"),
@@ -2391,6 +2394,7 @@ function Router() {
     );
   if (path === "/login" || path === "/register")
     return <ReferenceAuth key={path} register={path === "/register"} />;
+  if (path === "/reset-password") return <ResetPasswordPage />;
   if (path === "/cart" || path === "/checkout")
     return <Cart checkout={path === "/checkout"} />;
   if (path.startsWith("/orders/") || path.startsWith("/checkout/"))

@@ -1,0 +1,194 @@
+/* Password reset, Turnstile box and Admin › ตั้งค่า integrations card.
+   Uses the existing theme tokens only (storefront: --surface/--border/--accent…,
+   back office: the merchant-shell tokens), so all 8 storefront themes follow along. */
+
+/* ---------- Turnstile box (login / register / forgot-password) ---------- */
+.turnstile-box {
+  display: grid;
+  gap: 6px;
+  min-height: 65px;
+  margin: 4px 0 14px;
+}
+.turnstile-slot {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+.turnstile-slot:empty {
+  display: none;
+}
+.turnstile-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  min-height: 65px;
+  padding: 0 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm, 10px);
+}
+.turnstile-note.error {
+  color: #dc2626;
+  border-style: solid;
+  border-color: color-mix(in srgb, #dc2626 40%, var(--border));
+}
+:root[data-theme="dark"] .turnstile-note.error {
+  color: #f87171;
+}
+
+/* ---------- Forgot / reset ---------- */
+.reference-auth-help .forgot-link,
+.reference-auth-help .recovery-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-text, var(--text));
+  text-decoration: none;
+}
+.reference-auth-help .forgot-link:hover,
+.reference-auth-help .recovery-back:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+.recovery-done {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  text-align: center;
+}
+.recovery-done p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+}
+.recovery-done .error-message {
+  width: 100%;
+  text-align: left;
+  margin: 0;
+}
+.recovery-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  color: var(--accent-text, var(--text));
+  background: color-mix(in srgb, var(--accent, #1534ff) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #1534ff) 32%, var(--border));
+}
+
+/* ---------- Admin › ตั้งค่า › อีเมลและกันบอท ---------- */
+.integrations-card {
+  max-width: 768px;
+  margin-top: 24px;
+  display: grid;
+  gap: 16px;
+}
+.integrations-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.integrations-head h2 {
+  font-size: 16px;
+  margin: 0 0 4px;
+}
+.integrations-head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.integrations-head .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.integrations-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.integration-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--surface);
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+.integration-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.integration-title svg {
+  color: #1534ff;
+}
+.integration-title .status {
+  margin-left: auto;
+}
+.integration-item p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.integration-env {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.integration-env code,
+.integration-facts code {
+  font-size: 11.5px;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 5px;
+  word-break: break-all;
+}
+.integration-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+.integration-facts dt {
+  color: var(--muted);
+}
+.integration-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.integrations-log-title {
+  font-size: 14px;
+  margin: 4px 0 0;
+}
+.integrations-log td small {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  max-width: 260px;
+}
+@media (max-width: 640px) {
+  .integrations-grid {
+    grid-template-columns: 1fr;
+  }
+  .integrations-head {
+    flex-direction: column;
+  }
+}
