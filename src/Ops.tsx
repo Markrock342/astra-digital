@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { ErrorMessage, Link, useStore } from "./App";
+import { NAVIGATE_EVENT } from "./navigation";
 import { api, dateTime, money, relativeTime } from "./api";
 import { t } from "./i18n";
 
@@ -40,6 +41,8 @@ export type Notice = {
   kind: string;
   title: string;
   body: string;
+  /** In-app path to open (order or chat); null on older notifications. */
+  link?: string | null;
   read_at: string | null;
   created_at: string;
 };
@@ -74,6 +77,9 @@ function usePoll(fn: () => void, ms: number, enabled = true, topics: LiveTopic[]
   }, [ms, enabled]);
 }
 
+// Order page paths in a chat message (e.g. the shop's "resend" message) become links.
+const ORDER_PATH = /(\/orders\/[A-Za-z0-9-]{8,80})/;
+
 const time = (value: string) =>
   dateTime(value).split(" ").slice(-1)[0] ?? "";
 
@@ -91,6 +97,8 @@ function noticeText(n: Notice) {
 }
 
 function noticeTarget(n: Notice, admin: boolean) {
+  // Only same-site paths; anything else falls back to the kind-based page.
+  if (n.link && /^\/(?!\/)/.test(n.link)) return n.link;
   if (admin)
     return (
       {
@@ -219,10 +227,13 @@ function MessageList({
   messages,
   mine,
   customerName,
+  admin = false,
 }: {
   messages: ChatMessage[];
   mine: (m: ChatMessage) => boolean;
   customerName: (m: ChatMessage) => string;
+  /** Team view: order links open the back-office order instead. */
+  admin?: boolean;
 }) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -233,7 +244,17 @@ function MessageList({
       {messages.map((m) => (
         <div key={m.id} className={mine(m) ? "chat-bubble mine" : "chat-bubble"}>
           <small>{customerName(m)}</small>
-          <p>{m.body}</p>
+          <p>
+            {m.body.split(ORDER_PATH).map((part, i) =>
+              i % 2 ? (
+                <Link key={i} to={admin ? "/admin" + part : part} className="chat-order-link">
+                  {part}
+                </Link>
+              ) : (
+                part
+              ),
+            )}
+          </p>
           <time>{time(m.created_at)}</time>
         </div>
       ))}
@@ -447,6 +468,19 @@ export function AdminChat() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"OPEN" | "MINE" | "ALL">("OPEN");
+  // Deep link from a notification: /admin/chat?thread=<id> opens that thread,
+  // also when the bell is used while this page is already open.
+  useEffect(() => {
+    const pick = () => {
+      const id = new URLSearchParams(location.search).get("thread");
+      if (!id) return;
+      setMessages([]);
+      setCurrent(id);
+    };
+    pick();
+    addEventListener(NAVIGATE_EVENT, pick);
+    return () => removeEventListener(NAVIGATE_EVENT, pick);
+  }, []);
   const loadThreads = useCallback(async () => {
     try {
       setThreads((await api<{ threads: ChatThread[] }>("/chat/threads")).threads);
@@ -615,6 +649,7 @@ export function AdminChat() {
               </header>
               <MessageList
                 messages={messages}
+                admin
                 mine={(m) => m.sender_type !== "USER"}
                 customerName={(m) =>
                   m.sender_type === "USER" ? (thread.customer ?? "ลูกค้า") : m.sender_type === "ADMIN" ? "แอดมิน" : "ทีมงาน"

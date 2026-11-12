@@ -81,6 +81,7 @@ const EVENT_TEXT: Record<string, string> = {
   cancelled: "ยกเลิกออเดอร์",
   revealed: "เปิดดูรหัส",
   replaced: "เปลี่ยนบัญชีให้ลูกค้า",
+  resent: "ส่งรหัสให้ลูกค้าอีกครั้ง",
   reviewed: "ลูกค้ารีวิว",
   note: "เพิ่มหมายเหตุ",
 };

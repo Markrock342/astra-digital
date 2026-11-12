@@ -37,6 +37,7 @@ import {
   type ReplacementItem,
 } from "./OrderHistory";
 import { StockImport } from "./StockImport";
+import { CopyValue, ResendCredentials } from "./OrderCredentials";
 import { WarrantyStatus } from "./Warranty";
 
 type Filters = Record<string, string>;
@@ -863,23 +864,25 @@ export function AdminOrderDetail({ id }: { id: string }) {
               ) : (
                 <>
                   <ul className="admin-credential-list">
+                    {/* Copy buttons only once revealed; masked values are never copied. */}
                     {shown!.credentials.map((c, i) => (
                       <li key={"c" + i}>
                         <span>ID</span>
-                        <code>{c.loginId}</code>
+                        <CopyValue value={c.loginId} label="ID" copyable={!!revealed} />
                         <span>รหัสผ่าน</span>
-                        <code>{c.password}</code>
+                        <CopyValue value={c.password} label="รหัสผ่าน" copyable={!!revealed} />
                         {replaceButton(pairUnits[i]?.id)}
                       </li>
                     ))}
                     {shown!.codes.map((c, i) => (
                       <li key={"k" + i}>
                         <span>โค้ด</span>
-                        <code>{c}</code>
+                        <CopyValue value={c} label="โค้ด" copyable={!!revealed} />
                         {replaceButton(codeUnits[i]?.id)}
                       </li>
                     ))}
                   </ul>
+                  <ResendCredentials orderId={order.id} onSent={() => void reload()} />
                   {replacing && (
                     <form className="admin-reason-form" onSubmit={replace}>
                       <label className="field">

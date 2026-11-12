@@ -26,6 +26,7 @@ const LIVE_METHODS = {
   refundOrder: ["orders", "customers", "catalog", "notify"],
   adjustCustomerCredit: ["customers", "notify"],
   replaceOrderCredential: ["orders", "catalog", "notify"],
+  resendOrderCredentials: ["orders", "chat", "notify"],
   addProductImage: ["catalog"],
   reorderProductImages: ["catalog"],
   deleteProductImage: ["catalog"],

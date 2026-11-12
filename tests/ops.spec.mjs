@@ -64,11 +64,11 @@ test("admin answers from the inbox, sees ranking and notifications", async ({ pa
   await bell.click();
   await expect(page.getByRole("dialog", { name: "แจ้งเตือน" })).toContainText("ลูกค้าเปิดแชทใหม่");
   await page.getByRole("dialog", { name: "แจ้งเตือน" }).getByText("ลูกค้าเปิดแชทใหม่").click();
-  await expect(page).toHaveURL(/\/admin\/chat$/);
+  // The notification links to its thread, which opens straight away (and is read).
+  await expect(page).toHaveURL(/\/admin\/chat\?thread=/);
   const thread = page.locator(".admin-chat-thread", { hasText: "Chat Buyer" });
-  await expect(thread.locator(".admin-chat-unread")).toHaveText("1");
-  await thread.click();
   await expect(page.locator(".admin-chat-room")).toContainText("สินค้าใช้ได้กี่วันครับ");
+  await expect(thread).toHaveClass(/active/);
   await expect(thread.locator(".admin-chat-unread")).toHaveCount(0);
   await page.getByLabel("ข้อความตอบกลับ").fill("ใช้ได้ 30 วันครับ");
   await page.getByRole("button", { name: "ส่ง" }).click();

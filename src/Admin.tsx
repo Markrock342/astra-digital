@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -62,7 +62,10 @@ import {
   AdminProducts,
 } from "./AdminLists";
 import { StockImport } from "./StockImport";
+import { useUnsavedChangesGuard } from "./navigation";
 import type { AdminData, Features, Product, QueueItem } from "./types";
+/** Same shape as the editor's formValues state, for dirty checks. */
+const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
 const productTabs = [
   ["products", "สินค้าทั้งหมด"],
   ["inventory", "บัญชีสต็อก"],
@@ -144,6 +147,14 @@ export default function Admin() {
   const formOpen = newProduct || !!editingProduct;
   const [formValues, setFormValues] = useState<Record<string, string> | null>(null);
   useEffect(() => setFormValues(null), [editingProduct?.id, newProduct]);
+  // Unsaved-changes guard: the form is dirty once its values differ from what it
+  // showed when it opened (or was last saved). The form remounts per product (key).
+  const savedForm = useRef<string | null>(null);
+  const captureSavedForm = useCallback((form: HTMLFormElement | null) => {
+    if (form) savedForm.current = formSnapshot(form);
+  }, []);
+  const formDirty = formOpen && formValues !== null && JSON.stringify(formValues) !== savedForm.current;
+  const markFormClean = useUnsavedChangesGuard(formDirty);
   const realProducts = data?.products ?? [];
   const setupSteps: [string, string, boolean][] = [
     ["ใส่ชื่อร้านและช่องทางติดต่อ", "settings", !!overview?.shop?.shopName],
@@ -180,9 +191,10 @@ export default function Admin() {
   }, [path]);
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setBusy(true);
     setError("");
-    const { type, ...values } = Object.fromEntries(new FormData(e.currentTarget));
+    const { type, ...values } = Object.fromEntries(new FormData(form));
     try {
       const result = await api<{ id: string }>("/admin/products", {
         ...values,
@@ -196,6 +208,10 @@ export default function Admin() {
       });
       await load();
       await refresh();
+      // Saved: the current values are the new baseline, and leaving is free.
+      savedForm.current = formSnapshot(form);
+      setFormValues(null);
+      markFormClean();
       toast(newProduct ? "สร้างฉบับร่างแล้ว" : "บันทึกสินค้าแล้ว");
       go("/admin/products/" + result.id);
     } catch (e) {
@@ -490,6 +506,7 @@ export default function Admin() {
               onSubmit={save}
               className="reference-product-editor"
               key={editingProduct?.id ?? "new"}
+              ref={captureSavedForm}
               onInput={(e) =>
                 setFormValues(Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>)
               }

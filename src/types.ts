@@ -5,10 +5,20 @@ export type Variant = {
   price: number;
   /** 0 = no warranty. */
   warranty_days?: number;
-  /** Public API caps this at 10; admin overview returns the exact count. */
-  stock: number;
-  stockStatus?: "in" | "low" | "out";
+  /** Public catalog: a status only, never a stock number. */
+  stockStatus: "in" | "low" | "out";
+  /** Can be ordered now (in stock, or a preorder product). */
+  available: boolean;
 };
+/** Admin APIs keep the exact ready-stock count. */
+export type AdminVariant = Omit<Variant, "stockStatus" | "available"> & {
+  stock: number;
+  stockStatus?: Variant["stockStatus"];
+  available?: boolean;
+};
+export type AdminProduct = Omit<Product, "variants"> & { variants: AdminVariant[] };
+/** Most one order can buy; also the quantity cap while a variant is available. */
+export const MAX_PER_ORDER = 10;
 export type Product = {
   id: string;
   name: string;
@@ -85,7 +95,7 @@ export type AdminData = {
   orderCount: number;
   delivered: number;
   stock: number;
-  products: Product[];
+  products: AdminProduct[];
   orders: {
     id: string;
     status: string;

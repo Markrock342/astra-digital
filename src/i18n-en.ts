@@ -398,6 +398,8 @@ export const EN_STRINGS: Record<string, string> = {
   "ได้รับเลขคิวพรีออเดอร์": "Pre-order queue number issued",
   "พรีออเดอร์พร้อมใช้งานแล้ว": "Your pre-order is ready",
   "รหัสสินค้าถูกจัดส่งแล้ว กดดูคำสั่งซื้อเพื่อรับรหัส": "Your item has been delivered. Open the order to see it.",
+  "ร้านส่งข้อมูลบัญชีให้อีกครั้ง": "The shop sent your account details again",
+  "ข้อมูลบัญชีอยู่ในหน้าคำสั่งซื้อ กดเพื่อเปิดดู": "Your account details are on the order page. Tap to open it.",
   "คิวของคุณคือ #{n}": "Your queue number is #{n}",
   "คำสั่งซื้อ {id} ได้รับโค้ดแล้ว": "Order {id} has been delivered",
   "ชำระเงินสำเร็จ ได้เลขคิวแล้ว": "Payment complete. You have a queue number.",
