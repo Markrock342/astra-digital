@@ -22,6 +22,27 @@ export async function api<T = unknown>(
     throw new Error(data.error ?? "เกิดข้อผิดพลาด กรุณาลองใหม่");
   return data as T;
 }
+/** POST raw image bytes. The server checks the type and a 2MB cap itself. */
+export async function uploadImage<T = unknown>(
+  path: string,
+  file: Blob,
+  contentType: string,
+): Promise<T> {
+  const response = await fetch("/api" + path, {
+    credentials: "same-origin",
+    method: "POST",
+    headers: { "Content-Type": contentType, "X-Astra-Request": "1" },
+    body: file,
+  });
+  const data = await response
+    .json()
+    .catch(() => ({
+      error: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจว่าระบบกำลังทำงาน",
+    }));
+  if (!response.ok)
+    throw new Error(data.error ?? "เกิดข้อผิดพลาด กรุณาลองใหม่");
+  return data as T;
+}
 export const money = (value: number) =>
   new Intl.NumberFormat(locale(), {
     style: "currency",

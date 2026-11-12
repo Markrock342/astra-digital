@@ -1614,6 +1614,44 @@ html.lang-swap .storefront-shell .main-nav {
   background: var(--accent);
   color: var(--accent-ink);
 }
+.storefront-shell .avatar {
+  overflow: hidden;
+}
+.storefront-shell .avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.storefront-shell .reference-account-page .account-summary {
+  align-items: flex-start;
+}
+.storefront-shell .reference-account-page .account-avatar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.storefront-shell .account-avatar-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 600px) {
+  .storefront-shell .reference-account-page .account-summary {
+    flex-wrap: wrap;
+  }
+  .storefront-shell .reference-account-page .account-summary p,
+  .storefront-shell .reference-account-page .account-summary .service-pill {
+    font-size: 12px;
+  }
+}
 .storefront-shell .reference-account-page .field input {
   border-radius: var(--radius-sm);
   background: var(--raised);
