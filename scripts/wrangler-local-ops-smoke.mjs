@@ -48,11 +48,21 @@ async function api(method, path, body) {
   if (jar.size)
     headers.Cookie = [...jar.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const response = await fetch(base + path, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 20000);
+  let response;
+  try {
+    response = await fetch(base + path, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: ac.signal,
+    });
+  } catch (error) {
+    clearTimeout(timer);
+    throw new Error(`${method} ${path} failed: ${error.name} ${error.message}`);
+  }
+  clearTimeout(timer);
   storeCookies(response);
   const data = await response.json().catch(() => ({}));
   return { status: response.status, data };
