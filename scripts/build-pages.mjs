@@ -1,4 +1,5 @@
-import { cpSync, rmSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { cpSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { build } from "esbuild";
 const STRICT_CSP =
   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
 // Turnstile (bot check on register / login / forgot-password) needs its script and iframe
@@ -10,7 +11,16 @@ const turnstile = !!process.env.TURNSTILE_SITE_KEY;
 rmSync("dist-pages",{recursive:true,force:true});
 mkdirSync("dist-pages", { recursive: true });
 cpSync("dist", "dist-pages", { recursive: true });
-writeFileSync("dist-pages/_worker.js", readFileSync("cloud/pages-proxy.mjs"));
+// The proxy imports the shared SEO helpers (server/seo.mjs), so bundle it into one module.
+await build({
+  entryPoints: ["cloud/pages-proxy.mjs"],
+  bundle: true,
+  format: "esm",
+  platform: "neutral",
+  target: "es2022",
+  outfile: "dist-pages/_worker.js",
+  logLevel: "warning",
+});
 const common =
   "  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  X-Frame-Options: SAMEORIGIN\n";
 writeFileSync(

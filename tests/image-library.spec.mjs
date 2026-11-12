@@ -106,6 +106,7 @@ test("new product: name suggests a cover, shown in the preview and uploaded afte
   await expect(suggest.getByLabel("ใช้รูปนี้เป็นรูปปก")).toBeChecked();
   await expect(page.locator(".product-preview-img")).toHaveAttribute("src", "/library/netflix.webp");
   await page.getByLabel("รายละเอียด").fill("บัญชี Netflix จอส่วนตัว ใช้ได้ 30 วัน");
+  await page.getByLabel("ชื่อตัวเลือกแรก").fill("1 เดือน");
   await page.getByLabel("ราคาตัวเลือกแรก (บาท)").fill("199");
   await page.getByRole("button", { name: "สร้างฉบับร่าง" }).click();
   await expect(page.getByText(/สร้างฉบับร่างแล้ว · ใส่รูปปก Netflix แล้ว/)).toBeVisible();
@@ -126,6 +127,7 @@ test("new product: unticking the suggestion creates the product without a cover"
   await suggest.getByLabel("ใช้รูปนี้เป็นรูปปก").uncheck();
   await expect(page.locator(".product-preview-img")).toHaveCount(0);
   await page.getByLabel("รายละเอียด").fill("บัญชี Spotify Premium ใช้ได้ 30 วัน");
+  await page.getByLabel("ชื่อตัวเลือกแรก").fill("1 เดือน");
   await page.getByLabel("ราคาตัวเลือกแรก (บาท)").fill("59");
   await page.getByRole("button", { name: "สร้างฉบับร่าง" }).click();
   await expect(page).toHaveURL(/\/admin\/products\/(?!new$)[^/]+$/);

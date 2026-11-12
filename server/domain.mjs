@@ -53,6 +53,7 @@ import {
 } from "./order-extras.mjs";
 import { createCouponApis, normalizeCouponCode } from "./coupons.mjs";
 import { createAccountEmail } from "./account-email.mjs";
+import { normalizeLegal } from "./legal.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -1089,6 +1090,8 @@ export function createCommerceCore({
         fail(400, `เวลารอชำระเงินต้องอยู่ระหว่าง ${PENDING_EXPIRY_MIN}–${PENDING_EXPIRY_MAX} นาที`);
       current.pendingExpiryMinutes = value;
     }
+    // Legal pages form (ตั้งค่า › ข้อกำหนดและนโยบาย). Plain text only; escaped when rendered.
+    if (input.legal !== undefined) current.legal = normalizeLegal(input.legal, fail);
     run(
       "INSERT INTO runtime_flags(key,value) VALUES('shop-settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
       JSON.stringify(current),
@@ -1098,6 +1101,16 @@ export function createCommerceCore({
     for (const [field, value] of Object.entries(current)) {
       if (JSON.stringify(before[field]) === JSON.stringify(value)) continue;
       const short = (v) => (typeof v === "string" && v.length > 80 ? v.slice(0, 80) + "…" : v);
+      if (value && typeof value === "object") {
+        // Nested settings (legal pages): list which parts changed instead of copying long text.
+        const from = before[field] ?? {};
+        changed[field] = {
+          fields: [...new Set([...Object.keys(from), ...Object.keys(value)])].filter(
+            (key) => JSON.stringify(from[key]) !== JSON.stringify(value[key]),
+          ),
+        };
+        continue;
+      }
       changed[field] = { from: short(before[field] ?? null), to: short(value) };
     }
     run(
@@ -1109,9 +1122,16 @@ export function createCommerceCore({
     );
     return { shop: current };
   }
+  /** Public legal pages data: the saved form (or nothing → built-in defaults) + the old policy text. */
+  function legal() {
+    const shop = settings();
+    return { legal: shop.legal ?? null, policy: shop.policy ?? "" };
+  }
   function overview() {
+    // The legal text can be long; storefront pages fetch it from /api/legal when needed.
+    const { legal: _legal, ...shop } = settings();
     return {
-      shop: settings(),
+      shop,
       customers: one("SELECT COUNT(*) AS n FROM users WHERE role='CUSTOMER'").n,
       products: one(
         `SELECT COUNT(*) AS n FROM inventory i JOIN variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE p.active=1 AND p.hidden_seed=0 AND p.preorder=0 AND ${inventoryAvailableAliased}`,
@@ -2642,6 +2662,7 @@ export function createCommerceCore({
     reviews,
     settings,
     saveSettings,
+    legal,
     addReview,
     register,
     login,

@@ -75,6 +75,7 @@ import { uploadImage } from "./image-upload";
 import { AdminAlerts, AdminBackup } from "./AdminAlerts";
 import { AdminCoupons } from "./AdminCoupons";
 import { AdminIntegrations } from "./AdminIntegrations";
+import { LegalSettings } from "./Legal";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -91,6 +92,7 @@ const orderTabs = [
 const settingTabs = [
   ["settings", "ร้าน"],
   ["settings/payment", "รับเงิน"],
+  ["settings/legal", "ข้อกำหนดและนโยบาย"],
   ["settings/account", "บัญชีแอดมิน"],
   ["settings/alerts", "แจ้งเตือนนอกเว็บ"],
   ["settings/backup", "สำรองข้อมูล"],
@@ -871,6 +873,8 @@ export default function Admin() {
             <AdminAlerts />
           ) : sub === "settings/backup" ? (
             <AdminBackup />
+          ) : sub === "settings/legal" ? (
+            <LegalSettings />
           ) : (
             <ReferenceSettings sub={sub} />
           ))}
@@ -1323,15 +1327,10 @@ function ReferenceSettings({ sub }: { sub: string }) {
         </section>
         <section className="reference-admin-card editor-panel">
           <h2>ข้อกำหนดร้าน</h2>
-          <p>ลูกค้าอ่านได้ที่ท้ายหน้าร้าน</p>
-          <label className="field">
-            ข้อกำหนด
-            <textarea
-              name="policy"
-              maxLength={10000}
-              defaultValue={shop?.policy ?? ""}
-            />
-          </label>
+          <p>
+            ข้อกำหนดการใช้บริการและนโยบายความเป็นส่วนตัวแก้ไขได้ที่{" "}
+            <Link to="/admin/settings/legal">ข้อกำหนดและนโยบาย</Link>
+          </p>
           <label className="checkbox-label">
             <input
               name="requireTerms"
