@@ -1843,3 +1843,149 @@ html.lang-swap .storefront-shell .main-nav {
   font-size: 12px;
   color: var(--muted);
 }
+@media (max-width: 600px) {
+  .storefront-shell .eyebrow,
+  .storefront-shell .stat-value > span,
+  .storefront-shell .status,
+  .storefront-shell .stock-tag,
+  .storefront-shell .service-pill,
+  .storefront-shell .live-pill,
+  .storefront-shell .history-card-top,
+  .storefront-shell .history-card-top small,
+  .storefront-shell .history-card-body p,
+  .storefront-shell .result-actions > p {
+    font-size: 12px;
+  }
+}
+.storefront-shell .skeleton-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--raised),
+    var(--surface),
+    var(--raised)
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shine 1.2s var(--ease-out-expo) infinite;
+}
+.storefront-shell .skeleton-line {
+  height: 18px;
+  width: min(280px, 70%);
+}
+.storefront-shell .skeleton-line.short,
+.storefront-shell .skeleton-panel.short {
+  width: min(180px, 46%);
+}
+.storefront-shell .skeleton-panel {
+  height: 140px;
+  margin-top: 16px;
+}
+.storefront-shell .skeleton-media {
+  min-height: 280px;
+}
+.storefront-shell .skeleton-product,
+.storefront-shell .skeleton-cart,
+.storefront-shell .skeleton-order {
+  display: grid;
+  gap: 16px;
+}
+@media (min-width: 800px) {
+  .storefront-shell .skeleton-product {
+    grid-template-columns: 1.1fr 0.9fr;
+    align-items: start;
+  }
+}
+.storefront-shell .pay-shell {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.storefront-shell .pay-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.storefront-shell .pay-steps span {
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--border);
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 13px;
+}
+.storefront-shell .pay-steps span[aria-current="step"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+.storefront-shell .pay-qr {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--raised);
+  border: 1px solid var(--border);
+}
+.storefront-shell .pay-qr-mark {
+  width: 84px;
+  height: 84px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(90deg, var(--text) 8px, transparent 8px) 0 0 / 14px 14px,
+    linear-gradient(var(--text) 8px, transparent 8px) 0 0 / 14px 14px,
+    var(--surface);
+}
+.storefront-shell .pay-qr small,
+.storefront-shell .pay-slip-note {
+  color: var(--muted);
+  font-size: 13px;
+}
+.storefront-shell .pay-qr strong {
+  display: block;
+  font-size: 22px;
+}
+.storefront-shell .pay-slip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: var(--radius-btn);
+  border: 1px dashed var(--border);
+  background: var(--surface);
+  cursor: pointer;
+}
+.storefront-shell .pay-slip:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.storefront-shell .pay-slip input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.storefront-shell .pay-slip-preview {
+  width: min(100%, 280px);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+@media (prefers-reduced-motion: reduce) {
+  .storefront-shell .skeleton-block {
+    animation: none;
+  }
+}
+@keyframes skeleton-shine {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}

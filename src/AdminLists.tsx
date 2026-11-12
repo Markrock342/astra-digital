@@ -2130,3 +2130,83 @@ export function AdminReports() {
     </>
   );
 }
+
+// ---------------------------------------------------------------- Product live preview
+
+export type ProductDraft = {
+  name: string;
+  description: string;
+  category: string;
+  preorder: boolean;
+  active: boolean;
+  featured: boolean;
+  art: string;
+  variants: { id: string; label: string; price: number; stock: number }[];
+};
+
+/** How the product will look on the storefront, updated as the admin types. */
+export function ProductPreview({ draft, categoryName }: { draft: ProductDraft; categoryName: string }) {
+  const [selected, setSelected] = useState(0);
+  const variants = draft.variants.length ? draft.variants : [{ id: "draft", label: "ตัวเลือกแรก", price: 0, stock: 0 }];
+  const variant = variants[Math.min(selected, variants.length - 1)];
+  const prices = variants.map((v) => v.price).filter((p) => p > 0);
+  const low = prices.length ? Math.min(...prices) : 0;
+  const high = prices.length ? Math.max(...prices) : 0;
+  const available = draft.preorder || variant.stock > 0;
+  const stockText = draft.preorder ? "สั่งจอง" : variant.stock <= 0 ? "สินค้าหมด" : variant.stock <= 3 ? "เหลือน้อย" : "มีสินค้า";
+  return (
+    <div className="product-preview">
+      <div className="product-preview-bar">
+        <span className="dots" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span>ตัวอย่างบนหน้าร้าน</span>
+        <span className={"product-preview-state" + (draft.active ? " on" : "")}>{draft.active ? "เปิดขาย" : "ฉบับร่าง · ลูกค้ายังไม่เห็น"}</span>
+      </div>
+      <div className="product-preview-body">
+        <small className="product-preview-label">การ์ดในหน้ารายการสินค้า</small>
+        <article className="product-preview-card">
+          <div className="product-preview-art">
+            <Art small type={draft.art} name={draft.name || "สินค้า"} />
+          </div>
+          <div>
+            {draft.preorder && <span className="product-preview-pill">สั่งจอง</span>}
+            <strong>{draft.name || "ชื่อสินค้า"}</strong>
+            <span>
+              {low ? money(low) : "฿–"}
+              {high > low && " – " + money(high)}
+            </span>
+          </div>
+        </article>
+        <small className="product-preview-label">หน้าสินค้า</small>
+        <section className="product-preview-page">
+          <span className="product-preview-category">{categoryName}</span>
+          <h3>{draft.name || "ชื่อสินค้า"}</h3>
+          <div className="product-preview-price">{variant.price ? money(variant.price) : "฿–"}</div>
+          {draft.preorder && <p className="product-preview-note">ชำระแล้วได้เลขคิวทันที ร้านส่ง ID และรหัสผ่านตามลำดับคิว</p>}
+          <div className="product-preview-variants">
+            {variants.map((v, i) => (
+              <button
+                type="button"
+                key={v.id}
+                className={i === Math.min(selected, variants.length - 1) ? "selected" : ""}
+                onClick={() => setSelected(i)}
+              >
+                <span>{v.label}</span>
+                <b>{v.price ? money(v.price) : "฿–"}</b>
+              </button>
+            ))}
+          </div>
+          <div className="product-preview-buy">
+            <span className={"product-preview-stock" + (available ? "" : " out")}>{stockText}</span>
+            <span className={"product-preview-cta" + (available ? "" : " disabled")}>{draft.preorder ? "จองเลย" : "ซื้อเลย"}</span>
+          </div>
+          <p className="product-preview-desc">{draft.description || "รายละเอียดสินค้าจะแสดงตรงนี้"}</p>
+        </section>
+        {draft.featured && <p className="product-preview-hint">★ แสดงในส่วน "สินค้าแนะนำ" บนหน้าแรก</p>}
+      </div>
+    </div>
+  );
+}

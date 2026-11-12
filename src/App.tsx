@@ -46,6 +46,7 @@ import {
   AlertCircle,
   SlidersHorizontal,
   Clock,
+  Upload,
 } from "lucide-react";
 import { t, getLang, setLang, setMerchantScope, type Lang } from "./i18n";
 import {
@@ -711,7 +712,7 @@ function Catalog() {
   return (
     <main className="container page-main">
       <div className="page-heading">
-        <span className="eyebrow">DIGITAL COLLECTION</span>
+        <span className="eyebrow">{t("คอลเลกชันดิจิทัล")}</span>
         <h1>{t("สินค้าทั้งหมด")}</h1>
         <p>{t("เลือกสินค้าดิจิทัลที่ใช่สำหรับคุณ")}</p>
       </div>
@@ -1127,7 +1128,7 @@ function RequireLogin() {
   );
 }
 function Cart({ checkout = false }: { checkout?: boolean }) {
-  const { basket, products, setBasket, user, go } = useStore();
+  const { basket, products, setBasket, user, go, loading } = useStore();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const p = products.find((p) =>
@@ -1155,8 +1156,18 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
   }
   return (
     <main className="container page-main reference-cart-page">
+      {loading ? (
+        <div className="skeleton-cart" aria-busy="true" aria-label={t("กำลังโหลดตะกร้า")}>
+          <div className="skeleton-block skeleton-line" />
+          <div className="skeleton-block skeleton-panel" />
+          <div className="skeleton-block skeleton-panel short" />
+        </div>
+      ) : (
+      <>
       <div className="page-heading">
-        <span className="eyebrow">{checkout ? "CHECKOUT" : "YOUR BAG"}</span>
+        <span className="eyebrow">
+          {checkout ? t("ชำระเงิน") : t("กระเป๋าของคุณ")}
+        </span>
         <h1>{checkout ? t("ตรวจสอบคำสั่งซื้อ") : t("ตะกร้าสินค้า")}</h1>
         <p>
           {checkout
@@ -1245,11 +1256,72 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
           </aside>
         </div>
       )}
+      </>
+      )}
     </main>
+  );
+}
+function ledgerText(label: string) {
+  const prefixes = ["ชำระสินค้าสั่งจอง ", "ชำระคำสั่งซื้อ "];
+  for (const prefix of prefixes) {
+    if (label.startsWith(prefix))
+      return t(prefix.trimEnd()) + " " + label.slice(prefix.length);
+  }
+  return t(label);
+}
+function PayShell({ total }: { total: number }) {
+  const [slipName, setSlipName] = useState("");
+  const [preview, setPreview] = useState("");
+  return (
+    <section className="pay-shell" aria-label={t("สถานะการชำระเงิน")}>
+      <p>{t("การชำระเงินจะเชื่อมต่อภายหลัง ระบบยังไม่ส่งโค้ด")}</p>
+      <div className="pay-steps">
+        <span aria-current="step">{t("รอตรวจสลิป")}</span>
+        <span>{t("ชำระสำเร็จ")}</span>
+        <span>{t("ชำระไม่ผ่าน")}</span>
+      </div>
+      <div className="pay-qr">
+        <span className="pay-qr-mark" aria-hidden="true" />
+        <div>
+          <small>{t("พร้อมเพย์")}</small>
+          <strong>{money(total)}</strong>
+          <p>{t("ช่องทางจ่ายยังไม่เปิด")}</p>
+        </div>
+      </div>
+      <label className="pay-slip">
+        <Upload size={18} />
+        {t("อัปโหลดสลิป")}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            setSlipName(file?.name ?? "");
+            setPreview("");
+            if (!file || !file.type.startsWith("image/")) return;
+            const reader = new FileReader();
+            reader.onload = () => setPreview(String(reader.result || ""));
+            reader.readAsDataURL(file);
+          }}
+        />
+      </label>
+      {slipName && (
+        <p className="pay-slip-note">
+          {slipName}
+          {" · "}
+          {t("เลือกสลิปแล้ว ยังไม่ส่งไฟล์นี้")}
+        </p>
+      )}
+      {preview && <img className="pay-slip-preview" src={preview} alt="" />}
+    </section>
   );
 }
 function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
   const { user, refresh, toast, go, setBasket } = useStore();
+  usePageTitle(
+    payment ? t("ชำระเงิน") : t("คำสั่งซื้อ"),
+    t("รายละเอียดคำสั่งซื้อ การชำระเงิน และสินค้าที่ได้รับ"),
+  );
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1318,9 +1390,9 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
         <>
           <ErrorMessage message={error} />
           {!error && (
-            <div className="loading-row">
-              <LoaderCircle className="spin" />
-              {t("กำลังโหลดคำสั่งซื้อ")}
+            <div className="skeleton-order" aria-busy="true" aria-label={t("กำลังโหลดคำสั่งซื้อ")}>
+              <div className="skeleton-block skeleton-line" />
+              <div className="skeleton-block skeleton-panel" />
             </div>
           )}
         </>
@@ -1443,37 +1515,41 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               </div>
             ) : (
               order.status === "PENDING_PAYMENT" && (
-                <div className="note-box">
-                  <Clock size={20} />
-                  <div>
-                    <strong>{t("ยอดคำสั่งซื้อ")}{" "}{money(order.total)}</strong>
-                    {testPayments ? (
-                      <>
-                        <p>
-                          {t("โหมดทดสอบ: ชำระด้วยเครดิตทดลอง")} · {t("เครดิตคงเหลือ")} {money(user.balance)}
-                        </p>
-                        <ErrorMessage message={error} />
-                        <div className="pay-actions">
-                          <button
-                            className="button primary"
-                            disabled={busy || user.balance < order.total}
-                            onClick={() => pay("success")}
-                          >
-                            {busy ? <LoaderCircle className="spin" size={17} /> : <CreditCard size={17} />}
-                            {t("ชำระเงิน")} {money(order.total)}
-                          </button>
-                          {user.balance < order.total && (
-                            <Link to="/wallet" className="button secondary">
-                              {t("เติมเครดิตทดลอง")}
-                            </Link>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <p>{t("รอเชื่อมช่องทางชำระเงิน ระบบจะส่ง ID และรหัสผ่านหลังยืนยันยอดแล้วเท่านั้น")}</p>
-                    )}
+                <>
+                  <div className="note-box">
+                    <Clock size={20} />
+                    <div>
+                      <strong>{t("ยอดคำสั่งซื้อ")}{" "}{money(order.total)}</strong>
+                      {testPayments ? (
+                        <>
+                          <p>
+                            {t("โหมดทดสอบ: ชำระด้วยเครดิตทดลอง")} · {t("เครดิตคงเหลือ")} {money(user.balance)}
+                          </p>
+                          <ErrorMessage message={error} />
+                          <div className="pay-actions">
+                            <button
+                              className="button primary"
+                              disabled={busy || user.balance < order.total}
+                              onClick={() => pay("success")}
+                            >
+                              {busy ? <LoaderCircle className="spin" size={17} /> : <CreditCard size={17} />}
+                              {t("ชำระเงิน")} {money(order.total)}
+                            </button>
+                            {user.balance < order.total && (
+                              <Link to="/wallet" className="button secondary">
+                                {t("เติมเครดิตทดลอง")}
+                              </Link>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <p>{t("รอเชื่อมช่องทางชำระเงิน ระบบจะส่ง ID และรหัสผ่านหลังยืนยันยอดแล้วเท่านั้น")}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
+                  {/* Bank's PromptPay/slip shell is the UI for the real provider; test mode pays with test credit. */}
+                  {!testPayments && <PayShell total={order.total} />}
+                </>
               )
             )}
           </section>
@@ -1529,7 +1605,7 @@ function HistoryPage() {
   return (
     <main className="container page-main reference-history-page">
       <div className="page-heading">
-        <span className="eyebrow">MY ORDERS</span>
+        <span className="eyebrow">{t("คำสั่งซื้อของฉัน")}</span>
         <h1>{t("ประวัติการซื้อ")}</h1>
         <p>{t("ติดตามคำสั่งซื้อและเปิดดูโค้ดสินค้าของคุณ")}</p>
       </div>
@@ -1723,7 +1799,7 @@ function WalletPage() {
                     )}
                   </span>
                   <div>
-                    <strong>{e.label}</strong>
+                    <strong>{ledgerText(e.label)}</strong>
                     <small>{dateTime(e.created_at)}</small>
                   </div>
                   <b className={e.amount > 0 ? "positive" : ""}>
@@ -1790,7 +1866,7 @@ function ReviewsPage() {
   return (
     <main className="container page-main reference-reviews-page">
       <div className="page-heading">
-        <span className="eyebrow">CUSTOMER REVIEWS</span>
+        <span className="eyebrow">{t("รีวิวจากลูกค้า")}</span>
         <h1>
           {t("เครดิตร้าน")}
           <br />
@@ -1971,7 +2047,7 @@ function Account() {
   return (
     <main className="container page-main narrow-main reference-account-page">
       <div className="page-heading">
-        <span className="eyebrow">MY ACCOUNT</span>
+        <span className="eyebrow">{t("บัญชีของฉัน")}</span>
         <h1>{t("บัญชีของฉัน")}</h1>
         <p>{t("ข้อมูลและการตั้งค่าบัญชีของคุณ")}</p>
       </div>
@@ -2182,26 +2258,75 @@ function NotFound() {
     </main>
   );
 }
-function Router() {
-  const { path, overview } = useStore();
+function writeMeta(name: string, content: string, property = false) {
+  const attr = property ? "property" : "name";
+  let el = document.head.querySelector(`meta[${attr}="${name}"]`);
+  if (!el) {
+    el = document.createElement("meta");
+    el.setAttribute(attr, name);
+    document.head.appendChild(el);
+  }
+  el.setAttribute("content", content);
+}
+export function usePageTitle(page: string, description = "") {
+  const { overview } = useStore();
   const name = shopName(overview?.shop?.shopName);
   useEffect(() => {
-    const titles: Record<string, string> = {
-      "/": t("หน้าร้าน"),
-      "/products": t("สินค้าทั้งหมด"),
-      "/login": t("เข้าสู่ระบบ"),
-      "/register": t("สมัครสมาชิก"),
-      "/orders": t("ประวัติการซื้อ"),
-      "/cart": t("ตะกร้าสินค้า"),
-      "/checkout": t("ตรวจสอบคำสั่งซื้อ"),
-      "/account": t("บัญชีของฉัน"),
-      "/admin": t("แดชบอร์ด"),
-    };
-    const page = path.startsWith("/admin")
-      ? t("แดชบอร์ด")
-      : (titles[path] ?? name);
+    if (!page) return;
+    const text = (description || t("ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที")).slice(0, 180);
     document.title = page + " — " + name;
-  }, [path, name, getLang()]);
+    writeMeta("description", text);
+    writeMeta("og:title", page + " — " + name, true);
+    writeMeta("og:description", text, true);
+    writeMeta("og:image", location.origin + "/brand/og.png", true);
+  }, [page, description, name, getLang()]);
+}
+function Router() {
+  const { path } = useStore();
+  const titles: Record<string, string> = {
+    "/": t("หน้าร้าน"),
+    "/products": t("สินค้าทั้งหมด"),
+    "/login": t("เข้าสู่ระบบ"),
+    "/register": t("สมัครสมาชิก"),
+    "/orders": t("ประวัติการซื้อ"),
+    "/cart": t("ตะกร้าสินค้า"),
+    "/checkout": t("ตรวจสอบคำสั่งซื้อ"),
+    "/account": t("บัญชีของฉัน"),
+    "/wallet": t("บัญชีของร้าน"),
+    "/top-up": t("บัญชีของร้าน"),
+    "/reviews": t("เครดิตร้าน"),
+    "/credits": t("เครดิตร้าน"),
+    "/support": t("ติดต่อร้าน"),
+    "/terms": t("ข้อกำหนดร้าน"),
+    "/privacy": t("ความเป็นส่วนตัว"),
+    "/stores": t("ร้านค้า"),
+    "/admin": t("แดชบอร์ด"),
+  };
+  const descriptions: Record<string, string> = {
+    "/": t("ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที"),
+    "/products": t("สินค้าดิจิทัลทั้งหมดของร้าน"),
+    "/cart": t("สินค้าที่คุณเลือกไว้ พร้อมเมื่อคุณพร้อม"),
+    "/checkout": t("ตรวจสอบข้อมูลให้ครบ ระบบจะบันทึกคำสั่งซื้อไว้ก่อน"),
+    "/orders": t("ติดตามคำสั่งซื้อและเปิดดูโค้ดสินค้าของคุณ"),
+    "/account": t("ข้อมูลและการตั้งค่าบัญชีของคุณ"),
+    "/wallet": t("ช่องทางจ่ายยังไม่เปิด โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น"),
+    "/top-up": t("ช่องทางจ่ายยังไม่เปิด โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น"),
+    "/reviews": t("รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์"),
+    "/credits": t("รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์"),
+    "/support": t("เราพร้อมช่วยเหลือคุณ"),
+    "/terms": t("สินค้าในร้านนี้เป็นสินค้าดิจิทัล การสั่งซื้อถือว่าคุณยอมรับข้อกำหนดของร้าน"),
+    "/privacy": t("ระบบจัดเก็บชื่อ อีเมล รหัสผ่านที่ผ่านการแฮช และประวัติคำสั่งซื้อ เพื่อให้เปิดดูรายการของตนเองได้"),
+  };
+  const dynamic =
+    path.startsWith("/products/") ||
+    path.startsWith("/orders/") ||
+    path.startsWith("/checkout/");
+  const page = dynamic
+    ? ""
+    : path.startsWith("/admin")
+      ? t("แดชบอร์ด")
+      : (titles[path] ?? t("ไม่พบหน้านี้"));
+  usePageTitle(page, dynamic ? "" : (descriptions[path] ?? t("หน้านี้อาจถูกย้าย หรือที่อยู่ไม่ถูกต้อง")));
   if (path === "/stores") return <Stores />;
   if (path === "/") return <Home />;
   if (path === "/products") return <ReferenceCatalogPage />;
