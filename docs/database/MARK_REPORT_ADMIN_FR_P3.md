@@ -3,7 +3,7 @@
 **ถึง:** มาร์ค  
 **จาก:** น็อต  
 **วันที่:** 2026-11-12  
-**PR:** (ใส่ลิงก์หลังเปิด)  
+**PR:** https://github.com/Markrock342/astra-digital/pull/27  
 **Branch:** `feat/admin-fr-p3-saveproduct-preorder`  
 **ฐาน:** `main` @ `7fb79f9`  
 **Deploy:** **ยังไม่ทำ**
