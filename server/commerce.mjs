@@ -21,6 +21,7 @@ import { ensureLiveVersions } from "./live.mjs";
 import { applyMigration007, MIGRATION_007_NAME } from "./migrate-007.mjs";
 import { applyMigration008, MIGRATION_008_NAME } from "./migrate-008.mjs";
 import { applyMigration009, MIGRATION_009_NAME } from "./migrate-009.mjs";
+import { applyMigration010, MIGRATION_010_NAME } from "./migrate-010.mjs";
 import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
@@ -68,6 +69,8 @@ export function createCommerce(options = {}) {
           applyMigration008(db);
         } else if (file === MIGRATION_009_NAME) {
           applyMigration009(db);
+        } else if (file === MIGRATION_010_NAME) {
+          applyMigration010(db);
         } else {
           const sql = readFileSync(
             new URL("./migrations/" + file, import.meta.url),

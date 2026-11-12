@@ -566,6 +566,13 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
               limit: url.searchParams.get("limit") ?? undefined,
             }),
           );
+        if (path === "/api/admin/inventory/expiring")
+          return send(
+            200,
+            service.adminExpiringInventory(user, {
+              limit: url.searchParams.get("limit") ?? undefined,
+            }),
+          );
       } else if (request.method === "PATCH") {
         if (/^\/api\/admin\/coupons\/[^/]+$/.test(path))
           return send(200, service.adminUpdateCoupon(user, path.split("/")[4], input));

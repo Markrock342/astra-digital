@@ -3508,6 +3508,8 @@ type StockUnit = {
   order_id?: string | null;
   reservation_id?: string | null;
   defective_reason?: string | null;
+  expires_at?: string | null;
+  cost?: number | null;
 };
 
 function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () => void }) {
@@ -3557,6 +3559,8 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
         <div className="reference-status-tabs" role="group" aria-label="สถานะสต็อก">
           {[
             ["available", "พร้อมขาย"],
+            ["expiring", "ใกล้หมดอายุ"],
+            ["expired", "หมดอายุแล้ว"],
             ["sold", "ขายแล้ว"],
             ["defective", "เสีย"],
           ].map(([key, label]) => (
@@ -3572,6 +3576,8 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
               <code>{u.loginIdMasked ?? u.codeMasked ?? "•••"}</code>
               <small>
                 เติมเมื่อ {dateTime(u.created_at)}
+                {u.expires_at && " · หมดอายุ " + dateTime(u.expires_at)}
+                {u.cost != null && " · ต้นทุน " + money(u.cost)}
                 {u.sold_at && " · ขาย " + dateTime(u.sold_at)}
                 {(u.order_id || u.reservation_id) && (
                   <>
@@ -3582,7 +3588,7 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
                 {u.defective_reason && " · " + u.defective_reason}
               </small>
             </span>
-            {u.status === "available" && (
+            {(u.status === "available" || status === "expiring" || status === "expired") && (
               <span className="admin-action-row">
                 <button type="button" className="button ghost" onClick={() => void defect(u)}>
                   เสีย

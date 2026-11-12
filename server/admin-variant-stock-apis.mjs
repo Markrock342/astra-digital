@@ -63,35 +63,81 @@ export function parseOptionalCost(raw) {
   return { cost };
 }
 
-function withCost(entry, costRaw) {
-  const parsed = parseOptionalCost(costRaw);
-  if (parsed.error) return { ...entry, cost: null, error: entry.error || parsed.error };
-  return { ...entry, cost: parsed.cost };
+/** Optional expiry as YYYY-MM-DD or YYYY-MM-DD HH:MM:SS (UTC-ish text for SQLite). */
+export function parseOptionalExpires(raw) {
+  if (raw === undefined || raw === null) return { expiresAt: null };
+  const text = String(raw).trim();
+  if (text === "") return { expiresAt: null };
+  const day = text.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (day) return { expiresAt: day[1] + " 23:59:59" };
+  const full = text.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)$/);
+  if (full) {
+    const time = full[2].length === 5 ? full[2] + ":00" : full[2];
+    return { expiresAt: full[1] + " " + time };
+  }
+  return { error: "วันหมดอายุต้องเป็น YYYY-MM-DD" };
 }
 
-function pairEntry(line, loginIdRaw, password, costRaw) {
+function withCostAndExpires(entry, costRaw, expiresRaw) {
+  let next = { ...entry, cost: null, expiresAt: null };
+  const cost = parseOptionalCost(costRaw);
+  if (cost.error) return { ...next, error: entry.error || cost.error };
+  next.cost = cost.cost;
+  const expires = parseOptionalExpires(expiresRaw);
+  if (expires.error) return { ...next, error: entry.error || expires.error };
+  next.expiresAt = expires.expiresAt;
+  return next;
+}
+
+/** Pull trailing YYYY-MM-DD… then optional cost digits from CSV/text parts. */
+function takeExpiresAndCost(parts) {
+  let head = parts;
+  let expiresRaw;
+  let costRaw;
+  if (
+    head.length >= 2 &&
+    /^\d{4}-\d{2}-\d{2}/.test(String(head[head.length - 1]).trim())
+  ) {
+    expiresRaw = String(head[head.length - 1]).trim();
+    head = head.slice(0, -1);
+  }
+  if (head.length >= 2 && /^\d+$/.test(String(head[head.length - 1]).trim())) {
+    costRaw = String(head[head.length - 1]).trim();
+    head = head.slice(0, -1);
+  }
+  return { head, costRaw, expiresRaw };
+}
+
+function pairEntry(line, loginIdRaw, password, costRaw, expiresRaw) {
   const loginId = typeof loginIdRaw === "string" ? loginIdRaw.trim() : "";
-  const entry = { line, kind: "pair", loginId, password, cost: null };
+  const entry = { line, kind: "pair", loginId, password, cost: null, expiresAt: null };
   if (typeof loginIdRaw !== "string" || typeof password !== "string")
     return { ...entry, password: "", error: "ไอดีและรหัสผ่านต้องเป็นข้อความ" };
   if (!loginId) return { ...entry, error: "ไม่มีไอดี" };
   if (loginId.length > 160) return { ...entry, error: "ไอดียาวเกิน 160 ตัวอักษร" };
   if (!password) return { ...entry, error: "ไม่มีรหัสผ่าน" };
   if (password.length > 500) return { ...entry, error: "รหัสผ่านยาวเกินกำหนด" };
-  return withCost(entry, costRaw);
+  return withCostAndExpires(entry, costRaw, expiresRaw);
 }
 
 function codeEntry(line, raw) {
-  let code = raw;
-  let costRaw;
-  const comma = String(raw).lastIndexOf(",");
-  if (comma > 0 && /^\d+$/.test(String(raw).slice(comma + 1).trim())) {
-    code = String(raw).slice(0, comma).trim();
-    costRaw = String(raw).slice(comma + 1).trim();
-  }
+  const parts = String(raw).split(",");
+  const { head, costRaw, expiresRaw } = takeExpiresAndCost(parts);
+  const code = head.join(",").trim();
   if (!CODE_PATTERN.test(code))
-    return { line, kind: "code", code, cost: null, error: "รูปแบบโค้ดไม่ถูกต้อง" };
-  return withCost({ line, kind: "code", code, cost: null }, costRaw);
+    return {
+      line,
+      kind: "code",
+      code,
+      cost: null,
+      expiresAt: null,
+      error: "รูปแบบโค้ดไม่ถูกต้อง",
+    };
+  return withCostAndExpires(
+    { line, kind: "code", code, cost: null, expiresAt: null },
+    costRaw,
+    expiresRaw,
+  );
 }
 
 /**
@@ -111,19 +157,42 @@ export function parseImportEntries(input, fail) {
     return lines.map(({ raw, line }) => {
       const parts = raw.split(",");
       if (parts.length < 2)
-        return { line, kind: "pair", loginId: "", password: "", cost: null, raw, error: "ต้องเป็น ไอดี,รหัสผ่าน" };
-      // Trailing integer field is optional cost (satang); password may contain commas.
-      let costRaw;
-      let body = parts;
-      if (parts.length >= 3 && /^\d+$/.test(parts[parts.length - 1].trim())) {
-        costRaw = parts[parts.length - 1].trim();
-        body = parts.slice(0, -1);
-      }
-      const loginId = body[0];
-      const password = body.slice(1).join(",");
+        return {
+          line,
+          kind: "pair",
+          loginId: "",
+          password: "",
+          cost: null,
+          expiresAt: null,
+          raw,
+          error: "ต้องเป็น ไอดี,รหัสผ่าน",
+        };
+      const { head, costRaw, expiresRaw } = takeExpiresAndCost(parts);
+      if (head.length < 2)
+        return {
+          line,
+          kind: "pair",
+          loginId: "",
+          password: "",
+          cost: null,
+          expiresAt: null,
+          raw,
+          error: "ต้องเป็น ไอดี,รหัสผ่าน",
+        };
+      const loginId = head[0];
+      const password = head.slice(1).join(",");
       if (!loginId.trim())
-        return { line, kind: "pair", loginId: "", password: "", cost: null, raw, error: "ต้องเป็น ไอดี,รหัสผ่าน" };
-      return pairEntry(line, loginId, password, costRaw);
+        return {
+          line,
+          kind: "pair",
+          loginId: "",
+          password: "",
+          cost: null,
+          expiresAt: null,
+          raw,
+          error: "ต้องเป็น ไอดี,รหัสผ่าน",
+        };
+      return pairEntry(line, loginId, password, costRaw, expiresRaw);
     });
   }
   if (has("codes") && has("items"))
@@ -133,8 +202,22 @@ export function parseImportEntries(input, fail) {
       fail(400, "รายการคู่ต้องเป็น array 1–100 รายการ");
     return input.items.map((item, index) =>
       item && typeof item === "object"
-        ? pairEntry(index + 1, item.loginId, item.password, item.cost)
-        : { line: index + 1, kind: "pair", loginId: "", password: "", cost: null, error: "รายการคู่ไม่ถูกต้อง" },
+        ? pairEntry(
+            index + 1,
+            item.loginId,
+            item.password,
+            item.cost,
+            item.expiresAt ?? item.expires_at,
+          )
+        : {
+            line: index + 1,
+            kind: "pair",
+            loginId: "",
+            password: "",
+            cost: null,
+            expiresAt: null,
+            error: "รายการคู่ไม่ถูกต้อง",
+          },
     );
   }
   if (typeof input.codes !== "string" || !input.codes.trim() || input.codes.length > 20000)
@@ -351,22 +434,33 @@ export function createAdminVariantStockApis({
       query.status != null && String(query.status).trim() !== ""
         ? clean(query.status, 1, 20, "สถานะสต็อก")
         : null;
-    if (status && !["available", "sold", "defective"].includes(status))
+    if (
+      status &&
+      !["available", "sold", "defective", "expiring", "expired"].includes(status)
+    )
       fail(400, "สถานะสต็อกไม่ถูกต้อง");
     const cursorParts = decodeCursor(query.cursor, fail);
 
     const where = ["i.variant_id = ?"];
     const params = [variantId];
+    const free =
+      "i.order_id IS NULL AND i.reservation_id IS NULL AND COALESCE(i.defective,0)=0";
     if (status === "available") {
-      where.push(
-        "i.order_id IS NULL AND i.reservation_id IS NULL AND COALESCE(i.defective,0)=0",
-      );
+      where.push(free);
     } else if (status === "sold") {
       where.push(
         "(i.order_id IS NOT NULL OR i.reservation_id IS NOT NULL) AND COALESCE(i.defective,0)=0",
       );
     } else if (status === "defective") {
       where.push("COALESCE(i.defective,0)=1");
+    } else if (status === "expired") {
+      where.push(free);
+      where.push("i.expires_at IS NOT NULL AND datetime(i.expires_at) <= datetime('now')");
+    } else if (status === "expiring") {
+      where.push(free);
+      where.push(
+        "i.expires_at IS NOT NULL AND datetime(i.expires_at) > datetime('now') AND datetime(i.expires_at) <= datetime('now', '+7 days')",
+      );
     }
     if (cursorParts) {
       where.push("(i.created_at < ? OR (i.created_at = ? AND i.id < ?))");
@@ -374,7 +468,7 @@ export function createAdminVariantStockApis({
     }
     const sql = `SELECT i.id,i.created_at,i.order_id,i.reservation_id,i.sold_at,
                         i.defective,i.defective_at,i.defective_reason,i.legacy_single_secret,
-                        i.login_id_enc,i.password_enc,
+                        i.login_id_enc,i.password_enc,i.expires_at,i.cost,
                         ${inventoryStatusSql("i")} AS status
                  FROM inventory i
                  WHERE ${where.join(" AND ")}
@@ -392,6 +486,8 @@ export function createAdminVariantStockApis({
         sold_at: row.sold_at,
         defective_at: row.defective_at,
         defective_reason: row.defective_reason,
+        expires_at: row.expires_at ?? null,
+        cost: row.cost ?? null,
         credentialsMasked: true,
       };
       if (row.legacy_single_secret)
@@ -454,7 +550,7 @@ export function createAdminVariantStockApis({
       if (row.order_id != null || row.reservation_id != null)
         fail(409, "บัญชีที่ขายแล้วลบไม่ได้");
       run(
-        `DELETE FROM inventory WHERE id=? AND ${inventoryAvailableSql}`,
+        `DELETE FROM inventory WHERE id=? AND order_id IS NULL AND reservation_id IS NULL AND COALESCE(defective,0)=0`,
         inventoryId,
       );
       if (one("SELECT id FROM inventory WHERE id=?", inventoryId))

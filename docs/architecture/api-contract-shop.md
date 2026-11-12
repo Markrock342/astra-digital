@@ -157,6 +157,10 @@ Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์
 - `POST /api/admin/settings` รับ `lowStockAt` (1–100, default 3) · แจ้งเตือน `stock_low` และ `stockStatus` ใช้ค่านี้
 - สต็อก available ไม่นับแถว `defective=1` · Migration 007 เพิ่มคอลัมน์ defective*
 - Migration `009_inventory_cost.sql`: `inventory.cost INTEGER NULL` (สตางค์)
+- Migration `010_inventory_expires.sql`: `inventory.expires_at TEXT NULL` + index `(variant_id, expires_at)`
+- กติกาขาย: ไม่จัดสรรแถวที่ `expires_at` อยู่ในหน้าต่าง `warranty_days` นับจากตอนจัดสรร (pay / deliver) · นับสต็อกพร้อมขายใช้กติกาเดียวกัน
+- `GET /api/admin/variants/:id/inventory?status=expiring|expired` · `GET /api/admin/inventory/expiring` — STAFF+
+- นำเข้า: `expiresAt` / ฟิลด์ท้าย `YYYY-MM-DD` · notify `stock_expiry` เมื่อมีแถวหมดอายุหรือใกล้หมด (7 วัน)
 
 ### สต็อกที่หน้าร้านเห็น
 
