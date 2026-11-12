@@ -711,7 +711,7 @@ function Catalog() {
   return (
     <main className="container page-main">
       <div className="page-heading">
-        <span className="eyebrow">DIGITAL COLLECTION</span>
+        <span className="eyebrow">{t("คอลเลกชันดิจิทัล")}</span>
         <h1>{t("สินค้าทั้งหมด")}</h1>
         <p>{t("เลือกสินค้าดิจิทัลที่ใช่สำหรับคุณ")}</p>
       </div>
@@ -1156,7 +1156,9 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
   return (
     <main className="container page-main reference-cart-page">
       <div className="page-heading">
-        <span className="eyebrow">{checkout ? "CHECKOUT" : "YOUR BAG"}</span>
+        <span className="eyebrow">
+          {checkout ? t("ชำระเงิน") : t("กระเป๋าของคุณ")}
+        </span>
         <h1>{checkout ? t("ตรวจสอบคำสั่งซื้อ") : t("ตะกร้าสินค้า")}</h1>
         <p>
           {checkout
@@ -1248,8 +1250,17 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
     </main>
   );
 }
+function ledgerText(label: string) {
+  const prefixes = ["ชำระสินค้าสั่งจอง ", "ชำระคำสั่งซื้อ "];
+  for (const prefix of prefixes) {
+    if (label.startsWith(prefix))
+      return t(prefix.trimEnd()) + " " + label.slice(prefix.length);
+  }
+  return t(label);
+}
 function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
   const { user, refresh, toast, go, setBasket } = useStore();
+  usePageTitle(payment ? t("ชำระเงิน") : t("คำสั่งซื้อ"));
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1529,7 +1540,7 @@ function HistoryPage() {
   return (
     <main className="container page-main reference-history-page">
       <div className="page-heading">
-        <span className="eyebrow">MY ORDERS</span>
+        <span className="eyebrow">{t("คำสั่งซื้อของฉัน")}</span>
         <h1>{t("ประวัติการซื้อ")}</h1>
         <p>{t("ติดตามคำสั่งซื้อและเปิดดูโค้ดสินค้าของคุณ")}</p>
       </div>
@@ -1723,7 +1734,7 @@ function WalletPage() {
                     )}
                   </span>
                   <div>
-                    <strong>{e.label}</strong>
+                    <strong>{ledgerText(e.label)}</strong>
                     <small>{dateTime(e.created_at)}</small>
                   </div>
                   <b className={e.amount > 0 ? "positive" : ""}>
@@ -1790,7 +1801,7 @@ function ReviewsPage() {
   return (
     <main className="container page-main reference-reviews-page">
       <div className="page-heading">
-        <span className="eyebrow">CUSTOMER REVIEWS</span>
+        <span className="eyebrow">{t("รีวิวจากลูกค้า")}</span>
         <h1>
           {t("เครดิตร้าน")}
           <br />
@@ -1971,7 +1982,7 @@ function Account() {
   return (
     <main className="container page-main narrow-main reference-account-page">
       <div className="page-heading">
-        <span className="eyebrow">MY ACCOUNT</span>
+        <span className="eyebrow">{t("บัญชีของฉัน")}</span>
         <h1>{t("บัญชีของฉัน")}</h1>
         <p>{t("ข้อมูลและการตั้งค่าบัญชีของคุณ")}</p>
       </div>
@@ -2182,10 +2193,23 @@ function NotFound() {
     </main>
   );
 }
+export function usePageTitle(page: string) {
+  const { overview } = useStore();
+  const name = shopName(overview?.shop?.shopName);
+  useEffect(() => {
+    document.title = page + " — " + name;
+  }, [page, name, getLang()]);
+}
 function Router() {
   const { path, overview } = useStore();
   const name = shopName(overview?.shop?.shopName);
   useEffect(() => {
+    if (
+      path.startsWith("/products/") ||
+      path.startsWith("/orders/") ||
+      path.startsWith("/checkout/")
+    )
+      return;
     const titles: Record<string, string> = {
       "/": t("หน้าร้าน"),
       "/products": t("สินค้าทั้งหมด"),
@@ -2195,11 +2219,19 @@ function Router() {
       "/cart": t("ตะกร้าสินค้า"),
       "/checkout": t("ตรวจสอบคำสั่งซื้อ"),
       "/account": t("บัญชีของฉัน"),
+      "/wallet": t("บัญชีของร้าน"),
+      "/top-up": t("บัญชีของร้าน"),
+      "/reviews": t("เครดิตร้าน"),
+      "/credits": t("เครดิตร้าน"),
+      "/support": t("ติดต่อร้าน"),
+      "/terms": t("ข้อกำหนดร้าน"),
+      "/privacy": t("ความเป็นส่วนตัว"),
+      "/stores": t("ร้านค้า"),
       "/admin": t("แดชบอร์ด"),
     };
     const page = path.startsWith("/admin")
       ? t("แดชบอร์ด")
-      : (titles[path] ?? name);
+      : (titles[path] ?? t("ไม่พบหน้านี้"));
     document.title = page + " — " + name;
   }, [path, name, getLang()]);
   if (path === "/stores") return <Stores />;
