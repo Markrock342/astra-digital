@@ -1,0 +1,280 @@
+/* ลูกค้า › ประกาศถึงลูกค้า (admin). shadcn/ui card / radio-group / dialog patterns (MIT)
+   on the back-office tokens: white cards, cool-grey page, --brand for the one accent. */
+.broadcast-admin .reference-admin-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.broadcast-quota {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.broadcast-quota.is-empty {
+  background: #fef2f2;
+  color: #b42318;
+}
+.broadcast-hint {
+  margin: -4px 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.broadcast-hint a {
+  color: var(--brand);
+  font-weight: 500;
+}
+.broadcast-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
+  gap: 24px;
+  align-items: start;
+}
+.broadcast-form {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.broadcast-form .editor-panel h2 {
+  margin-bottom: 14px;
+  font-size: 16px;
+}
+.broadcast-form .field small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.broadcast-form .field small.broadcast-field-error {
+  color: #b42318;
+}
+.broadcast-form .field input[aria-invalid="true"] {
+  border-color: #f04438;
+}
+.broadcast-counter {
+  align-self: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+.broadcast-form textarea {
+  min-height: 140px;
+  line-height: 1.6;
+}
+.broadcast-audiences {
+  display: grid;
+  gap: 8px;
+}
+.broadcast-audience {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.broadcast-audience:hover {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--border));
+}
+.broadcast-audience.is-selected {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 5%, var(--surface));
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.broadcast-audience input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  accent-color: var(--brand);
+}
+.broadcast-audience span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.broadcast-audience strong {
+  font-size: 14px;
+}
+.broadcast-audience small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.broadcast-buyers {
+  margin-top: 14px;
+}
+.broadcast-count {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--raised);
+  font-size: 14px;
+}
+.broadcast-count > svg {
+  flex: none;
+  color: var(--brand);
+}
+.broadcast-count span {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+}
+.broadcast-count strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.broadcast-count small {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}
+.broadcast-form .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  font-size: 14px;
+}
+.broadcast-form .checkbox-label svg {
+  color: var(--muted);
+}
+.broadcast-form .checkbox-label.is-disabled {
+  color: var(--muted);
+}
+.broadcast-actions {
+  flex-wrap: wrap;
+}
+.broadcast-preview-col {
+  position: sticky;
+  top: 16px;
+  min-width: 0;
+}
+.broadcast-preview-card {
+  padding: 20px;
+  border-top: 3px solid var(--brand);
+}
+.broadcast-preview-card > small {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.broadcast-bell-preview {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.08);
+}
+.broadcast-bell-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.broadcast-bell-preview > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.broadcast-bell-preview strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.broadcast-bell-preview p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  max-height: 260px;
+  overflow: auto;
+}
+.broadcast-preview-link {
+  color: var(--brand);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.broadcast-bell-preview time {
+  color: var(--muted);
+  font-size: 12px;
+}
+.broadcast-summary {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+.broadcast-summary div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.broadcast-summary dt {
+  color: var(--muted);
+}
+.broadcast-summary dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.broadcast-history {
+  margin-top: 24px;
+}
+.broadcast-history-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.broadcast-confirm .reference-card-heading {
+  padding: 18px 24px 0;
+}
+.broadcast-confirm-lead {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+  .broadcast-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .broadcast-preview-col {
+    position: static;
+  }
+}
+@media (max-width: 640px) {
+  .broadcast-actions .button {
+    flex: 1;
+  }
+  .broadcast-actions > span {
+    flex-basis: 100%;
+  }
+  .broadcast-confirm .reference-card-heading {
+    padding: 16px 16px 0;
+  }
+  .broadcast-confirm form {
+    padding: 0 16px 16px;
+  }
+}

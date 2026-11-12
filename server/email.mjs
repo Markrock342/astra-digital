@@ -139,7 +139,7 @@ function layout({ shopName, heading, intro, rows = [], button, footer }) {
   const buttonHtml = button
     ? `<p style="margin:24px 0"><a href="${escapeHtml(button.href)}" style="display:inline-block;background:#1534ff;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:10px">${escapeHtml(button.label)}</a></p><p style="font-size:12px;color:#5f6066;word-break:break-all">หากปุ่มกดไม่ได้ ให้คัดลอกลิงก์นี้ไปเปิดในเบราว์เซอร์:<br>${escapeHtml(button.href)}</p>`
     : "";
-  return `<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(heading)}</title></head><body style="margin:0;background:#f1f3f6;font-family:-apple-system,'Segoe UI',Tahoma,sans-serif;color:#0b0b0c"><div style="max-width:520px;margin:0 auto;padding:24px 16px"><p style="font-weight:700;font-size:15px;margin:0 0 12px">${escapeHtml(shopName)}</p><div style="background:#ffffff;border:1px solid #e3e6eb;border-radius:14px;padding:24px;box-shadow:0 1px 2px rgba(16,24,40,.06)"><h1 style="font-size:20px;margin:0 0 12px">${escapeHtml(heading)}</h1><p style="font-size:14px;line-height:1.7;margin:0">${escapeHtml(intro)}</p>${rowsHtml}${buttonHtml}</div><p style="font-size:12px;color:#5f6066;line-height:1.6;margin:16px 4px">${escapeHtml(footer)}</p></div></body></html>`;
+  return `<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(heading)}</title></head><body style="margin:0;background:#f1f3f6;font-family:-apple-system,'Segoe UI',Tahoma,sans-serif;color:#0b0b0c"><div style="max-width:520px;margin:0 auto;padding:24px 16px"><p style="font-weight:700;font-size:15px;margin:0 0 12px">${escapeHtml(shopName)}</p><div style="background:#ffffff;border:1px solid #e3e6eb;border-radius:14px;padding:24px;box-shadow:0 1px 2px rgba(16,24,40,.06)"><h1 style="font-size:20px;margin:0 0 12px">${escapeHtml(heading)}</h1><p style="font-size:14px;line-height:1.7;margin:0;white-space:pre-line">${escapeHtml(intro)}</p>${rowsHtml}${buttonHtml}</div><p style="font-size:12px;color:#5f6066;line-height:1.6;margin:16px 4px">${escapeHtml(footer)}</p></div></body></html>`;
 }
 function plain({ shopName, heading, intro, rows = [], button, footer }) {
   return [
@@ -187,6 +187,17 @@ export const templates = {
       ],
       button: { label: "ดูคำสั่งซื้อ", href: link },
       footer: "ข้อมูลบัญชีหรือโค้ดสินค้าจะแสดงเฉพาะในหน้าคำสั่งซื้อหลังเข้าสู่ระบบเท่านั้น ร้านไม่ส่งรหัสทางอีเมล · " + AUTOMATED,
+    });
+  },
+  /** Admin announcement (ลูกค้า › ประกาศถึงลูกค้า). Plain text; line breaks kept. */
+  broadcast({ shopName, title, body, link }) {
+    return render({
+      shopName,
+      subject: `${title} — ${shopName}`,
+      heading: title,
+      intro: body,
+      button: link ? { label: "ดูรายละเอียด", href: link } : null,
+      footer: "คุณได้รับอีเมลนี้เพราะมีบัญชีลูกค้ากับร้าน · " + AUTOMATED,
     });
   },
   preorderReady({ shopName, orderNumber, product, quantity, link }) {

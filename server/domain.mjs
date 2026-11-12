@@ -54,6 +54,8 @@ import {
 import { createCouponApis, normalizeCouponCode } from "./coupons.mjs";
 import { createAccountEmail } from "./account-email.mjs";
 import { normalizeLegal } from "./legal.mjs";
+import { normalizeFaq } from "./faq.mjs";
+import { createBroadcastApis } from "./broadcast.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -1092,6 +1094,11 @@ export function createCommerceCore({
     }
     // Legal pages form (ตั้งค่า › ข้อกำหนดและนโยบาย). Plain text only; escaped when rendered.
     if (input.legal !== undefined) current.legal = normalizeLegal(input.legal, fail);
+    // FAQ form (ตั้งค่า › คำถามที่พบบ่อย). Plain text only; escaped when rendered.
+    if (input.faq !== undefined)
+      current.faq = normalizeFaq(input.faq, fail, {
+        productExists: (id) => !!one("SELECT id FROM products WHERE id=?", id),
+      });
     run(
       "INSERT INTO runtime_flags(key,value) VALUES('shop-settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
       JSON.stringify(current),
@@ -1127,9 +1134,13 @@ export function createCommerceCore({
     const shop = settings();
     return { legal: shop.legal ?? null, policy: shop.policy ?? "" };
   }
+  /** Public FAQ data: the saved list, or null → built-in defaults (server/faq.mjs). */
+  function faq() {
+    return { faq: settings().faq ?? null };
+  }
   function overview() {
-    // The legal text can be long; storefront pages fetch it from /api/legal when needed.
-    const { legal: _legal, ...shop } = settings();
+    // The legal text and FAQ can be long; storefront pages fetch them from /api/legal and /api/faq.
+    const { legal: _legal, faq: _faq, ...shop } = settings();
     return {
       shop,
       customers: one("SELECT COUNT(*) AS n FROM users WHERE role='CUSTOMER'").n,
@@ -2657,12 +2668,33 @@ export function createCommerceCore({
     publicBaseUrl,
     waitUntil,
   });
+  const broadcasts = createBroadcastApis({
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clock,
+    requireAdmin,
+    confirmPassword: auth.confirmPassword,
+    emailQueue: accountEmail.queue,
+    emailEnabled: accountEmail.enabled,
+    shopName: () => {
+      const name = String(settings().shopName ?? "").trim();
+      return name && name !== "ร้านค้า" ? name : "ASIA EXTRA";
+    },
+    publicBaseUrl,
+  });
   const service = {
     db,
     reviews,
     settings,
     saveSettings,
     legal,
+    faq,
+    broadcastStatus: broadcasts.broadcastStatus,
+    broadcastPreview: broadcasts.broadcastPreview,
+    sendBroadcast: broadcasts.sendBroadcast,
     addReview,
     register,
     login,
@@ -2813,6 +2845,8 @@ export function createCommerceCore({
       outsideAlerts: true,
       backupExport: true,
       coupons: true,
+      faq: true,
+      broadcasts: true,
       // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
       email: accountEmail.enabled,
       passwordReset: accountEmail.enabled,
@@ -2873,6 +2907,9 @@ export function createCommerceCore({
     "createOrder",
     "pay",
     "retry",
+    // Audience "unpaid order" must not count orders whose payment window already ran out.
+    "broadcastPreview",
+    "sendBroadcast",
   ]) {
     const call = live[name];
     live[name] = (user, ...args) => {

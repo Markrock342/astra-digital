@@ -4,7 +4,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   Check,
-  ChevronDown,
   ChevronRight,
   Clock,
   Eye,
@@ -31,6 +30,7 @@ import {
 import { t } from "./i18n";
 import { BrandLogo, shopName } from "./Theme";
 import { WarrantyDays } from "./Warranty";
+import { ProductFaq } from "./Faq";
 import { api, dateTime, money } from "./api";
 import type { Order, Product, Review } from "./types";
 import { MAX_PER_ORDER } from "./types";
@@ -592,28 +592,7 @@ export function ReferenceProduct({ id }: { id: string }) {
           </section>
         </div>
       </div>
-      <section className="reference-faq">
-        <h2>{t("คำถามที่พบบ่อย")}</h2>
-        {(product.preorder
-          ? [
-              [t("พรีออเดอร์ได้ของเมื่อไหร่"), t("ร้านส่งตามลำดับคิวที่ได้หลังชำระเงิน เมื่อส่งแล้วจะมีแจ้งเตือนในเว็บ และดู ID กับรหัสผ่านได้ในประวัติการซื้อ")],
-              [t("ดูเลขคิวได้ที่ไหน"), t("เปิดประวัติการซื้อ แล้วกดคำสั่งซื้อนั้น เลขคิวอยู่ในหน้ารายละเอียด")],
-              [t("มีปัญหากับบัญชีที่ได้รับ ทำอย่างไร"), t("กดปุ่มแชทมุมขวาล่างเพื่อติดต่อร้าน แจ้งเลขคำสั่งซื้อด้วย")],
-            ]
-          : [
-              [t("ได้รับสินค้าเมื่อไหร่"), t("ทันทีหลังชำระเงินสำเร็จ ID และรหัสผ่านจะแสดงในหน้าคำสั่งซื้อ และเปิดดูซ้ำได้ในประวัติการซื้อ")],
-              [t("มีปัญหากับบัญชีที่ได้รับ ทำอย่างไร"), t("กดปุ่มแชทมุมขวาล่างเพื่อติดต่อร้าน แจ้งเลขคำสั่งซื้อด้วย")],
-            ]
-        ).map(([q, a]) => (
-          <details key={q}>
-            <summary>
-              {q}
-              <ChevronDown size={16} />
-            </summary>
-            <p>{a}</p>
-          </details>
-        ))}
-      </section>
+      <ProductFaq product={product} />
       <section className="reference-product-reviews">
         <h2>{t("รีวิวจากผู้ซื้อ")}</h2>
         {reviews.length ? (

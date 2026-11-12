@@ -5,7 +5,7 @@ export const BRAND = "ASIA EXTRA";
 export const DEFAULT_DESCRIPTION = "ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที";
 export const DEFAULT_IMAGE = "/brand/og.png";
 /** Storefront pages listed in the sitemap besides one URL per active product. */
-export const STATIC_PATHS = ["/", "/products", "/reviews", "/terms", "/privacy"];
+export const STATIC_PATHS = ["/", "/products", "/reviews", "/faq", "/terms", "/privacy"];
 
 const XML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
 export const escapeXml = (value) =>
