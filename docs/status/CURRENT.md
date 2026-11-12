@@ -3,7 +3,7 @@
 อัปเดตล่าสุด: 2026-11-12
 
 ## Admin FR — งาน 3 พร้อม PR (ห้าม deploy)
-- branch `feat/admin-fr-work3-ledger-006` จาก tip FR-P3
+- PR #28 · branch `feat/admin-fr-work3-ledger-006` (stacked บน #27)
 - MIG-006 ledger + `GET /api/admin/transactions` + bugfixes Bangkok/sold/spent/LIKE · flag `adminFinance`
 - หลักฐาน 70/70 + e2e 14/14 · รายงาน [MARK_REPORT_ADMIN_FR_WORK3](../database/MARK_REPORT_ADMIN_FR_WORK3.md)
 - **ห้าม deploy** · รอ Mark ก่อนงาน 4

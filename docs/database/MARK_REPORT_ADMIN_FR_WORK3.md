@@ -3,8 +3,9 @@
 **ถึง:** มาร์ค  
 **จาก:** น็อต  
 **วันที่:** 2026-11-12  
+**PR:** https://github.com/Markrock342/astra-digital/pull/28  
 **Branch:** `feat/admin-fr-work3-ledger-006`  
-**ฐาน:** tip หลัง FR-P3 (`0712535` · บน `7fb79f9`)  
+**ฐาน:** tip หลัง FR-P3 (`0712535` · บน `7fb79f9`) · stacked บน PR #27  
 **Deploy:** **ยังไม่ทำ**
 
 ## คำตัดสิน
