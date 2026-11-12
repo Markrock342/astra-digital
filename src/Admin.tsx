@@ -43,6 +43,7 @@ import { api, dateTime, money } from "./api";
 import { AdminDashboard } from "./AdminDashboard";
 import { AdminChat, BuyerRanking, BuyerRankingCard, PaymentChannelSettings } from "./Ops";
 import {
+  ProductPreview,
   AdminAccount,
   AdminAudit,
   AdminReports,
@@ -138,6 +139,8 @@ export default function Admin() {
   );
   const newProduct = tab === "products" && productId === "new";
   const formOpen = newProduct || !!editingProduct;
+  const [formValues, setFormValues] = useState<Record<string, string> | null>(null);
+  useEffect(() => setFormValues(null), [editingProduct?.id, newProduct]);
   const realProducts = data?.products ?? [];
   const setupSteps: [string, string, boolean][] = [
     ["ใส่ชื่อร้านและช่องทางติดต่อ", "settings", !!overview?.shop?.shopName],
@@ -505,10 +508,46 @@ export default function Admin() {
                 </Link>
               )}
             </div>
+            <div className="product-editor-layout">
+            <aside className="product-preview-col" aria-label="ตัวอย่างบนหน้าร้าน">
+              <ProductPreview
+                categoryName={
+                  overview?.categories.find(
+                    (c) => c.id === (formValues?.category ?? editingProduct?.category ?? "streaming"),
+                  )?.name ?? ""
+                }
+                draft={{
+                  name: formValues?.name ?? editingProduct?.name ?? "",
+                  description: formValues?.description ?? editingProduct?.description ?? "",
+                  category: formValues?.category ?? editingProduct?.category ?? "streaming",
+                  preorder: formValues ? formValues.type === "preorder" : !!editingProduct?.preorder,
+                  active: formValues ? formValues.active === "on" : !!editingProduct?.active,
+                  featured: formValues ? formValues.featured === "on" : !!editingProduct?.featured,
+                  art: editingProduct?.art ?? "gift",
+                  variants: editingProduct
+                    ? editingProduct.variants.map((v) => ({ id: v.id, label: v.label, price: v.price, stock: v.stock }))
+                    : [
+                        {
+                          id: "new",
+                          label: "ตัวเลือกแรก",
+                          price: Math.round(Number(formValues?.price || 0) * 100),
+                          stock: 0,
+                        },
+                      ],
+                }}
+              />
+            </aside>
+            <div className="product-editor-col">
             <form
               onSubmit={save}
               className="reference-product-editor"
               key={editingProduct?.id ?? "new"}
+              onInput={(e) =>
+                setFormValues(Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>)
+              }
+              onChange={(e) =>
+                setFormValues(Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>)
+              }
             >
               <section className="reference-admin-card editor-panel">
                 <h2>ข้อมูลสินค้า</h2>
@@ -628,15 +667,6 @@ export default function Admin() {
               </section>
               {!newProduct && (
                 <>
-                  <section className="reference-admin-card editor-panel">
-                    <h2>รูปภาพ</h2>
-                    <div className="editor-product-image">
-                      <Art
-                        type={editingProduct!.art}
-                        name={editingProduct!.name}
-                      />
-                    </div>
-                  </section>
                   <input
                     type="hidden"
                     name="price"
@@ -678,6 +708,8 @@ export default function Admin() {
             {editingProduct && !newProduct && (
               <VariantManager productId={editingProduct.id} preorder={!!editingProduct.preorder} />
             )}
+            </div>
+            </div>
           </>
         )}
         {tab === "inventory" && (
