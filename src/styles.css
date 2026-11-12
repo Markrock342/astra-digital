@@ -8721,6 +8721,92 @@ a.reference-bestseller {
 .admin-account-card {
   max-width: 640px;
 }
+/* Settings › บัญชีแอดมิน › ยืนยันตัวตน 2 ขั้น and inline password re-confirm
+   (shadcn/ui-style form rows, reusing the admin tokens above). */
+.totp-card {
+  margin-top: 16px;
+  display: grid;
+  gap: 14px;
+}
+.totp-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.totp-head h2 {
+  margin: 0 0 4px;
+}
+.totp-head p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.totp-steps {
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.totp-steps p {
+  margin: 0;
+}
+.totp-secret {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.totp-secret code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  padding: 8px 12px;
+  border: 1px solid var(--border, #e4e4e7);
+  border-radius: 6px;
+  background: #f4f4f5;
+  user-select: all;
+  word-break: break-all;
+}
+.totp-recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+  margin: 0;
+  padding-left: 22px;
+}
+.totp-recovery-codes code {
+  font-size: 15px;
+}
+.totp-recovery .admin-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.admin-inline-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.admin-inline-confirm input {
+  min-height: 36px;
+  min-width: 180px;
+  padding: 6px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border, #e4e4e7);
+  border-radius: 6px;
+  background: #fff;
+}
+@media (max-width: 600px) {
+  .totp-recovery-codes {
+    grid-template-columns: 1fr;
+  }
+  .admin-inline-confirm input {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+}
 .audit-detail {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   word-break: break-all;

@@ -154,3 +154,26 @@ Mutation เพิ่ม: ต้องมี `X-Astra-Request: 1` + JSON + same-
 - [x] ใช้เอกสารนี้เป็นเกณฑ์ Phase 2  
 
 Approved: 2026-11-09
+
+## 12. Admin login hardening + 2FA (`server/auth-hardening.mjs`)
+
+Schema is idempotent (`ensureAuthHardening`, called from `server/commerce.mjs` and `cloud/worker.mjs`):
+`sessions.created_at/last_seen`, `login_attempts`, `user_totp`, `totp_recovery_codes`, `login_challenges`.
+
+| Rule | Behaviour |
+|------|-----------|
+| Lockout | Per account (existing account → its user id, unknown identifier → normalized text), stored in SQLite. 5 failures in 15 min → locked 15 min, doubling on repeat locks (max 24 h, forgotten after a quiet day). Locked → 429 with one Thai message whether or not the account exists. Success clears the counter. Wrong TOTP codes and wrong re-confirm passwords count too. The per-IP limit (20/min) is unchanged. |
+| Audit | `LOGIN_FAILED`, `LOGIN_LOCKED`, `LOGIN_TOTP_FAILED`, `REAUTH_FAILED`, `TOTP_ENABLE`, `TOTP_DISABLE`, `TOTP_RESET`, `RECOVERY_CODE_USED`. Detail = masked identifier (`ad***@astra.local`), keyed hash (`idHash`), IP (`CF-Connecting-IP` → `X-Forwarded-For` → socket). Never the raw identifier or password. |
+| Sessions | ADMIN/STAFF: 12 h absolute + 2 h idle (sliding `last_seen`, cookie `Max-Age=43200`). Customers: 7 days. Old sessions without `created_at` are capped when first seen. |
+| Re-confirm | `currentPassword` required for: creating an ADMIN, granting ADMIN, `POST /api/admin/payment-channel`, starting 2FA setup, disabling 2FA. Missing/wrong → 403. |
+| 2FA | Optional TOTP (RFC 6238, HMAC-SHA1, 30 s, ±1 step, replay-protected) for ADMIN/STAFF. Secret AES-256-GCM encrypted with the inventory key; 8 recovery codes stored as HMAC. Login: password → `{needsTotp, challenge}` (5 min, 5 tries, no cookie) → `POST /api/login/totp {challenge, code}` → session. |
+
+**Owner escape hatch.** If the owner (`admin@astra.local`) loses the authenticator and the recovery codes,
+rotate `ASTRA_ADMIN_PASSWORD` (e.g. `wrangler secret put ASTRA_ADMIN_PASSWORD`). On the next start the
+HMAC mark of the secret differs, so the owner's password is reset to the new secret **and** the owner's
+2FA, recovery codes, pending challenges and lockout are cleared (audit `TOTP_RESET`). Sign in with the new
+secret, then turn 2FA on again.
+
+Other admins/staff who lose their phone sign in with a recovery code and turn 2FA off themselves. There is
+no back-office button to clear someone else's 2FA yet (2FA settings are own-account only); if they also lost
+the recovery codes, an operator deletes their rows in `user_totp` and `totp_recovery_codes`.

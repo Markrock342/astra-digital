@@ -9,6 +9,7 @@ export const securityHeaders = {
 };
 export const authenticationPaths = [
   "/api/login",
+  "/api/login/totp",
   "/api/register",
   "/api/demo",
   "/api/demo-merchant",
@@ -56,7 +57,16 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
     uploadAttempts.set(key, hit);
     return ++hit.n <= 30;
   }
-  return async function handle(request) {
+  /** Client IP for the audit trail: Cloudflare header, then proxy header, then the socket. */
+  function clientIp(request, env) {
+    const value =
+      request.headers.get("CF-Connecting-IP") ??
+      request.headers.get("X-Forwarded-For")?.split(",")[0] ??
+      env?.ip ??
+      null;
+    return value ? String(value).trim().slice(0, 64) || null : null;
+  }
+  return async function handle(request, env = {}) {
     const url = new URL(request.url),
       path = url.pathname;
     const send = (status, data, extra = {}) =>
@@ -184,19 +194,25 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             429,
             "มีคำขอมากเกินไป กรุณาลองอีกครั้งในหนึ่งนาที",
           );
+        const ctx = { ip: clientIp(request, env) };
         const result =
           path === "/api/login"
-            ? service.login(input)
-            : path === "/api/register"
-              ? service.register(input)
-              : path === "/api/demo-merchant"
-                ? service.demoMerchant()
-                : service.demo();
+            ? service.login(input, ctx)
+            : path === "/api/login/totp"
+              ? service.loginTotp(input, ctx)
+              : path === "/api/register"
+                ? service.register(input)
+                : path === "/api/demo-merchant"
+                  ? service.demoMerchant()
+                  : service.demo();
+        // Password OK but the account has 2FA: no cookie until /api/login/totp succeeds.
+        if (result.needsTotp)
+          return send(200, { needsTotp: true, challenge: result.challenge });
         return send(
           200,
           { user: result.user },
           {
-            "Set-Cookie": `astra_session=${result.token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800${url.protocol === "https:" ? "; Secure" : ""}`,
+            "Set-Cookie": `astra_session=${result.token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${result.maxAge ?? 604800}${url.protocol === "https:" ? "; Secure" : ""}`,
           },
         );
       }
@@ -316,6 +332,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, page);
         }
         if (path === "/api/admin/team") return send(200, { team: service.team(user) });
+        if (path === "/api/account/totp") return send(200, service.totpStatus(user));
         if (path === "/api/admin/reports/sales")
           return send(200, service.salesReport(user, {
             from: url.searchParams.get("from") ?? undefined,
@@ -478,10 +495,19 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminResetCustomerPassword(user, path.split("/")[4]));
         if (/^\/api\/admin\/customers\/[^/]+\/sign-out$/.test(path))
           return send(200, service.adminSignOutCustomer(user, path.split("/")[4]));
-        if (path === "/api/admin/payment-channel")
+        if (path === "/api/admin/payment-channel") {
+          // Sensitive: the admin re-enters their password (input.currentPassword).
+          service.reauthAdmin(user, input);
           return send(200, {
             channel: service.setPaymentChannel(user, input),
           });
+        }
+        if (path === "/api/account/totp/setup")
+          return send(200, service.totpSetup(user, input));
+        if (path === "/api/account/totp/enable")
+          return send(200, service.totpEnable(user, input));
+        if (path === "/api/account/totp/disable")
+          return send(200, service.totpDisable(user, input));
         if (path === "/api/admin/inventory")
           return send(200, service.importCodes(user, input));
         if (/^\/api\/admin\/inventory\/[^/]+\/defect$/.test(path))

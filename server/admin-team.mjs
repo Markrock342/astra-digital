@@ -4,7 +4,7 @@
  * an active admin, and the shop always keeps at least one active admin. */
 import { randomBytes, randomUUID } from "node:crypto";
 
-export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash, requireAdmin, requireStaff, one, all, run, tx, fail, clean, notify }) {
+export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash, requireAdmin, requireStaff, one, all, run, tx, fail, clean, notify, confirmPassword }) {
   const auditDetail = (user, action, entity, detail) =>
     run(
       "INSERT INTO audit(user_id,action,entity_id,detail) VALUES(?,?,?,?)",
@@ -50,6 +50,13 @@ export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash,
   function saveStaff(user, input = {}) {
     requireAdmin(user);
     const name = clean(input.name, 2, 60, "ชื่อ");
+    // Creating an admin or granting admin rights needs the acting admin's password again.
+    // Checked before the transaction so a wrong password still counts toward the lockout.
+    const existingRole = input.id
+      ? one("SELECT role FROM users WHERE id=? AND role IN ('ADMIN','STAFF')", String(input.id))?.role
+      : null;
+    const makesAdmin = pickRole(input.role, existingRole ?? "STAFF") === "ADMIN" && existingRole !== "ADMIN";
+    if (makesAdmin) confirmPassword(user, input.currentPassword);
     return tx(() => {
       if (input.id) {
         const row = one("SELECT * FROM users WHERE id=? AND role IN ('ADMIN','STAFF')", clean(input.id, 1, 80, "ทีมงาน"));
@@ -57,6 +64,7 @@ export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash,
         const role = pickRole(input.role, row.role);
         if (role !== row.role) {
           guardChange(user, row);
+          if (role === "ADMIN" && !makesAdmin) fail(409, "ข้อมูลทีมงานเปลี่ยนระหว่างทำรายการ กรุณาลองใหม่");
           if (row.role === "ADMIN" && (row.status ?? "ACTIVE") === "ACTIVE" && activeAdmins() <= 1)
             fail(409, "ต้องมีแอดมินที่ใช้งานอยู่อย่างน้อย 1 คน");
         }
@@ -69,6 +77,7 @@ export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash,
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, "อีเมลไม่ถูกต้อง");
       if (one("SELECT id FROM users WHERE email=?", email)) fail(409, "อีเมลนี้มีบัญชีแล้ว");
       const role = pickRole(input.role, "STAFF");
+      if (role === "ADMIN" && !makesAdmin) fail(409, "ข้อมูลทีมงานเปลี่ยนระหว่างทำรายการ กรุณาลองใหม่");
       const id = randomUUID();
       const password = temporaryPassword();
       run(
@@ -91,6 +100,10 @@ export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash,
     requireAdmin(user);
     const role = input.role;
     if (!["ADMIN", "STAFF", "CUSTOMER"].includes(role)) fail(400, "สิทธิ์ไม่ถูกต้อง");
+    // Granting admin rights needs the acting admin's password again (outside the tx so a
+    // wrong password still counts toward the lockout).
+    const target = one("SELECT role FROM users WHERE id=?", String(id ?? ""));
+    if (role === "ADMIN" && target && target.role !== "ADMIN") confirmPassword(user, input.currentPassword);
     return tx(() => {
       const row = one("SELECT * FROM users WHERE id=?", clean(id, 1, 80, "บัญชี"));
       if (!row) fail(404, "ไม่พบบัญชี");

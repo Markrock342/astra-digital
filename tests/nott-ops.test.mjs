@@ -6,7 +6,7 @@ import { ROLES } from "../server/auth-policy.mjs";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { randomBytes } from "node:crypto";
+import { randomBytes, scryptSync } from "node:crypto";
 // applyMigration006 imported inside W3 test to keep sync fixtures light
 
 function fixture(t) {
@@ -1378,10 +1378,28 @@ test("team accounts and chat assignment", (t) => {
 });
 
 test("admins can add admins and grant or remove admin rights, never locking the shop out", (t) => {
-  const { s, staff, merchant } = fixture(t);
+  const { s, staff, merchant, merchantToken } = fixture(t);
   assert.throws(() => s.saveStaff(staff, { name: "X", email: "x2@example.invalid", role: "ADMIN" }), (e) => e.status === 403);
   assert.throws(() => s.saveStaff(merchant, { name: "X", email: "x3@example.invalid", role: "CUSTOMER" }), (e) => e.status === 400);
-  const made = s.saveStaff(merchant, { name: "แอดมินใหม่", email: "new-admin@example.invalid", role: "ADMIN" });
+  // Creating or granting ADMIN needs the acting admin's password again.
+  const bossPassword = "Merchant-known-Password-123";
+  const salt = randomBytes(16).toString("hex");
+  s.db
+    .prepare("UPDATE users SET password_hash=? WHERE id=?")
+    .run(salt + ":" + scryptSync(bossPassword, salt, 64).toString("hex"), merchant.id);
+  const boss = s.session(merchantToken);
+  assert.throws(
+    () => s.saveStaff(boss, { name: "Xavier", email: "x4@example.invalid", role: "ADMIN" }),
+    (e) => e.status === 403,
+  );
+  assert.throws(
+    () => s.saveStaff(boss, { name: "Xavier", email: "x4@example.invalid", role: "ADMIN", currentPassword: "wrong-password" }),
+    (e) => e.status === 403,
+  );
+  assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM users WHERE email='x4@example.invalid'").get().n, 0);
+  // Plain staff needs no password.
+  s.saveStaff(boss, { name: "ทีมงานธรรมดา", email: "plain-staff@example.invalid" });
+  const made = s.saveStaff(boss, { name: "แอดมินใหม่", email: "new-admin@example.invalid", role: "ADMIN", currentPassword: bossPassword });
   assert.equal(made.member.role, "ADMIN");
   const secondToken = s.login({ email: "new-admin@example.invalid", password: made.temporaryPassword }).token;
   const second = s.session(secondToken);
@@ -1390,7 +1408,8 @@ test("admins can add admins and grant or remove admin rights, never locking the 
   assert.throws(() => s.adminTransactions(staff, {}), (e) => e.status === 403);
 
   // Promote a staff member; the role applies to their open session at once.
-  s.saveStaff(merchant, { id: staff.id, name: staff.name, role: "ADMIN" });
+  assert.throws(() => s.saveStaff(boss, { id: staff.id, name: staff.name, role: "ADMIN" }), (e) => e.status === 403);
+  s.saveStaff(boss, { id: staff.id, name: staff.name, role: "ADMIN", currentPassword: bossPassword });
   assert.equal(s.session(s.login({ email: staff.email, password: "Staff-only-Password-123" }).token)?.role, "ADMIN");
   s.saveStaff(second, { id: staff.id, name: staff.name, role: "STAFF" });
   const log = s.adminAuditLog(merchant, { action: "TEAM_ROLE" }).entries;
@@ -1795,11 +1814,20 @@ test("FR-O7: staff keeps an internal order note that the customer never sees", (
 });
 
 test("an existing customer can be given staff or admin rights and taken back to customer", (t) => {
-  const { s, user, staff, merchant } = fixture(t);
+  const { s, user, staff, merchant: demoBoss, merchantToken } = fixture(t);
+  // Granting ADMIN re-confirms the acting admin's password, so give the boss a known one.
+  const bossPassword = "Merchant-known-Password-123";
+  const salt = randomBytes(16).toString("hex");
+  s.db
+    .prepare("UPDATE users SET password_hash=? WHERE id=?")
+    .run(salt + ":" + scryptSync(bossPassword, salt, 64).toString("hex"), demoBoss.id);
+  const merchant = s.session(merchantToken);
   assert.throws(() => s.setMemberRole(staff, user.id, { role: "ADMIN" }), (e) => e.status === 403);
   assert.throws(() => s.setMemberRole(merchant, user.id, { role: "OWNER" }), (e) => e.status === 400);
+  assert.throws(() => s.setMemberRole(merchant, user.id, { role: "ADMIN" }), (e) => e.status === 403);
+  assert.equal(s.session(s.login({ email: user.email, password: "Test-only-Password-123" }).token).role, "CUSTOMER");
 
-  s.setMemberRole(merchant, user.id, { role: "ADMIN" });
+  s.setMemberRole(merchant, user.id, { role: "ADMIN", currentPassword: bossPassword });
   // Same password, now an admin with admin powers; history stays on the account.
   const again = s.session(s.login({ email: user.email, password: "Test-only-Password-123" }).token);
   assert.equal(again.role, "ADMIN");

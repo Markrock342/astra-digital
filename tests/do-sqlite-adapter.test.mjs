@@ -178,6 +178,7 @@ test(
     const channel = await api("POST", "/api/admin/payment-channel", {
       provider: "sandbox",
       active: true,
+      currentPassword: adminPassword,
     });
     assert.equal(channel.status, 200, JSON.stringify(channel.data));
 

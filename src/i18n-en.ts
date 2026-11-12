@@ -444,4 +444,17 @@ export const EN_STRINGS: Record<string, string> = {
   "ลืมรหัสผ่าน? ติดต่อร้านผ่านช่องทางในหน้า": "Forgot your password? Reach the shop through",
   "ติดต่อเรา": "Contact us",
   "ร้านจะตั้งรหัสผ่านชั่วคราวให้หลังยืนยันตัวตน": "and the shop will set a temporary password after verifying you.",
+  "ยืนยันตัวตน 2 ขั้น": "Two-step verification",
+  "กรอกรหัสกู้คืนที่บันทึกไว้ตอนเปิดใช้งาน รหัสแต่ละชุดใช้ได้ครั้งเดียว":
+    "Enter a recovery code you saved when you turned this on. Each code works once.",
+  "เปิดแอปยืนยันตัวตนในโทรศัพท์ แล้วกรอกรหัส 6 หลักที่แสดงอยู่":
+    "Open your authenticator app and enter the 6-digit code it shows.",
+  "รหัสกู้คืน": "Recovery code",
+  "รหัสยืนยัน 6 หลัก": "6-digit code",
+  "ยืนยันและเข้าสู่ระบบ": "Verify and sign in",
+  "ใช้รหัสจากแอปยืนยันตัวตนแทน": "Use the authenticator app instead",
+  "ไม่มีโทรศัพท์? ใช้รหัสกู้คืน": "No phone? Use a recovery code",
+  "กลับไปกรอกรหัสผ่าน": "Back to password",
+  "เข้าสู่ระบบไม่สำเร็จหลายครั้ง ระบบพักการเข้าสู่ระบบชั่วคราว กรุณาลองใหม่ภายหลัง":
+    "Too many failed sign-in attempts. Sign-in is paused for a while; please try again later.",
 };

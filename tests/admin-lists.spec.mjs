@@ -252,6 +252,8 @@ test("admin adds another admin, grants and removes admin rights with a confirm s
   await page.getByLabel("ชื่อ", { exact: true }).fill("แอดมินสำรอง");
   await page.getByLabel("อีเมลสำหรับเข้าสู่ระบบ").fill("backup-admin@example.invalid");
   await page.getByLabel("สิทธิ์").selectOption("ADMIN");
+  // A new admin needs the acting admin's password again.
+  await page.getByLabel(/รหัสผ่านของคุณ/).fill(adminPassword);
   await page.getByRole("button", { name: "เพิ่มบัญชี" }).click();
   const temp = (await page.locator(".admin-temp-password code").textContent()).trim();
   const row = page.locator(".settings-row", { hasText: "backup-admin@example.invalid" });
