@@ -152,6 +152,81 @@ test("last key can only be purchased by one customer", (t) => {
     (e) => e.status === 409,
   );
 });
+test("C1 race: two accounts pay last unit concurrently — one wins, loser not charged", async (t) => {
+  const { s, user, other, token } = fixture(t);
+  s.db
+    .prepare(
+      "DELETE FROM inventory WHERE variant_id=? AND order_id IS NULL AND id != (SELECT id FROM inventory WHERE variant_id=? AND order_id IS NULL LIMIT 1)",
+    )
+    .run("stream-plus-30", "stream-plus-30");
+  const first = checkout(s, user, "race-first");
+  const second = checkout(s, other, "race-second");
+  const otherAuth = s.login({
+    email: other.email,
+    password: "Another-test-only-123",
+  });
+  const loserBalanceBefore = s.publicUser(other).balance;
+  const winnerBalanceBefore = s.publicUser(user).balance;
+  const server = createApp(s);
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  t.after(() => new Promise((r) => server.close(r)));
+  const base = "http://127.0.0.1:" + server.address().port;
+  const pay = (order, cookie) =>
+    fetch(base + "/api/orders/" + order.id + "/pay", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Astra-Request": "1",
+        Cookie: "astra_session=" + cookie,
+      },
+      body: JSON.stringify({
+        paymentToken: order.paymentToken,
+        outcome: "success",
+      }),
+    }).then(async (r) => ({ status: r.status, body: await r.json() }));
+  const [a, b] = await Promise.all([
+    pay(first, token),
+    pay(second, otherAuth.token),
+  ]);
+  assert.equal(a.status, 200);
+  assert.equal(b.status, 200);
+  const statuses = [a.body.status, b.body.status].sort();
+  assert.deepEqual(statuses, ["DELIVERED", "OUT_OF_STOCK"]);
+  const winner = a.body.status === "DELIVERED" ? a.body : b.body;
+  const loser = a.body.status === "OUT_OF_STOCK" ? a.body : b.body;
+  assert.ok(winner.codes?.length === 1 || winner.credentials?.length === 1);
+  assert.deepEqual(loser.codes, []);
+  assert.deepEqual(loser.credentials ?? [], []);
+  const otherStill = s.publicUser(other).balance;
+  const userStill = s.publicUser(user).balance;
+  if (loser.id === second.id) {
+    assert.equal(otherStill, loserBalanceBefore, "loser not charged");
+    assert.ok(userStill < winnerBalanceBefore, "winner was charged");
+  } else {
+    assert.equal(userStill, winnerBalanceBefore, "loser not charged");
+    assert.ok(otherStill < loserBalanceBefore, "winner was charged");
+  }
+  assert.equal(
+    s.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL",
+      )
+      .get("stream-plus-30").n,
+    0,
+  );
+  assert.equal(
+    s.db.prepare("SELECT COUNT(*) AS n FROM inventory WHERE order_id=?").get(winner.id)
+      .n,
+    1,
+    "winner got exactly one unit",
+  );
+  assert.equal(
+    s.db.prepare("SELECT COUNT(*) AS n FROM inventory WHERE order_id=?").get(loser.id)
+      .n,
+    0,
+    "loser got no inventory",
+  );
+});
 test("wallet cannot become negative, invalid confirmations do not deliver", (t) => {
   const { s, user } = fixture(t);
   const order = checkout(s, user);
