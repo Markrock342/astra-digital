@@ -25,6 +25,7 @@ import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
   ensureCustomerAdmin,
+  ensureOrderExtras,
   ensureOrderHistory,
   ensureProductsStock,
   ensureNotificationLinks,
@@ -101,6 +102,7 @@ export class Commerce extends DurableObject {
       ensureProductsStock(db);
       ensureNotificationLinks(db);
       ensureSmallUxB(db);
+      ensureOrderExtras(db);
       ensureLiveVersions(db);
       ensureAppendOnlyMoney(db);
     });

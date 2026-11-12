@@ -268,6 +268,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, { orders: service.orders(user) });
         if (/^\/api\/orders\/[^/]+$/.test(path))
           return send(200, service.orderDetail(user, path.split("/")[3]));
+        if (/^\/api\/orders\/[^/]+\/receipt$/.test(path))
+          return send(200, { receipt: service.orderReceipt(user, path.split("/")[3]) });
         if (path === "/api/staff/orders") {
           const page = service.staffOrders(user, {
             limit: url.searchParams.get("limit"),
@@ -385,6 +387,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           }));
         if (/^\/api\/admin\/orders\/[^/]+$/.test(path))
           return send(200, service.adminOrderDetail(user, path.split("/")[4]));
+        if (/^\/api\/admin\/orders\/[^/]+\/receipt$/.test(path))
+          return send(200, { receipt: service.adminOrderReceipt(user, path.split("/")[4]) });
         if (/^\/api\/admin\/customers\/[^/]+$/.test(path))
           return send(200, service.adminCustomerDetail(user, path.split("/")[4]));
         if (path === "/api/admin/customers")

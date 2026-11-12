@@ -40,6 +40,7 @@ import {
 import { StockImport } from "./StockImport";
 import { CopyValue, ResendCredentials } from "./OrderCredentials";
 import { WarrantyStatus } from "./Warranty";
+import { ReceiptLink } from "./OrderExtras";
 
 type Filters = Record<string, string>;
 
@@ -800,7 +801,12 @@ export function AdminOrderDetail({ id }: { id: string }) {
                 {order.queue_number != null && " · คิวที่ " + order.queue_number}
               </p>
             </div>
-            <Status status={order.paymentSummary?.refundStatus ?? order.status} />
+            <span className="reference-heading-actions">
+              <ReceiptLink id={order.id} admin className="button secondary admin-receipt-link">
+                ใบเสร็จ
+              </ReceiptLink>
+              <Status status={order.paymentSummary?.refundStatus ?? order.status} />
+            </span>
           </div>
           {order.status === "PENDING_PAYMENT" && user?.role === "ADMIN" && (
             <section className="reference-admin-card admin-detail-card">

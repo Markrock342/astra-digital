@@ -24,6 +24,7 @@ import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
   ensureCustomerAdmin,
+  ensureOrderExtras,
   ensureOrderHistory,
   ensureProductsStock,
   ensureNotificationLinks,
@@ -82,6 +83,7 @@ export function createCommerce(options = {}) {
   ensureProductsStock(db);
   ensureNotificationLinks(db);
   ensureSmallUxB(db);
+  ensureOrderExtras(db);
   ensureLiveVersions(db);
   ensureAppendOnlyMoney(db);
   return createCommerceCore({ ...options, db, key });
