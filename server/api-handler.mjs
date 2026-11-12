@@ -367,6 +367,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (path === "/api/admin/orders")
           return send(200, service.adminOrders(user, {
             status: url.searchParams.get("status") ?? undefined,
+            group: url.searchParams.get("group") ?? undefined,
             from: url.searchParams.get("from") ?? undefined,
             to: url.searchParams.get("to") ?? undefined,
             product: url.searchParams.get("product") ?? undefined,
@@ -490,8 +491,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.setStaffActive(user, path.split("/")[4], input));
         if (/^\/api\/chat\/threads\/[^/]+\/assign$/.test(path))
           return send(200, { thread: service.assignChatThread(user, path.split("/")[4], input) });
-        if (/^\/api\/admin\/orders\/[^/]+\/note$/.test(path))
-          return send(200, service.adminSetOrderNote(user, path.split("/")[4], input));
+        // Append-only internal notes; /note kept for older clients (also appends).
+        if (/^\/api\/admin\/orders\/[^/]+\/notes?$/.test(path))
+          return send(200, service.adminAddOrderNote(user, path.split("/")[4], input));
         if (/^\/api\/admin\/orders\/[^/]+\/refund$/.test(path))
           return send(200, service.refundOrder(user, path.split("/")[4], input));
         if (/^\/api\/admin\/customers\/[^/]+\/credit$/.test(path))

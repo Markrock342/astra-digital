@@ -12,6 +12,7 @@ export function createAdminOrderReplaceApis({
   inventoryAvailableSql,
   notify,
   maybeNotifyStockLow,
+  recordReplacement,
 }) {
   function loadOrderOrReservation(orderId) {
     return (
@@ -58,10 +59,12 @@ export function createAdminOrderReplaceApis({
       if (!replacement) fail(409, "สต็อกไม่พอสำหรับเปลี่ยนบัญชี");
 
       const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+      // B2: the old unit stays linked to the order (defective, so it is never
+      // sold again and the customer no longer sees it). order_replacements keeps
+      // who swapped which unit, when and why.
       const cleared = run(
         `UPDATE inventory SET
-           defective=1, defective_at=?, defective_by=?, defective_reason=?,
-           order_id=NULL, reservation_id=NULL, sold_at=NULL
+           defective=1, defective_at=?, defective_by=?, defective_reason=?
          WHERE id=? AND ${bindCol}=? AND COALESCE(defective,0)=0`,
         now,
         user.id,
@@ -85,14 +88,29 @@ export function createAdminOrderReplaceApis({
         "บัญชีถูกเปลี่ยนแล้ว",
         "ร้านส่งบัญชีใหม่แทนบัญชีที่มีปัญหา กดดูคำสั่งซื้อเพื่อรับบัญชีใหม่",
       );
+      const replacementId = recordReplacement({
+        orderId,
+        oldInventoryId: inventoryId,
+        newInventoryId: replacement.id,
+        reason,
+        actorId: user.id,
+        at: now,
+      });
       maybeNotifyStockLow(row.variant_id);
-      audit(user, "REPLACE_ORDER_CREDENTIAL", orderId);
+      run(
+        "INSERT INTO audit(user_id,action,entity_id,detail) VALUES(?,?,?,?)",
+        user.id,
+        "REPLACE_ORDER_CREDENTIAL",
+        orderId,
+        JSON.stringify({ reason, replacementId }),
+      );
       return {
         id: orderId,
         replacedInventoryId: inventoryId,
         newInventoryId: replacement.id,
         status: "DELIVERED",
         replaced_at: now,
+        replacementId,
       };
     });
   }

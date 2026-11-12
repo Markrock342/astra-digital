@@ -87,9 +87,9 @@ test("orders filter on the server and the detail page reveals credentials with a
   await page.goto(base + "/admin/orders");
   const table = page.locator(".admin-list-table tbody");
   await expect(table).toContainText("Lists Buyer");
-  await page.getByLabel("สถานะ").selectOption("PENDING_PAYMENT");
+  await page.getByRole("tab", { name: /^รอชำระ/ }).click();
   await expect(table).not.toContainText("Lists Buyer");
-  await page.getByRole("button", { name: "ล้างตัวกรอง" }).click();
+  await page.getByRole("tab", { name: /^ทั้งหมด/ }).click();
   await page.getByLabel("ค้นเลขออเดอร์ ลูกค้า หรือสินค้า").fill("lists-buyer");
   await expect(table.locator("tr")).toHaveCount(1);
   await table.locator("tr").first().click();
@@ -107,6 +107,100 @@ test("orders filter on the server and the detail page reveals credentials with a
   expect(audit).toBe(1);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await noSideScroll(page)).toBe(true);
+});
+
+test("order tabs keep filters in the URL; detail shows activity, notes and replacement history", async ({ page, browser }) => {
+  const admin = service.session(adminToken);
+  const before = service.orderDetail(buyer, paidOrder.id);
+  const oldItem = before.codes[0] ?? before.credentials[0].loginId;
+  await as(page, adminToken);
+  await page.goto(base + "/admin/orders");
+  const tabs = page.getByRole("tablist", { name: "สถานะออเดอร์" });
+  await expect(tabs.getByRole("tab", { name: /^ทั้งหมด/ })).toHaveAttribute("aria-selected", "true");
+  // Counts come from the server for the current filters except status.
+  const counts = service.adminOrders(admin, { q: "lists-buyer" }).counts;
+  await page.getByLabel("ค้นเลขออเดอร์ ลูกค้า หรือสินค้า").fill("lists-buyer");
+  await expect(tabs.getByRole("tab", { name: /^ส่งแล้ว/ })).toContainText(String(counts.delivered));
+  await expect(tabs.getByRole("tab", { name: /^รอชำระ/ })).toContainText(String(counts.pending));
+  await tabs.getByRole("tab", { name: /^ส่งแล้ว/ }).click();
+  await expect(page).toHaveURL(/tab=delivered/);
+  await expect(page).toHaveURL(/q=lists-buyer/);
+  const table = page.locator(".admin-list-table tbody");
+  await expect(table.locator("tr")).toHaveCount(counts.delivered);
+  // Reload keeps the tab and the search.
+  await page.reload();
+  await expect(tabs.getByRole("tab", { name: /^ส่งแล้ว/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByLabel("ค้นเลขออเดอร์ ลูกค้า หรือสินค้า")).toHaveValue("lists-buyer");
+  // Open the paid order, then back keeps them too.
+  await page.goto(base + "/admin/orders/" + paidOrder.id);
+  await page.goBack();
+  await expect(page).toHaveURL(/tab=delivered/);
+  await expect(tabs.getByRole("tab", { name: /^ส่งแล้ว/ })).toHaveAttribute("aria-selected", "true");
+  await table.locator("tr", { hasText: paidOrder.id.slice(0, 8).toUpperCase() }).click();
+  await expect(page).toHaveURL(new RegExp("/admin/orders/" + paidOrder.id + "$"));
+
+  // Replace the account: history card + timeline entry, masked logins only.
+  await page.getByRole("button", { name: "บัญชีเสีย · เปลี่ยนให้ลูกค้า" }).first().click();
+  await page.getByLabel(/บัญชีนี้มีปัญหาอะไร/).fill("ลูกค้าเข้าไม่ได้ รหัสถูกเปลี่ยน");
+  await page.getByRole("button", { name: "ส่งบัญชีใหม่" }).click();
+  await expect(page.getByText("ส่งบัญชีใหม่ให้ลูกค้าแล้ว", { exact: false })).toBeVisible();
+  const history = page.locator(".order-replacements");
+  await expect(history).toContainText("ประวัติการเปลี่ยนบัญชี");
+  await expect(history).toContainText("1 ครั้ง");
+  await expect(history).toContainText("ลูกค้าเข้าไม่ได้ รหัสถูกเปลี่ยน");
+  const record = service.adminOrderDetail(admin, paidOrder.id).replacements[0];
+  await expect(history).toContainText(record.oldLogin + "→" + record.newLogin);
+  expect(record.oldLogin).toBe(oldItem.slice(0, 2) + "***");
+  await expect(history).not.toContainText(oldItem);
+  const activity = page.locator(".admin-activity");
+  await expect(activity).toContainText("เปลี่ยนบัญชีให้ลูกค้า");
+  await expect(activity).toContainText("เปิดดูรหัส");
+  await expect(activity).toContainText("ลูกค้าแจ้งว่าเข้าใช้งานไม่ได้");
+  // The customer sees only the new account.
+  const mine = service.orderDetail(buyer, paidOrder.id);
+  const items = [...mine.codes, ...mine.credentials.map((c) => c.loginId)];
+  expect(items.length).toBe(1);
+  expect(items[0]).not.toBe(oldItem);
+  expect(items[0].slice(0, 2) + "***").toBe(record.newLogin);
+
+  // Notes append; earlier ones stay.
+  for (const text of ["โทรหาลูกค้าแล้ว", "ลูกค้ายืนยันว่าใช้ได้"]) {
+    await page.getByLabel("เพิ่มหมายเหตุ").fill(text);
+    await page.getByRole("button", { name: "เพิ่มหมายเหตุ" }).click();
+    await expect(page.locator(".order-note-list")).toContainText(text);
+  }
+  await expect(page.locator(".order-note-list li")).toHaveCount(2);
+  await expect(activity).toContainText("ลูกค้ายืนยันว่าใช้ได้");
+  expect(JSON.stringify(service.orderDetail(buyer, paidOrder.id))).not.toContain("โทรหาลูกค้า");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await noSideScroll(page)).toBe(true);
+  await page.goto(base + "/admin/orders?tab=failed");
+  await expect(tabs.getByRole("tab", { name: /^ยกเลิก\/ล้มเหลว/ })).toHaveAttribute("aria-selected", "true");
+  expect(await noSideScroll(page)).toBe(true);
+
+  // STAFF lands on "ต้องทำ" and sees the history masked, without payments.
+  const staffAuth = service.register({
+    name: "Lists Staff",
+    email: "lists-staff@example.invalid",
+    password: "Lists-staff-Password-123",
+  });
+  service.db.prepare("UPDATE users SET role='STAFF' WHERE id=?").run(staffAuth.user.id);
+  const staffPage = await browser.newPage();
+  await staffPage.context().addCookies([
+    { name: "astra_session", value: staffAuth.token, url: base, httpOnly: true, sameSite: "Lax" },
+  ]);
+  await staffPage.goto(base + "/admin/orders");
+  const staffTabs = staffPage.getByRole("tablist", { name: "สถานะออเดอร์" });
+  await expect(staffTabs.getByRole("tab", { name: /^ต้องทำ/ })).toHaveAttribute("aria-selected", "true");
+  await expect(staffTabs.getByRole("tab", { name: /^ต้องทำ/ })).toContainText(
+    String(service.adminOrders(admin, {}).counts.todo),
+  );
+  await staffPage.goto(base + "/admin/orders/" + paidOrder.id);
+  await expect(staffPage.locator(".order-replacements")).toContainText(record.newLogin);
+  await expect(staffPage.locator(".order-replacements")).not.toContainText(items[0]);
+  await expect(staffPage.getByText("รายละเอียดการชำระเงินดูได้เฉพาะแอดมิน")).toBeVisible();
+  await expect(staffPage.locator(".admin-activity")).toContainText("โดย");
+  await staffPage.close();
 });
 
 test("admin edits and bans a customer, who is signed out", async ({ page, browser }) => {
@@ -210,9 +304,10 @@ test("preorder queue filters by product and delivers several queues at once", as
 
   // Internal note on the order: saved for staff, never shown to the customer.
   await page.goto(base + "/admin/orders/" + queued[0].id);
-  await page.getByLabel("หมายเหตุภายใน").fill("ลูกค้าขอส่งด่วน");
-  await page.getByRole("button", { name: "บันทึกหมายเหตุ" }).click();
-  await expect(page.getByText("บันทึกหมายเหตุแล้ว")).toBeVisible();
+  await page.getByLabel("เพิ่มหมายเหตุ").fill("ลูกค้าขอส่งด่วน");
+  await page.getByRole("button", { name: "เพิ่มหมายเหตุ" }).click();
+  await expect(page.getByText("เพิ่มหมายเหตุแล้ว")).toBeVisible();
+  await expect(page.locator(".order-note-list")).toContainText("ลูกค้าขอส่งด่วน");
   expect(JSON.stringify(service.orderDetail(buyer, queued[0].id))).not.toContain("ส่งด่วน");
 });
 

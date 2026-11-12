@@ -58,3 +58,43 @@ export function dropAppendOnlyMoney(db) {
     db.exec(`DROP TRIGGER IF EXISTS ${table}_append_only_delete`);
   }
 }
+
+/**
+ * Order history (B2 + appended notes). Idempotent, no numbered migration.
+ * - order_replacements: one row per replaced account. The old unit also stays
+ *   linked to the order (marked defective), so the history is never lost.
+ * - order_notes: append-only internal notes. The old single admin_note value is
+ *   copied in once as a legacy note with a fixed id, so re-runs change nothing.
+ * Run after ensureCustomerAdmin (needs admin_note and audit.detail).
+ */
+export function ensureOrderHistory(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS order_replacements (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL,
+    old_inventory_id TEXT NOT NULL,
+    new_inventory_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    actor_id TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_order_replacements_order ON order_replacements(order_id, created_at)",
+  );
+  db.exec(`CREATE TABLE IF NOT EXISTS order_notes (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL,
+    author_id TEXT,
+    body TEXT NOT NULL,
+    legacy INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_order_notes_order ON order_notes(order_id, created_at)");
+  for (const table of ["orders", "reservations"])
+    db.exec(`INSERT OR IGNORE INTO order_notes(id, order_id, author_id, body, legacy, created_at)
+      SELECT 'legacy-' || o.id, o.id,
+        (SELECT a.user_id FROM audit a WHERE a.action='ORDER_NOTE' AND a.entity_id=o.id ORDER BY a.id DESC LIMIT 1),
+        o.admin_note, 1,
+        COALESCE((SELECT MAX(a.created_at) FROM audit a WHERE a.action='ORDER_NOTE' AND a.entity_id=o.id), o.created_at)
+      FROM ${table} o
+      WHERE o.admin_note IS NOT NULL AND trim(o.admin_note) <> ''`);
+}
