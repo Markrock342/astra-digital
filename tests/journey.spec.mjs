@@ -41,6 +41,7 @@ test("1. admin lists a product, adds a variant and stocks ID + password", async 
   await page.goto(base + "/admin/products/new");
   await page.getByLabel("ชื่อสินค้า").fill("Journey Stream");
   await page.getByLabel("รายละเอียด").fill("บัญชีสตรีมมิ่งสำหรับทดสอบทั้งระบบ");
+  await page.getByLabel("ชื่อตัวเลือกแรก").fill("1 เดือน");
   await page.getByLabel("ราคาตัวเลือกแรก (บาท)").fill("99");
   await page.getByRole("button", { name: "สร้างฉบับร่าง" }).click();
   await expect(page).toHaveURL(/\/admin\/products\/(?!new$)[^/]+$/);

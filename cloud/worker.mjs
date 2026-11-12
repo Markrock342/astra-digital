@@ -25,6 +25,7 @@ import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
   ensureCustomerAdmin,
+  ensureOrderExtras,
   ensureOrderHistory,
   ensureProductsStock,
 } from "../server/ensure-admin-fr.mjs";
@@ -97,6 +98,7 @@ export class Commerce extends DurableObject {
       ensureAuthHardening(db);
       ensureOrderHistory(db);
       ensureProductsStock(db);
+      ensureOrderExtras(db);
       ensureLiveVersions(db);
       ensureAppendOnlyMoney(db);
     });

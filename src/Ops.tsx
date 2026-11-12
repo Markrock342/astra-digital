@@ -14,6 +14,7 @@ import {
 import { ErrorMessage, Link, useStore } from "./App";
 import { api, dateTime, money, relativeTime } from "./api";
 import { t } from "./i18n";
+import { ChatOrderTag, useReportDraft } from "./OrderExtras";
 
 export type ChatThread = {
   id: string;
@@ -26,6 +27,8 @@ export type ChatThread = {
   created_at: string;
   assigned_to?: string | null;
   assignee?: string | null;
+  /** Latest order reported in this thread ("แจ้งปัญหาบัญชีนี้"). */
+  order_id?: string | null;
 };
 type TeamMember = { id: string; name: string; role: string; active: boolean };
 export type ChatMessage = {
@@ -34,6 +37,8 @@ export type ChatMessage = {
   sender_type: "USER" | "STAFF" | "ADMIN";
   body: string;
   created_at: string;
+  order_id?: string | null;
+  report_reason?: string | null;
 };
 export type Notice = {
   id: string;
@@ -219,10 +224,12 @@ function MessageList({
   messages,
   mine,
   customerName,
+  admin = false,
 }: {
   messages: ChatMessage[];
   mine: (m: ChatMessage) => boolean;
   customerName: (m: ChatMessage) => string;
+  admin?: boolean;
 }) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -233,6 +240,7 @@ function MessageList({
       {messages.map((m) => (
         <div key={m.id} className={mine(m) ? "chat-bubble mine" : "chat-bubble"}>
           <small>{customerName(m)}</small>
+          {m.order_id && <ChatOrderTag orderId={m.order_id} reason={m.report_reason} admin={admin} />}
           <p>{m.body}</p>
           <time>{time(m.created_at)}</time>
         </div>
@@ -286,6 +294,8 @@ export function CustomerChat() {
     setOpen(true);
     void loadUnread();
   }
+  // "แจ้งปัญหาบัญชีนี้" from the order page: prefilled message + reason picker.
+  const report = useReportDraft({ setText, open: reveal });
   useEffect(() => {
     addEventListener("open-chat", reveal);
     return () => removeEventListener("open-chat", reveal);
@@ -324,14 +334,23 @@ export function CustomerChat() {
     try {
       if (thread?.status === "OPEN") {
         setMessages(
-          (await api<{ messages: ChatMessage[] }>("/chat/threads/" + thread.id + "/messages", { body })).messages,
+          (
+            await api<{ messages: ChatMessage[] }>("/chat/threads/" + thread.id + "/messages", {
+              body,
+              ...report.payload,
+            })
+          ).messages,
         );
       } else {
-        const opened = await api<{ thread: ChatThread; messages: ChatMessage[] }>("/chat/threads", { body });
+        const opened = await api<{ thread: ChatThread; messages: ChatMessage[] }>("/chat/threads", {
+          body,
+          ...report.payload,
+        });
         setThread(opened.thread);
         setMessages(opened.messages);
       }
       setText("");
+      report.clear();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -404,13 +423,14 @@ export function CustomerChat() {
                 <p className="chat-closed-note">{t("แชทก่อนหน้าปิดแล้ว ส่งข้อความเพื่อเริ่มแชทใหม่")}</p>
               )}
               <ErrorMessage message={error} />
+              {report.bar}
               <form className="chat-composer" onSubmit={send}>
                 <textarea
                   aria-label={t("ข้อความ")}
                   placeholder={t("พิมพ์ข้อความ…")}
                   value={text}
                   maxLength={1000}
-                  rows={1}
+                  rows={report.report ? 6 : 1}
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -565,6 +585,9 @@ export function AdminChat() {
                     {relativeTime(x.lastMessageAt)}
                     {x.assignee ? " · ดูแลโดย " + x.assignee : ""}
                   </small>
+                  {x.order_id && (
+                    <small className="chat-thread-order">แจ้งปัญหาออเดอร์ #{x.order_id.slice(0, 8).toUpperCase()}</small>
+                  )}
                 </span>
                 {x.unreadCount > 0 && <b className="admin-chat-unread">{x.unreadCount}</b>}
               </button>
@@ -614,6 +637,7 @@ export function AdminChat() {
                 )}
               </header>
               <MessageList
+                admin
                 messages={messages}
                 mine={(m) => m.sender_type !== "USER"}
                 customerName={(m) =>

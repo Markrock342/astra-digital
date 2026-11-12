@@ -122,3 +122,25 @@ export function ensureProductsStock(db) {
   add("inventory", "login_key", "TEXT");
   db.exec("CREATE INDEX IF NOT EXISTS inventory_login_key ON inventory(login_key)");
 }
+
+/**
+ * Order extras (idempotent, no numbered migration):
+ * - products.usage_instructions: plain text shown to the buyer after delivery only.
+ * - chat_messages.order_id / report_reason: "แจ้งปัญหาบัญชีนี้" messages linked to an
+ *   order (also the per-order daily report limit).
+ * - chat_threads.order_id: latest order reported in the thread, for the admin inbox.
+ */
+export function ensureOrderExtras(db) {
+  const has = (table, column) =>
+    db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  const add = (table, column, ddl) => {
+    if (!has(table, column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  };
+  add("products", "usage_instructions", "TEXT");
+  add("chat_messages", "order_id", "TEXT");
+  add("chat_messages", "report_reason", "TEXT");
+  add("chat_threads", "order_id", "TEXT");
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_chat_messages_order ON chat_messages(order_id, created_at)",
+  );
+}

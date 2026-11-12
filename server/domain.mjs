@@ -39,6 +39,10 @@ import { createFileStore } from "./file-store.mjs";
 import { createAuthHardening } from "./auth-hardening.mjs";
 import { createAdminMoneyApis } from "./admin-money.mjs";
 import {
+  createOrderExtras,
+  normalizeUsageInstructions,
+} from "./order-extras.mjs";
+import {
   createMoneyScope,
   walletBalanceSql,
   walletHistory,
@@ -299,6 +303,20 @@ export function createCommerceCore({
     ))
       notify(staff.id, kind, title, body);
   };
+  const orderExtras = createOrderExtras({
+    one,
+    all,
+    run,
+    fail,
+    clean: (...a) => clean(...a),
+    clock,
+    requireUser: (u) => requireUser(u),
+    requireStaff: (u) => requireStaff(u),
+    isStaff,
+    isAdmin,
+    settings: () => settings(),
+    orderRefundState: (...a) => orderRefundState(...a),
+  });
   const stockLowCooldown = new Map();
   const maybeNotifyStockLow = (variantId) => {
     const row = one(
@@ -850,7 +868,9 @@ export function createCommerceCore({
     audit,
     fileStore,
   });
-  function mapProduct(p) {
+  function mapProduct(row) {
+    // Usage instructions are for buyers of a delivered order only (order-extras.mjs).
+    const { usage_instructions: _usage, ...p } = row;
     const lowAt = getLowStockAt();
     return {
       ...p,
@@ -1104,6 +1124,7 @@ export function createCommerceCore({
         preorder: true,
         reviewed: true,
         ...delivered,
+        ...orderExtras.customerOrderExtras(orderId, ownerView),
         ...orderRefundState(orderId, true),
         queueNumber: reservation.queue_number ?? null,
       };
@@ -1118,6 +1139,7 @@ export function createCommerceCore({
       ...safe,
       reviewed: !!one("SELECT id FROM reviews WHERE order_id=?", orderId),
       ...delivered,
+      ...orderExtras.customerOrderExtras(orderId, ownerView),
       ...orderRefundState(orderId, false),
     };
   }
@@ -1802,6 +1824,23 @@ export function createCommerceCore({
     // product takes it here, for its first variant. Updating never overwrites prices.
     const price = input.id ? null : integer(input.price, 100, 10000000, "ราคา");
     const hasPreorder = Object.prototype.hasOwnProperty.call(input, "preorder");
+    const hasUsage = Object.prototype.hasOwnProperty.call(input, "usageInstructions");
+    const usageInstructions = hasUsage
+      ? normalizeUsageInstructions(input.usageInstructions, fail)
+      : null;
+    // First option of a new product: the form sends its name and warranty. API callers
+    // that send neither keep the old default label (backward compatible).
+    const firstLabel =
+      input.id || input.firstLabel === undefined || input.firstLabel === null
+        ? "โค้ดดิจิทัล"
+        : clean(input.firstLabel, 1, 80, "ชื่อตัวเลือกแรก");
+    const firstWarranty =
+      input.id ||
+      input.firstWarrantyDays === undefined ||
+      input.firstWarrantyDays === null ||
+      input.firstWarrantyDays === ""
+        ? 0
+        : integer(input.firstWarrantyDays, 0, 365, "วันรับประกัน");
     const preorderFlag =
       input.preorder === true || input.preorder === "on" || input.preorder === 1
         ? 1
@@ -1823,6 +1862,8 @@ export function createCommerceCore({
         );
         if (preorder !== existing.preorder)
           audit(user, preorder ? "PRODUCT_SET_PREORDER" : "PRODUCT_SET_READY", id);
+        if (hasUsage)
+          run("UPDATE products SET usage_instructions=? WHERE id=?", usageInstructions, id);
       } else {
         run(
           "INSERT INTO products(id,name,category,description,art,active,featured,preorder) VALUES(?,?,?,?,?,?,?,?)",
@@ -1836,12 +1877,15 @@ export function createCommerceCore({
           hasPreorder ? preorderFlag : 0,
         );
         run(
-          "INSERT INTO variants(id,product_id,label,price,active,sort_order) VALUES(?,?,?,?,1,0)",
+          "INSERT INTO variants(id,product_id,label,price,active,sort_order,warranty_days) VALUES(?,?,?,?,1,0,?)",
           id + "-30",
           id,
-          "โค้ดดิจิทัล",
+          firstLabel,
           price,
+          firstWarranty,
         );
+        if (usageInstructions)
+          run("UPDATE products SET usage_instructions=? WHERE id=?", usageInstructions, id);
       }
       audit(user, "SAVE_PRODUCT", id);
       const saved = one("SELECT preorder FROM products WHERE id=?", id);
@@ -1975,6 +2019,8 @@ export function createCommerceCore({
     const body = clean(input.body ?? "สวัสดี ต้องการความช่วยเหลือ", 1, 1000, "ข้อความ");
     assertChatRateLimit(user.id);
     return tx(() => {
+      // "แจ้งปัญหาบัญชีนี้": checked inside the transaction so the daily limit holds.
+      const report = orderExtras.chatReportLink(user, input);
       let thread = one(
         "SELECT * FROM chat_threads WHERE user_id=? AND status='OPEN' ORDER BY created_at DESC LIMIT 1",
         user.id,
@@ -1988,13 +2034,15 @@ export function createCommerceCore({
         );
         thread = one("SELECT * FROM chat_threads WHERE id=?", id);
       }
+      const messageId = randomUUID();
       run(
         "INSERT INTO chat_messages(id,thread_id,sender_type,body) VALUES(?,?,?,?)",
-        randomUUID(),
+        messageId,
         thread.id,
         "USER",
         body,
       );
+      orderExtras.attachChatReport(thread.id, messageId, report);
       notify(
         user.id,
         "chat",
@@ -2003,7 +2051,7 @@ export function createCommerceCore({
       );
       notifyStaffChatThrottled(
         thread.id,
-        "ลูกค้าเปิดแชทใหม่",
+        report ? "ลูกค้าแจ้งปัญหาบัญชี" : "ลูกค้าเปิดแชทใหม่",
         body.slice(0, 120),
       );
       audit(user, "OPEN_CHAT", thread.id);
@@ -2032,7 +2080,7 @@ export function createCommerceCore({
       );
     }
     return all(
-      "SELECT id,thread_id,sender_type,body,created_at FROM chat_messages WHERE thread_id=? ORDER BY created_at ASC,rowid ASC",
+      "SELECT id,thread_id,sender_type,body,created_at,order_id,report_reason FROM chat_messages WHERE thread_id=? ORDER BY created_at ASC,rowid ASC",
       id,
     );
   }
@@ -2056,13 +2104,16 @@ export function createCommerceCore({
           ? "ADMIN"
           : "STAFF"
         : "USER";
+      const report = staffReply ? null : orderExtras.chatReportLink(user, input);
+      const messageId = randomUUID();
       run(
         "INSERT INTO chat_messages(id,thread_id,sender_type,body) VALUES(?,?,?,?)",
-        randomUUID(),
+        messageId,
         id,
         senderType,
         body,
       );
+      orderExtras.attachChatReport(id, messageId, report);
       if (staffReply)
         notify(
           live.user_id,
@@ -2073,7 +2124,7 @@ export function createCommerceCore({
       else if (!isStaff(user))
         notifyStaffChatThrottled(
           id,
-          "ลูกค้าส่งข้อความใหม่",
+          report ? "ลูกค้าแจ้งปัญหาบัญชี" : "ลูกค้าส่งข้อความใหม่",
           body.slice(0, 120),
         );
       audit(user, "CHAT_MESSAGE", id);
@@ -2417,6 +2468,8 @@ export function createCommerceCore({
     publicUser,
     queueBoard,
     myQueue,
+    orderReceipt: orderExtras.orderReceipt,
+    adminOrderReceipt: orderExtras.adminOrderReceipt,
     chatThreads,
     openChatThread,
     chatMessages,

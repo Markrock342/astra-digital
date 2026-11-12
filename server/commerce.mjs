@@ -24,6 +24,7 @@ import {
   ensureAppendOnlyMoney,
   ensureChatThreadReads,
   ensureCustomerAdmin,
+  ensureOrderExtras,
   ensureOrderHistory,
   ensureProductsStock,
 } from "./ensure-admin-fr.mjs";
@@ -78,6 +79,7 @@ export function createCommerce(options = {}) {
   ensureAuthHardening(db);
   ensureOrderHistory(db);
   ensureProductsStock(db);
+  ensureOrderExtras(db);
   ensureLiveVersions(db);
   ensureAppendOnlyMoney(db);
   return createCommerceCore({ ...options, db, key });

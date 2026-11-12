@@ -77,6 +77,7 @@ test("admin creates a product, prices it, opens it and imports codes", async ({
   await page
     .getByLabel("รายละเอียด", { exact: true })
     .fill("ไลเซนส์สำหรับตรวจระบบร้านจริงแบบอัตโนมัติ");
+  await page.getByLabel("ชื่อตัวเลือกแรก").fill("ไลเซนส์ 1 ปี");
   await page.getByLabel("ราคาตัวเลือกแรก (บาท)").fill("125");
   await page.getByRole("button", { name: "สร้างฉบับร่าง", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("สร้างฉบับร่างแล้ว");
@@ -96,7 +97,7 @@ test("admin creates a product, prices it, opens it and imports codes", async ({
     await page.getByRole("button", { name: "นำเข้าโค้ด", exact: true }).click();
     await page
       .getByLabel("สินค้าและตัวเลือก")
-      .selectOption({ label: productName + " · โค้ดดิจิทัล" });
+      .selectOption({ label: productName + " · ไลเซนส์ 1 ปี" });
     const singleCode = page.getByRole("radio", { name: "โค้ดเดี่ยว" });
     await expect(singleCode).toBeVisible({ timeout: 15000 });
     await singleCode.check();

@@ -75,6 +75,7 @@ import Stores, { MerchantHeader } from "./Stores";
 import { CustomerChat, NotificationBell } from "./Ops";
 import { CountUp, useRouteMotion } from "./motion";
 import { WarrantyStatus } from "./Warranty";
+import { DeliveredExtras, hasReceipt, ReceiptLink, ReceiptPage, receiptRoute } from "./OrderExtras";
 import {
   ReferenceCatalog,
   ReferenceCatalogPage,
@@ -1483,6 +1484,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
             <div className="order-meta">
               <span>{t("คำสั่งซื้อ #")}{order.id.slice(0, 8).toUpperCase()}</span>
               <span>{dateTime(order.created_at)}</span>
+              {hasReceipt(order) && <ReceiptLink id={order.id} />}
             </div>
             {order.status === "DELIVERED" && <WarrantyStatus until={order.warranty_until} />}
             {order.status === "PREORDER" ? (
@@ -1545,6 +1547,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                   </div>
                 ))}
                 <p className="sandbox-note">{t("เก็บโค้ดนี้ไว้ในที่ปลอดภัย")}</p>
+                <DeliveredExtras order={order} />
               </div>
             ) : (
               order.status === "PENDING_PAYMENT" && (
@@ -1674,10 +1677,10 @@ function HistoryPage() {
           ) : filtered?.length ? (
             <div className="orders-list">
               {filtered.map((o) => (
+                <div className="history-item" key={o.id}>
                 <Link
                   to={"/orders/" + o.id}
                   className="panel history-card"
-                  key={o.id}
                 >
                   <div className="history-card-top">
                     <span>
@@ -1713,6 +1716,14 @@ function HistoryPage() {
                     <ArrowRight size={15} />
                   </div>
                 </Link>
+                {hasReceipt(o) && (
+                  <div className="history-item-actions">
+                    <ReceiptLink id={o.id}>
+                      {t("ใบเสร็จ")} #{o.id.slice(0, 8).toUpperCase()}
+                    </ReceiptLink>
+                  </div>
+                )}
+                </div>
               ))}
             </div>
           ) : (
@@ -2425,6 +2436,8 @@ function Router() {
 export default function App() {
   const [path, setPath] = useState(location.pathname);
   const merchant = path.startsWith("/admin") || path === "/stores";
+  // Printable receipt pages render on their own (no header, footer or chat).
+  const receipt = receiptRoute(path);
   const [lang, setLangState] = useState<Lang>(getLang);
   setMerchantScope(merchant);
   useRouteMotion(path);
@@ -2564,6 +2577,10 @@ export default function App() {
         changeLang,
       }}
     >
+      {receipt ? (
+        <ReceiptPage key={path} id={receipt.id} admin={receipt.admin} />
+      ) : (
+      <>
       <a className="skip-link" href="#content">
         {t("ข้ามไปเนื้อหา")}
       </a>
@@ -2599,6 +2616,8 @@ export default function App() {
         {!merchant && <Footer />}
         {!merchant && <CustomerChat />}
       </div>
+      </>
+      )}
       {toast && (
         <div className="toast" role="status">
           <CheckCircle2 size={18} />
