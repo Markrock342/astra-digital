@@ -67,6 +67,7 @@
 - หลังงาน 2 เพิ่ม: `adminOrdersApi`, `adminCustomersApi`, `adminProductsApi`, `adminSummaryApi` (boolean)
 - หลัง FR-P3: `productPreorderForm` (boolean) — `POST /api/admin/products` รับ `preorder`
 - หลังงาน 3: `adminFinance` (boolean) — `GET /api/admin/transactions` พร้อม
+- หลังงาน 4: `adminVariantCrud`, `adminStockApi` (boolean)
 
 ### สินค้า — ตั้งพรีออเดอร์จากฟอร์ม (FR-P3)
 
@@ -135,9 +136,27 @@
 
 Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์ `direction, fee, net, status, order_id, payment_id, provider_ref, actor_id, reason, finalized_at`
 
+### ตัวเลือกสินค้า (Admin FR งาน 4 · FR-P2)
+
+- `GET /api/admin/products/:id/variants` — STAFF+ · `{ variants[] }` มี label, price, active, sort_order, stock, stockStatus
+- `POST /api/admin/products/:id/variants` — ADMIN · body `{ label, price, sort_order? }` → 201
+- `PATCH /api/admin/variants/:id` — ADMIN · แก้ label/price/active/sort_order
+- `DELETE /api/admin/variants/:id` — ADMIN · ลบได้เมื่อไม่มีออเดอร์/จอง/สต็อก · ถ้ามี → 409 ให้ปิด `active` แทน
+- หน้าร้านและ checkout เห็นเฉพาะ `active=1` · เรียง `sort_order ASC`
+- Migration `007_variant_stock.sql`: `variants.active`, `variants.sort_order`
+
+### สต็อกต่อตัวเลือก (Admin FR งาน 4 · FR-P7)
+
+- `GET /api/admin/variants/:id/inventory?status=available|sold|defective&cursor&limit` — STAFF+ · ปิดบังรหัส (`credentialsMasked`)
+- `POST /api/admin/inventory/:id/defect` — ADMIN · `{ reason }` เฉพาะ available
+- `DELETE /api/admin/inventory/:id` — ADMIN · ลบได้เฉพาะ available
+- `POST /api/admin/inventory` รับ `csv` ข้อความเพิ่มจาก `codes`/`items` เดิม (บรรทัดละโค้ด หรือ `loginId,password`)
+- `POST /api/admin/settings` รับ `lowStockAt` (1–100, default 3) · แจ้งเตือน `stock_low` และ `stockStatus` ใช้ค่านี้
+- สต็อก available ไม่นับแถว `defective=1` · Migration 007 เพิ่มคอลัมน์ defective*
+
 ### สต็อกที่หน้าร้านเห็น
 
-- `GET /api/products` และ `/api/products/:id` ส่ง `stock` ไม่เกิน 10 (เท่าจำนวนสูงสุดต่อคำสั่งซื้อ) และ `stockStatus` = `in` | `low` (เหลือ ≤ 3) | `out`
+- `GET /api/products` และ `/api/products/:id` ส่ง `stock` ไม่เกิน 10 (เท่าจำนวนสูงสุดต่อคำสั่งซื้อ) และ `stockStatus` = `in` | `low` (เหลือ ≤ `lowStockAt`, default 3) | `out`
 - หน้าร้านแสดงแค่ "มีสินค้า / เหลือน้อย / สินค้าหมด" ไม่แสดงจำนวนจริง
 - จำนวนจริงดูได้เฉพาะผู้ดูแลที่ `GET /api/admin`
 

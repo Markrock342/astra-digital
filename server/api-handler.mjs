@@ -44,15 +44,17 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         headers: { ...securityHeaders, "Cache-Control": "no-store", ...extra },
       });
     try {
-      if (!["GET", "POST"].includes(request.method))
+      if (!["GET", "POST", "PATCH", "DELETE"].includes(request.method))
         return send(405, { error: "Method not allowed" });
-      if (request.method === "POST") {
+      const mutating = ["POST", "PATCH", "DELETE"].includes(request.method);
+      if (mutating) {
         if (request.headers.get("X-Astra-Request") !== "1")
           throw new ApiError(403, "ข้อมูลคำขอไม่ถูกต้อง");
         const origin = request.headers.get("Origin");
         if (origin && !sameLocalOrigin(origin, url.origin))
           throw new ApiError(403, "ไม่อนุญาตคำขอจากเว็บไซต์อื่น");
         if (
+          request.method !== "DELETE" &&
           !request.headers.get("Content-Type")?.startsWith("application/json")
         )
           throw new ApiError(415, "ต้องส่งข้อมูลแบบ JSON");
@@ -83,31 +85,35 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
       )?.[1];
       const user = service.session(token);
       let input = {};
-      if (request.method === "POST") {
+      if (mutating) {
         const length = Number(request.headers.get("Content-Length") ?? 0);
         if (length > 32768) throw new ApiError(413, "ข้อมูลมีขนาดใหญ่เกินไป");
-        const reader = request.body?.getReader();
-        const decoder = new TextDecoder();
-        let text = "",
-          bytes = 0;
-        if (reader)
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            bytes += value.byteLength;
-            if (bytes > 32768) {
-              await reader.cancel();
-              throw new ApiError(413, "ข้อมูลมีขนาดใหญ่เกินไป");
+        if (request.method === "DELETE" && length === 0) {
+          input = {};
+        } else {
+          const reader = request.body?.getReader();
+          const decoder = new TextDecoder();
+          let text = "",
+            bytes = 0;
+          if (reader)
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              bytes += value.byteLength;
+              if (bytes > 32768) {
+                await reader.cancel();
+                throw new ApiError(413, "ข้อมูลมีขนาดใหญ่เกินไป");
+              }
+              text += decoder.decode(value, { stream: true });
             }
-            text += decoder.decode(value, { stream: true });
+          text += decoder.decode();
+          try {
+            input = JSON.parse(text || "{}");
+            if (!input || typeof input !== "object" || Array.isArray(input))
+              throw Error();
+          } catch {
+            throw new ApiError(400, "ข้อมูล JSON ไม่ถูกต้อง");
           }
-        text += decoder.decode();
-        try {
-          input = JSON.parse(text || "{}");
-          if (!input || typeof input !== "object" || Array.isArray(input))
-            throw Error();
-        } catch {
-          throw new ApiError(400, "ข้อมูล JSON ไม่ถูกต้อง");
         }
       }
       if (request.method === "POST" && authenticationPaths.includes(path)) {
@@ -285,6 +291,36 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             cursor: url.searchParams.get("cursor") ?? undefined,
             limit: url.searchParams.get("limit") ?? undefined,
           }));
+        if (/^\/api\/admin\/products\/[^/]+\/variants$/.test(path))
+          return send(
+            200,
+            service.adminProductVariants(user, path.split("/")[4]),
+          );
+        if (/^\/api\/admin\/variants\/[^/]+\/inventory$/.test(path))
+          return send(
+            200,
+            service.adminVariantInventory(user, path.split("/")[4], {
+              status: url.searchParams.get("status") ?? undefined,
+              cursor: url.searchParams.get("cursor") ?? undefined,
+              limit: url.searchParams.get("limit") ?? undefined,
+            }),
+          );
+      } else if (request.method === "PATCH") {
+        if (/^\/api\/admin\/variants\/[^/]+$/.test(path))
+          return send(
+            200,
+            service.updateVariant(user, path.split("/")[4], input),
+          );
+        return send(404, { error: "ไม่พบหน้าที่ร้องขอ" });
+      } else if (request.method === "DELETE") {
+        if (/^\/api\/admin\/variants\/[^/]+$/.test(path))
+          return send(200, service.deleteVariant(user, path.split("/")[4]));
+        if (/^\/api\/admin\/inventory\/[^/]+$/.test(path))
+          return send(
+            200,
+            service.deleteInventoryUnit(user, path.split("/")[4]),
+          );
+        return send(404, { error: "ไม่พบหน้าที่ร้องขอ" });
       } else {
         if (path === "/api/logout") {
           service.logout(token);
@@ -350,6 +386,16 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           });
         if (path === "/api/admin/inventory")
           return send(200, service.importCodes(user, input));
+        if (/^\/api\/admin\/inventory\/[^/]+\/defect$/.test(path))
+          return send(
+            200,
+            service.markInventoryDefect(user, path.split("/")[4], input),
+          );
+        if (/^\/api\/admin\/products\/[^/]+\/variants$/.test(path))
+          return send(
+            201,
+            service.createVariant(user, path.split("/")[4], input),
+          );
         if (/^\/api\/admin\/reservations\/[^/]+\/deliver$/.test(path))
           return send(
             200,

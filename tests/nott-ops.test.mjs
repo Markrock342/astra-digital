@@ -1381,3 +1381,160 @@ test("live versions bump on mutations", (t) => {
   assert.equal(after.chat, before.chat + 1);
   assert.ok(seen.includes("chat"));
 });
+
+test('ADMIN-FR-W4: variant CRUD active sort and RBAC', (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  const product = s.saveProduct(merchant, {
+    name: 'Variant CRUD Item',
+    description: 'สินค้าทดสอบหลายตัวเลือก',
+    category: 'streaming',
+    price: 15000,
+    active: true,
+  });
+  const listed = s.adminProductVariants(staff, product.id);
+  assert.equal(listed.variants.length, 1);
+  assert.equal(listed.variants[0].label, 'โค้ดดิจิทัล');
+
+  const second = s.createVariant(merchant, product.id, {
+    label: '7 วัน',
+    price: 9900,
+    sort_order: 0,
+  });
+  s.updateVariant(merchant, listed.variants[0].id, { sort_order: 1 });
+  const ordered = s.adminProductVariants(merchant, product.id).variants;
+  assert.equal(ordered[0].id, second.id);
+  assert.equal(ordered[0].label, '7 วัน');
+
+  s.updateVariant(merchant, second.id, { active: false });
+  const publicProduct = s.productDetail(product.id);
+  assert.ok(!publicProduct.variants.some((v) => v.id === second.id));
+  assert.throws(
+    () =>
+      s.createOrder(user, {
+        variantId: second.id,
+        quantity: 1,
+        requestKey: 'w4-inactive-buy',
+      }),
+    (e) => e.status === 404,
+  );
+
+  assert.throws(
+    () => s.createVariant(staff, product.id, { label: 'x', price: 1000 }),
+    (e) => e.status === 403,
+  );
+  assert.throws(
+    () => s.updateVariant(user, second.id, { label: 'hack' }),
+    (e) => e.status === 403,
+  );
+
+  const empty = s.createVariant(merchant, product.id, {
+    label: 'ลบได้',
+    price: 12000,
+  });
+  assert.equal(s.deleteVariant(merchant, empty.id).deleted, true);
+  s.importCodes(merchant, { variantId: listed.variants[0].id, codes: 'W4DELCODE0001' });
+  assert.throws(
+    () => s.deleteVariant(merchant, listed.variants[0].id),
+    (e) => e.status === 409,
+  );
+  assert.equal(s.features.adminVariantCrud, true);
+});
+
+test('ADMIN-FR-W4: inventory list defect delete CSV and lowStockAt', async (t) => {
+  const { s, user, staff, merchant, merchantToken, staffToken, token } = fixture(t);
+  const product = s.saveProduct(merchant, {
+    name: 'Stock Page Item',
+    description: 'ทดสอบหน้าสต็อกต่อตัวเลือก',
+    category: 'streaming',
+    price: 20000,
+    active: true,
+  });
+  const variantId = s.adminProductVariants(merchant, product.id).variants[0].id;
+  s.importCodes(merchant, {
+    variantId,
+    csv: 'acc01,pass01\nacc02,pass02\nacc03,pass03',
+  });
+  const available = s.adminVariantInventory(staff, variantId, { status: 'available' });
+  assert.equal(available.inventory.length, 3);
+  assert.ok(available.inventory.every((row) => row.credentialsMasked));
+  assert.ok(available.inventory.every((row) => row.passwordMasked === '••••••••'));
+  assert.ok(!JSON.stringify(available).includes('pass01'));
+
+  const defectId = available.inventory[0].id;
+  s.markInventoryDefect(merchant, defectId, { reason: 'บัญชีล็อก' });
+  assert.equal(
+    s.adminVariantInventory(merchant, variantId, { status: 'defective' }).inventory.length,
+    1,
+  );
+  assert.equal(
+    s.adminVariantInventory(merchant, variantId, { status: 'available' }).inventory.length,
+    2,
+  );
+
+  const deleteId = s.adminVariantInventory(merchant, variantId, { status: 'available' })
+    .inventory[0].id;
+  assert.equal(s.deleteInventoryUnit(merchant, deleteId).deleted, true);
+  assert.throws(
+    () => s.deleteInventoryUnit(merchant, defectId),
+    (e) => e.status === 409,
+  );
+
+  s.setPaymentChannel(merchant, { provider: 'sandbox', active: true });
+  s.importCodes(merchant, { variantId, codes: 'W4SELLCODE0001' });
+  const order = s.createOrder(user, {
+    variantId,
+    quantity: 1,
+    requestKey: 'w4-sell-stock',
+  });
+  s.pay(user, order.id, { paymentToken: order.paymentToken, outcome: 'success' });
+  const sold = s.adminVariantInventory(merchant, variantId, { status: 'sold' });
+  assert.ok(sold.inventory.some((row) => row.order_id === order.id));
+  assert.throws(
+    () => s.deleteInventoryUnit(merchant, sold.inventory[0].id),
+    (e) => e.status === 409,
+  );
+
+  assert.throws(
+    () => s.markInventoryDefect(staff, available.inventory[1]?.id ?? defectId, { reason: 'nope' }),
+    (e) => e.status === 403,
+  );
+  assert.throws(
+    () => s.adminVariantInventory(user, variantId),
+    (e) => e.status === 403,
+  );
+
+  s.saveSettings(merchant, { lowStockAt: 5 });
+  assert.equal(s.settings().lowStockAt, 5);
+  assert.equal(s.features.adminStockApi, true);
+
+  const handle = createAPIHandler(s);
+  const patch = await handle(
+    new Request('http://127.0.0.1/api/admin/variants/' + variantId, {
+      method: 'PATCH',
+      headers: {
+        Cookie: 'astra_session=' + merchantToken,
+        'Content-Type': 'application/json',
+        'X-Astra-Request': '1',
+      },
+      body: JSON.stringify({ label: 'แพ็กมาตรฐาน' }),
+    }),
+  );
+  assert.equal(patch.status, 200);
+  assert.equal((await patch.json()).label, 'แพ็กมาตรฐาน');
+
+  const delDenied = await handle(
+    new Request('http://127.0.0.1/api/admin/variants/' + variantId, {
+      method: 'DELETE',
+      headers: {
+        Cookie: 'astra_session=' + staffToken,
+        'X-Astra-Request': '1',
+      },
+    }),
+  );
+  assert.equal(delDenied.status, 403);
+
+  // migrate 007 idempotent
+  const { applyMigration007 } = await import('../server/migrate-007.mjs');
+  const again = applyMigration007(s.db);
+  assert.equal(again.skipped, true);
+});

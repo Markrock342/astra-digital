@@ -24,6 +24,7 @@ import { createAdminFinanceApis } from "./admin-finance-apis.mjs";
 import { createAdminCustomerApis } from "./admin-customers.mjs";
 import { withLive } from "./live.mjs";
 import { createTeamApis } from "./admin-team.mjs";
+import { createAdminVariantStockApis } from "./admin-variant-stock-apis.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
@@ -111,9 +112,9 @@ export function createCommerceCore({
     );
   };
   const inventoryAvailableSql =
-    "order_id IS NULL AND reservation_id IS NULL";
+    "order_id IS NULL AND reservation_id IS NULL AND COALESCE(defective,0)=0";
   const inventoryAvailableAliased =
-    "i.order_id IS NULL AND i.reservation_id IS NULL";
+    "i.order_id IS NULL AND i.reservation_id IS NULL AND COALESCE(i.defective,0)=0";
   // Legacy single-secret rows stay in `codes`; real ID + password pairs go to
   // `credentials`, so the customer never sees one item listed twice.
   const readDeliveredItems = (column, bindId) => {
@@ -251,7 +252,7 @@ export function createCommerceCore({
        WHERE v.id=? AND p.preorder=0`,
       variantId,
     );
-    if (!row || row.stock > LOW_STOCK_AT) return;
+    if (!row || row.stock > getLowStockAt()) return;
     const now = Date.now();
     const last = stockLowCooldown.get(variantId) ?? 0;
     if (now - last < 300000) return;
@@ -364,7 +365,7 @@ export function createCommerceCore({
           p.featured ? 1 : 0,
         );
         run(
-          "INSERT INTO variants VALUES(?,?,?,?)",
+          "INSERT INTO variants(id,product_id,label,price,active,sort_order) VALUES(?,?,?,?,1,0)",
           p.id + "-30",
           p.id,
           p.category === "gift" ? "โค้ดดิจิทัล" : "30 วัน",
@@ -373,7 +374,7 @@ export function createCommerceCore({
       }
       for (const p of catalog.slice(0, 5))
         run(
-          "INSERT INTO variants VALUES(?,?,?,?)",
+          "INSERT INTO variants(id,product_id,label,price,active,sort_order) VALUES(?,?,?,?,1,1)",
           p.id + "-90",
           p.id,
           "90 วัน",
@@ -471,7 +472,7 @@ export function createCommerceCore({
         "UPDATE variants SET label='fyhdtjthjht',price=11000 WHERE id='stream-plus-90'",
       );
       run(
-        "INSERT OR IGNORE INTO variants VALUES('stream-plus-full','stream-plus','DISNEY+ 30 DAYS ยกแอค',38900)",
+        "INSERT OR IGNORE INTO variants(id,product_id,label,price,active,sort_order) VALUES('stream-plus-full','stream-plus','DISNEY+ 30 DAYS ยกแอค',38900,1,2)",
       );
       run(
         "UPDATE variants SET label='MONOMAX 30 DAYS หาร',price=12900 WHERE id='cinema-max-30'",
@@ -758,12 +759,17 @@ export function createCommerceCore({
     );
   }
   const PUBLIC_STOCK_CAP = 10;
-  const LOW_STOCK_AT = 3;
+  const getLowStockAt = () => {
+    const raw = settings().lowStockAt;
+    const n = Number(raw);
+    return Number.isInteger(n) && n >= 1 && n <= 100 ? n : 3;
+  };
   function mapProduct(p) {
+    const lowAt = getLowStockAt();
     return {
       ...p,
       variants: all(
-        `SELECT v.*, CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=? ORDER BY CASE WHEN v.id='stream-plus-full' THEN 0 WHEN v.id LIKE '%-30' THEN 1 ELSE 2 END,price`,
+        `SELECT v.*, CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=? AND COALESCE(v.active,1)=1 ORDER BY v.sort_order ASC, CASE WHEN v.id='stream-plus-full' THEN 0 WHEN v.id LIKE '%-30' THEN 1 ELSE 2 END, price, v.id`,
         p.id,
       ).map((v) => ({
         ...v,
@@ -771,7 +777,7 @@ export function createCommerceCore({
         // Public stock is capped at the per-order maximum so exact inventory stays private.
         stock: Math.min(v.stock, PUBLIC_STOCK_CAP),
         stockStatus:
-          v.stock <= 0 ? "out" : v.stock <= LOW_STOCK_AT ? "low" : "in",
+          v.stock <= 0 ? "out" : v.stock <= lowAt ? "low" : "in",
       })),
       rating: one(
         "SELECT AVG(r.rating) AS average,COUNT(*) AS count FROM reviews r JOIN orders o ON o.id=r.order_id JOIN variants v ON v.id=o.variant_id WHERE v.product_id=?",
@@ -814,6 +820,7 @@ export function createCommerceCore({
       requireTerms: true,
       stockOrder: "oldest",
       shopOpen: true,
+      lowStockAt: 3,
       ...(raw ? JSON.parse(raw.value) : {}),
     };
   }
@@ -850,6 +857,9 @@ export function createCommerceCore({
       if (!["oldest", "newest", "random"].includes(input.stockOrder))
         fail(400, "ลำดับสต็อกไม่ถูกต้อง");
       current.stockOrder = input.stockOrder;
+    }
+    if (input.lowStockAt !== undefined) {
+      current.lowStockAt = integer(input.lowStockAt, 1, 100, "เกณฑ์สต็อกใกล้หมด");
     }
     run(
       "INSERT INTO runtime_flags(key,value) VALUES('shop-settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
@@ -906,7 +916,7 @@ export function createCommerceCore({
       return { ...orderDetail(user, prior.id), paymentToken: null };
     }
     const variant = one(
-      "SELECT v.*,p.preorder FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.active=1 AND p.hidden_seed=0",
+      "SELECT v.*,p.preorder FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.active=1 AND p.hidden_seed=0 AND COALESCE(v.active,1)=1",
       variantId,
     );
     if (!variant) fail(404, "ไม่พบสินค้า");
@@ -1580,7 +1590,7 @@ export function createCommerceCore({
           hasPreorder ? preorderFlag : 0,
         );
         run(
-          "INSERT INTO variants VALUES(?,?,?,?)",
+          "INSERT INTO variants(id,product_id,label,price,active,sort_order) VALUES(?,?,?,?,1,0)",
           id + "-30",
           id,
           "โค้ดดิจิทัล",
@@ -1892,7 +1902,7 @@ export function createCommerceCore({
     audit,
     readDeliveredItems,
     inventoryAvailableAliased,
-    LOW_STOCK_AT,
+    getLowStockAt,
     bangkokDayRange,
     isAdmin,
   });
@@ -1934,6 +1944,33 @@ export function createCommerceCore({
     fail,
     clean,
     notify,
+  });
+  const {
+    adminProductVariants,
+    createVariant,
+    updateVariant,
+    deleteVariant,
+    adminVariantInventory,
+    markInventoryDefect,
+    deleteInventoryUnit,
+    importInventory,
+  } = createAdminVariantStockApis({
+    requireStaff,
+    requireAdmin,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    audit,
+    integer,
+    inventoryAvailableSql,
+    inventoryAvailableAliased,
+    decrypt,
+    importCodes,
+    getLowStockAt,
+    randomUUID,
   });
   function buyerRanking(user, query = {}) {
     requireAdmin(user);
@@ -2001,6 +2038,13 @@ export function createCommerceCore({
     saveStaff,
     setStaffActive,
     assignChatThread,
+    adminProductVariants,
+    createVariant,
+    updateVariant,
+    deleteVariant,
+    adminVariantInventory,
+    markInventoryDefect,
+    deleteInventoryUnit,
     getPaymentChannel,
     setPaymentChannel,
     pay,
@@ -2008,7 +2052,7 @@ export function createCommerceCore({
     topup,
     adminOverview,
     adminSummary,
-    importCodes,
+    importCodes: importInventory,
     deliverReservation,
     saveProduct,
     profile,
@@ -2040,6 +2084,8 @@ export function createCommerceCore({
       liveUpdates: true,
       teamAccounts: true,
       chatAssignment: true,
+      adminVariantCrud: true,
+      adminStockApi: true,
     }),
     salesRevenueSatang,
     logout: (token) =>
