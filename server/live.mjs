@@ -20,6 +20,7 @@ const LIVE_METHODS = {
   deleteInventoryUnit: ["catalog"],
   deliverReservation: ["orders", "notify"],
   adminCancelOrder: ["orders"],
+  replaceOrderCredential: ["orders", "catalog", "notify"],
   openChatThread: ["chat", "notify"],
   postChatMessage: ["chat", "notify"],
   closeChatThread: ["chat"],
