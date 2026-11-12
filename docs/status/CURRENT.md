@@ -2,11 +2,13 @@
 
 อัปเดตล่าสุด: 2026-11-12
 
-## Admin FR Backend — งาน 2 พร้อม PR (ห้าม deploy)
-- ฐาน `main` @ `6b37c4a` · branch `feat/admin-fr-work2-list-apis` · PR https://github.com/Markrock342/astra-digital/pull/26
-- เสร็จ: list APIs + reveal/audit · **`GET /api/admin/summary`** (Bangkok + FR-F10) · คืนสเปก Sharp|Animations ใน e2e · **ยังไม่ตัด** blob `/api/admin` · แชท `order_id` เลื่อน
-- หลักฐาน: `npm test` 67/67 · `test:e2e` 14/14 · รายงาน [MARK_REPORT_ADMIN_FR_WORK2](../database/MARK_REPORT_ADMIN_FR_WORK2.md)
-- **ห้าม deploy** · งาน 3–5 รอ Mark ผ่านงาน 2
+## Admin FR — FR-P3 พร้อม PR (ห้าม deploy)
+- ฐาน `main` @ `7fb79f9` · branch `feat/admin-fr-p3-saveproduct-preorder`
+- `saveProduct` รับ `preorder` · flag `productPreorderForm` · หลักฐาน 68/68 + e2e 14/14 · รายงาน [MARK_REPORT_ADMIN_FR_P3](../database/MARK_REPORT_ADMIN_FR_P3.md)
+- **ห้าม deploy** · งาน 3 เริ่มคนละ PR หลังส่งมอบนี้
+
+## Admin FR Backend — งาน 2 merge แล้ว (PR #26 · ยังไม่ deploy)
+- merge ใน `7fb79f9` · รายงาน [MARK_REPORT_ADMIN_FR_WORK2](../database/MARK_REPORT_ADMIN_FR_WORK2.md)
 
 ## Deploy 12 พ.ย. — งวด 2 (ล่าสุด)
 - Worker `2aa1ce33` + Pages `302a34d2` จาก main `65e8cfe`
