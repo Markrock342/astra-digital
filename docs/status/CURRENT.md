@@ -2,6 +2,14 @@
 
 อัปเดตล่าสุด: 2026-11-12
 
+## Deploy 12 พ.ย. — งวด 2 (ล่าสุด)
+- Worker `2aa1ce33` + Pages `302a34d2` จาก main `65e8cfe`
+  - รวม PR #22, #24 (#23 เข้าผ่าน #24) และ PR #25
+  - หน้าจอแชท / กระดิ่งแจ้งเตือน / อันดับผู้ซื้อ / ตั้งค่ารับเงิน (มาร์คทำแทนกลุ่ม B ของแบงค์)
+- **โหมดทดสอบเปิดอยู่:** `ASTRA_TEST_PAYMENTS: "on"` ใน `wrangler.jsonc` ทำให้ health ขึ้น `mode: sandbox` ให้ลูกค้าเติมเครดิตทดลองและจ่ายเงินทดลองได้
+  - ก่อนเปิดขายจริง: ลบค่านี้ แล้วล้างข้อมูลทดสอบ
+- สถานะเทียบ SOW: [INSTALLMENT-2-READINESS](INSTALLMENT-2-READINESS.md)
+
 ## Admin FR Backend — งาน 1 พร้อม PR (ห้าม deploy)
 - อ้างอิง [ADMIN-FR-20261111](../requirements/ADMIN-FR-20261111.md) · Roadmap [NOTT-ADMIN-FR-20261111](../roadmaps/NOTT-ADMIN-FR-20261111.md)
 - งาน 1 เสร็จในเครื่อง: สัญญาแชท/แจ้งเตือน/อันดับ + unread inbox + admin ops notify + features ใน `/api/me` + FR-F10 `salesRevenueSatang` · branch `feat/admin-fr-work1-api-contract-revenue`
