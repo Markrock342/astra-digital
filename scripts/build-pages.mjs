@@ -1,4 +1,4 @@
-import { cpSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { cpSync, rmSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { build } from "esbuild";
 const STRICT_CSP =
   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
@@ -7,7 +7,11 @@ const STRICT_CSP =
 // (TURNSTILE_SITE_KEY set at build time); the default build is unchanged.
 const TURNSTILE_CSP =
   "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
-const turnstile = !!process.env.TURNSTILE_SITE_KEY;
+// Turnstile is on when the build env says so, or when wrangler.jsonc carries the site key
+// (the deployed Worker then enforces it, so the Pages CSP must allow the widget too).
+const turnstile =
+  !!process.env.TURNSTILE_SITE_KEY ||
+  /"TURNSTILE_SITE_KEY"\s*:\s*"[^"]+"/.test(readFileSync("wrangler.jsonc", "utf8"));
 rmSync("dist-pages",{recursive:true,force:true});
 mkdirSync("dist-pages", { recursive: true });
 cpSync("dist", "dist-pages", { recursive: true });
