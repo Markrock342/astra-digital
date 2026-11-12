@@ -22,6 +22,8 @@ import { credentialFingerprint } from "./migrate-005.mjs";
 import { createAdminListApis } from "./admin-list-apis.mjs";
 import { createAdminFinanceApis } from "./admin-finance-apis.mjs";
 import { createAdminCustomerApis } from "./admin-customers.mjs";
+import { withLive } from "./live.mjs";
+import { createTeamApis } from "./admin-team.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
@@ -1470,7 +1472,7 @@ export function createCommerceCore({
     });
   }
   function deliverReservation(user, id) {
-    requireAdmin(user);
+    requireStaff(user);
     const reservationId = clean(id, 1, 80, "รหัสพรีออเดอร์");
     return tx(() => {
       const reservation = one(
@@ -1680,7 +1682,7 @@ export function createCommerceCore({
     requireUser(user);
     if (isStaff(user))
       return all(
-        `SELECT t.*,u.name AS customer,u.email AS customer_email,
+        `SELECT t.*,u.name AS customer,u.email AS customer_email,a.name AS assignee,
                 (SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id=t.id) AS messages,
                 COALESCE(
                   (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.thread_id=t.id),
@@ -1695,7 +1697,7 @@ export function createCommerceCore({
                       '1970-01-01 00:00:00'
                     )
                 ) AS unreadCount
-         FROM chat_threads t JOIN users u ON u.id=t.user_id
+         FROM chat_threads t JOIN users u ON u.id=t.user_id LEFT JOIN users a ON a.id=t.assigned_to
          ORDER BY lastMessageAt DESC, t.id DESC`,
         user.id,
       );
@@ -1921,6 +1923,18 @@ export function createCommerceCore({
     fail,
     clean,
   });
+  const { team, saveStaff, setStaffActive, assignChatThread } = createTeamApis({
+    passwordHash,
+    requireAdmin,
+    requireStaff,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    notify,
+  });
   function buyerRanking(user, query = {}) {
     requireAdmin(user);
     const rawLimit = query.limit ?? null;
@@ -1953,7 +1967,7 @@ export function createCommerceCore({
       spentSatang: row.spent_satang,
     }));
   }
-  return {
+  const service = {
     db,
     reviews,
     settings,
@@ -1983,6 +1997,10 @@ export function createCommerceCore({
     adminResetCustomerPassword,
     adminAuditLog,
     adminCancelOrder,
+    team,
+    saveStaff,
+    setStaffActive,
+    assignChatThread,
     getPaymentChannel,
     setPaymentChannel,
     pay,
@@ -2019,6 +2037,9 @@ export function createCommerceCore({
       productPreorderForm: true,
       adminFinance: true,
       adminCustomerManage: true,
+      liveUpdates: true,
+      teamAccounts: true,
+      chatAssignment: true,
     }),
     salesRevenueSatang,
     logout: (token) =>
@@ -2047,4 +2068,5 @@ export function createCommerceCore({
       );
     },
   };
+  return withLive(service, { run, all });
 }

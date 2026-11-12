@@ -570,10 +570,7 @@ test("ISSUE-18 DB-005: import pairs, deliver, owner credentials, queue, index", 
     () => s.deliverReservation(user, reservation.id),
     (e) => e.status === 403,
   );
-  assert.throws(
-    () => s.deliverReservation(staff, reservation.id),
-    (e) => e.status === 403,
-  );
+  // Team members (STAFF) may deliver preorders since the team-accounts change; customers may not.
 
   // P1 — ADMIN deliver binds reservation_id
   const delivered = s.deliverReservation(merchant, reservation.id);
@@ -1348,4 +1345,39 @@ test("admin cancels only unpaid orders, issues a temporary password, and reads t
   const next = s.adminAuditLog(merchant, { scope: "staff", cursor: log.nextCursor });
   assert.ok(next.entries.every((e) => e.id < log.entries[1].id));
   assert.ok(s.adminAuditLog(merchant, { action: "CUSTOMER_" }).entries.every((e) => e.action.startsWith("CUSTOMER_")));
+});
+
+test("team accounts and chat assignment", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  assert.throws(() => s.saveStaff(staff, { name: "X", email: "x@example.invalid" }), (e) => e.status === 403);
+  const created = s.saveStaff(merchant, { name: "แอดมินสอง", email: "Second@Example.invalid" });
+  assert.equal(created.member.role, "STAFF");
+  assert.equal(created.temporaryPassword.length, 12);
+  const second = s.session(s.login({ email: "second@example.invalid", password: created.temporaryPassword }).token);
+  assert.ok(s.team(second).some((m) => m.id === merchant.id));
+
+  const opened = s.openChatThread(user, { body: "สินค้าเข้าเมื่อไหร่" });
+  const assigned = s.assignChatThread(merchant, opened.thread.id, { assigneeId: second.id });
+  assert.equal(assigned.assignee, "แอดมินสอง");
+  assert.ok(s.notifications(second).some((n) => n.kind === "chat_assigned"));
+  assert.equal(s.chatThreads(second).find((th) => th.id === opened.thread.id).assignee, "แอดมินสอง");
+  assert.throws(() => s.assignChatThread(user, opened.thread.id, { assigneeId: second.id }), (e) => e.status === 403);
+  assert.throws(() => s.assignChatThread(merchant, opened.thread.id, { assigneeId: user.id }), (e) => e.status === 400);
+  s.postChatMessage(second, opened.thread.id, { body: "พรุ่งนี้ครับ" });
+
+  s.setStaffActive(merchant, second.id, { active: false });
+  assert.throws(() => s.login({ email: "second@example.invalid", password: created.temporaryPassword }), (e) => e.status === 403);
+  assert.equal(s.chatThreads(merchant).find((th) => th.id === opened.thread.id).assigned_to, null);
+  assert.throws(() => s.setStaffActive(merchant, merchant.id, { active: false }), (e) => e.status === 404);
+});
+
+test("live versions bump on mutations", (t) => {
+  const { s, user } = fixture(t);
+  const seen = [];
+  s.onLive((topics) => seen.push(...topics));
+  const before = s.liveVersions();
+  s.openChatThread(user, { body: "สวัสดี" });
+  const after = s.liveVersions();
+  assert.equal(after.chat, before.chat + 1);
+  assert.ok(seen.includes("chat"));
 });

@@ -1,4 +1,5 @@
 // In-web chat, notifications and buyer ranking (SOW items). API: docs/architecture/api-contract-shop.md
+import { useLive, type LiveTopic } from "./live";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
@@ -23,7 +24,10 @@ export type ChatThread = {
   lastMessageAt: string;
   unreadCount: number;
   created_at: string;
+  assigned_to?: string | null;
+  assignee?: string | null;
 };
+type TeamMember = { id: string; name: string; role: string; active: boolean };
 export type ChatMessage = {
   id: string;
   thread_id: string;
@@ -48,9 +52,13 @@ export type Buyer = {
 };
 
 /** Runs `fn` now and every `ms` while the tab is visible. */
-function usePoll(fn: () => void, ms: number, enabled = true) {
+/** Load now, again on every live signal for `topics`, and on a slow safety interval. */
+function usePoll(fn: () => void, ms: number, enabled = true, topics: LiveTopic[] = []) {
   const saved = useRef(fn);
   saved.current = fn;
+  useLive(topics, () => {
+    if (enabled) saved.current();
+  });
   useEffect(() => {
     if (!enabled) return;
     saved.current();
@@ -87,6 +95,7 @@ function noticeTarget(n: Notice, admin: boolean) {
     return (
       {
         chat: "/admin/chat",
+        chat_assigned: "/admin/chat",
         order_new: "/admin/orders",
         preorder_queue_admin: "/admin/preorders",
         stock_low: "/admin/inventory",
@@ -110,7 +119,7 @@ export function NotificationBell({ admin = false }: { admin?: boolean }) {
       /* keep the last list; the bell is not critical */
     }
   }, []);
-  usePoll(load, 20000, !!user);
+  usePoll(load, 60000, !!user, ["notify"]);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
@@ -272,7 +281,7 @@ export function CustomerChat() {
       setLoaded(true);
     }
   }, []);
-  usePoll(load, 8000, open && !!user);
+  usePoll(load, 60000, open && !!user, ["chat"]);
   async function send(e: FormEvent) {
     e.preventDefault();
     const body = text.trim();
@@ -382,14 +391,20 @@ export function CustomerChat() {
 
 /** /admin/chat — every customer thread, newest message first. */
 export function AdminChat() {
-  const { toast } = useStore();
+  const { toast, user } = useStore();
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  useEffect(() => {
+    api<{ team: TeamMember[] }>("/admin/team")
+      .then((r) => setTeam(r.team.filter((m) => m.active)))
+      .catch(() => {});
+  }, []);
   const [threads, setThreads] = useState<ChatThread[] | null>(null);
   const [current, setCurrent] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState<"OPEN" | "ALL">("OPEN");
+  const [filter, setFilter] = useState<"OPEN" | "MINE" | "ALL">("OPEN");
   const loadThreads = useCallback(async () => {
     try {
       setThreads((await api<{ threads: ChatThread[] }>("/chat/threads")).threads);
@@ -409,10 +424,22 @@ export function AdminChat() {
       setError((e as Error).message);
     }
   }, [current]);
-  usePoll(loadThreads, 10000);
-  usePoll(loadMessages, 6000, !!current);
+  usePoll(loadThreads, 60000, true, ["chat"]);
+  usePoll(loadMessages, 60000, !!current, ["chat"]);
   const thread = threads?.find((x) => x.id === current);
-  const shown = (threads ?? []).filter((x) => filter === "ALL" || x.status === "OPEN");
+  const shown = (threads ?? []).filter((x) =>
+    filter === "ALL" ? true : filter === "MINE" ? x.assigned_to === user?.id && x.status === "OPEN" : x.status === "OPEN",
+  );
+  async function assign(assigneeId: string) {
+    if (!current) return;
+    try {
+      await api("/chat/threads/" + current + "/assign", { assigneeId: assigneeId || null });
+      toast(assigneeId ? "มอบหมายแชทแล้ว" : "ยกเลิกการมอบหมายแล้ว");
+      await loadThreads();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
   async function reply(e: FormEvent) {
     e.preventDefault();
     const body = text.trim();
@@ -463,6 +490,7 @@ export function AdminChat() {
             {(
               [
                 ["OPEN", "เปิดอยู่"],
+                ["MINE", "ของฉัน"],
                 ["ALL", "ทั้งหมด"],
               ] as const
             ).map(([key, label]) => (
@@ -475,7 +503,7 @@ export function AdminChat() {
             <p className="reference-empty-text">กำลังโหลดแชท…</p>
           ) : !shown.length ? (
             <p className="reference-empty-text">
-              {filter === "OPEN" ? "ไม่มีแชทที่เปิดอยู่" : "ยังไม่มีลูกค้าทักแชท"}
+              {filter === "OPEN" ? "ไม่มีแชทที่เปิดอยู่" : filter === "MINE" ? "ไม่มีแชทที่มอบหมายให้คุณ" : "ยังไม่มีลูกค้าทักแชท"}
             </p>
           ) : (
             shown.map((x) => (
@@ -493,6 +521,7 @@ export function AdminChat() {
                   <small>
                     {x.status === "CLOSED" ? "ปิดแล้ว · " : ""}
                     {relativeTime(x.lastMessageAt)}
+                    {x.assignee ? " · ดูแลโดย " + x.assignee : ""}
                   </small>
                 </span>
                 {x.unreadCount > 0 && <b className="admin-chat-unread">{x.unreadCount}</b>}
@@ -517,6 +546,23 @@ export function AdminChat() {
                     {dateTime(thread.created_at)}
                   </small>
                 </div>
+                {thread.status === "OPEN" && (
+                  <label className="admin-chat-assign">
+                    <span className="sr-only">ผู้ดูแลแชทนี้</span>
+                    <select
+                      aria-label="ผู้ดูแลแชทนี้"
+                      value={thread.assigned_to ?? ""}
+                      onChange={(e) => void assign(e.target.value)}
+                    >
+                      <option value="">ยังไม่มอบหมาย</option>
+                      {team.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.id === user?.id ? m.name + " (ฉัน)" : m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 {thread.status === "OPEN" ? (
                   <button className="button secondary" disabled={busy} onClick={() => void close()}>
                     ปิดแชท

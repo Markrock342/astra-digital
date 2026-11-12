@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   UserRound,
 } from "lucide-react";
+import { useLive, type LiveTopic } from "./live";
+import { AdminChat as AdminChatLazy } from "./Ops";
 import { Art, ErrorMessage, Link, Status, useStore } from "./App";
 import { api, dateTime, money } from "./api";
 
@@ -27,7 +29,9 @@ const query = (filters: Filters, cursor?: string | null) => {
 };
 
 /** Cursor list that refetches when filters change (search is debounced). */
-function useCursorList<T>(path: string, key: string, filters: Filters) {
+function useCursorList<T>(path: string, key: string, filters: Filters, topics: LiveTopic[] = []) {
+  const [tick, setTick] = useState(0);
+  useLive(topics, () => setTick((n) => n + 1));
   const [rows, setRows] = useState<T[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -49,7 +53,7 @@ function useCursorList<T>(path: string, key: string, filters: Filters) {
     }, 250);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, serial]);
+  }, [path, serial, tick]);
   async function more() {
     if (!next) return;
     setLoadingMore(true);
@@ -221,7 +225,7 @@ export function AdminOrders() {
   const { go } = useStore();
   const [filters, setFilters] = useState<Filters>(emptyOrderFilters);
   const [exporting, setExporting] = useState(false);
-  const list = useCursorList<OrderRow>("/admin/orders", "orders", { ...filters, limit: "50" });
+  const list = useCursorList<OrderRow>("/admin/orders", "orders", { ...filters, limit: "50" }, ["orders"]);
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
   const active = Object.values(filters).some(Boolean);
   async function exportCsv() {
@@ -545,7 +549,7 @@ export function AdminCustomers() {
   const { go, user } = useStore();
   const admin = user?.role === "ADMIN";
   const [filters, setFilters] = useState<Filters>(emptyCustomerFilters);
-  const list = useCursorList<CustomerRow>("/admin/customers", "customers", { ...filters, limit: "50" });
+  const list = useCursorList<CustomerRow>("/admin/customers", "customers", { ...filters, limit: "50" }, ["customers", "orders"]);
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
   const active = Object.entries(filters).some(([k, v]) => v && !(k === "sort" && v === "created_at"));
   const [exporting, setExporting] = useState(false);
@@ -996,7 +1000,7 @@ export function AdminProducts({
 }) {
   const { go } = useStore();
   const [filters, setFilters] = useState<Filters>(emptyProductFilters);
-  const list = useCursorList<ProductRow>("/admin/products", "products", { ...filters, limit: "50" });
+  const list = useCursorList<ProductRow>("/admin/products", "products", { ...filters, limit: "50" }, ["catalog", "orders"]);
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
   const active = Object.entries(filters).some(([k, v]) => v && !(k === "sort" && v === "name"));
   return (
@@ -1172,7 +1176,7 @@ export function AdminFinance() {
   const [filters, setFilters] = useState<Filters>(emptyFinanceFilters);
   const [summary, setSummary] = useState<TxnSummary | null>(null);
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
-  const list = useCursorList<Txn>("/admin/transactions", "transactions", { ...filters, limit: "50" });
+  const list = useCursorList<Txn>("/admin/transactions", "transactions", { ...filters, limit: "50" }, ["orders", "customers"]);
   const serial = JSON.stringify(filters);
   useEffect(() => {
     api<{ summary: TxnSummary }>("/admin/transactions" + query({ ...filters, limit: "1" }))
@@ -1512,5 +1516,216 @@ export function AdminAudit() {
       </div>
       {list.rows && <MoreRow next={list.next} more={list.more} loading={list.loadingMore} count={list.rows.length} />}
     </>
+  );
+}
+
+// ---------------------------------------------------------------- Settings: team (FR-S4)
+
+type Member = { id: string; name: string; email: string; role: string; active: boolean; created_at: string };
+
+export function AdminTeam() {
+  const { toast, user } = useStore();
+  const [team, setTeam] = useState<Member[] | null>(null);
+  const [error, setError] = useState("");
+  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = () =>
+    api<{ team: Member[] }>("/admin/team")
+      .then((r) => setTeam(r.team))
+      .catch((e) => setError((e as Error).message));
+  useEffect(() => {
+    void load();
+  }, []);
+  useLive(["team"], () => void load());
+  async function add(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const values = Object.fromEntries(new FormData(form)) as Record<string, string>;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ member: Member; temporaryPassword: string }>("/admin/team", values);
+      setCreated({ email: result.member.email, password: result.temporaryPassword });
+      form.reset();
+      toast("เพิ่มทีมงานแล้ว");
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function toggle(m: Member) {
+    try {
+      await api("/admin/team/" + m.id + "/active", { active: !m.active });
+      toast(m.active ? "ปิดบัญชีทีมงานแล้ว" : "เปิดบัญชีทีมงานแล้ว");
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>ทีมงาน</h1>
+          <p>ทีมงานตอบแชท ดูออเดอร์ ส่งของพรีออเดอร์ และดูลูกค้าได้ · ไม่เห็นการเงิน ตั้งค่า และแก้สินค้าไม่ได้</p>
+        </div>
+      </div>
+      <ErrorMessage message={error} />
+      <div className="admin-detail-grid">
+        <section className="reference-admin-card admin-detail-card">
+          <h2>สมาชิก</h2>
+          {!team && <p className="muted">กำลังโหลด…</p>}
+          {team?.map((m) => (
+            <div className="settings-row" key={m.id}>
+              <span>
+                {m.name} {m.id === user?.id && <span className="admin-chip">ฉัน</span>}
+                <small>
+                  {m.email} · {m.role === "ADMIN" ? "แอดมิน (เจ้าของ)" : "ทีมงาน"}
+                  {!m.active && " · ปิดอยู่"}
+                </small>
+              </span>
+              {m.role === "STAFF" && (
+                <button className={"button " + (m.active ? "ghost" : "secondary")} onClick={() => void toggle(m)}>
+                  {m.active ? "ปิดบัญชี" : "เปิดบัญชี"}
+                </button>
+              )}
+            </div>
+          ))}
+        </section>
+        <section className="reference-admin-card admin-detail-card">
+          <h2>เพิ่มทีมงาน</h2>
+          <form onSubmit={add} className="admin-form-grid">
+            <label className="field span-2">
+              ชื่อ
+              <input name="name" required minLength={2} maxLength={60} />
+            </label>
+            <label className="field span-2">
+              อีเมลสำหรับเข้าสู่ระบบ
+              <input name="email" type="email" required maxLength={160} />
+            </label>
+            <button className="button primary span-2" disabled={busy}>
+              เพิ่มทีมงาน
+            </button>
+          </form>
+          {created && (
+            <div className="admin-temp-password">
+              <p>ส่งข้อมูลนี้ให้ทีมงาน (แสดงครั้งเดียว) แล้วให้เปลี่ยนรหัสผ่านหลังเข้าสู่ระบบ</p>
+              <span>อีเมล: {created.email}</span>
+              <code>{created.password}</code>
+            </div>
+          )}
+        </section>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- STAFF back office
+
+type QueueRow = {
+  id: string;
+  queue_number: number;
+  status: string;
+  total: number;
+  quantity: number;
+  created_at: string;
+  customer: string;
+  product: string;
+  label: string;
+};
+
+function StaffQueue() {
+  const { toast } = useStore();
+  const [queue, setQueue] = useState<QueueRow[] | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+  const load = () =>
+    api<{ queue: QueueRow[] }>("/queue")
+      .then((r) => setQueue(r.queue))
+      .catch((e) => setError((e as Error).message));
+  useEffect(() => {
+    void load();
+  }, []);
+  useLive(["orders", "catalog"], () => void load());
+  async function deliver(item: QueueRow) {
+    setBusy(item.id);
+    setError("");
+    try {
+      await api("/admin/reservations/" + item.id + "/deliver", {});
+      toast("ส่งของคิว #" + item.queue_number + " แล้ว");
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+  const waiting = (queue ?? []).filter((q) => q.status === "PREORDER");
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>คิวพรีออเดอร์</h1>
+          <p>ส่งของตามลำดับคิว ระบบดึง ID และรหัสผ่านจากสต็อกให้อัตโนมัติ (แอดมินต้องเติมสต็อกก่อน)</p>
+        </div>
+      </div>
+      <ErrorMessage message={error} />
+      <div className="table-scroll reference-table admin-list-table">
+        <table>
+          <thead>
+            <tr>
+              <th>คิว</th>
+              <th>ลูกค้า</th>
+              <th>สินค้า</th>
+              <th>วันที่</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {waiting.map((q) => (
+              <tr key={q.id}>
+                <td>
+                  <strong>#{q.queue_number}</strong>
+                </td>
+                <td>{q.customer}</td>
+                <td>
+                  {q.product}
+                  <small>
+                    {q.label} · {q.quantity} ชิ้น
+                  </small>
+                </td>
+                <td className="nowrap">{dateTime(q.created_at)}</td>
+                <td>
+                  <button className="button primary" disabled={!!busy} onClick={() => void deliver(q)}>
+                    {busy === q.id ? "กำลังส่ง…" : "ส่งของ"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {queue && !waiting.length && <p className="reference-empty-text">ไม่มีคิวรอส่ง</p>}
+      </div>
+    </>
+  );
+}
+
+/** Team members (STAFF): chat, orders, preorder queue, customers (no money), own account. */
+export function StaffBackOffice({ tab, sub, detailId }: { tab: string; sub: string; detailId?: string }) {
+  if (tab === "chat" || tab === "") return <AdminChatLazy />;
+  if (tab === "orders") return detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />;
+  if (tab === "preorders") return <StaffQueue />;
+  if (tab === "customers") return detailId ? <AdminCustomerDetail id={detailId} /> : <AdminCustomers />;
+  if (sub === "settings/account") return <AdminAccount />;
+  return (
+    <section className="reference-admin-card editor-panel">
+      <h1>ไม่มีสิทธิ์เข้าหน้านี้</h1>
+      <p>บัญชีทีมงานใช้ได้เฉพาะแชท ออเดอร์ คิวพรีออเดอร์ และลูกค้า</p>
+      <Link to="/admin/chat" className="button primary">
+        ไปที่แชท
+      </Link>
+    </section>
   );
 }

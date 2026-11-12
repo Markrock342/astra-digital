@@ -28,5 +28,6 @@ export function ensureCustomerAdmin(db) {
   add("users", "phone", "TEXT");
   add("users", "note", "TEXT");
   add("audit", "detail", "TEXT");
+  add("chat_threads", "assigned_to", "TEXT");
   db.exec("CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit(entity_id)");
 }

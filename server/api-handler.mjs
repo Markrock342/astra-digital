@@ -141,6 +141,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             storage: service.storageKind ?? "local-sqlite",
             features: service.features ?? {},
           });
+        if (path === "/api/live" && service.liveVersions)
+          return send(200, { versions: service.liveVersions() });
         if (path === "/api/me")
           return send(200, {
             user: service.publicUser(user),
@@ -233,6 +235,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             });
           return send(200, page);
         }
+        if (path === "/api/admin/team") return send(200, { team: service.team(user) });
         if (path === "/api/admin/audit")
           return send(200, service.adminAuditLog(user, {
             action: url.searchParams.get("action") ?? undefined,
@@ -321,6 +324,11 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           });
         if (/^\/api\/notifications\/[^/]+\/read$/.test(path))
           return send(200, service.markNotificationRead(user, path.split("/")[3]));
+        if (path === "/api/admin/team") return send(200, service.saveStaff(user, input));
+        if (/^\/api\/admin\/team\/[^/]+\/active$/.test(path))
+          return send(200, service.setStaffActive(user, path.split("/")[4], input));
+        if (/^\/api\/chat\/threads\/[^/]+\/assign$/.test(path))
+          return send(200, { thread: service.assignChatThread(user, path.split("/")[4], input) });
         if (/^\/api\/admin\/orders\/[^/]+\/cancel$/.test(path))
           return send(200, service.adminCancelOrder(user, path.split("/")[4], input));
         if (/^\/api\/admin\/orders\/[^/]+\/reveal$/.test(path))

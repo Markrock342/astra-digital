@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { AlertTriangle, ChevronRight, Clock3, MessageCircle, Receipt } from "lucide-react";
 import { Link } from "./App";
+import { useLive } from "./live";
 import { api, money } from "./api";
 
 type Summary = { revenue: number; orderCount: number; newCustomers: number };
@@ -49,6 +50,8 @@ export function AdminDashboard({
   const [low, setLow] = useState<Product[]>([]);
   const [unread, setUnread] = useState(0);
   const [error, setError] = useState("");
+  const [tick, setTick] = useState(0);
+  useLive(["orders", "catalog", "chat", "customers"], () => setTick((n) => n + 1));
 
   useEffect(() => {
     const { days } = ranges[range];
@@ -69,7 +72,7 @@ export function AdminDashboard({
         setDaily(t.summary.daily);
       })
       .catch((e) => setError((e as Error).message));
-  }, [range]);
+  }, [range, tick]);
 
   useEffect(() => {
     api<{ products: Product[] }>("/admin/products?sort=sold&limit=5")
@@ -84,7 +87,7 @@ export function AdminDashboard({
     api<{ threads: { unreadCount?: number; status?: string }[] }>("/chat/threads")
       .then((d) => setUnread(d.threads.reduce((n, t) => n + (t.unreadCount ?? 0), 0)))
       .catch(() => {});
-  }, []);
+  }, [tick]);
 
   // Fill missing days so the chart reads as a calendar, not a list of sales.
   const chartDays = Math.max(ranges[range].days || 30, 7);

@@ -1,3 +1,4 @@
+import { useLive } from "./live";
 import {
   createContext,
   useContext,
@@ -1254,6 +1255,12 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const testPayments = useTestPayments();
+  useLive(["orders"], () => {
+    if (user && !busy)
+      api<Order>("/orders/" + id)
+        .then(setOrder)
+        .catch(() => {});
+  });
   useEffect(() => {
     if (user)
       api<Order>("/orders/" + id)
@@ -1508,12 +1515,14 @@ function HistoryPage() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
-  useEffect(() => {
+  const loadOrders = () => {
     if (user)
       api<{ orders: Order[] }>("/orders")
         .then((r) => setOrders(r.orders))
         .catch((e) => setError(e.message));
-  }, [user?.id]);
+  };
+  useEffect(loadOrders, [user?.id]);
+  useLive(["orders"], loadOrders);
   const filtered = orders?.filter(
     (o) => filter === "all" || o.status === filter,
   );
@@ -2344,6 +2353,8 @@ export default function App() {
       setLoading(false);
     }
   }
+  // Stock, prices and products update live on every open tab.
+  useLive(["catalog"], () => void refresh());
   useEffect(() => {
     void refresh();
     const onPop = () => setPath(location.pathname);

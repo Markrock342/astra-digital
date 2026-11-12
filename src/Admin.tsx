@@ -36,6 +36,7 @@ import {
   X,
   Clock3,
 } from "lucide-react";
+import { useLive } from "./live";
 import { Art, Empty, ErrorMessage, Link, Status, useStore } from "./App";
 import { useDialog } from "./dialog";
 import { api, dateTime, money } from "./api";
@@ -44,6 +45,8 @@ import { AdminChat, BuyerRanking, BuyerRankingCard, PaymentChannelSettings } fro
 import {
   AdminAccount,
   AdminAudit,
+  AdminTeam,
+  StaffBackOffice,
   AdminCustomerDetail,
   AdminFinance,
   AdminCustomers,
@@ -64,6 +67,7 @@ const orderTabs = [
 const settingTabs = [
   ["settings", "ร้าน"],
   ["settings/payment", "รับเงิน"],
+  ["settings/team", "ทีมงาน"],
   ["settings/account", "บัญชีแอดมิน"],
   ["settings/audit", "ประวัติการทำงาน"],
 ];
@@ -154,6 +158,11 @@ export default function Admin() {
       setError((e as Error).message);
     }
   }
+  // Orders, stock and queue counts refresh the moment anything changes.
+  useLive(["orders", "catalog", "customers"], () => {
+    if (user?.role === "ADMIN") void load();
+    if (user?.role === "ADMIN" && tab === "preorders") void loadQueue();
+  });
   useEffect(() => {
     if (user?.role === "ADMIN") void load();
   }, [user?.id]);
@@ -272,6 +281,15 @@ export default function Admin() {
       setBusy(false);
     }
   }
+  if (user?.role === "STAFF")
+    return (
+      <>
+        {orderGroup && <Subnav items={orderTabs} current={tab} />}
+        <main className="reference-admin-main">
+          <StaffBackOffice tab={tab} sub={sub} detailId={detailId} />
+        </main>
+      </>
+    );
   if (!user || user.role !== "ADMIN")
     return (
       <main className="reference-merchant-login">
@@ -852,6 +870,8 @@ export default function Admin() {
         {tab === "settings" &&
           (sub === "settings/payment" ? (
             <PaymentChannelSettings />
+          ) : sub === "settings/team" ? (
+            <AdminTeam />
           ) : sub === "settings/account" ? (
             <AdminAccount />
           ) : sub === "settings/audit" ? (

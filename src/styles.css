@@ -8726,3 +8726,17 @@ a.reference-bestseller {
   word-break: break-all;
   max-width: 420px;
 }
+.admin-chat-assign select {
+  height: 36px;
+  border: 1px solid var(--border, #e4e4e7);
+  border-radius: 7px;
+  background: #fff;
+  padding: 0 28px 0 10px;
+  font-size: 13px;
+  max-width: 180px;
+}
+@media (max-width: 760px) {
+  .admin-chat-room-head {
+    flex-wrap: wrap;
+  }
+}

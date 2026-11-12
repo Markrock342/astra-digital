@@ -17,6 +17,7 @@ import {
   MIGRATION_005_NAME,
 } from "./migrate-005.mjs";
 import { applyMigration006, MIGRATION_006_NAME } from "./migrate-006.mjs";
+import { ensureLiveVersions } from "./live.mjs";
 import { ensureChatThreadReads, ensureCustomerAdmin } from "./ensure-admin-fr.mjs";
 export { ApiError } from "./domain.mjs";
 
@@ -61,6 +62,7 @@ export function createCommerce(options = {}) {
   ensureInventoryAvailableIndex(db);
   ensureChatThreadReads(db);
   ensureCustomerAdmin(db);
+  ensureLiveVersions(db);
   return createCommerceCore({ ...options, db, key });
 }
 export function openLocalCommerce({

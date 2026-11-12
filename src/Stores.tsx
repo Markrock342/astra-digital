@@ -40,7 +40,10 @@ export function MerchantHeader() {
   const [search, setSearch] = useState(false);
   const [term, setTerm] = useState("");
   const tab = path.split("/")[2] ?? "";
-  const admin = path.startsWith("/admin") && user?.role === "ADMIN";
+  const staff = path.startsWith("/admin") && user?.role === "STAFF";
+  const admin = (path.startsWith("/admin") && user?.role === "ADMIN") || staff;
+  // Team members only see the operations menus.
+  const navItems = staff ? nav.filter(([key]) => ["orders", "chat", "customers"].includes(key)) : nav;
   useDialog(search, ".merchant-command-dialog", () => setSearch(false));
   const shop = overview?.shop?.shopName || "ร้านค้า";
   useEffect(() => {
@@ -128,7 +131,7 @@ export function MerchantHeader() {
       </header>
       {admin && (
         <nav className="reference-primary-nav" aria-label="จัดการร้านค้า">
-          {nav.map(([key, label, Icon]) => {
+          {navItems.map(([key, label, Icon]) => {
             const active =
               key === ""
                 ? tab === "" || tab === "reports" || tab === "rankings"
