@@ -36,6 +36,7 @@ import { createAdminOrderReplaceApis } from "./admin-order-replace.mjs";
 import { createAdminOrderResendApis } from "./admin-order-resend.mjs";
 import { createOrderHistoryApis } from "./admin-order-history.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
+import { createProfileUploadApis } from "./profile-uploads.mjs";
 import { createFileStore } from "./file-store.mjs";
 import { createAuthHardening } from "./auth-hardening.mjs";
 import { createAdminMoneyApis } from "./admin-money.mjs";
@@ -212,6 +213,7 @@ export function createCommerceCore({
           role: user.role,
           // S4: one balance formula (signed net over wallet rows), see money.mjs.
           balance: one(walletBalanceSql, user.id).value,
+          avatarUrl: user.avatar_key ? "/api/files/" + user.avatar_key : null,
         }
       : null;
   const audit = (user, action, entity) =>
@@ -897,6 +899,23 @@ export function createCommerceCore({
     audit,
     fileStore,
   });
+  // Profile avatar + shop logo (UP-2). Wired after product images so fileStore is ready.
+  // settings()/persistShopSettings are function declarations (hoisted) in this scope.
+  const { setAvatar, removeAvatar, setLogo, removeLogo } = createProfileUploadApis({
+    requireUser,
+    requireAdmin,
+    one,
+    run,
+    fail,
+    audit,
+    fileStore,
+    readShopSettings: () => {
+      const s = { ...settings() };
+      delete s.logoUrl;
+      return s;
+    },
+    writeShopSettings: (obj) => persistShopSettings(obj),
+  });
   function mapProduct(row) {
     // Usage instructions are for buyers of a delivered order only (order-extras.mjs).
     const { usage_instructions: _usage, ...p } = row;
@@ -943,7 +962,7 @@ export function createCommerceCore({
     const raw = one(
       "SELECT value FROM runtime_flags WHERE key='shop-settings'",
     );
-    return {
+    const base = {
       shopName: "ร้านค้า",
       description: "",
       announcement: "",
@@ -961,6 +980,24 @@ export function createCommerceCore({
       pendingExpiryMinutes: PENDING_EXPIRY_DEFAULT,
       ...(raw ? JSON.parse(raw.value) : {}),
     };
+    // logoUrl is derived for API consumers; never persist it (see saveSettings / setLogo).
+    delete base.logoUrl;
+    const logoKey =
+      typeof base.logoKey === "string" && base.logoKey.length > 0
+        ? base.logoKey
+        : null;
+    return {
+      ...base,
+      logoUrl: logoKey ? "/api/files/" + logoKey : null,
+    };
+  }
+  function persistShopSettings(settingsObj) {
+    const stored = { ...settingsObj };
+    delete stored.logoUrl;
+    run(
+      "INSERT INTO runtime_flags(key,value) VALUES('shop-settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+      JSON.stringify(stored),
+    );
   }
   function saveSettings(user, input) {
     requireAdmin(user);
@@ -1008,10 +1045,9 @@ export function createCommerceCore({
         fail(400, `เวลารอชำระเงินต้องอยู่ระหว่าง ${PENDING_EXPIRY_MIN}–${PENDING_EXPIRY_MAX} นาที`);
       current.pendingExpiryMinutes = value;
     }
-    run(
-      "INSERT INTO runtime_flags(key,value) VALUES('shop-settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-      JSON.stringify(current),
-    );
+    // Client cannot set logo via this form — logoKey stays; logoUrl is never stored.
+    delete current.logoUrl;
+    persistShopSettings(current);
     // S10: keep what changed (short values only) so the audit log answers "who changed what".
     const changed = {};
     for (const [field, value] of Object.entries(current)) {
@@ -1026,7 +1062,7 @@ export function createCommerceCore({
       user.id,
       Object.keys(changed).length ? JSON.stringify({ changed }) : null,
     );
-    return { shop: current };
+    return { shop: settings() };
   }
   function overview() {
     return {
@@ -2524,6 +2560,10 @@ export function createCommerceCore({
     reorderProductImages,
     deleteProductImage,
     getFile,
+    setAvatar,
+    removeAvatar,
+    setLogo,
+    removeLogo,
     profile,
     publicUser,
     queueBoard,
