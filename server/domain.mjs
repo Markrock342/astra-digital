@@ -204,15 +204,46 @@ export function createCommerceCore({
       row.name + " / " + row.label + " เหลือ " + row.stock,
     );
   };
-  const salesRevenueSatang = () => {
+  const salesRevenueSatang = (range = null) => {
+    const bounds = range
+      ? " AND COALESCE(finalized_at, created_at) >= ? AND COALESCE(finalized_at, created_at) <= ?"
+      : "";
+    const refundBounds = range
+      ? " AND created_at >= ? AND created_at <= ?"
+      : "";
+    const params = range ? [range.fromUtc, range.toUtc] : [];
     const succeeded = one(
-      "SELECT COALESCE(SUM(amount),0) AS n FROM payments WHERE status='SUCCEEDED'",
+      "SELECT COALESCE(SUM(amount),0) AS n FROM payments WHERE status='SUCCEEDED'" +
+        bounds,
+      ...params,
     ).n;
     // Refunds land in Work 3 / FR-F6; until then nothing to subtract.
     const refunded = one(
-      "SELECT COALESCE(SUM(ABS(amount)),0) AS n FROM ledger WHERE kind='REFUND'",
+      "SELECT COALESCE(SUM(ABS(amount)),0) AS n FROM ledger WHERE kind='REFUND'" +
+        refundBounds,
+      ...params,
     ).n;
     return succeeded - refunded;
+  };
+  /** Interpret YYYY-MM-DD as Asia/Bangkok calendar days → UTC SQL timestamps. */
+  const bangkokDayRange = (from, to) => {
+    const day = (label, value) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value))
+        fail(400, label + " ต้องเป็น YYYY-MM-DD");
+      return value;
+    };
+    const fromDay = day("วันเริ่ม", from);
+    const toDay = day("วันสิ้นสุด", to);
+    if (fromDay > toDay) fail(400, "ช่วงวันไม่ถูกต้อง");
+    const fromUtc = new Date(fromDay + "T00:00:00+07:00")
+      .toISOString()
+      .slice(0, 19)
+      .replace("T", " ");
+    const toUtc = new Date(toDay + "T23:59:59+07:00")
+      .toISOString()
+      .slice(0, 19)
+      .replace("T", " ");
+    return { from: fromDay, to: toDay, fromUtc, toUtc };
   };
   const nextQueueNumber = () => {
     const row = one(
@@ -1194,6 +1225,43 @@ export function createCommerceCore({
     });
     return publicUser(user);
   }
+  function adminSummary(user, query = {}) {
+    requireAdmin(user);
+    const hasFrom = query.from != null && String(query.from).trim() !== "";
+    const hasTo = query.to != null && String(query.to).trim() !== "";
+    if (hasFrom !== hasTo)
+      fail(400, "ต้องส่ง from และ to คู่กัน");
+    const range = hasFrom
+      ? bangkokDayRange(
+          clean(query.from, 10, 10, "วันเริ่ม"),
+          clean(query.to, 10, 10, "วันสิ้นสุด"),
+        )
+      : null;
+    const timeFilter = range
+      ? " AND created_at >= ? AND created_at <= ?"
+      : "";
+    const params = range ? [range.fromUtc, range.toUtc] : [];
+    const orderCount = one(
+      `SELECT (
+         (SELECT COUNT(*) FROM orders WHERE 1=1${timeFilter})
+         + (SELECT COUNT(*) FROM reservations WHERE 1=1${timeFilter})
+       ) AS n`,
+      ...params,
+      ...params,
+    ).n;
+    const newCustomers = one(
+      `SELECT COUNT(*) AS n FROM users WHERE role='CUSTOMER'${timeFilter}`,
+      ...params,
+    ).n;
+    return {
+      from: range?.from ?? null,
+      to: range?.to ?? null,
+      timezone: "Asia/Bangkok",
+      revenue: salesRevenueSatang(range),
+      orderCount,
+      newCustomers,
+    };
+  }
   function adminOverview(user) {
     requireAdmin(user);
     return {
@@ -1764,6 +1832,7 @@ export function createCommerceCore({
     retry,
     topup,
     adminOverview,
+    adminSummary,
     importCodes,
     deliverReservation,
     saveProduct,
@@ -1789,6 +1858,7 @@ export function createCommerceCore({
       adminOrdersApi: true,
       adminCustomersApi: true,
       adminProductsApi: true,
+      adminSummaryApi: true,
     }),
     salesRevenueSatang,
     logout: (token) =>

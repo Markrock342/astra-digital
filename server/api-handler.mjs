@@ -200,6 +200,11 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           });
         if (path === "/api/admin")
           return send(200, service.adminOverview(user));
+        if (path === "/api/admin/summary")
+          return send(200, service.adminSummary(user, {
+            from: url.searchParams.get("from") ?? undefined,
+            to: url.searchParams.get("to") ?? undefined,
+          }));
         if (path === "/api/admin/orders")
           return send(200, service.adminOrders(user, {
             status: url.searchParams.get("status") ?? undefined,

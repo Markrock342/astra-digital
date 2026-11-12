@@ -918,3 +918,71 @@ test("ADMIN-FR-W2: customers and products list filters + RBAC", (t) => {
   const pre = s.adminProducts(merchant, { type: "preorder" });
   assert.ok(pre.products.every((p) => p.preorder === true));
 });
+
+test("ADMIN-FR-W2: admin summary uses Bangkok range and FR-F10 revenue", async (t) => {
+  const { s, user, staff, merchant, token, staffToken, merchantToken } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const order = s.createOrder(user, {
+    variantId: "stream-plus-30",
+    quantity: 1,
+    requestKey: "w2-summary",
+  });
+  const paid = s.pay(user, order.id, {
+    paymentToken: order.paymentToken,
+    outcome: "success",
+  });
+  const bangkokToday = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  assert.throws(() => s.adminSummary(user), (e) => e.status === 403);
+  assert.throws(() => s.adminSummary(staff), (e) => e.status === 403);
+  const allTime = s.adminSummary(merchant);
+  assert.equal(allTime.timezone, "Asia/Bangkok");
+  assert.equal(allTime.revenue, s.salesRevenueSatang());
+  assert.ok(allTime.orderCount >= 1);
+  assert.ok(allTime.newCustomers >= 1);
+  const day = s.adminSummary(merchant, { from: bangkokToday, to: bangkokToday });
+  assert.equal(day.from, bangkokToday);
+  assert.equal(day.to, bangkokToday);
+  assert.equal(day.revenue, paid.total);
+  assert.ok(day.orderCount >= 1);
+  assert.ok(day.newCustomers >= 1);
+  const empty = s.adminSummary(merchant, {
+    from: "2000-01-01",
+    to: "2000-01-02",
+  });
+  assert.equal(empty.revenue, 0);
+  assert.equal(empty.orderCount, 0);
+  assert.throws(
+    () => s.adminSummary(merchant, { from: bangkokToday }),
+    (e) => e.status === 400,
+  );
+  const handle = createAPIHandler(s);
+  const http = await handle(
+    new Request(
+      "http://local.test/api/admin/summary?from=" +
+        bangkokToday +
+        "&to=" +
+        bangkokToday,
+      { headers: { Cookie: "astra_session=" + merchantToken } },
+    ),
+  );
+  assert.equal(http.status, 200);
+  assert.equal((await http.json()).revenue, paid.total);
+  const staffDenied = await handle(
+    new Request("http://local.test/api/admin/summary", {
+      headers: { Cookie: "astra_session=" + staffToken },
+    }),
+  );
+  assert.equal(staffDenied.status, 403);
+  const customerDenied = await handle(
+    new Request("http://local.test/api/admin/summary", {
+      headers: { Cookie: "astra_session=" + token },
+    }),
+  );
+  assert.equal(customerDenied.status, 403);
+  assert.equal(s.features.adminSummaryApi, true);
+});
