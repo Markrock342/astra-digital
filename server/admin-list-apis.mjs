@@ -736,7 +736,8 @@ export function createAdminListApis({
       const byProduct = new Map(page.map((p) => [p.id, p]));
       for (const v of all(
         `SELECT v.id,v.product_id,v.label,v.price,COALESCE(v.active,1) AS active,v.warranty_days,
-                (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) AS stock
+                (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) AS stock,
+                (SELECT COUNT(*) FROM stock_watch w WHERE w.variant_id=v.id AND w.notified_at IS NULL) AS waiting
          FROM variants v
          WHERE v.product_id IN (${page.map(() => "?").join(",")})
          ORDER BY v.sort_order ASC, v.id ASC`,
@@ -750,6 +751,8 @@ export function createAdminListApis({
           active: !!v.active,
           warranty_days: v.warranty_days ?? 0,
           stock: product.preorder ? 0 : v.stock,
+          // Customers waiting for "แจ้งเตือนเมื่อมีของ" (stock-watch.mjs).
+          waiting: v.waiting,
           stockStatus: product.preorder
             ? null
             : v.stock <= 0

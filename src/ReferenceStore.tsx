@@ -35,6 +35,8 @@ import { api, dateTime, money } from "./api";
 import type { Order, Product, Review } from "./types";
 import { MAX_PER_ORDER } from "./types";
 import { ForgotPassword, TURNSTILE_WAIT, TurnstileBox, useAuthConfig } from "./AccountRecovery";
+import { StockWatchButton } from "./StockWatch";
+import { ReviewReply } from "./ReviewReply";
 export function ReferenceCatalog() {
   const { products, loading } = useStore();
   const [query, setQuery] = useState("");
@@ -416,7 +418,10 @@ export function ReferenceProduct({ id }: { id: string }) {
             ? "cinema-max"
             : id),
   );
-  const [selected, setSelected] = useState("");
+  // ?variant=<id> (back-in-stock notice, login return) preselects that option.
+  const [selected, setSelected] = useState(
+    () => new URLSearchParams(location.search).get("variant") ?? "",
+  );
   const [quantity, setQuantity] = useState(1);
   const [image, setImage] = useState(0);
   const variant =
@@ -431,7 +436,11 @@ export function ReferenceProduct({ id }: { id: string }) {
   useEffect(() => {
     api<{ reviews: Review[] }>("/reviews")
       .then((r) =>
-        setReviews(r.reviews.filter((x) => x.product === product?.name)),
+        setReviews(
+          r.reviews.filter((x) =>
+            x.product_id ? x.product_id === product?.id : x.product === product?.name,
+          ),
+        ),
       )
       .catch(() => {});
   }, [product?.id]);
@@ -558,6 +567,10 @@ export function ReferenceProduct({ id }: { id: string }) {
               </button>
             ))}
           </fieldset>
+          {!product.preorder && !variant.available ? (
+            // Out of stock (ready-stock only): ask to be told when it is back instead of buy.
+            <StockWatchButton key={variant.id} variantId={variant.id} productId={product.id} />
+          ) : (
           <div className="reference-buy-row">
             <Quantity
               value={quantity}
@@ -580,6 +593,7 @@ export function ReferenceProduct({ id }: { id: string }) {
               {product.preorder ? t("จองเลย") : t("ซื้อเลย")}
             </button>
           </div>
+          )}
           <p className="reference-delivery-note">
             <KeyRound size={15} />
             {product.preorder
@@ -640,7 +654,7 @@ export function ReferenceProduct({ id }: { id: string }) {
             </div>
             <div>
               {reviews.map((r) => (
-                <div className="reference-review-item" key={r.id}>
+                <div className="reference-review-item" key={r.id} id={"review-" + r.id}>
                   <div className="review-stars">
                     {Array.from({ length: r.rating }, (_, i) => (
                       <Star key={i} size={13} fill="currentColor" />
@@ -658,6 +672,7 @@ export function ReferenceProduct({ id }: { id: string }) {
                       {t("ผู้ซื้อจริง")}
                     </span>
                   </span>
+                  <ReviewReply reply={r.reply} />
                 </div>
               ))}
             </div>
@@ -714,6 +729,15 @@ export function ReferenceReviews() {
   useEffect(() => {
     void load();
   }, [user?.id]);
+  // ?review=<id> (the "ร้านตอบกลับรีวิวของคุณ" notice): bring that review into view.
+  const [focus] = useState(() => new URLSearchParams(location.search).get("review") ?? "");
+  useEffect(() => {
+    if (!focus || !ready) return;
+    setFilter(0);
+    requestAnimationFrame(() =>
+      document.getElementById("review-" + focus)?.scrollIntoView({ block: "center" }),
+    );
+  }, [focus, ready]);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
@@ -749,8 +773,8 @@ export function ReferenceReviews() {
             </span>
             <h1>{t("เครดิตร้าน")}</h1>
             <h2>{shopName(overview?.shop?.shopName)}</h2>
-            <p>
-              {t("ทุกรีวิวมาจากลูกค้าที่ซื้อจริง และเขียนได้ภายใน 7 วันหลังซื้อเท่านั้น ร้านแก้ไขหรือซ่อนรีวิวไม่ได้")}
+            <p data-testid="review-policy">
+              {t("ทุกรีวิวมาจากลูกค้าที่ซื้อจริง และเขียนได้ภายใน 7 วันหลังซื้อเท่านั้น ร้านแก้ไขข้อความรีวิวไม่ได้ และไม่ซ่อนรีวิวเพราะคะแนนต่ำหรือคำติ จะซ่อนเฉพาะสแปม/โฆษณา คำหยาบหรือข้อมูลส่วนตัว และเนื้อหาที่ไม่เกี่ยวกับสินค้า โดยบันทึกเหตุผลไว้ทุกครั้ง")}
             </p>
             {ready && reviews.length > 0 && (
               <div className="credit-trust-badges">
@@ -888,7 +912,11 @@ export function ReferenceReviews() {
             {reviews
               .filter((r) => !filter || r.rating === filter)
               .map((r) => (
-                <article className="review-card credit-review-card" key={r.id}>
+                <article
+                  className={"review-card credit-review-card" + (focus === r.id ? " review-focus" : "")}
+                  key={r.id}
+                  id={"review-" + r.id}
+                >
                   <div className="review-stars">
                     {[1, 2, 3, 4, 5].map((n) => (
                       <Star
@@ -903,6 +931,7 @@ export function ReferenceReviews() {
                     {r.comment ||
                       t("ให้คะแนน ") + r.rating + t(" ดาว โดยไม่ได้เขียนความเห็น")}
                   </p>
+                  <ReviewReply reply={r.reply} />
                   <div className="credit-review-owner">
                     <span className="avatar">{r.name.slice(0, 2)}</span>
                     <div>

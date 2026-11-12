@@ -18,6 +18,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Star,
   Store,
   Users,
   Wallet,
@@ -48,6 +49,8 @@ const nav = [
   ["team", "ทีมงาน", ShieldCheck],
   ["settings", "ตั้งค่า", Settings],
 ] as const;
+// Team members reply to reviews (สินค้า › รีวิว for the admin); they have no products menu.
+const staffReviews = ["reviews", "รีวิว", Star] as const;
 export function MerchantHeader() {
   const { user, path, go, refresh, overview } = useStore();
   const [menu, setMenu] = useState(false);
@@ -57,7 +60,9 @@ export function MerchantHeader() {
   const staff = path.startsWith("/admin") && user?.role === "STAFF";
   const admin = (path.startsWith("/admin") && user?.role === "ADMIN") || staff;
   // Team members only see the operations menus.
-  const navItems = staff ? nav.filter(([key]) => ["orders", "chat", "customers"].includes(key)) : nav;
+  const navItems = staff
+    ? [...nav.filter(([key]) => ["orders", "chat", "customers"].includes(key)), staffReviews]
+    : nav;
   useDialog(search, ".merchant-command-dialog", () => setSearch(false));
   const shop = overview?.shop?.shopName || "ร้านค้า";
   useEffect(() => {
@@ -156,6 +161,7 @@ export function MerchantHeader() {
                       "inventory",
                       "categories",
                       "coupons",
+                      ...(staff ? [] : ["reviews"]),
                     ].includes(tab)
                   : key === "orders"
                     ? ["orders", "preorders"].includes(tab)

@@ -44,6 +44,7 @@ import { StockImport } from "./StockImport";
 import { CopyValue, ResendCredentials } from "./OrderCredentials";
 import { WarrantyStatus } from "./Warranty";
 import { ReceiptLink } from "./OrderExtras";
+import { AdminReviews } from "./AdminReviews";
 
 type Filters = Record<string, string>;
 
@@ -1626,6 +1627,8 @@ type ProductVariantStock = {
   active: boolean;
   stock: number;
   stockStatus: "out" | "low" | "in" | null;
+  /** Customers waiting for "แจ้งเตือนเมื่อมีของ". */
+  waiting?: number;
 };
 type ProductRow = {
   id: string;
@@ -1651,6 +1654,15 @@ const bulkText: Record<BulkAction, [string, string]> = {
   unfeature: ["เลิกแนะนำ", "เลิกแนะนำแล้ว"],
 };
 
+/** Customers who pressed "แจ้งเตือนเมื่อมีของ" on this option (helps decide how much to restock). */
+function WaitingBadge({ count }: { count: number }) {
+  return (
+    <em className="stock-waiting-badge" title="ลูกค้าที่กดรอแจ้งเตือนเมื่อมีของ ระบบแจ้งให้อัตโนมัติเมื่อเติมสต็อก">
+      รอแจ้งเตือน {count} คน
+    </em>
+  );
+}
+
 /** Stock per option, so one empty option is not hidden inside the product total. */
 function VariantStockList({ product, onStock }: { product: ProductRow; onStock: () => void }) {
   if (product.preorder) return <span className="muted">ส่งตามคิว</span>;
@@ -1673,6 +1685,7 @@ function VariantStockList({ product, onStock }: { product: ProductRow; onStock: 
           {v.stockStatus && v.stockStatus !== "in" && (
             <em className={"stock-badge stock-badge-" + v.stockStatus}>{stockText[v.stockStatus]}</em>
           )}
+          {!!v.waiting && <WaitingBadge count={v.waiting} />}
         </span>
       ))}
     </button>
@@ -3474,11 +3487,13 @@ export function StaffBackOffice({ tab, sub, detailId }: { tab: string; sub: stri
   if (tab === "orders") return detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />;
   if (tab === "preorders") return <PreorderQueue />;
   if (tab === "customers") return detailId ? <AdminCustomerDetail id={detailId} /> : <AdminCustomers />;
+  // Team members reply to reviews; hiding stays with the admin (server enforces it too).
+  if (tab === "reviews") return <AdminReviews />;
   if (sub === "settings/account") return <AdminAccount />;
   return (
     <section className="reference-admin-card editor-panel">
       <h1>ไม่มีสิทธิ์เข้าหน้านี้</h1>
-      <p>บัญชีทีมงานใช้ได้เฉพาะแชท ออเดอร์ คิวพรีออเดอร์ และลูกค้า</p>
+      <p>บัญชีทีมงานใช้ได้เฉพาะแชท ออเดอร์ คิวพรีออเดอร์ ลูกค้า และรีวิว</p>
       <Link to="/admin/chat" className="button primary">
         ไปที่แชท
       </Link>
@@ -3497,6 +3512,7 @@ type Variant = {
   warranty_days?: number;
   stock: number;
   stockStatus: "out" | "low" | "in";
+  waiting?: number;
 };
 type StockUnit = {
   id: string;
@@ -3734,6 +3750,7 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
               >
                 สต็อก {v.stock} {open === v.id ? "▲" : "▼"}
               </button>
+              {!!v.waiting && <WaitingBadge count={v.waiting} />}
               <span className="admin-action-row">
                 <button type="button" className="button ghost" onClick={() => setEditing(v.id)}>
                   แก้

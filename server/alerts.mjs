@@ -321,6 +321,8 @@ export function createAlerts({
           title: data.level === "out" ? "สต็อกหมด" : "สต็อกใกล้หมด",
           body:
             oneLine(data.name, 80) + " / " + oneLine(data.label, 60) + " เหลือ " + data.stock + " ชิ้น" +
+            // Customers waiting for "แจ้งเตือนเมื่อมีของ" on this option (stock-watch.mjs).
+            (Number(data.waiting) > 0 ? " · รอแจ้งเตือน " + Number(data.waiting) + " คน" : "") +
             link(cfg, "/admin/products/" + data.productId),
         };
       case "chat_message": {
@@ -357,6 +359,14 @@ export function createAlerts({
             "ยอดขาย: " + thb(s.gross) + " จาก " + s.paidCount + " รายการชำระ" +
             (s.refunds ? "\nคืนเงิน: " + thb(s.refunds) : "") +
             "\nสุทธิ: " + thb(s.gross - s.refunds) +
+            // Options customers wait for ("แจ้งเตือนเมื่อมีของ"), most wanted first.
+            (Array.isArray(s.waiting) && s.waiting.length
+              ? "\nรอแจ้งเตือนเมื่อมีของ: " +
+                s.waiting
+                  .slice(0, 5)
+                  .map((w) => oneLine(w.name, 60) + " / " + oneLine(w.label, 40) + " " + Number(w.waiting) + " คน")
+                  .join(", ")
+              : "") +
             link(cfg, "/admin/reports"),
         };
       }

@@ -152,7 +152,8 @@ export function createAdminVariantStockApis({
     const lowAt = getLowStockAt();
     const variants = all(
       `SELECT v.id,v.product_id,v.label,v.price,v.active,v.sort_order,v.warranty_days,
-              (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) AS stock
+              (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) AS stock,
+              (SELECT COUNT(*) FROM stock_watch w WHERE w.variant_id=v.id AND w.notified_at IS NULL) AS waiting
        FROM variants v WHERE v.product_id=?
        ORDER BY v.sort_order ASC, v.id ASC`,
       productId,
@@ -167,6 +168,8 @@ export function createAdminVariantStockApis({
       stock: v.stock,
       stockStatus:
         v.stock <= 0 ? "out" : v.stock <= lowAt ? "low" : "in",
+      // Customers waiting for "แจ้งเตือนเมื่อมีของ" (stock-watch.mjs).
+      waiting: v.waiting,
     }));
     return { variants };
   }

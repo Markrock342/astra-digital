@@ -120,7 +120,6 @@ export const EN_STRINGS: Record<string, string> = {
   "ทั้งหมด": "All",
   "ทำรายการสำเร็จ ได้รับโค้ดแล้ว": "Done! You've received your code",
   "ทุกรายการเติมและใช้เครดิตมีประวัติที่ตรวจสอบได้": "Every credit top-up and spend has an auditable history",
-  "ทุกรีวิวมาจากลูกค้าที่ซื้อจริง และเขียนได้ภายใน 7 วันหลังซื้อเท่านั้น ร้านแก้ไขหรือซ่อนรีวิวไม่ได้": "Every review comes from a verified buyer and can only be written within 7 days of purchase. The store cannot edit or hide reviews.",
   "บอกเล่าประสบการณ์การสั่งซื้อของคุณ": "Share your order experience",
   "บัญชีของฉัน": "My account",
   "บัญชีของร้าน": "Store account",
@@ -513,4 +512,32 @@ export const EN_STRINGS: Record<string, string> = {
   "สรุปยอด": "Price summary",
   "ราคาสินค้า": "Item price",
   "ยอดชำระ": "Amount paid",
+  // Back-in-stock notices (StockWatch.tsx, server/stock-watch.mjs)
+  "แจ้งเตือนเมื่อมีของ": "Notify me when available",
+  "เราจะแจ้งเตือนเมื่อมีของ": "We'll notify you when it's back",
+  "ยกเลิกการแจ้งเตือนแล้ว": "Notification cancelled",
+  "ยกเลิกการแจ้งเตือน": "Cancel notification",
+  "แจ้งครั้งเดียวทางกระดิ่งแจ้งเตือน (และอีเมล ถ้าร้านเปิดใช้) ไม่ได้จองสินค้าไว้ให้":
+    "One notice in your bell (and by email if the store has it on). Items are not reserved for you.",
+  "ตัวเลือกนี้หมดชั่วคราว กดเพื่อรับแจ้งเตือนครั้งเดียวเมื่อกลับมามีของ":
+    "This option is out of stock. Tap to get a one-time notice when it's back.",
+  "ตัวเลือกนี้หมดชั่วคราว เข้าสู่ระบบเพื่อรับแจ้งเตือนเมื่อกลับมามีของ":
+    "This option is out of stock. Sign in to get notified when it's back.",
+  "สินค้าที่รอแจ้งเตือน": "Waiting for restock",
+  "เราแจ้งเตือนครั้งเดียวเมื่อสินค้ากลับมามีของ หากพลาด กดรอใหม่ได้ที่หน้าสินค้า":
+    "We notify you once when an item is back. If you miss it, ask again on the product page.",
+  "ยังไม่มีสินค้าที่รอแจ้งเตือน": "You're not waiting for any items",
+  "กดรอเมื่อ": "since",
+  "มีของแล้ว": "Back in stock",
+  "สินค้าที่คุณรอกลับมามีของแล้ว": "An item you were waiting for is back in stock",
+  "สินค้าพรีออเดอร์สั่งจองได้เลย ไม่ต้องรอแจ้งเตือน": "Preorder items can be ordered now, no need to wait",
+  "ตัวเลือกนี้มีสินค้าแล้ว สั่งซื้อได้เลย": "This option is in stock. You can order it now",
+  "รอแจ้งเตือนได้สูงสุด 50 รายการ ยกเลิกรายการเก่าในหน้าบัญชีก่อน":
+    "You can wait for up to 50 items. Cancel an older one on your account page first",
+  "กดแจ้งเตือนบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่": "Too many requests. Please wait a moment and try again",
+  // Review replies (ReviewReply.tsx, server/review-moderation.mjs)
+  "ตอบกลับจากร้าน": "Reply from the store",
+  "ร้านตอบกลับรีวิวของคุณ": "The store replied to your review",
+  "ทุกรีวิวมาจากลูกค้าที่ซื้อจริง และเขียนได้ภายใน 7 วันหลังซื้อเท่านั้น ร้านแก้ไขข้อความรีวิวไม่ได้ และไม่ซ่อนรีวิวเพราะคะแนนต่ำหรือคำติ จะซ่อนเฉพาะสแปม/โฆษณา คำหยาบหรือข้อมูลส่วนตัว และเนื้อหาที่ไม่เกี่ยวกับสินค้า โดยบันทึกเหตุผลไว้ทุกครั้ง":
+    "Every review comes from a verified buyer and can only be written within 7 days of purchase. The store cannot edit reviews and never hides a review for a low rating or criticism. Only spam/ads, abusive language or personal data, and off-topic content are hidden, and the reason is always recorded.",
 };
