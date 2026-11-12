@@ -33,3 +33,26 @@ export function ensureCustomerAdmin(db) {
   add("reservations", "admin_note", "TEXT");
   db.exec("CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit(entity_id)");
 }
+
+/**
+ * S9: money and audit rows are append-only at the database level. Idempotent
+ * (CREATE TRIGGER IF NOT EXISTS). The one-time demo cleanup that runs when test mode
+ * is switched off drops these triggers and recreates them inside its own transaction.
+ */
+const APPEND_ONLY_TABLES = ["ledger", "audit"];
+export function ensureAppendOnlyMoney(db) {
+  for (const table of APPEND_ONLY_TABLES) {
+    db.exec(
+      `CREATE TRIGGER IF NOT EXISTS ${table}_append_only_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT, '${table} rows are append-only'); END`,
+    );
+    db.exec(
+      `CREATE TRIGGER IF NOT EXISTS ${table}_append_only_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT, '${table} rows are append-only'); END`,
+    );
+  }
+}
+export function dropAppendOnlyMoney(db) {
+  for (const table of APPEND_ONLY_TABLES) {
+    db.exec(`DROP TRIGGER IF EXISTS ${table}_append_only_update`);
+    db.exec(`DROP TRIGGER IF EXISTS ${table}_append_only_delete`);
+  }
+}

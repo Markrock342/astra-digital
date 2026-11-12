@@ -315,12 +315,29 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             });
           return send(200, page);
         }
+        if (/^\/api\/admin\/transactions\/[^/]+$/.test(path))
+          return send(200, service.adminTransactionDetail(user, path.split("/")[4]));
         if (path === "/api/admin/team") return send(200, { team: service.team(user) });
-        if (path === "/api/admin/reports/sales")
-          return send(200, service.salesReport(user, {
+        if (path === "/api/admin/reports/sales") {
+          const report = service.salesReport(user, {
             from: url.searchParams.get("from") ?? undefined,
             to: url.searchParams.get("to") ?? undefined,
-          }));
+            format: url.searchParams.get("format") ?? undefined,
+          });
+          if (report.csv != null)
+            return new Response(report.csv, {
+              status: 200,
+              headers: {
+                ...securityHeaders,
+                "Content-Type": "text/csv; charset=utf-8",
+                "Cache-Control": "no-store",
+                "Content-Disposition": 'attachment; filename="sales-report.csv"',
+              },
+            });
+          return send(200, report);
+        }
+        if (/^\/api\/admin\/orders\/[^/]+\/payment-summary$/.test(path))
+          return send(200, service.adminOrderPaymentSummary(user, path.split("/")[4]));
         if (path === "/api/admin/audit")
           return send(200, service.adminAuditLog(user, {
             action: url.searchParams.get("action") ?? undefined,
@@ -456,6 +473,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, { thread: service.assignChatThread(user, path.split("/")[4], input) });
         if (/^\/api\/admin\/orders\/[^/]+\/note$/.test(path))
           return send(200, service.adminSetOrderNote(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/orders\/[^/]+\/refund$/.test(path))
+          return send(200, service.refundOrder(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/customers\/[^/]+\/credit$/.test(path))
+          return send(200, service.adjustCustomerCredit(user, path.split("/")[4], input));
         if (/^\/api\/admin\/orders\/[^/]+\/cancel$/.test(path))
           return send(200, service.adminCancelOrder(user, path.split("/")[4], input));
         if (/^\/api\/admin\/orders\/[^/]+\/replace$/.test(path))

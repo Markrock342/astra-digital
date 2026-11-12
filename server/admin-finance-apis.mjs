@@ -1,4 +1,5 @@
-/** Admin FR Work 3 — transactions list/summary/CSV (FR-F2–F4, F9). ADMIN only. */
+/** Admin FR Work 3 — transactions list/summary/CSV/detail (FR-F2–F5, F9). ADMIN only. */
+import { csvLine, maskRef } from "./money.mjs";
 
 function parseLimit(limit, fail, { fallback = 25, max = 100 } = {}) {
   if (limit == null || String(limit).trim() === "") return fallback;
@@ -47,7 +48,9 @@ const MONEY_KINDS = new Set([
 
 /** created_at is stored as UTC wall-clock; +7h yields Asia/Bangkok calendar day. */
 const BANGKOK_DAY_SQL = "substr(datetime(l.created_at, '+7 hours'), 1, 10)";
-const CSV_MAX_ROWS = 10000;
+export const CSV_MAX_ROWS = 10000;
+/** Shop view of a row: refunds always take money out of revenue, whatever the wallet saw. */
+const FLOW_SQL = "CASE WHEN l.kind='REFUND' THEN 'out' ELSE l.direction END";
 
 export function createAdminFinanceApis({
   requireAdmin,
@@ -56,6 +59,8 @@ export function createAdminFinanceApis({
   fail,
   clean,
   bangkokDayRange,
+  moneyScope,
+  outstandingCredit,
 }) {
   function adminTransactions(user, query = {}) {
     requireAdmin(user);
@@ -118,6 +123,8 @@ export function createAdminFinanceApis({
 
     const where = [];
     const params = [];
+    // S2: live mode leaves test money (sandbox payments, DEMO_CREDIT) out of every number and CSV.
+    if (moneyScope) where.push(moneyScope.ledger("l."));
     if (includeDemo) {
       where.push("l.kind = 'DEMO_CREDIT'");
     } else if (kind) {
@@ -185,8 +192,9 @@ export function createAdminFinanceApis({
 
     const agg = one(
       `SELECT
-         COALESCE(SUM(CASE WHEN l.direction='in' AND l.status='SUCCEEDED' THEN l.net ELSE 0 END),0) AS inflow,
-         COALESCE(SUM(CASE WHEN l.direction='out' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS outflow,
+         COALESCE(SUM(CASE WHEN ${FLOW_SQL}='in' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS inflow,
+         COALESCE(SUM(CASE WHEN ${FLOW_SQL}='out' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS outflow,
+         COALESCE(SUM(CASE WHEN l.kind='REFUND' AND l.status='SUCCEEDED' THEN l.amount ELSE 0 END),0) AS refunds,
          COALESCE(SUM(CASE WHEN l.status='PENDING' THEN 1 ELSE 0 END),0) AS pending,
          COUNT(*) AS count
        FROM ledger l
@@ -196,8 +204,8 @@ export function createAdminFinanceApis({
     );
     const daily = all(
       `SELECT ${BANGKOK_DAY_SQL} AS day,
-              COALESCE(SUM(CASE WHEN l.direction='in' AND l.status='SUCCEEDED' THEN l.net ELSE 0 END),0) AS inflow,
-              COALESCE(SUM(CASE WHEN l.direction='out' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS outflow,
+              COALESCE(SUM(CASE WHEN ${FLOW_SQL}='in' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS inflow,
+              COALESCE(SUM(CASE WHEN ${FLOW_SQL}='out' AND l.status='SUCCEEDED' THEN ABS(l.net) ELSE 0 END),0) AS outflow,
               COUNT(*) AS count
        FROM ledger l
        JOIN users u ON u.id = l.user_id
@@ -216,6 +224,7 @@ export function createAdminFinanceApis({
       label: row.label,
       kind: row.kind,
       direction: row.direction,
+      flow: row.kind === "REFUND" ? "out" : row.direction,
       fee: row.fee,
       net: row.net,
       status: row.status,
@@ -233,8 +242,13 @@ export function createAdminFinanceApis({
       in: agg.inflow,
       out: agg.outflow,
       net: agg.inflow - agg.outflow,
+      refunds: agg.refunds,
       pending: agg.pending,
       count: agg.count,
+      csvMaxRows: CSV_MAX_ROWS,
+      // Customer credit still owed (liability): all time, never mixed into revenue.
+      customerCredit: outstandingCredit ? outstandingCredit() : null,
+      mode: moneyScope?.mode ?? "sandbox",
       daily: daily.map((d) => ({
         day: d.day,
         in: d.inflow,
@@ -279,14 +293,11 @@ export function createAdminFinanceApis({
         "finalized_at",
         "label",
       ];
-      const escape = (v) => {
-        const s = v == null ? "" : String(v);
-        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-      };
-      const lines = [header.join(",")];
+      // S5: server-side escaping, same rule as downloadCsv in the admin UI.
+      const lines = [csvLine(header)];
       for (const row of page) {
         lines.push(
-          [
+          csvLine([
             row.id,
             row.kind,
             row.direction,
@@ -303,9 +314,7 @@ export function createAdminFinanceApis({
             row.created_at,
             row.finalized_at,
             row.label,
-          ]
-            .map(escape)
-            .join(","),
+          ]),
         );
       }
       return { csv: lines.join("\n") + "\n", summary, nextCursor: null };
@@ -323,5 +332,119 @@ export function createAdminFinanceApis({
     return { transactions: page, summary, nextCursor };
   }
 
-  return { adminTransactions };
+  /** FR-F5: one ledger row with its event timeline, order, customer and actor. */
+  function adminTransactionDetail(user, id) {
+    requireAdmin(user);
+    const txnId = clean(id, 1, 80, "รายการ");
+    const row = one(
+      `SELECT l.*, u.name AS customer_name, u.email AS customer_email, a.name AS actor_name
+       FROM ledger l JOIN users u ON u.id=l.user_id LEFT JOIN users a ON a.id=l.actor_id
+       WHERE l.id=?${moneyScope ? " AND " + moneyScope.ledger("l.") : ""}`,
+      txnId,
+    );
+    if (!row) fail(404, "ไม่พบรายการ");
+    const payment = row.payment_id
+      ? one(
+          "SELECT id,amount,currency,status,provider,provider_ref,idempotency_key,created_at,finalized_at FROM payments WHERE id=?",
+          row.payment_id,
+        )
+      : null;
+    const order = row.order_id
+      ? (one(
+          "SELECT id,status,total,quantity,created_at,0 AS preorder FROM orders WHERE id=?",
+          row.order_id,
+        ) ??
+        one(
+          "SELECT id,status,total,quantity,created_at,1 AS preorder FROM reservations WHERE id=?",
+          row.order_id,
+        ))
+      : null;
+    // Every money row for the same order (or this row alone), oldest first.
+    const related = row.order_id
+      ? all(
+          `SELECT l.id,l.kind,l.direction,l.amount,l.net,l.status,l.label,l.created_at,a.name AS actor
+           FROM ledger l LEFT JOIN users a ON a.id=l.actor_id
+           WHERE l.order_id=?${moneyScope ? " AND " + moneyScope.ledger("l.") : ""}
+           ORDER BY l.created_at ASC, l.rowid ASC`,
+          row.order_id,
+        )
+      : [];
+    const audits = all(
+      `SELECT au.action,au.created_at,au.detail,us.name AS actor FROM audit au LEFT JOIN users us ON us.id=au.user_id
+       WHERE au.entity_id=? AND au.action IN
+         ('PAYMENT_AND_DELIVERY','PREORDER_PAID','DELIVER_RESERVATION','ORDER_REFUND','CANCEL_ORDER','REPLACE_ORDER_CREDENTIAL')
+       ORDER BY au.id ASC`,
+      row.order_id ?? "",
+    );
+    const events = [{ at: row.created_at, event: "created", text: row.label }];
+    if (payment) {
+      events.push({ at: payment.created_at, event: "payment_created", text: payment.provider });
+      if (payment.finalized_at)
+        events.push({ at: payment.finalized_at, event: "payment_" + payment.status.toLowerCase(), text: payment.provider });
+    }
+    if (row.finalized_at && row.finalized_at !== row.created_at)
+      events.push({ at: row.finalized_at, event: "finalized", text: "" });
+    for (const a of audits) {
+      let detail = null;
+      try {
+        detail = a.detail ? JSON.parse(a.detail) : null;
+      } catch {
+        detail = null;
+      }
+      events.push({
+        at: a.created_at,
+        event: "audit",
+        action: a.action,
+        actor: a.actor ?? null,
+        text: detail?.reason ?? "",
+      });
+    }
+    events.sort((x, y) => String(x.at).localeCompare(String(y.at)));
+    return {
+      transaction: {
+        id: row.id,
+        kind: row.kind,
+        direction: row.direction,
+        flow: row.kind === "REFUND" ? "out" : row.direction,
+        amount: row.amount,
+        fee: row.fee,
+        net: row.net,
+        status: row.status,
+        label: row.label,
+        reason: row.reason,
+        reference: maskRef(row.reference),
+        provider_ref: maskRef(row.provider_ref),
+        created_at: row.created_at,
+        finalized_at: row.finalized_at,
+        test:
+          row.kind === "DEMO_CREDIT" ||
+          String(row.provider_ref ?? "").startsWith("sandbox:") ||
+          payment?.provider === "sandbox",
+      },
+      customer: { id: row.user_id, name: row.customer_name, email: row.customer_email },
+      actor: row.actor_id ? { id: row.actor_id, name: row.actor_name } : null,
+      order: order ? { ...order, preorder: !!order.preorder } : null,
+      payment: payment
+        ? {
+            id: payment.id,
+            amount: payment.amount,
+            currency: payment.currency,
+            status: payment.status,
+            provider: payment.provider,
+            provider_ref: maskRef(payment.provider_ref),
+            idempotency_key: maskRef(payment.idempotency_key),
+            created_at: payment.created_at,
+            finalized_at: payment.finalized_at,
+          }
+        : null,
+      related: related.map((r) => ({
+        ...r,
+        flow: r.kind === "REFUND" ? "out" : r.direction,
+        current: r.id === row.id,
+      })),
+      events,
+    };
+  }
+
+  return { adminTransactions, adminTransactionDetail };
 }

@@ -84,6 +84,7 @@ export function createAdminListApis({
   getLowStockAt,
   bangkokDayRange,
   isAdmin,
+  paymentSummaryFor,
 }) {
   function dayBounds(fromRaw, toRaw) {
     const hasFrom = fromRaw != null && String(fromRaw).trim() !== "";
@@ -309,6 +310,10 @@ export function createAdminListApis({
         email: row.customer_email,
       },
       payments,
+      // Paid / refunded / outstanding / fee — money, so ADMIN only (NFR-3).
+      ...(paymentSummaryFor && isAdmin(user)
+        ? { paymentSummary: paymentSummaryFor(row) }
+        : {}),
       timeline: buildTimeline(row, payments),
       units,
       codes: delivered.codes.map(maskCredential),
