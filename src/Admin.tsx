@@ -56,6 +56,7 @@ import {
   AdminAccount,
   AdminAudit,
   AdminReports,
+  AdminSystemHealth,
   AdminTeam,
   StaffBackOffice,
   TestModeStockWarning,
@@ -97,6 +98,7 @@ const settingTabs = [
   ["settings/alerts", "แจ้งเตือนนอกเว็บ"],
   ["settings/backup", "สำรองข้อมูล"],
   ["settings/audit", "ประวัติการทำงาน"],
+  ["settings/health", "ตรวจระบบ"],
 ];
 function Subnav({ items, current }: { items: string[][]; current: string }) {
   return (
@@ -875,6 +877,8 @@ export default function Admin() {
             <AdminBackup />
           ) : sub === "settings/legal" ? (
             <LegalSettings />
+          ) : sub === "settings/health" ? (
+            <AdminSystemHealth />
           ) : (
             <ReferenceSettings sub={sub} />
           ))}

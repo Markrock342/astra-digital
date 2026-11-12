@@ -38,6 +38,7 @@ import { createOrderHistoryApis } from "./admin-order-history.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createProfileUploadApis } from "./profile-uploads.mjs";
 import { createPrivacyApis } from "./privacy.mjs";
+import { createAdminHealthApis } from "./admin-health.mjs";
 import { createFileStore } from "./file-store.mjs";
 import { createAuthHardening } from "./auth-hardening.mjs";
 import { createAdminMoneyApis } from "./admin-money.mjs";
@@ -1068,6 +1069,12 @@ export function createCommerceCore({
     randomUUID,
     passwordHash,
     deleteFile: (key) => fileStore.delete(key),
+  });
+  const { adminSystemHealth } = createAdminHealthApis({
+    requireAdmin,
+    one,
+    all,
+    db,
   });
   function mapProduct(row) {
     // Usage instructions are for buyers of a delivered order only (order-extras.mjs).
@@ -2952,6 +2959,7 @@ export function createCommerceCore({
     requestAccountDeletion,
     adminPrivacyRequests,
     approvePrivacyDeletion,
+    adminSystemHealth,
     profile,
     publicUser,
     queueBoard,

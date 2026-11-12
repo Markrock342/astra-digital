@@ -3924,6 +3924,78 @@ export function AdminReports() {
   );
 }
 
+// ---------------------------------------------------------------- System health
+
+type HealthCheck = {
+  id: string;
+  ok: boolean;
+  label: string;
+  detail: string;
+};
+type HealthReport = {
+  ok: boolean;
+  checkedAt: string;
+  migrations: { missing: string[]; applied: string[] };
+  checks: HealthCheck[];
+};
+
+export function AdminSystemHealth() {
+  const [report, setReport] = useState<HealthReport | null>(null);
+  const [error, setError] = useState("");
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    api<HealthReport>("/admin/health")
+      .then((r) => {
+        setReport(r);
+        setError("");
+      })
+      .catch((e) => setError((e as Error).message));
+  }, [tick]);
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>ตรวจระบบ</h1>
+          <p>ตรวจ migration · append-only · เครดิต/ledger · สต็อกค้าง และคอลัมน์สำคัญ</p>
+        </div>
+        <button type="button" className="button secondary" onClick={() => setTick((n) => n + 1)}>
+          ตรวจอีกครั้ง
+        </button>
+      </div>
+      <ErrorMessage message={error} />
+      {report && (
+        <>
+          <div className="admin-stat-row">
+            <div className="reference-admin-card">
+              <small>สถานะรวม</small>
+              <strong>{report.ok ? "ผ่าน" : "พบปัญหา"}</strong>
+            </div>
+            <div className="reference-admin-card">
+              <small>ตรวจเมื่อ</small>
+              <strong>{dateTime(report.checkedAt)}</strong>
+            </div>
+            <div className="reference-admin-card">
+              <small>migrations ที่ apply แล้ว</small>
+              <strong>{report.migrations.applied.length}</strong>
+            </div>
+          </div>
+          <section className="reference-admin-card">
+            {report.checks.map((c) => (
+              <div className="settings-row" key={c.id}>
+                <span>
+                  <strong>{c.label}</strong>
+                  <small>{c.detail}</small>
+                </span>
+                <strong className={c.ok ? "" : "danger-text"}>{c.ok ? "ผ่าน" : "ไม่ผ่าน"}</strong>
+              </div>
+            ))}
+          </section>
+        </>
+      )}
+    </>
+  );
+}
+
 // ---------------------------------------------------------------- Product live preview
 
 export type ProductDraft = {

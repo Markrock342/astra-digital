@@ -191,6 +191,14 @@ Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์
 - ตอบ `{ "imported": n }` · ซ้ำ (fingerprint ชน) ตอบ 409 ทั้งชุด ไม่บันทึกบางส่วน
 - ยังรับ `codes` แบบเดิมได้ระหว่างเปลี่ยนผ่าน
 
+### ตรวจระบบ (Admin)
+
+`GET /api/admin/health` — **ADMIN only**
+
+- คืน `{ ok, checkedAt, migrations, checks[] }`
+- ตรวจ: migrations ครบตาม Track A · append-only triggers · เครดิตไม่ติดลบ · payments SUCCEEDED มี `PAYMENT_IN` · สต็อกไม่กำพร้า/ไม่ค้างกับ PENDING_PAYMENT · คอลัมน์ inventory (cost/expires_at/…)
+- หน้า UI: `/admin/settings/health`
+
 ### ประสิทธิภาพ (~10k ออเดอร์)
 
 - Migration `011_perf_indexes.sql`: index บน payments/orders/reservations/inventory/ledger สำหรับรายการแอดมิน

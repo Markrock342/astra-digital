@@ -462,6 +462,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
               status: url.searchParams.get("status") ?? undefined,
             }),
           );
+        if (path === "/api/admin/health")
+          return send(200, service.adminSystemHealth(user));
         if (path === "/api/admin/reports/sales") {
           const report = service.salesReport(user, {
             from: url.searchParams.get("from") ?? undefined,
