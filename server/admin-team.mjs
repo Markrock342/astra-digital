@@ -84,6 +84,30 @@ export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash,
     });
   }
 
+  /** Grant or remove team rights on any existing account, including a customer who
+   * signed up on the storefront. CUSTOMER means "back to a normal customer". Orders,
+   * credit and chat history stay with the account. */
+  function setMemberRole(user, id, input = {}) {
+    requireAdmin(user);
+    const role = input.role;
+    if (!["ADMIN", "STAFF", "CUSTOMER"].includes(role)) fail(400, "สิทธิ์ไม่ถูกต้อง");
+    return tx(() => {
+      const row = one("SELECT * FROM users WHERE id=?", clean(id, 1, 80, "บัญชี"));
+      if (!row) fail(404, "ไม่พบบัญชี");
+      if (row.role === role) return { member: member(row) };
+      guardChange(user, row);
+      if ((row.status ?? "ACTIVE") !== "ACTIVE") fail(409, "บัญชีนี้ถูกระงับอยู่ เปิดบัญชีก่อนจึงเปลี่ยนสิทธิ์ได้");
+      if (row.role === "ADMIN" && activeAdmins() <= 1) fail(409, "ต้องมีแอดมินที่ใช้งานอยู่อย่างน้อย 1 คน");
+      run("UPDATE users SET role=? WHERE id=?", role, row.id);
+      if (role === "CUSTOMER") run("UPDATE chat_threads SET assigned_to=NULL WHERE assigned_to=?", row.id);
+      auditDetail(user, "TEAM_ROLE", row.id, { from: row.role, to: role });
+      const label = { ADMIN: "แอดมิน", STAFF: "ทีมงาน" }[role];
+      if (label)
+        notify(row.id, "team", "คุณได้รับสิทธิ์" + label, user.name + " เพิ่มคุณเป็น" + label + " เข้าหลังบ้านได้ที่เมนูบัญชี");
+      return { member: member(one("SELECT * FROM users WHERE id=?", row.id)) };
+    });
+  }
+
   function setStaffActive(user, id, input = {}) {
     requireAdmin(user);
     return tx(() => {
@@ -130,5 +154,5 @@ export function createTeamApis({ ownerEmail = "admin@astra.local", passwordHash,
     });
   }
 
-  return { team, saveStaff, setStaffActive, assignChatThread };
+  return { team, saveStaff, setMemberRole, setStaffActive, assignChatThread };
 }

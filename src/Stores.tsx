@@ -16,6 +16,7 @@ import {
   Receipt,
   Search,
   Settings,
+  ShieldCheck,
   Sparkles,
   Store,
   Users,
@@ -44,6 +45,7 @@ const nav = [
   ["chat", "แชท", MessageCircle],
   ["payments", "การเงิน", Wallet],
   ["customers", "ลูกค้า", Users],
+  ["team", "ทีมงาน", ShieldCheck],
   ["settings", "ตั้งค่า", Settings],
 ] as const;
 export function MerchantHeader() {

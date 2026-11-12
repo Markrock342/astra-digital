@@ -1790,3 +1790,31 @@ test("FR-O7: staff keeps an internal order note that the customer never sees", (
   assert.equal(s.adminOrderDetail(merchant, o.id).note, null);
   assert.throws(() => s.adminSetOrderNote(merchant, "missing-order", { note: "x" }), (e) => e.status === 404);
 });
+
+test("an existing customer can be given staff or admin rights and taken back to customer", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  assert.throws(() => s.setMemberRole(staff, user.id, { role: "ADMIN" }), (e) => e.status === 403);
+  assert.throws(() => s.setMemberRole(merchant, user.id, { role: "OWNER" }), (e) => e.status === 400);
+
+  s.setMemberRole(merchant, user.id, { role: "ADMIN" });
+  // Same password, now an admin with admin powers; history stays on the account.
+  const again = s.session(s.login({ email: user.email, password: "Test-only-Password-123" }).token);
+  assert.equal(again.role, "ADMIN");
+  assert.doesNotThrow(() => s.adminTransactions(again, {}));
+  assert.ok(s.team(merchant).some((m) => m.id === user.id && m.role === "ADMIN"));
+  assert.ok(s.notifications(again).some((n) => n.kind === "team"));
+  // Nobody changes their own role.
+  assert.throws(() => s.setMemberRole(again, again.id, { role: "CUSTOMER" }), (e) => e.status === 400);
+
+  s.setMemberRole(merchant, user.id, { role: "CUSTOMER" });
+  assert.equal(s.session(s.login({ email: user.email, password: "Test-only-Password-123" }).token).role, "CUSTOMER");
+  assert.ok(!s.team(merchant).some((m) => m.id === user.id));
+  assert.deepEqual(
+    s.adminAuditLog(merchant, { action: "TEAM_ROLE" }).entries.map((e) => e.detail.to),
+    ["CUSTOMER", "ADMIN"],
+  );
+
+  // A banned customer must be re-enabled first.
+  s.adminSetCustomerStatus(merchant, user.id, { status: "BANNED", reason: "ทดสอบ" });
+  assert.throws(() => s.setMemberRole(merchant, user.id, { role: "STAFF" }), (e) => e.status === 409);
+});

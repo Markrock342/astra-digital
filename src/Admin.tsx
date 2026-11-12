@@ -72,7 +72,6 @@ const orderTabs = [
 const settingTabs = [
   ["settings", "ร้าน"],
   ["settings/payment", "รับเงิน"],
-  ["settings/team", "ทีมงาน"],
   ["settings/account", "บัญชีแอดมิน"],
   ["settings/audit", "ประวัติการทำงาน"],
 ];
@@ -771,6 +770,7 @@ export default function Admin() {
           ) : (
             <ReferenceSettings sub={sub} />
           ))}
+        {tab === "team" && <AdminTeam />}
         {tab === "chat" && <AdminChat />}
         {tab === "rankings" && <BuyerRanking />}
         {tab === "guide" && (
@@ -809,6 +809,7 @@ export default function Admin() {
           "top-ups",
           "ledger",
           "settings",
+          "team",
           "guide",
           "chat",
           "rankings",

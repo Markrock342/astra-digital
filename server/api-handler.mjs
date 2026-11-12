@@ -450,6 +450,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (/^\/api\/notifications\/[^/]+\/read$/.test(path))
           return send(200, service.markNotificationRead(user, path.split("/")[3]));
         if (path === "/api/admin/team") return send(200, service.saveStaff(user, input));
+        if (/^\/api\/admin\/team\/[^/]+\/role$/.test(path))
+          return send(200, service.setMemberRole(user, path.split("/")[4], input));
         if (/^\/api\/admin\/team\/[^/]+\/active$/.test(path))
           return send(200, service.setStaffActive(user, path.split("/")[4], input));
         if (/^\/api\/chat\/threads\/[^/]+\/assign$/.test(path))

@@ -1974,7 +1974,7 @@ export function createCommerceCore({
     fail,
     clean,
   });
-  const { team, saveStaff, setStaffActive, assignChatThread } = createTeamApis({
+  const { team, saveStaff, setMemberRole, setStaffActive, assignChatThread } = createTeamApis({
     passwordHash,
     requireAdmin,
     requireStaff,
@@ -2093,6 +2093,7 @@ export function createCommerceCore({
     replaceOrderCredential,
     team,
     saveStaff,
+    setMemberRole,
     setStaffActive,
     assignChatThread,
     salesReport,

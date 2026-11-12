@@ -816,7 +816,7 @@ const historyText = (h: CustomerDetail["history"][number]) => {
 };
 
 export function AdminCustomerDetail({ id }: { id: string }) {
-  const { toast, user } = useStore();
+  const { toast, user, go } = useStore();
   const admin = user?.role === "ADMIN";
   const [data, setData] = useState<CustomerDetail | null>(null);
   const [error, setError] = useState("");
@@ -1013,6 +1013,13 @@ export function AdminCustomerDetail({ id }: { id: string }) {
                       ตั้งรหัสผ่านชั่วคราว
                     </button>
                   )}
+                </>
+              )}
+              {admin && c.status === "ACTIVE" && (
+                <>
+                  <h2>สิทธิ์เข้าหลังบ้าน</h2>
+                  <p className="muted">ให้ลูกค้าคนนี้เป็นทีมงานหรือแอดมิน ใช้รหัสผ่านเดิมเข้าหลังบ้านได้ทันที</p>
+                  <GrantAccess userId={c.id} name={c.name} onDone={() => go("/admin/team")} />
                 </>
               )}
               <h2>ประวัติการแก้ไข</h2>
@@ -1621,6 +1628,121 @@ export function AdminAudit() {
 
 type Member = { id: string; name: string; email: string; role: string; active: boolean; owner?: boolean; created_at: string };
 
+type TeamRole = "ADMIN" | "STAFF" | "CUSTOMER";
+const ROLE_ACTION: Record<TeamRole, string> = {
+  ADMIN: "ให้สิทธิ์แอดมิน",
+  STAFF: "ตั้งเป็นทีมงาน",
+  CUSTOMER: "เปลี่ยนกลับเป็นลูกค้า",
+};
+const ROLE_DONE: Record<TeamRole, string> = {
+  ADMIN: "เป็นแอดมินแล้ว",
+  STAFF: "เป็นทีมงานแล้ว",
+  CUSTOMER: "กลับเป็นลูกค้าแล้ว",
+};
+
+/** Grant back-office rights to an account that already exists (a customer who signed up).
+ * Two clicks: pick the role, then confirm. Used on the team page and on customer detail. */
+export function GrantAccess({ userId, name, onDone }: { userId: string; name: string; onDone?: () => void }) {
+  const { toast } = useStore();
+  const [pick, setPick] = useState<TeamRole | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function apply(role: TeamRole) {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/admin/team/" + userId + "/role", { role });
+      toast(name + " " + ROLE_DONE[role]);
+      setPick(null);
+      onDone?.();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <span className="admin-row-actions">
+      {pick ? (
+        <>
+          <button className="button primary" disabled={busy} onClick={() => void apply(pick)}>
+            ยืนยัน{ROLE_ACTION[pick]}
+          </button>
+          <button className="button ghost" onClick={() => setPick(null)}>
+            ยกเลิก
+          </button>
+        </>
+      ) : (
+        <>
+          <button className="button secondary" onClick={() => setPick("STAFF")}>
+            ตั้งเป็นทีมงาน
+          </button>
+          <button className="button secondary" onClick={() => setPick("ADMIN")}>
+            ให้สิทธิ์แอดมิน
+          </button>
+        </>
+      )}
+      <ErrorMessage message={error} />
+    </span>
+  );
+}
+
+type CustomerHit = { id: string; name: string; email: string; username: string | null; status?: string };
+function PromoteCustomer({ onDone }: { onDone: () => void }) {
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<CustomerHit[] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) {
+      setHits(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      api<{ customers: CustomerHit[] }>("/admin/customers?limit=8&q=" + encodeURIComponent(term))
+        .then((r) => {
+          setHits(r.customers);
+          setError("");
+        })
+        .catch((e) => setError((e as Error).message));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [q]);
+  return (
+    <section className="reference-admin-card admin-detail-card span-2">
+      <h2>มอบสิทธิ์ให้ลูกค้าที่สมัครแล้ว</h2>
+      <p className="field-help">
+        ค้นหาด้วยชื่อ อีเมล หรือชื่อผู้ใช้ แล้วเลือกสิทธิ์ ลูกค้าใช้รหัสผ่านเดิมเข้าหลังบ้านได้ทันที ประวัติการซื้อและเครดิตยังอยู่ครบ
+      </p>
+      <label className="field">
+        ค้นหาลูกค้า
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="อย่างน้อย 2 ตัวอักษร" maxLength={80} />
+      </label>
+      <ErrorMessage message={error} />
+      {hits && hits.length === 0 && <p className="muted">ไม่พบลูกค้าที่ตรงกับคำค้น</p>}
+      {hits?.map((c) => (
+        <div className="settings-row" key={c.id}>
+          <span>
+            {c.name}
+            <small>
+              {c.email.endsWith(".local") ? (c.username ?? "—") : c.email}
+              {c.status && c.status !== "ACTIVE" && " · ถูกระงับ"}
+            </small>
+          </span>
+          <GrantAccess
+            userId={c.id}
+            name={c.name}
+            onDone={() => {
+              setHits((list) => list?.filter((x) => x.id !== c.id) ?? null);
+              onDone();
+            }}
+          />
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export function AdminTeam() {
   const { toast, user } = useStore();
   const [team, setTeam] = useState<Member[] | null>(null);
@@ -1665,13 +1787,12 @@ export function AdminTeam() {
       setError((err as Error).message);
     }
   }
-  async function changeRole(m: Member) {
-    const role = m.role === "ADMIN" ? "STAFF" : "ADMIN";
+  async function changeRole(m: Member, role: TeamRole) {
     setConfirming(null);
     setError("");
     try {
-      await api("/admin/team", { id: m.id, name: m.name, role });
-      toast(role === "ADMIN" ? m.name + " เป็นแอดมินแล้ว" : m.name + " เป็นทีมงานแล้ว");
+      await api("/admin/team/" + m.id + "/role", { role });
+      toast(m.name + " " + ROLE_DONE[role]);
       await load();
     } catch (err) {
       setError((err as Error).message);
@@ -1705,10 +1826,13 @@ export function AdminTeam() {
               </span>
               {!locked(m) && (
                 <span className="admin-row-actions">
-                  {confirming === m.id ? (
+                  {confirming?.startsWith(m.id + ":") ? (
                     <>
-                      <button className="button primary" onClick={() => void changeRole(m)}>
-                        {m.role === "ADMIN" ? "ยืนยันถอดสิทธิ์แอดมิน" : "ยืนยันให้สิทธิ์แอดมิน"}
+                      <button
+                        className="button primary"
+                        onClick={() => void changeRole(m, confirming.split(":")[1] as TeamRole)}
+                      >
+                        ยืนยัน{ROLE_ACTION[confirming.split(":")[1] as TeamRole]}
                       </button>
                       <button className="button ghost" onClick={() => setConfirming(null)}>
                         ยกเลิก
@@ -1717,8 +1841,16 @@ export function AdminTeam() {
                   ) : (
                     <>
                       {m.active && (
-                        <button className="button secondary" onClick={() => setConfirming(m.id)}>
-                          {m.role === "ADMIN" ? "ถอดสิทธิ์แอดมิน" : "ให้สิทธิ์แอดมิน"}
+                        <button
+                          className="button secondary"
+                          onClick={() => setConfirming(m.id + ":" + (m.role === "ADMIN" ? "STAFF" : "ADMIN"))}
+                        >
+                          {m.role === "ADMIN" ? "ลดเป็นทีมงาน" : "ให้สิทธิ์แอดมิน"}
+                        </button>
+                      )}
+                      {m.active && (
+                        <button className="button ghost" onClick={() => setConfirming(m.id + ":CUSTOMER")}>
+                          กลับเป็นลูกค้า
                         </button>
                       )}
                       <button className={"button " + (m.active ? "ghost" : "secondary")} onClick={() => void toggle(m)}>
@@ -1764,6 +1896,7 @@ export function AdminTeam() {
             </div>
           )}
         </section>
+        <PromoteCustomer onDone={() => void load()} />
       </div>
     </>
   );

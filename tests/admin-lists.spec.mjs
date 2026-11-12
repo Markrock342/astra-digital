@@ -1,6 +1,7 @@
 // Admin back-office screens: preorder toggle (FR-P3), server-filtered orders,
 // customers (edit / ban) and products (FR-O, FR-C, FR-P1).
 import { test, expect } from "@playwright/test";
+import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { createCommerce } from "../server/commerce.mjs";
 import { createApp } from "../server/http.mjs";
@@ -242,7 +243,9 @@ test("product images UI resizes to webp and sends raw bytes (upload API mocked u
 
 test("admin adds another admin, grants and removes admin rights with a confirm step", async ({ page, browser }) => {
   await as(page, adminToken);
-  await page.goto(base + "/admin/settings/team");
+  await page.goto(base + "/admin");
+  await page.getByRole("link", { name: "ทีมงาน", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/team$/);
   await expect(page.getByText("เจ้าของร้าน")).toBeVisible();
   await page.getByLabel("ชื่อ", { exact: true }).fill("แอดมินสำรอง");
   await page.getByLabel("อีเมลสำหรับเข้าสู่ระบบ").fill("backup-admin@example.invalid");
@@ -260,11 +263,29 @@ test("admin adds another admin, grants and removes admin rights with a confirm s
   await expect(other.getByRole("heading", { name: "การเงิน", exact: true })).toBeVisible();
   await other.close();
 
-  // Remove admin rights: first click only asks, the second applies.
-  await row.getByRole("button", { name: "ถอดสิทธิ์แอดมิน" }).click();
-  await row.getByRole("button", { name: "ยืนยันถอดสิทธิ์แอดมิน" }).click();
+  // Lower to staff: first click only asks, the second applies.
+  await row.getByRole("button", { name: "ลดเป็นทีมงาน" }).click();
+  await row.getByRole("button", { name: "ยืนยันตั้งเป็นทีมงาน" }).click();
   await expect(row).toContainText("ทีมงาน");
   await expect(row.getByRole("button", { name: "ให้สิทธิ์แอดมิน" })).toBeVisible();
   // The owner row and the signed-in admin have no role buttons.
   await expect(page.locator(".settings-row", { hasText: "admin@astra.local" }).getByRole("button")).toHaveCount(0);
+});
+
+test("admin gives a customer who already signed up staff rights, then takes them back", async ({ page }) => {
+  await as(page, adminToken);
+  await page.goto(base + "/admin/team");
+  await page.getByLabel("ค้นหาลูกค้า").fill("Quiet");
+  const hit = page.locator(".settings-row", { hasText: "quiet-window@example.invalid" });
+  await hit.getByRole("button", { name: "ตั้งเป็นทีมงาน" }).click();
+  await hit.getByRole("button", { name: "ยืนยันตั้งเป็นทีมงาน" }).click();
+  const row = page.locator(".settings-row", { hasText: "quiet-window@example.invalid" });
+  await expect(row).toContainText("ทีมงาน");
+  // The same password now opens the back office.
+  const login = service.login({ email: "quiet-window@example.invalid", password: "Quiet-window-Password-123" });
+  assert.equal(service.session(login.token).role, "STAFF");
+  await row.getByRole("button", { name: "กลับเป็นลูกค้า" }).click();
+  await row.getByRole("button", { name: "ยืนยันเปลี่ยนกลับเป็นลูกค้า" }).click();
+  await expect(page.locator(".settings-row", { hasText: "quiet-window@example.invalid" })).toHaveCount(0);
+  assert.equal(service.session(login.token).role, "CUSTOMER");
 });
