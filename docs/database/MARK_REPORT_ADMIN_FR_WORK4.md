@@ -3,6 +3,7 @@
 **ถึง:** มาร์ค  
 **จาก:** น็อต  
 **วันที่:** 2026-11-12  
+**PR:** https://github.com/Markrock342/astra-digital/pull/31  
 **Branch:** `feat/admin-fr-work4-variant-stock`  
 **ฐาน:** `main` @ `56f4603`  
 **Deploy:** **ยังไม่ทำ**

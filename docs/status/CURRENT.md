@@ -3,9 +3,9 @@
 อัปเดตล่าสุด: 2026-11-12
 
 ## Admin FR — งาน 4 พร้อม PR (ห้าม deploy)
-- branch `feat/admin-fr-work4-variant-stock` จาก `main` @ `56f4603`
+- PR #31 · branch `feat/admin-fr-work4-variant-stock` จาก `main` @ `56f4603`
 - MIG-007 + variant CRUD + inventory list/defect/delete/CSV + `lowStockAt` · flags `adminVariantCrud`/`adminStockApi`
-- หลักฐาน `npm test` 77/77 · รายงาน [MARK_REPORT_ADMIN_FR_WORK4](../database/MARK_REPORT_ADMIN_FR_WORK4.md)
+- หลักฐาน 77/77 + e2e 19/19 · รายงาน [MARK_REPORT_ADMIN_FR_WORK4](../database/MARK_REPORT_ADMIN_FR_WORK4.md)
 - **ห้าม deploy** · รอ Mark ก่อนงาน 5
 
 
