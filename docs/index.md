@@ -20,6 +20,8 @@
 | รายงาน Admin FR งาน 2 (NOTT → Mark) | [database/MARK_REPORT_ADMIN_FR_WORK2.md](database/MARK_REPORT_ADMIN_FR_WORK2.md) |
 | รายงาน Admin FR-P3 (NOTT → Mark) | [database/MARK_REPORT_ADMIN_FR_P3.md](database/MARK_REPORT_ADMIN_FR_P3.md) |
 | รายงาน Admin FR งาน 3 (NOTT → Mark) | [database/MARK_REPORT_ADMIN_FR_WORK3.md](database/MARK_REPORT_ADMIN_FR_WORK3.md) |
+| รายงาน W3 polish daily/CSV (NOTT → Mark) | [database/MARK_REPORT_ADMIN_FR_W3_POLISH.md](database/MARK_REPORT_ADMIN_FR_W3_POLISH.md) |
+| รายงานตรวจทานโจทย์ 12 พ.ย. (NOTT → Mark) | [database/MARK_REPORT_ADMIN_FR_HANDOFF_20261112.md](database/MARK_REPORT_ADMIN_FR_HANDOFF_20261112.md) |
 | Task Specs | [prompts/TASK-PROMPT-TEMPLATE.md](prompts/TASK-PROMPT-TEMPLATE.md) · [SOW FIFACORP 10 พ.ย. 2026](prompts/SOW-FIFACORP-FINAL-20261110.md) · [งานมาร์ค/น็อต](prompts/TASKS-MARK-NOTT-20261110.md) · [ISSUE-18 DB-005 APIs](prompts/ISSUE-18-db005-apis.md) · [Admin FR Work1](prompts/ADMIN-FR-WORK1-api-contract-revenue.md) · [Admin FR Work2](prompts/ADMIN-FR-WORK2-list-apis.md) · [Admin FR-P3](prompts/ADMIN-FR-P3-saveproduct-preorder.md) · [Admin FR Work3](prompts/ADMIN-FR-WORK3-ledger-006.md) |
 | Changelog กระบวนการ | [changelog.md](changelog.md) |
 
