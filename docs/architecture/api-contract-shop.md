@@ -68,6 +68,7 @@
 - หลัง FR-P3: `productPreorderForm` (boolean) — `POST /api/admin/products` รับ `preorder`
 - หลังงาน 3: `adminFinance` (boolean) — `GET /api/admin/transactions` พร้อม
 - หลังงาน 4: `adminVariantCrud`, `adminStockApi` (boolean)
+- หลังงาน 5 (FR-O5): `adminReplaceCredential` (boolean) — `POST /api/admin/orders/:id/replace`
 
 ### สินค้า — ตั้งพรีออเดอร์จากฟอร์ม (FR-P3)
 
@@ -182,11 +183,23 @@ Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์
 - ตอบ `{ "imported": n }` · ซ้ำ (fingerprint ชน) ตอบ 409 ทั้งชุด ไม่บันทึกบางส่วน
 - ยังรับ `codes` แบบเดิมได้ระหว่างเปลี่ยนผ่าน
 
-**ส่งของพรีออเดอร์** — `POST /api/admin/reservations/:id/deliver` (ADMIN, body `{}`)
+**ส่งของพรีออเดอร์** — `POST /api/admin/reservations/:id/deliver` (STAFF+, body `{}`)
 
 - ตอบ metadata เท่านั้น เช่น `{ "id", "status": "DELIVERED", "delivered_at", "delivered_by", "delivered": n }` ไม่มีรหัส
 - เรียกซ้ำหลังส่งแล้วตอบ metadata เดิม 200 · ไม่ใช่ PREORDER ตอบ 409 · ของไม่พอตอบ 409
 - กระดานคิวใช้ `GET /api/queue` เดิม
+
+**เปลี่ยนบัญชีที่เสีย (FR-O5)** — `POST /api/admin/orders/:id/replace` (ADMIN)
+
+```json
+{ "inventoryId": "…", "reason": "…" }
+```
+
+- ใช้ได้กับออเดอร์พร้อมส่งหรือพรีออเดอร์ที่ `DELIVERED` แล้ว (id เดียวกับ detail/reveal)
+- `inventoryId` ต้องเป็นแถวที่ผูก order/reservation นั้นอยู่ · ดึงบัญชีใหม่จากสต็อก available ตัวเลือกเดียวกัน
+- บัญชีเก่า → `defective=1` + เหตุผล · เคลียร์ bind · บัญชีใหม่ผูกแทน
+- แจ้งเตือนลูกค้าในเว็บ · audit `REPLACE_ORDER_CREDENTIAL` · ตอบ metadata เท่านั้น (ไม่มี plaintext)
+- สต็อกหมด / ยังไม่ DELIVERED / id ไม่ตรง → 409 · STAFF/CUSTOMER → 403
 
 **เจ้าของอ่านของที่ได้รับ** — `GET /api/orders/:id` (ทั้งออเดอร์ปกติและพรีออเดอร์)
 

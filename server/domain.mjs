@@ -26,6 +26,7 @@ import { withLive } from "./live.mjs";
 import { createTeamApis } from "./admin-team.mjs";
 import { createReportApis } from "./admin-reports.mjs";
 import { createAdminVariantStockApis } from "./admin-variant-stock-apis.mjs";
+import { createAdminOrderReplaceApis } from "./admin-order-replace.mjs";
 export { ROLES } from "./auth-policy.mjs";
 export class ApiError extends Error {
   constructor(status, message) {
@@ -124,7 +125,8 @@ export function createCommerceCore({
     const codes = [];
     const credentials = [];
     for (const row of all(
-      `SELECT login_id_enc, password_enc, legacy_single_secret FROM inventory WHERE ${column}=? ORDER BY rowid`,
+      `SELECT login_id_enc, password_enc, legacy_single_secret FROM inventory
+       WHERE ${column}=? AND COALESCE(defective,0)=0 ORDER BY rowid`,
       bindId,
     )) {
       const loginId = decrypt(row.login_id_enc);
@@ -1974,6 +1976,19 @@ export function createCommerceCore({
     randomUUID,
   });
   const { salesReport } = createReportApis({ requireAdmin, all, one, fail, bangkokDayRange });
+  const { replaceOrderCredential } = createAdminOrderReplaceApis({
+    requireAdmin,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    audit,
+    inventoryAvailableSql,
+    notify,
+    maybeNotifyStockLow,
+  });
   function buyerRanking(user, query = {}) {
     requireAdmin(user);
     const rawLimit = query.limit ?? null;
@@ -2036,6 +2051,7 @@ export function createCommerceCore({
     adminResetCustomerPassword,
     adminAuditLog,
     adminCancelOrder,
+    replaceOrderCredential,
     team,
     saveStaff,
     setStaffActive,
@@ -2089,6 +2105,7 @@ export function createCommerceCore({
       chatAssignment: true,
       adminVariantCrud: true,
       adminStockApi: true,
+      adminReplaceCredential: true,
     }),
     salesRevenueSatang,
     logout: (token) =>

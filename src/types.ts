@@ -118,6 +118,7 @@ export type Features = {
   adminCustomerManage?: boolean;
   adminVariantCrud?: boolean;
   adminStockApi?: boolean;
+  adminReplaceCredential?: boolean;
 };
 export type QueueItem = {
   id: string;

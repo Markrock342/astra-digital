@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { createHmac, createHash } from "node:crypto";
 import { createCommerceCore } from "../server/domain.mjs";
+import { createDoSqliteAdapter } from "../server/do-sqlite-adapter.mjs";
 import { executeSqliteMigration } from "../server/sqlite-migrations.mjs";
 import {
   applyMigration005,
@@ -34,14 +35,8 @@ export class Commerce extends DurableObject {
     super(ctx, env);
     const sql = ctx.storage.sql;
     const transaction = (fn) => ctx.storage.transactionSync(fn);
-    const db = {
-      exec: (s) => sql.exec(s),
-      prepare: (s) => ({
-        all: (...a) => sql.exec(s, ...a).toArray(),
-        get: (...a) => sql.exec(s, ...a).toArray()[0],
-        run: (...a) => sql.exec(s, ...a),
-      }),
-    };
+    // Map DO cursor.rowsWritten → { changes } so domain if (!x.changes) works on Cloudflare.
+    const db = createDoSqliteAdapter(sql);
     if (!env.INVENTORY_KEY) throw Error("Inventory key is missing");
     const key = createHmac("sha256", env.INVENTORY_KEY)
       .update(ctx.id.toString())

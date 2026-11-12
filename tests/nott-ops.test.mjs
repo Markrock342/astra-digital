@@ -873,6 +873,9 @@ test("ADMIN-FR-W2: order detail masks credentials; reveal audits", (t) => {
   assert.ok(detail.payments.some((p) => p.status === "SUCCEEDED"));
   assert.ok(detail.timeline.some((e) => e.event === "paid"));
   assert.ok(detail.timeline.some((e) => e.event === "delivered"));
+  assert.ok(Array.isArray(detail.units));
+  assert.equal(detail.units.length, order.quantity);
+  assert.ok(detail.units.every((u) => typeof u.id === "string" && u.id.length > 0));
   const blob = JSON.stringify(detail);
   for (const code of paid.codes ?? []) assert.ok(!blob.includes(code));
   for (const cred of paid.credentials ?? []) {
@@ -1602,4 +1605,147 @@ test("sales report groups paid orders by variant and Bangkok day", (t) => {
   assert.equal(report.byDay[0].day, today);
   assert.equal(report.totals.revenue, row.revenue);
   assert.equal(s.salesReport(merchant, { from: "2000-01-01", to: "2000-01-01" }).totals.orders, 0);
+});
+
+test("ADMIN-FR-W5-O5: replace delivered ready credential; staff forbidden", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const product = s.saveProduct(merchant, {
+    name: "O5 Ready Item",
+    description: "ทดสอบเปลี่ยนบัญชีพร้อมส่ง",
+    category: "streaming",
+    price: 15000,
+    active: true,
+  });
+  const variantId = s.adminProductVariants(merchant, product.id).variants[0].id;
+  s.importCodes(merchant, {
+    variantId,
+    items: [
+      { loginId: "old-ready", password: "old-pass" },
+      { loginId: "new-ready", password: "new-pass" },
+    ],
+  });
+  const order = s.createOrder(user, {
+    variantId,
+    quantity: 1,
+    requestKey: "o5-ready-001",
+  });
+  const paid = s.pay(user, order.id, {
+    paymentToken: order.paymentToken,
+    outcome: "success",
+  });
+  assert.equal(paid.credentials[0].loginId, "old-ready");
+  const soldId = s.db
+    .prepare("SELECT id FROM inventory WHERE order_id=?")
+    .get(order.id).id;
+
+  assert.throws(
+    () =>
+      s.replaceOrderCredential(staff, order.id, {
+        inventoryId: soldId,
+        reason: "บัญชีล็อก",
+      }),
+    (e) => e.status === 403,
+  );
+  assert.throws(
+    () =>
+      s.replaceOrderCredential(user, order.id, {
+        inventoryId: soldId,
+        reason: "บัญชีล็อก",
+      }),
+    (e) => e.status === 403,
+  );
+
+  const replaced = s.replaceOrderCredential(merchant, order.id, {
+    inventoryId: soldId,
+    reason: "บัญชีล็อกจากผู้ให้บริการ",
+  });
+  assert.equal(replaced.replacedInventoryId, soldId);
+  assert.ok(replaced.newInventoryId);
+  assert.notEqual(replaced.newInventoryId, soldId);
+
+  const detail = s.orderDetail(user, order.id);
+  assert.equal(detail.credentials.length, 1);
+  assert.equal(detail.credentials[0].loginId, "new-ready");
+  assert.equal(
+    s.db.prepare("SELECT defective FROM inventory WHERE id=?").get(soldId)
+      .defective,
+    1,
+  );
+  assert.equal(
+    s.db.prepare("SELECT order_id FROM inventory WHERE id=?").get(soldId)
+      .order_id,
+    null,
+  );
+  const notes = s.notifications(user);
+  assert.ok(notes.some((n) => n.title.includes("เปลี่ยน")));
+  assert.equal(s.features.adminReplaceCredential, true);
+
+  assert.throws(
+    () =>
+      s.replaceOrderCredential(merchant, order.id, {
+        inventoryId: soldId,
+        reason: "ซ้ำ",
+      }),
+    (e) => e.status === 409,
+  );
+});
+
+test("ADMIN-FR-W5-O5: replace after preorder deliver; empty stock 409", (t) => {
+  const { s, user, staff, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const product = s.saveProduct(merchant, {
+    name: "O5 Preorder Item",
+    description: "ทดสอบเปลี่ยนบัญชีพรีออเดอร์",
+    category: "streaming",
+    price: 19900,
+    preorder: true,
+    active: true,
+  });
+  const variantId = s.adminProductVariants(merchant, product.id).variants[0].id;
+  s.importCodes(merchant, {
+    variantId,
+    items: [
+      { loginId: "old-pre", password: "p1" },
+      { loginId: "spare-pre", password: "p2" },
+    ],
+  });
+  const order = s.createOrder(user, {
+    variantId,
+    quantity: 1,
+    requestKey: "o5-pre-001",
+  });
+  s.pay(user, order.id, {
+    paymentToken: order.paymentToken,
+    outcome: "success",
+  });
+  s.deliverReservation(staff, order.id);
+  const soldId = s.db
+    .prepare("SELECT id FROM inventory WHERE reservation_id=?")
+    .get(order.id).id;
+  const before = s.orderDetail(user, order.id).credentials[0].loginId;
+  assert.equal(before, "old-pre");
+
+  const out = s.replaceOrderCredential(merchant, order.id, {
+    inventoryId: soldId,
+    reason: "รหัสผิด",
+  });
+  assert.ok(out.newInventoryId);
+  assert.equal(s.orderDetail(user, order.id).credentials[0].loginId, "spare-pre");
+  assert.equal(
+    s.adminRevealOrderCredentials(merchant, order.id).credentials[0].loginId,
+    "spare-pre",
+  );
+
+  const lastSold = s.db
+    .prepare("SELECT id FROM inventory WHERE reservation_id=?")
+    .get(order.id).id;
+  assert.throws(
+    () =>
+      s.replaceOrderCredential(merchant, order.id, {
+        inventoryId: lastSold,
+        reason: "ของหมด",
+      }),
+    (e) => e.status === 409,
+  );
 });

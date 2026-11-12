@@ -24,11 +24,18 @@
 ## ชั้นเทส
 | ชั้น | เมื่อไหร่ | หลักฐานตัวอย่าง |
 |------|----------|-----------------|
-| Unit | business logic / โดเมน | ผลเทสผ่าน |
+| Unit | business logic / โดเมน | ผลเทสผ่าน (`npm test`) |
 | Integration / Contract | API, DB, ขอบโมดูล | เทสหรือสคริปต์เรียกจริงผ่าน |
 | Security negative | authz, ข้อมูลผู้ใช้, input อันตราย | เคสถูกปฏิเสธ/ไม่รั่ว |
 | Regression | แก้บั๊กสำคัญ | เคสที่เคยพังถูกครอบ |
-| Manual / Owner | UX | รายการรอผู้ใช้เทส |
+| **Cloudflare DO / workerd** | แตะ `cloud/worker.mjs`, DO SQLite adapter, หรือโค้ดที่พึ่งผล `prepare().run().changes` | `npm run test:do` (Miniflare/workerd) **และ** `wrangler dev --local` + `npm run qa:wrangler-local` — **node SQLite อย่างเดียวไม่นับ** |
+| E2E (Playwright) | เส้นทางลูกค้า/แอดมินสำคัญ | `npm run test:e2e` |
+| Manual / Owner / Mark | UX บนร้านจริง | รายการรอผู้ใช้เทส — **ห้าม `qa:cloud` ร้านจริง** จนกว่า Mark/Owner สั่ง |
+
+### กฎบังคับเมื่อแตะ Cloudflare path
+- [ ] มีเทส workerd/Miniflare ที่พิสูจน์พฤติกรรมบน DO (ไม่ใช่แค่ `createCommerce` / node:sqlite)
+- [ ] มีหลักฐาน `wrangler dev --local` สำหรับเส้นทางที่เคยพังหรือพึ่ง `run().changes` (เช่น deliver / replace)
+- [ ] ห้ามปิด Task ว่า “ผ่าน” ถ้าเทสแค่ node แล้วสมมติว่า Cloudflare เหมือนกัน
 
 ## ความปลอดภัยเพิ่ม เมื่อแตะข้อมูลผู้ใช้หรือสิทธิ์
 - [ ] Never trust the client
