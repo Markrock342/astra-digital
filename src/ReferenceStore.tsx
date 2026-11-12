@@ -25,6 +25,7 @@ import {
   Link,
   ProductCard,
   Quantity,
+  usePageTitle,
   useStore,
 } from "./App";
 import { t } from "./i18n";
@@ -271,6 +272,7 @@ export function ReferenceProduct({ id }: { id: string }) {
     product?.variants.find((v) => v.id === selected) ??
     product?.variants.find((v) => v.stock > 0) ??
     product?.variants[0];
+  usePageTitle(product?.name ?? (loading ? t("สินค้า") : t("ไม่พบสินค้า")));
   const [reviews, setReviews] = useState<Review[]>([]);
   useEffect(() => {
     api<{ reviews: Review[] }>("/reviews")

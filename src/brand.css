@@ -1801,3 +1801,17 @@ html.lang-swap .storefront-shell .main-nav {
     transition: none;
   }
 }
+@media (max-width: 600px) {
+  .storefront-shell .eyebrow,
+  .storefront-shell .stat-value > span,
+  .storefront-shell .status,
+  .storefront-shell .stock-tag,
+  .storefront-shell .service-pill,
+  .storefront-shell .live-pill,
+  .storefront-shell .history-card-top,
+  .storefront-shell .history-card-top small,
+  .storefront-shell .history-card-body p,
+  .storefront-shell .result-actions > p {
+    font-size: 12px;
+  }
+}
