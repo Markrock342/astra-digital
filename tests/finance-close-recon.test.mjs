@@ -15,6 +15,7 @@ import {
   ensureFinanceBooks,
   maskAccount,
 } from "../server/finance-close.mjs";
+import { TAX_INVOICE_APPEND_ONLY_TRIGGERS } from "../server/ensure-admin-fr.mjs";
 import {
   RECON_MAX_ROWS,
   matchStatement,
@@ -223,7 +224,8 @@ test("append-only: new finance tables refuse UPDATE/DELETE; ensure is idempotent
   const health = s.adminSystemHealth(admin);
   const check = health.checks.find((c) => c.id === "append_only");
   assert.equal(check.ok, true);
-  assert.match(check.detail, new RegExp("ครบ " + (4 + FINANCE_APPEND_ONLY_TRIGGERS.length)));
+  // + the tax invoice tables (ensureTaxInvoices).
+  assert.match(check.detail, new RegExp("ครบ " + (4 + FINANCE_APPEND_ONLY_TRIGGERS.length + TAX_INVOICE_APPEND_ONLY_TRIGGERS.length)));
   s.db.exec("DROP TRIGGER recon_decisions_append_only_delete");
   const broken = s.adminSystemHealth(admin).checks.find((c) => c.id === "append_only");
   assert.equal(broken.ok, false);

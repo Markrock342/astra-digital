@@ -54,6 +54,7 @@ import {
   PendingProductImages,
   ProductImages,
   ProductPreview,
+  StockDetail,
   type PendingImage,
   AdminAccount,
   AdminAudit,
@@ -88,6 +89,7 @@ import { AdminManualOrder, ManualOrderBadge } from "./AdminManualOrder";
 import { AdminFraud } from "./AdminFraud";
 import { AdminEmailTemplates } from "./AdminEmailTemplates";
 import { AdminDailyClose, AdminReconcile, AdminWithdrawals } from "./AdminFinanceBooks";
+import { AdminReceiptSettings, AdminTaxInvoices } from "./AdminTaxInvoices";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -101,6 +103,8 @@ const productTabs = [
 const orderTabs = [
   ["orders", "ออเดอร์ทั้งหมด"],
   ["preorders", "คิวพรีออเดอร์"],
+  // Full tax invoice requests (AdminTaxInvoices.tsx); ADMIN only, hidden for staff below.
+  ["tax-invoices", "ใบกำกับภาษี"],
 ];
 // การเงิน: transactions + daily close / reconciliation / withdrawals (AdminFinanceBooks.tsx).
 const financeTabs = [
@@ -119,6 +123,7 @@ const settingTabs = [
   ["settings/payment", "รับเงิน"],
   ["settings/banners", "แบนเนอร์หน้าแรก"],
   ["settings/legal", "ข้อกำหนดและนโยบาย"],
+  ["settings/receipts", "ใบเสร็จและใบกำกับภาษี"],
   ["settings/faq", "คำถามที่พบบ่อย"],
   ["settings/account", "บัญชีแอดมิน"],
   ["settings/alerts", "แจ้งเตือนนอกเว็บ"],
@@ -187,7 +192,7 @@ export default function Admin() {
   const customerGroup = customerTabs.some(([key]) => key === tab);
   const financeGroup = ["payments", "top-ups", "ledger", "daily-close", "reconcile", "withdrawals"].includes(tab);
   const productId = path.split("/")[3];
-  const detailId = ["orders", "customers"].includes(tab) ? productId : undefined;
+  const detailId = ["orders", "customers", "inventory"].includes(tab) ? productId : undefined;
   const editingProduct = data?.products.find(
     (p) => p.id === (editing ?? productId),
   );
@@ -345,7 +350,7 @@ export default function Admin() {
   if (user?.role === "STAFF")
     return (
       <>
-        {orderGroup && <Subnav items={orderTabs} current={tab} />}
+        {orderGroup && <Subnav items={orderTabs.filter(([key]) => key !== "tax-invoices")} current={tab} />}
         <main className="reference-admin-main">
           <StaffBackOffice tab={tab} sub={sub} detailId={detailId} />
         </main>
@@ -384,7 +389,7 @@ export default function Admin() {
         <input
           aria-label="ค้นหาในระบบจัดการร้าน"
           placeholder={
-            tab === "products"
+            tab === "products" || tab === "inventory"
               ? "ค้นหาชื่อสินค้า"
               : tab === "customers"
                 ? "ค้นหาลูกค้า"
@@ -860,7 +865,8 @@ export default function Admin() {
             </div>
           </>
         )}
-        {tab === "inventory" && (
+        {tab === "inventory" && detailId && <StockDetail variantId={detailId} />}
+        {tab === "inventory" && !detailId && (
           <>
             <div className="reference-admin-heading">
               <div>
@@ -893,6 +899,9 @@ export default function Admin() {
                     <th>ราคา</th>
                     <th>พร้อมส่ง</th>
                     <th>สถานะ</th>
+                    <th>
+                      <span className="sr-only">จัดการ</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -902,8 +911,18 @@ export default function Admin() {
                     )
                     .flatMap((p) =>
                       p.variants.map((v) => (
-                        <tr key={v.id}>
-                          <td>{p.name}</td>
+                        <tr
+                          key={v.id}
+                          className="clickable-row"
+                          onClick={(e) => {
+                            if (!(e.target as HTMLElement).closest("a,button")) go("/admin/inventory/" + v.id);
+                          }}
+                        >
+                          <td>
+                            <Link to={"/admin/inventory/" + v.id} className="table-title-link">
+                              {p.name}
+                            </Link>
+                          </td>
                           <td>{v.label}</td>
                           <td>{money(v.price)}</td>
                           <td>{v.stock}</td>
@@ -919,6 +938,11 @@ export default function Admin() {
                                   ? "พร้อมส่ง"
                                   : "สินค้าหมด"}
                             </span>
+                          </td>
+                          <td className="table-action">
+                            <Link to={"/admin/inventory/" + v.id} className="button ghost">
+                              ดูไอดี / แก้ไข
+                            </Link>
                           </td>
                         </tr>
                       )),
@@ -937,6 +961,7 @@ export default function Admin() {
             <AdminOrders />
           ))}
         {tab === "preorders" && <PreorderQueue />}
+        {tab === "tax-invoices" && <AdminTaxInvoices />}
         {tab === "coupons" && <AdminCoupons id={productId} />}
         {tab === "reviews" && <AdminReviews />}
         {tab === "customers" &&
@@ -972,6 +997,8 @@ export default function Admin() {
             <FaqSettingsPanel products={data.products} />
           ) : sub === "settings/banners" ? (
             <AdminBanners />
+          ) : sub === "settings/receipts" ? (
+            <AdminReceiptSettings />
           ) : sub === "settings/health" ? (
             <AdminSystemHealth />
           ) : (
@@ -1011,6 +1038,7 @@ export default function Admin() {
           "inventory",
           "orders",
           "preorders",
+          "tax-invoices",
           "coupons",
           "categories",
           "reviews",

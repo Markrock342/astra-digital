@@ -74,6 +74,8 @@ export function createOrderExtras({
   isAdmin,
   settings,
   orderRefundState,
+  // Receipt settings + buyer details (tax-invoices.mjs); optional so older callers keep working.
+  taxInvoices = null,
 }) {
   /** Ready-stock order or preorder row, with product + option, or null. */
   function loadOrderRow(orderId) {
@@ -164,7 +166,7 @@ export function createOrderExtras({
 
   function shopBlock() {
     const s = settings() ?? {};
-    return {
+    const legacy = {
       name: typeof s.shopName === "string" && s.shopName !== "ร้านค้า" ? s.shopName : "ASIA EXTRA",
       legalName: firstText(s, SETTINGS_ALIASES.legalName),
       taxId: firstText(s, SETTINGS_ALIASES.taxId),
@@ -174,6 +176,8 @@ export function createOrderExtras({
       line: firstText(s, ["line"]),
       vatRegistered: s.vatRegistered === true,
     };
+    // ตั้งค่า › ใบเสร็จและใบกำกับภาษี first; the older shop settings fields are the fallback.
+    return taxInvoices ? { ...legacy, ...taxInvoices.sellerBlock(legacy) } : legacy;
   }
 
   function paymentOf(row) {
@@ -229,6 +233,8 @@ export function createOrderExtras({
       paymentStatus: payment.status,
       refundStatus: refund.refundStatus ?? null,
       refundedTotal: refund.refundedTotal ?? 0,
+      // Buyer block (ใบเสร็จรับเงิน in the buyer's name) + the issued tax invoice number.
+      ...(taxInvoices ? taxInvoices.receiptExtras(row) : {}),
     };
   }
 

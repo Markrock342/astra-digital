@@ -268,6 +268,10 @@ export function createAdminVariantStockApis({
   decrypt,
   getLowStockAt,
   randomUUID,
+  /** For editing an unsold unit (same keys as import: encrypted values, keyed duplicate checks). */
+  encrypt,
+  inventoryFingerprint,
+  inventoryLoginKey,
 }) {
   /** Warranty in whole days, 0 (none) to 365. */
   function warrantyInput(value, fallback) {
@@ -529,7 +533,164 @@ export function createAdminVariantStockApis({
       rows.length > lim
         ? encodeCursor([page[page.length - 1].created_at, page[page.length - 1].id])
         : null;
-    return { inventory: page, nextCursor };
+    // First page also carries the option and how many accounts it holds per status.
+    if (cursorParts) return { inventory: page, nextCursor };
+    return { inventory: page, nextCursor, variant: variantSummary(variantId), counts: inventoryCounts(variantId) };
+  }
+
+  function variantSummary(variantId) {
+    const v = one(
+      `SELECT v.id,v.label,v.price,v.active,p.id AS product_id,p.name AS product,p.preorder
+       FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=?`,
+      variantId,
+    );
+    return {
+      id: v.id,
+      label: v.label,
+      price: v.price,
+      active: !!v.active,
+      productId: v.product_id,
+      product: v.product,
+      preorder: !!v.preorder,
+      sellable: stockCount(variantId),
+    };
+  }
+
+  /** Accounts per status for one option (same definitions as the list filters). */
+  function inventoryCounts(variantId) {
+    const free = "order_id IS NULL AND reservation_id IS NULL AND COALESCE(defective,0)=0";
+    const row = one(
+      `SELECT COUNT(*) AS total,
+              SUM(CASE WHEN ${free} THEN 1 ELSE 0 END) AS available,
+              SUM(CASE WHEN ${free} AND expires_at IS NOT NULL AND datetime(expires_at) > datetime('now')
+                        AND datetime(expires_at) <= datetime('now','+7 days') THEN 1 ELSE 0 END) AS expiring,
+              SUM(CASE WHEN ${free} AND expires_at IS NOT NULL AND datetime(expires_at) <= datetime('now') THEN 1 ELSE 0 END) AS expired,
+              SUM(CASE WHEN (order_id IS NOT NULL OR reservation_id IS NOT NULL) AND COALESCE(defective,0)=0 THEN 1 ELSE 0 END) AS sold,
+              SUM(CASE WHEN COALESCE(defective,0)=1 THEN 1 ELSE 0 END) AS defective
+       FROM inventory WHERE variant_id=?`,
+      variantId,
+    );
+    const n = (v) => Number(v ?? 0);
+    return {
+      total: n(row.total),
+      available: n(row.available),
+      expiring: n(row.expiring),
+      expired: n(row.expired),
+      sold: n(row.sold),
+      defective: n(row.defective),
+    };
+  }
+
+  /** ADMIN: the full ID + password (or code) of one stock unit. Every view is audited. */
+  function revealInventoryUnit(user, inventoryIdRaw) {
+    requireAdmin(user);
+    const inventoryId = clean(inventoryIdRaw, 1, 80, "รายการสต็อก");
+    const row = one("SELECT id,login_id_enc,password_enc,legacy_single_secret FROM inventory WHERE id=?", inventoryId);
+    if (!row) fail(404, "ไม่พบรายการสต็อก");
+    let loginId;
+    let password;
+    try {
+      loginId = decrypt(row.login_id_enc);
+      password = row.legacy_single_secret ? "" : decrypt(row.password_enc);
+    } catch {
+      fail(500, "ถอดรหัสรายการนี้ไม่ได้");
+    }
+    audit(user, "INVENTORY_REVEAL", inventoryId);
+    return row.legacy_single_secret ? { id: inventoryId, code: loginId } : { id: inventoryId, loginId, password };
+  }
+
+  /**
+   * ADMIN: fix an unsold, working unit — ID / password (code), expiry, cost. Sold units are
+   * fixed from their order (replace + notify), defective ones stay as evidence.
+   */
+  function updateInventoryUnit(user, inventoryIdRaw, input = {}) {
+    requireAdmin(user);
+    const inventoryId = clean(inventoryIdRaw, 1, 80, "รายการสต็อก");
+    return tx(() => {
+      const row = one("SELECT * FROM inventory WHERE id=?", inventoryId);
+      if (!row) fail(404, "ไม่พบรายการสต็อก");
+      if (row.order_id != null || row.reservation_id != null)
+        fail(409, "บัญชีที่ขายแล้วแก้ที่นี่ไม่ได้ ให้เปลี่ยนบัญชีจากหน้าออเดอร์");
+      if (row.defective) fail(409, "รายการที่แจ้งเสียแล้วแก้ไขไม่ได้");
+      const legacy = !!row.legacy_single_secret;
+      const changed = [];
+      const sets = [];
+      const params = [];
+      const credentialEdit = input.loginId !== undefined || input.password !== undefined || input.code !== undefined;
+      if (credentialEdit) {
+        const oldLogin = decrypt(row.login_id_enc);
+        const oldPassword = legacy ? "" : decrypt(row.password_enc);
+        const loginId = legacy
+          ? input.code !== undefined
+            ? clean(input.code, 1, 500, "โค้ด")
+            : oldLogin
+          : input.loginId !== undefined
+            ? clean(input.loginId, 1, 200, "ID")
+            : oldLogin;
+        const password = legacy
+          ? ""
+          : input.password !== undefined
+            ? clean(input.password, 1, 200, "รหัสผ่าน")
+            : oldPassword;
+        if (loginId !== oldLogin || password !== oldPassword) {
+          const fingerprint = inventoryFingerprint(loginId, password);
+          const loginKey = inventoryLoginKey(legacy, loginId);
+          const clash = one(
+            "SELECT id FROM inventory WHERE (login_key=? OR fingerprint=?) AND id<>? LIMIT 1",
+            loginKey,
+            fingerprint,
+            inventoryId,
+          );
+          if (clash) fail(409, legacy ? "โค้ดนี้มีในระบบแล้ว" : "ID นี้มีในระบบแล้ว");
+          sets.push("login_id_enc=?", "password_enc=?", "fingerprint=?", "login_key=?");
+          params.push(encrypt(loginId), encrypt(password), fingerprint, loginKey);
+          if (loginId !== oldLogin) changed.push(legacy ? "code" : "loginId");
+          if (password !== oldPassword) changed.push("password");
+        }
+      }
+      if (input.expiresAt !== undefined) {
+        const parsed = parseOptionalExpires(input.expiresAt);
+        if (parsed.error) fail(400, parsed.error);
+        if ((parsed.expiresAt ?? null) !== (row.expires_at ?? null)) {
+          sets.push("expires_at=?");
+          params.push(parsed.expiresAt);
+          changed.push("expiresAt");
+        }
+      }
+      if (input.cost !== undefined) {
+        const parsed = parseOptionalCost(input.cost);
+        if (parsed.error) fail(400, parsed.error);
+        if ((parsed.cost ?? null) !== (row.cost ?? null)) {
+          sets.push("cost=?");
+          params.push(parsed.cost);
+          changed.push("cost");
+        }
+      }
+      if (sets.length) {
+        run(
+          `UPDATE inventory SET ${sets.join(",")} WHERE id=? AND order_id IS NULL AND reservation_id IS NULL AND COALESCE(defective,0)=0`,
+          ...params,
+          inventoryId,
+        );
+        // Never the values themselves: only which fields changed.
+        run(
+          "INSERT INTO audit(user_id,action,entity_id,detail) VALUES(?,?,?,?)",
+          user.id,
+          "INVENTORY_EDIT",
+          inventoryId,
+          JSON.stringify({ fields: changed }),
+        );
+      }
+      const after = one("SELECT login_id_enc,legacy_single_secret,expires_at,cost FROM inventory WHERE id=?", inventoryId);
+      const shown = decrypt(after.login_id_enc);
+      return {
+        id: inventoryId,
+        changed,
+        expires_at: after.expires_at ?? null,
+        cost: after.cost ?? null,
+        ...(after.legacy_single_secret ? { codeMasked: maskSecret(shown) } : { loginIdMasked: maskSecret(shown) }),
+      };
+    });
   }
 
   function markInventoryDefect(user, inventoryIdRaw, input = {}) {
@@ -595,5 +756,7 @@ export function createAdminVariantStockApis({
     adminVariantInventory,
     markInventoryDefect,
     deleteInventoryUnit,
+    revealInventoryUnit,
+    updateInventoryUnit,
   };
 }
