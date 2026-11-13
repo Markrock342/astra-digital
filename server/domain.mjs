@@ -2554,8 +2554,9 @@ export function createCommerceCore({
                   t.created_at
                 ) AS lastMessageAt,
                 (
+                  -- A team member's own storefront thread: they wrote those messages.
                   SELECT COUNT(*) FROM chat_messages m
-                  WHERE m.thread_id=t.id AND m.sender_type='USER'
+                  WHERE m.thread_id=t.id AND m.sender_type='USER' AND t.user_id<>?
                     AND m.created_at > COALESCE(
                       (SELECT r.last_read_at FROM chat_thread_reads r
                        WHERE r.thread_id=t.id AND r.user_id=?),
@@ -2564,6 +2565,7 @@ export function createCommerceCore({
                 ) AS unreadCount
          FROM chat_threads t JOIN users u ON u.id=t.user_id LEFT JOIN users a ON a.id=t.assigned_to
          ORDER BY lastMessageAt DESC, t.id DESC`,
+        user.id,
         user.id,
       );
     return all(
@@ -2638,7 +2640,7 @@ export function createCommerceCore({
     if (!thread) fail(404, "ไม่พบแชท");
     if (thread.user_id !== user.id && !isStaff(user))
       fail(403, "ไม่มีสิทธิ์ดูแชทนี้");
-    if (isStaff(user) && thread.user_id !== user.id) {
+    if (isStaff(user)) {
       const latest = one(
         "SELECT COALESCE(MAX(created_at), CURRENT_TIMESTAMP) AS t FROM chat_messages WHERE thread_id=?",
         id,
@@ -2650,6 +2652,12 @@ export function createCommerceCore({
         user.id,
         id,
         latest,
+      );
+      // Reading the thread also clears this person's bell alerts that point to it.
+      run(
+        "UPDATE notifications SET read_at=CURRENT_TIMESTAMP WHERE user_id=? AND kind='chat' AND link=? AND read_at IS NULL",
+        user.id,
+        adminChatLink(id),
       );
     }
     return chatAttach.decorate(
