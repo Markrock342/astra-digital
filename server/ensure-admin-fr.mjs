@@ -47,6 +47,7 @@ export function ensureCategories(db) {
 }
 
 export { ensurePrivacyRequests } from "./privacy.mjs";
+export { ensureManualOrders } from "./manual-orders.mjs";
 
 export function ensureChatThreadReads(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS chat_thread_reads (

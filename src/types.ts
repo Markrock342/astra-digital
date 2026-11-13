@@ -75,6 +75,9 @@ export type Order = {
   /** Price before the discount (total + discount). */
   subtotal?: number;
   coupon_code?: string | null;
+  /** The shop created this order in the back office (customer paid outside the site). */
+  createdByAdmin?: boolean;
+  paymentMethodLabel?: string;
 };
 /** POST /api/coupons/check: a preview only; the order is priced again on the server. */
 export type CouponPreview = { valid: true; code: string; subtotal: number; discount: number; total: number };
@@ -139,6 +142,8 @@ export type AdminData = {
     customer: string;
     product_id: string;
     product: string;
+    /** Created in the back office for a customer who paid outside the site. */
+    createdByAdmin?: boolean;
   }[];
   pendingPayment: number;
   preorderQueue: number;

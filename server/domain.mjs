@@ -63,6 +63,7 @@ import { createReviewModeration, maskReviewer } from "./review-moderation.mjs";
 import { normalizeLegal } from "./legal.mjs";
 import { normalizeFaq } from "./faq.mjs";
 import { createBroadcastApis } from "./broadcast.mjs";
+import { createManualOrderApis } from "./manual-orders.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -1588,6 +1589,158 @@ export function createCommerceCore({
     audit(user, "SET_PAYMENT_CHANNEL", provider);
     return getPaymentChannel();
   }
+  /**
+   * Shared settlement for a paid order (sandbox pay and admin manual orders,
+   * manual-orders.mjs): FEFO units that still cover the order's warranty snapshot.
+   */
+  const pickUnitsForOrder = (order) =>
+    all(
+      `SELECT id FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL
+         AND COALESCE(defective,0)=0
+         AND (expires_at IS NULL OR datetime(expires_at) > datetime('now', '+' || ? || ' days'))
+       ORDER BY ${inventoryOrderSql()} LIMIT ?`,
+      order.variant_id,
+      // Also enforce order snapshot warranty_days (may differ from current variant).
+      order.warranty_days ?? 0,
+      order.quantity,
+    );
+  /**
+   * Paid order -> DELIVERED: bind the units, start the warranty, record the SUCCEEDED
+   * payment + PAYMENT_IN row, notify customer and staff, raise alerts. Runs inside the
+   * caller's transaction. `payment` overrides the sandbox defaults (manual orders).
+   */
+  const deliverPaidOrder = (order, available, payment = {}) => {
+    const id = order.id;
+    for (const item of available) {
+      const bound = run(
+        `UPDATE inventory SET order_id=?,sold_at=CURRENT_TIMESTAMP WHERE id=? AND ${inventoryAvailableSql}`,
+        id,
+        item.id,
+      );
+      if (!bound.changes) fail(409, "สินค้าคงเหลือไม่เพียงพอ กรุณาเลือกจำนวนใหม่");
+    }
+    // Warranty runs from delivery, using the days snapshotted when the order was placed.
+    run(
+      `UPDATE orders SET status='DELIVERED',
+         warranty_until=CASE WHEN COALESCE(warranty_days,0)>0
+           THEN datetime('now','+'||warranty_days||' days') END
+       WHERE id=?`,
+      id,
+    );
+    const paymentId = randomUUID();
+    const provider = payment.provider ?? "sandbox";
+    const providerRef = payment.providerRef ?? "sandbox:order:" + id;
+    run(
+      `INSERT OR IGNORE INTO payments(
+        id, order_id, reservation_id, user_id, amount, currency, status,
+        provider, provider_ref, idempotency_key, created_at, finalized_at
+      ) VALUES(?,?,NULL,?,?,'THB','SUCCEEDED',?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+      paymentId,
+      id,
+      order.user_id,
+      order.total,
+      provider,
+      providerRef,
+      payment.idempotencyKey ?? "pay:order:" + id,
+    );
+    insertLedgerEntry({
+      userId: order.user_id,
+      amount: order.total,
+      reference: "payment-in:" + paymentId,
+      label: payment.label ?? "รับชำระออเดอร์ " + id.slice(0, 8),
+      kind: "PAYMENT_IN",
+      direction: "in",
+      orderId: id,
+      paymentId,
+      providerRef,
+      actorId: payment.actorId ?? null,
+    });
+    notify(
+      order.user_id,
+      "code_delivery",
+      "ส่งโค้ดสำเร็จ",
+      "คำสั่งซื้อ " + id.slice(0, 8) + " ได้รับโค้ดแล้ว",
+      "/orders/" + id,
+    );
+    notifyStaffRoles(
+      "order_new",
+      "ออเดอร์ใหม่",
+      "คำสั่งซื้อ " + id.slice(0, 8) + (payment.staffText ?? " ชำระแล้วและส่งของแล้ว"),
+      "/admin/orders/" + id,
+    );
+    maybeNotifyStockLow(order.variant_id);
+    alerts.emit("order_paid", {
+      id,
+      variantId: order.variant_id,
+      quantity: order.quantity,
+      total: order.total,
+    });
+    alerts.stockAfterSale(order.variant_id);
+    return paymentId;
+  };
+  /**
+   * Paid preorder -> PREORDER with a queue number: SUCCEEDED payment, PAYMENT_IN
+   * (when total > 0), notifications, alert. Runs inside the caller's transaction.
+   */
+  const settlePaidReservation = (o, payment = {}) => {
+    const id = o.id;
+    const queueNumber = o.queue_number ?? nextQueueNumber();
+    run(
+      "UPDATE reservations SET status='PREORDER', queue_number=? WHERE id=?",
+      queueNumber,
+      id,
+    );
+    const paymentId = randomUUID();
+    const provider = payment.provider ?? "sandbox";
+    const providerRef = payment.providerRef ?? "sandbox:preorder:" + id;
+    run(
+      `INSERT OR IGNORE INTO payments(
+        id, order_id, reservation_id, user_id, amount, currency, status,
+        provider, provider_ref, idempotency_key, created_at, finalized_at
+      ) VALUES(?,NULL,?,?,?,'THB','SUCCEEDED',?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+      paymentId,
+      id,
+      o.user_id,
+      o.total,
+      provider,
+      providerRef,
+      payment.idempotencyKey ?? "pay:reservation:" + id,
+    );
+    if (o.total)
+      insertLedgerEntry({
+        userId: o.user_id,
+        amount: o.total,
+        reference: "payment-in:" + paymentId,
+        label: payment.label ?? "รับชำระพรีออเดอร์ " + id.slice(0, 8),
+        kind: "PAYMENT_IN",
+        direction: "in",
+        orderId: id,
+        paymentId,
+        providerRef,
+        actorId: payment.actorId ?? null,
+      });
+    notify(
+      o.user_id,
+      "preorder_queue",
+      "ได้รับเลขคิวพรีออเดอร์",
+      "คิวของคุณคือ #" + queueNumber,
+      "/orders/" + id,
+    );
+    notifyStaffRoles(
+      "preorder_queue_admin",
+      "คิวพรีออเดอร์ใหม่",
+      "คิว #" + queueNumber + " · " + id.slice(0, 8),
+      "/admin/orders/" + id,
+    );
+    alerts.emit("preorder_paid", {
+      id,
+      queueNumber,
+      variantId: o.variant_id,
+      quantity: o.quantity,
+      total: o.total,
+    });
+    return { paymentId, queueNumber };
+  };
   function pay(user, id, input) {
     requireUser(user);
     assertSandboxPayAllowed();
@@ -1631,57 +1784,7 @@ export function createCommerceCore({
             direction: "out",
             orderId: id,
           });
-        const queueNumber = o.queue_number ?? nextQueueNumber();
-        run(
-          "UPDATE reservations SET status='PREORDER', queue_number=? WHERE id=?",
-          queueNumber,
-          id,
-        );
-        const paymentId = randomUUID();
-        run(
-          `INSERT OR IGNORE INTO payments(
-            id, order_id, reservation_id, user_id, amount, currency, status,
-            provider, provider_ref, idempotency_key, created_at, finalized_at
-          ) VALUES(?,NULL,?,?,?,'THB','SUCCEEDED','sandbox',?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
-          paymentId,
-          id,
-          user.id,
-          o.total,
-          "sandbox:preorder:" + id,
-          "pay:reservation:" + id,
-        );
-        if (o.total)
-          insertLedgerEntry({
-            userId: user.id,
-            amount: o.total,
-            reference: "payment-in:" + paymentId,
-            label: "รับชำระพรีออเดอร์ " + id.slice(0, 8),
-            kind: "PAYMENT_IN",
-            direction: "in",
-            orderId: id,
-            paymentId,
-            providerRef: "sandbox:preorder:" + id,
-          });
-        notify(
-          user.id,
-          "preorder_queue",
-          "ได้รับเลขคิวพรีออเดอร์",
-          "คิวของคุณคือ #" + queueNumber,
-          "/orders/" + id,
-        );
-        notifyStaffRoles(
-          "preorder_queue_admin",
-          "คิวพรีออเดอร์ใหม่",
-          "คิว #" + queueNumber + " · " + id.slice(0, 8),
-          "/admin/orders/" + id,
-        );
-        alerts.emit("preorder_paid", {
-          id,
-          queueNumber,
-          variantId: o.variant_id,
-          quantity: o.quantity,
-          total: o.total,
-        });
+        settlePaidReservation(o);
         audit(user, "PREORDER_PAID", id);
         return orderDetail(user, id);
       });
@@ -1712,17 +1815,7 @@ export function createCommerceCore({
         audit(user, "PAYMENT_FAILED", id);
         return orderDetail(user, id);
       }
-      // Also enforce order snapshot warranty_days (may differ from current variant).
-      const warrantyDays = order.warranty_days ?? 0;
-      const available = all(
-        `SELECT id FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL
-           AND COALESCE(defective,0)=0
-           AND (expires_at IS NULL OR datetime(expires_at) > datetime('now', '+' || ? || ' days'))
-         ORDER BY ${inventoryOrderSql()} LIMIT ?`,
-        order.variant_id,
-        warrantyDays,
-        order.quantity,
-      );
+      const available = pickUnitsForOrder(order);
       if (available.length !== order.quantity) {
         run("UPDATE orders SET status='OUT_OF_STOCK' WHERE id=?", id);
         releaseCouponForOrder(id, "OUT_OF_STOCK");
@@ -1741,65 +1834,7 @@ export function createCommerceCore({
         direction: "out",
         orderId: id,
       });
-      for (const item of available)
-        run(
-          `UPDATE inventory SET order_id=?,sold_at=CURRENT_TIMESTAMP WHERE id=? AND ${inventoryAvailableSql}`,
-          id,
-          item.id,
-        );
-      // Warranty runs from delivery, using the days snapshotted when the order was placed.
-      run(
-        `UPDATE orders SET status='DELIVERED',
-           warranty_until=CASE WHEN COALESCE(warranty_days,0)>0
-             THEN datetime('now','+'||warranty_days||' days') END
-         WHERE id=?`,
-        id,
-      );
-      const paymentId = randomUUID();
-      run(
-        `INSERT OR IGNORE INTO payments(
-          id, order_id, reservation_id, user_id, amount, currency, status,
-          provider, provider_ref, idempotency_key, created_at, finalized_at
-        ) VALUES(?,?,NULL,?,?,'THB','SUCCEEDED','sandbox',?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
-        paymentId,
-        id,
-        user.id,
-        order.total,
-        "sandbox:order:" + id,
-        "pay:order:" + id,
-      );
-      insertLedgerEntry({
-        userId: user.id,
-        amount: order.total,
-        reference: "payment-in:" + paymentId,
-        label: "รับชำระออเดอร์ " + id.slice(0, 8),
-        kind: "PAYMENT_IN",
-        direction: "in",
-        orderId: id,
-        paymentId,
-        providerRef: "sandbox:order:" + id,
-      });
-      notify(
-        user.id,
-        "code_delivery",
-        "ส่งโค้ดสำเร็จ",
-        "คำสั่งซื้อ " + id.slice(0, 8) + " ได้รับโค้ดแล้ว",
-        "/orders/" + id,
-      );
-      notifyStaffRoles(
-        "order_new",
-        "ออเดอร์ใหม่",
-        "คำสั่งซื้อ " + id.slice(0, 8) + " ชำระแล้วและส่งของแล้ว",
-        "/admin/orders/" + id,
-      );
-      maybeNotifyStockLow(order.variant_id);
-      alerts.emit("order_paid", {
-        id,
-        variantId: order.variant_id,
-        quantity: order.quantity,
-        total: order.total,
-      });
-      alerts.stockAfterSale(order.variant_id);
+      deliverPaidOrder(order, available);
       audit(user, "PAYMENT_AND_DELIVERY", id);
       return orderDetail(user, id);
     });
@@ -2945,6 +2980,29 @@ export function createCommerceCore({
     },
     publicBaseUrl,
   });
+  // Orders an ADMIN creates for a customer who paid outside the site (manual-orders.mjs).
+  const manualOrders = createManualOrderApis({
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    integer,
+    clock,
+    requireAdmin,
+    isAdmin,
+    confirmPassword: auth.confirmPassword,
+    buyableVariant,
+    coupons,
+    normalizeCouponCode,
+    pickUnitsForOrder,
+    deliverPaidOrder,
+    settlePaidReservation,
+    allowSandbox,
+    fileStore,
+    sendOrderConfirmation: accountEmail.sendOrderConfirmation,
+  });
   const reviewModeration = createReviewModeration({
     one,
     all,
@@ -3023,6 +3081,10 @@ export function createCommerceCore({
     adminAddOrderNote,
     replaceOrderCredential,
     resendOrderCredentials,
+    adminManualOrderQuote: manualOrders.adminManualOrderQuote,
+    adminCreateManualOrder: manualOrders.adminCreateManualOrder,
+    adminSetManualOrderSlip: manualOrders.adminSetManualOrderSlip,
+    adminManualOrderSlip: manualOrders.adminManualOrderSlip,
     loginTotp: (rawInput, ctx) => auth.loginTotp(rawInput, ctx),
     confirmPassword: auth.confirmPassword,
     reauthAdmin: auth.reauthAdmin,
@@ -3148,6 +3210,7 @@ export function createCommerceCore({
       categories: true,
       stockWatch: true,
       reviewModeration: true,
+      manualOrders: true,
       // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
       email: accountEmail.enabled,
       passwordReset: accountEmail.enabled,
@@ -3187,6 +3250,8 @@ export function createCommerceCore({
   accountEmail.hookOrderEmails(service);
   // Import / re-activation that brings a waited-for option back notifies the waiting customers.
   stockWatch.hook(service);
+  // "สร้างโดยแอดมิน" marker + payment method on the existing order views.
+  manualOrders.hook(service);
   const live = withLive(service, { run, all });
   // Unpaid-order expiry runs lazily on these calls (pending-expiry.mjs). The bump goes
   // through live.mjs so listeners hear "orders changed" only when something expired.

@@ -32,6 +32,8 @@ const LIVE_METHODS = {
   adjustCustomerCredit: ["customers", "notify"],
   replaceOrderCredential: ["orders", "catalog", "notify"],
   resendOrderCredentials: ["orders", "chat", "notify"],
+  adminCreateManualOrder: ["orders", "catalog", "notify", "customers"],
+  adminSetManualOrderSlip: ["orders"],
   addProductImage: ["catalog"],
   reorderProductImages: ["catalog"],
   deleteProductImage: ["catalog"],

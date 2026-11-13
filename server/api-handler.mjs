@@ -54,7 +54,8 @@ function isImageUploadPath(method, path) {
   return (
     /^\/api\/admin\/products\/[^/]+\/images$/.test(path) ||
     path === "/api/profile/avatar" ||
-    path === "/api/admin/settings/logo"
+    path === "/api/admin/settings/logo" ||
+    /^\/api\/admin\/orders\/[^/]+\/slip$/.test(path)
   );
 }
 export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
@@ -571,6 +572,19 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminOrderDetail(user, path.split("/")[4]));
         if (/^\/api\/admin\/orders\/[^/]+\/receipt$/.test(path))
           return send(200, { receipt: service.adminOrderReceipt(user, path.split("/")[4]) });
+        // Transfer slip of an admin-created order: ADMIN only, never cached or public.
+        if (/^\/api\/admin\/orders\/[^/]+\/slip$/.test(path)) {
+          const file = await service.adminManualOrderSlip(user, path.split("/")[4]);
+          return new Response(file.bytes, {
+            status: 200,
+            headers: {
+              ...securityHeaders,
+              "Content-Type": file.mime,
+              "Content-Disposition": "inline",
+              "Cache-Control": "private, no-store",
+            },
+          });
+        }
         if (/^\/api\/admin\/customers\/[^/]+$/.test(path))
           return send(200, service.adminCustomerDetail(user, path.split("/")[4]));
         if (path === "/api/admin/customers")
@@ -775,6 +789,13 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         // Append-only internal notes; /note kept for older clients (also appends).
         if (/^\/api\/admin\/orders\/[^/]+\/notes?$/.test(path))
           return send(200, service.adminAddOrderNote(user, path.split("/")[4], input));
+        // Order for a customer who paid outside the site (manual-orders.mjs).
+        if (path === "/api/admin/manual-orders/quote")
+          return send(200, service.adminManualOrderQuote(user, input));
+        if (path === "/api/admin/manual-orders")
+          return send(201, service.adminCreateManualOrder(user, input, { origin: url.origin }));
+        if (/^\/api\/admin\/orders\/[^/]+\/slip$/.test(path))
+          return send(200, await service.adminSetManualOrderSlip(user, path.split("/")[4], input));
         if (/^\/api\/admin\/orders\/[^/]+\/refund$/.test(path))
           return send(200, service.refundOrder(user, path.split("/")[4], input));
         if (/^\/api\/admin\/customers\/[^/]+\/credit$/.test(path))
