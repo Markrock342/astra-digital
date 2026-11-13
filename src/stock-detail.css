@@ -31,14 +31,35 @@
   gap: 12px;
   margin-bottom: 16px;
 }
+/* Colour-coded stat cards (shadcn/ui Card + Tailwind-palette tints, MIT): each status keeps one
+   hue for its icon chip, number, left accent and tab dot, so it reads at a glance. */
 .stock-summary-card {
-  display: grid;
-  gap: 4px;
+  --tone: #2f54eb;
+  --tone-soft: #eef2ff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 14px 16px;
   border: 1px solid #e3e6eb;
+  border-left: 4px solid var(--tone);
   border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  background: linear-gradient(135deg, var(--tone-soft) 0%, #fff 70%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.stock-summary-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--tone-soft);
+  color: var(--tone);
+}
+.stock-summary-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 .stock-summary-card small {
   color: #5b6170;
@@ -47,18 +68,53 @@
 .stock-summary-card strong {
   font-size: 24px;
   font-weight: 700;
-  color: #18181b;
+  line-height: 1.1;
+  color: var(--tone);
   font-variant-numeric: tabular-nums;
 }
-.stock-summary-card.good strong {
-  color: #15834a;
+.stock-summary-card.is-zero:not(.tone-total):not(.tone-ready) {
+  border-left-color: #d5d9e0;
+  background: #fff;
 }
-.stock-summary-card.warn strong {
-  color: #b45309;
+.stock-summary-card.is-zero:not(.tone-total):not(.tone-ready) strong {
+  color: #9aa0ac;
 }
-.stock-summary-card.bad strong {
-  color: #d92d20;
+.tone-total { --tone: #2f54eb; --tone-soft: #eef2ff; }
+.tone-ready,
+.tone-available { --tone: #15834a; --tone-soft: #e8f7ee; }
+.tone-expiring { --tone: #c2410c; --tone-soft: #fff1e6; }
+.tone-expired { --tone: #b42318; --tone-soft: #fdecea; }
+.tone-sold { --tone: #6941c6; --tone-soft: #f2edff; }
+.tone-defective { --tone: #c11574; --tone-soft: #fdeef6; }
+/* Status tabs: same hue as a dot; the active tab fills with it. */
+.stock-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
+.stock-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--tone);
+}
+.reference-status-tabs .stock-tab.active {
+  background: var(--tone);
+  border-color: var(--tone);
+  color: #fff;
+}
+.reference-status-tabs .stock-tab.active .stock-tab-dot {
+  background: #fff;
+}
+/* Row actions: icon + label, destructive ones in their colour. */
+.stock-unit .admin-action-row .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.stock-unit .stock-act-edit { color: #2f54eb; }
+.stock-unit .stock-act-defect { color: #c2410c; }
+.stock-unit .stock-act-remove { color: #b42318; }
 .stock-unit + .stock-unit {
   border-top: 1px solid #eef0f3;
 }

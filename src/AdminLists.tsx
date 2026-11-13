@@ -3,6 +3,14 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   ArrowLeft,
+  Boxes,
+  CalendarClock,
+  CalendarX2,
+  PackageCheck,
+  Pencil,
+  ShoppingBag,
+  Trash2,
+  TriangleAlert,
   Copy,
   Download,
   Eye,
@@ -3898,13 +3906,21 @@ function StockUnitRow({
           </button>
           {free && (
             <>
-              <button type="button" className="button ghost" aria-expanded={editing} onClick={() => setEditing(!editing)}>
+              <button
+                type="button"
+                className="button ghost stock-act-edit"
+                aria-expanded={editing}
+                onClick={() => setEditing(!editing)}
+              >
+                <Pencil size={15} />
                 แก้ไข
               </button>
-              <button type="button" className="button ghost" onClick={onDefect}>
+              <button type="button" className="button ghost stock-act-defect" onClick={onDefect}>
+                <TriangleAlert size={15} />
                 เสีย
               </button>
-              <button type="button" className="button ghost" onClick={onRemove}>
+              <button type="button" className="button ghost stock-act-remove" onClick={onRemove}>
+                <Trash2 size={15} />
                 ลบ
               </button>
             </>
@@ -4026,7 +4042,13 @@ export function VariantStock({
               ["defective", "เสีย"],
             ] as const
           ).map(([key, label]) => (
-            <button key={key} type="button" className={status === key ? "active" : ""} onClick={() => setStatus(key)}>
+            <button
+              key={key}
+              type="button"
+              className={"stock-tab tone-" + key + (status === key ? " active" : "")}
+              onClick={() => setStatus(key)}
+            >
+              <span className="stock-tab-dot" aria-hidden="true" />
               {label}
               {counts ? " " + counts[key] : ""}
             </button>
@@ -4977,17 +4999,22 @@ export function StockDetail({ variantId }: { variantId: string }) {
         <div className="stock-summary" aria-label="สรุปจำนวนไอดี">
           {(
             [
-              ["ทั้งหมด", counts.total, ""],
-              ["พร้อมขาย", info?.sellable ?? counts.available, "good"],
-              ["ใกล้หมดอายุ (7 วัน)", counts.expiring, counts.expiring ? "warn" : ""],
-              ["หมดอายุแล้ว", counts.expired, counts.expired ? "bad" : ""],
-              ["ขายแล้ว", counts.sold, ""],
-              ["เสีย", counts.defective, counts.defective ? "bad" : ""],
+              ["ทั้งหมด", counts.total, "total", Boxes],
+              ["พร้อมขาย", info?.sellable ?? counts.available, "ready", PackageCheck],
+              ["ใกล้หมดอายุ", counts.expiring, "expiring", CalendarClock],
+              ["หมดอายุแล้ว", counts.expired, "expired", CalendarX2],
+              ["ขายแล้ว", counts.sold, "sold", ShoppingBag],
+              ["เสีย", counts.defective, "defective", TriangleAlert],
             ] as const
-          ).map(([label, value, tone]) => (
-            <div key={label} className={"stock-summary-card " + tone}>
-              <small>{label}</small>
-              <strong>{value.toLocaleString("th-TH")}</strong>
+          ).map(([label, value, tone, Icon]) => (
+            <div key={label} className={"stock-summary-card tone-" + tone + (value ? "" : " is-zero")}>
+              <span className="stock-summary-icon" aria-hidden="true">
+                <Icon size={20} />
+              </span>
+              <span className="stock-summary-text">
+                <small>{label}</small>
+                <strong>{value.toLocaleString("th-TH")}</strong>
+              </span>
             </div>
           ))}
         </div>
