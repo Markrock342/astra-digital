@@ -135,7 +135,7 @@ test("3. after delivery the buyer sees the instructions and reports a problem th
   const admin = await adminContext.newPage();
   await admin.goto(base + "/admin/chat");
   const thread = admin.locator(".admin-chat-thread", { hasText: "Extras Buyer" });
-  await expect(thread).toContainText("แจ้งปัญหาออเดอร์ #" + number);
+  await expect(thread).toContainText("ออเดอร์ #" + number);
   await thread.click();
   const tag = admin.locator(".admin-chat-room .chat-order-tag");
   await expect(tag).toContainText("ออเดอร์ #" + number + " · รหัสผิด");

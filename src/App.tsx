@@ -86,6 +86,7 @@ import { WarrantyStatus } from "./Warranty";
 import { SessionsCard } from "./Sessions";
 import { StockWatchList } from "./StockWatch";
 import { DeliveredExtras, hasReceipt, ReceiptLink, ReceiptPage, receiptRoute } from "./OrderExtras";
+import { AskInChat } from "./ChatAttachments";
 import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
 import { RebuyActions } from "./Rebuy";
@@ -1662,6 +1663,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               <span>{dateTime(order.created_at)}</span>
               {order.createdByAdmin && <ManualOrderNote method={order.paymentMethodLabel} />}
               {hasReceipt(order) && <ReceiptLink id={order.id} />}
+              <AskInChat order={{ id: order.id, name: order.name }} />
             </div>
             {!!order.discount && (
               <dl className="order-price-breakdown" aria-label={t("สรุปยอด")}>

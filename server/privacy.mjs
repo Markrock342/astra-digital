@@ -29,6 +29,8 @@ export function createPrivacyApis({
   randomUUID,
   passwordHash,
   deleteFile,
+  /** Clears the customer's chat image links; returns the file keys to delete. */
+  eraseChatImages,
   confirmPassword,
 }) {
   function exportMyData(user) {
@@ -210,6 +212,9 @@ export function createPrivacyApis({
         // file-store delete is async on R2; fire-and-forget after identity cleared.
         Promise.resolve(deleteFile(previousAvatar)).catch(() => {});
       }
+      const chatImageKeys = typeof eraseChatImages === "function" ? eraseChatImages(subject.id) : [];
+      if (typeof deleteFile === "function")
+        for (const key of chatImageKeys) Promise.resolve().then(() => deleteFile(key)).catch(() => {});
       run(
         `UPDATE privacy_requests SET status='APPROVED', resolved_at=?, resolved_by=? WHERE id=?`,
         now,

@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { ensureChatAttachments } from "../server/chat-attachments.mjs";
 import { createHmac, createHash } from "node:crypto";
 import { createCommerceCore } from "../server/domain.mjs";
 import { createDoSqliteAdapter } from "../server/do-sqlite-adapter.mjs";
@@ -147,6 +148,7 @@ export class Commerce extends DurableObject {
       ensureNotificationLinks(db);
       ensureSmallUxB(db);
       ensureOrderExtras(db);
+      ensureChatAttachments(db);
       ensureCoupons(db);
       ensureCategories(db);
       ensureBanners(db);

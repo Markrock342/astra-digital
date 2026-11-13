@@ -43,6 +43,7 @@ import { createOrderHistoryApis } from "./admin-order-history.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createProfileUploadApis } from "./profile-uploads.mjs";
 import { createPrivacyApis } from "./privacy.mjs";
+import { createChatAttachments } from "./chat-attachments.mjs";
 import { createAdminHealthApis } from "./admin-health.mjs";
 import { createFileStore } from "./file-store.mjs";
 import { createAuthHardening } from "./auth-hardening.mjs";
@@ -1069,6 +1070,17 @@ export function createCommerceCore({
     audit,
     fileStore,
   });
+  // Live chat images / product + order cards (chat-attachments.mjs).
+  const chatAttach = createChatAttachments({
+    one,
+    all,
+    run,
+    fail,
+    clean: (...a) => clean(...a),
+    isStaff,
+    requireUser: (u) => requireUser(u),
+    fileStore,
+  });
   // Profile avatar + shop logo (UP-2). Wired after product images so fileStore is ready.
   // settings()/persistShopSettings are function declarations (hoisted) in this scope.
   const { setAvatar, removeAvatar, setLogo, removeLogo } = createProfileUploadApis({
@@ -1111,6 +1123,7 @@ export function createCommerceCore({
     randomUUID,
     passwordHash,
     deleteFile: (key) => fileStore.delete(key),
+    eraseChatImages: (userId) => chatAttach.eraseUserChatImages(userId),
     confirmPassword: (...a) => auth.confirmPassword(...a),
   });
   const { adminSystemHealth } = createAdminHealthApis({
@@ -2537,7 +2550,13 @@ export function createCommerceCore({
   function openChatThread(user, rawInput) {
     requireUser(user);
     const input = withoutClientPrivileges(rawInput);
-    const body = clean(input.body ?? "สวัสดี ต้องการความช่วยเหลือ", 1, 1000, "ข้อความ");
+    const withAttachment = chatAttach.hasAttachment(input);
+    const body = clean(
+      input.body ?? (withAttachment ? "" : "สวัสดี ต้องการความช่วยเหลือ"),
+      withAttachment ? 0 : 1,
+      1000,
+      "ข้อความ",
+    );
     assertChatRateLimit(user.id);
     return tx(() => {
       // "แจ้งปัญหาบัญชีนี้": checked inside the transaction so the daily limit holds.
@@ -2555,6 +2574,7 @@ export function createCommerceCore({
         );
         thread = one("SELECT * FROM chat_threads WHERE id=?", id);
       }
+      const attachments = chatAttach.resolve(user, thread, input);
       const messageId = randomUUID();
       run(
         "INSERT INTO chat_messages(id,thread_id,sender_type,body) VALUES(?,?,?,?)",
@@ -2564,6 +2584,7 @@ export function createCommerceCore({
         body,
       );
       orderExtras.attachChatReport(thread.id, messageId, report);
+      chatAttach.attach(thread.id, messageId, attachments);
       notify(
         user.id,
         "chat",
@@ -2573,7 +2594,7 @@ export function createCommerceCore({
       notifyStaffChatThrottled(
         thread.id,
         report ? "ลูกค้าแจ้งปัญหาบัญชี" : "ลูกค้าเปิดแชทใหม่",
-        body.slice(0, 120),
+        chatAttach.preview(body, attachments),
       );
       audit(user, "OPEN_CHAT", thread.id);
       return { thread, messages: chatMessages(user, thread.id) };
@@ -2600,16 +2621,20 @@ export function createCommerceCore({
         latest,
       );
     }
-    return all(
-      "SELECT id,thread_id,sender_type,body,created_at,order_id,report_reason FROM chat_messages WHERE thread_id=? ORDER BY created_at ASC,rowid ASC",
-      id,
+    return chatAttach.decorate(
+      user,
+      all(
+        "SELECT id,thread_id,sender_type,body,created_at,order_id,report_reason,image_key,product_id FROM chat_messages WHERE thread_id=? ORDER BY created_at ASC,rowid ASC",
+        id,
+      ),
     );
   }
   function postChatMessage(user, threadId, rawInput) {
     requireUser(user);
     const input = withoutClientPrivileges(rawInput);
     const id = clean(threadId, 1, 80, "แชท");
-    const body = clean(input.body, 1, 1000, "ข้อความ");
+    const withAttachment = chatAttach.hasAttachment(input);
+    const body = clean(input.body ?? "", withAttachment ? 0 : 1, 1000, "ข้อความ");
     const thread = one("SELECT * FROM chat_threads WHERE id=?", id);
     if (!thread) fail(404, "ไม่พบแชท");
     if (thread.status !== "OPEN") fail(409, "แชทนี้ปิดแล้ว");
@@ -2626,6 +2651,7 @@ export function createCommerceCore({
           : "STAFF"
         : "USER";
       const report = staffReply ? null : orderExtras.chatReportLink(user, input);
+      const attachments = chatAttach.resolve(user, live, input);
       const messageId = randomUUID();
       run(
         "INSERT INTO chat_messages(id,thread_id,sender_type,body) VALUES(?,?,?,?)",
@@ -2635,18 +2661,19 @@ export function createCommerceCore({
         body,
       );
       orderExtras.attachChatReport(id, messageId, report);
+      chatAttach.attach(id, messageId, attachments);
       if (staffReply)
         notify(
           live.user_id,
           "chat",
           "มีข้อความใหม่จากทีมงาน",
-          body.slice(0, 120),
+          chatAttach.preview(body, attachments),
         );
       else if (!isStaff(user))
         notifyStaffChatThrottled(
           id,
           report ? "ลูกค้าแจ้งปัญหาบัญชี" : "ลูกค้าส่งข้อความใหม่",
-          body.slice(0, 120),
+          chatAttach.preview(body, attachments),
         );
       audit(user, "CHAT_MESSAGE", id);
       return chatMessages(user, id);
@@ -3277,6 +3304,8 @@ export function createCommerceCore({
     reorderProductImages,
     deleteProductImage,
     getFile,
+    uploadChatImage: (...a) => chatAttach.uploadChatImage(...a),
+    chatFile: (...a) => chatAttach.chatFile(...a),
     setAvatar,
     removeAvatar,
     setLogo,

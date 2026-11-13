@@ -70,6 +70,7 @@ function isImageUploadPath(method, path) {
     /^\/api\/admin\/products\/[^/]+\/images$/.test(path) ||
     path === "/api/admin/finance/withdrawals/proof" ||
     path === "/api/profile/avatar" ||
+    path === "/api/chat/images" ||
     path === "/api/admin/settings/logo" ||
     /^\/api\/admin\/banners\/[^/]+\/(?:image|mobile-image)$/.test(path) ||
     /^\/api\/admin\/orders\/[^/]+\/slip$/.test(path)
@@ -627,6 +628,20 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminOrderDetail(user, path.split("/")[4]));
         if (/^\/api\/admin\/orders\/[^/]+\/receipt$/.test(path))
           return send(200, { receipt: service.adminOrderReceipt(user, path.split("/")[4]) });
+        // Live chat image: only the thread's customer or the team (chat-attachments.mjs).
+        if (/^\/api\/chat\/files\/[^/]+$/.test(path)) {
+          const file = await service.chatFile(user, path.split("/")[4]);
+          return new Response(file.bytes, {
+            status: 200,
+            headers: {
+              ...securityHeaders,
+              "Content-Type": file.mime,
+              "X-Content-Type-Options": "nosniff",
+              "Content-Disposition": "inline",
+              "Cache-Control": "private, max-age=86400",
+            },
+          });
+        }
         // Transfer slip of an admin-created order: ADMIN only, never cached or public.
         if (/^\/api\/admin\/orders\/[^/]+\/slip$/.test(path)) {
           const file = await service.adminManualOrderSlip(user, path.split("/")[4]);
@@ -1027,6 +1042,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, await service.setLogo(user, input));
         if (path === "/api/profile/avatar")
           return send(200, await service.setAvatar(user, input));
+        if (path === "/api/chat/images")
+          return send(201, await service.uploadChatImage(user, input));
         if (path === "/api/admin/products")
           return send(200, service.saveProduct(user, input, { origin: url.origin }));
         if (/^\/api\/admin\/products\/[^/]+\/images$/.test(path))

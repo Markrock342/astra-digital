@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { ensureChatAttachments } from "./chat-attachments.mjs";
 import {
   readFileSync,
   readdirSync,
@@ -111,6 +112,7 @@ export function createCommerce(options = {}) {
   ensureNotificationLinks(db);
   ensureSmallUxB(db);
   ensureOrderExtras(db);
+  ensureChatAttachments(db);
   ensureCoupons(db);
   ensureCategories(db);
   ensureBanners(db);
