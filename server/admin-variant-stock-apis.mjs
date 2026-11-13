@@ -89,19 +89,21 @@ function withCostAndExpires(entry, costRaw, expiresRaw) {
   return next;
 }
 
-/** Pull trailing YYYY-MM-DD… then optional cost digits from CSV/text parts. */
-function takeExpiresAndCost(parts) {
+/** Pull trailing YYYY-MM-DD… then optional cost digits from CSV/text parts.
+ * `keep` columns always stay (code = 1, ID+password = 2), so a numeric or date-like
+ * password such as "user@x.com,123456" is never read as a cost or an expiry. */
+function takeExpiresAndCost(parts, keep = 1) {
   let head = parts;
   let expiresRaw;
   let costRaw;
   if (
-    head.length >= 2 &&
+    head.length > keep &&
     /^\d{4}-\d{2}-\d{2}/.test(String(head[head.length - 1]).trim())
   ) {
     expiresRaw = String(head[head.length - 1]).trim();
     head = head.slice(0, -1);
   }
-  if (head.length >= 2 && /^\d+$/.test(String(head[head.length - 1]).trim())) {
+  if (head.length > keep && /^\d+$/.test(String(head[head.length - 1]).trim())) {
     costRaw = String(head[head.length - 1]).trim();
     head = head.slice(0, -1);
   }
@@ -167,7 +169,7 @@ export function parseImportEntries(input, fail) {
           raw,
           error: "ต้องเป็น ไอดี,รหัสผ่าน",
         };
-      const { head, costRaw, expiresRaw } = takeExpiresAndCost(parts);
+      const { head, costRaw, expiresRaw } = takeExpiresAndCost(parts, 2);
       if (head.length < 2)
         return {
           line,

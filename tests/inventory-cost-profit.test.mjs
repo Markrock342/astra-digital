@@ -144,3 +144,33 @@ test("profit report = revenue - refunds - cost; STAFF 403; live excludes sandbox
   assert.equal(liveReport.totals.cost, 0);
   assert.equal(liveReport.totals.profit, 0);
 });
+
+test("CSV pairs: a numeric or date-like password is never read as cost or expiry", (t) => {
+  const { s, admin, variantId } = fixture(t);
+  const preview = s.importCodes(admin, {
+    variantId,
+    dryRun: true,
+    csv: "num-pw@ex.invalid,123456\ndate-pw@ex.invalid,2026-12-31\nwith-cost@ex.invalid,pw9,2500\nboth@ex.invalid,778899,1500,2027-01-31",
+  });
+  assert.deepEqual(
+    preview.lines.map((l) => l.status),
+    ["ok", "ok", "ok", "ok"],
+    JSON.stringify(preview.lines),
+  );
+  s.importCodes(admin, {
+    variantId,
+    csv: "num-pw@ex.invalid,123456\ndate-pw@ex.invalid,2026-12-31\nwith-cost@ex.invalid,pw9,2500\nboth@ex.invalid,778899,1500,2027-01-31",
+  });
+  const rows = s.db
+    .prepare("SELECT cost, expires_at FROM inventory WHERE variant_id=? ORDER BY rowid")
+    .all(variantId);
+  assert.deepEqual(
+    rows.map((r) => [r.cost, r.expires_at == null ? null : String(r.expires_at).slice(0, 10)]),
+    [
+      [null, null],
+      [null, null],
+      [2500, null],
+      [1500, "2027-01-31"],
+    ],
+  );
+});

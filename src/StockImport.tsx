@@ -40,7 +40,7 @@ const statusText: Record<LineStatus, string> = {
 };
 
 /** Trailing YYYY-MM-DD… then optional cost digits. */
-function takeExpiresAndCost(parts: string[]): {
+function takeExpiresAndCost(parts: string[], keep = 1): {
   head: string[];
   cost?: number;
   expiresAt?: string;
@@ -48,11 +48,11 @@ function takeExpiresAndCost(parts: string[]): {
   let head = parts;
   let expiresAt: string | undefined;
   let cost: number | undefined;
-  if (head.length >= 2 && /^\d{4}-\d{2}-\d{2}/.test(head[head.length - 1].trim())) {
+  if (head.length > keep && /^\d{4}-\d{2}-\d{2}/.test(head[head.length - 1].trim())) {
     expiresAt = head[head.length - 1].trim().slice(0, 10);
     head = head.slice(0, -1);
   }
-  if (head.length >= 2 && /^\d+$/.test(head[head.length - 1].trim())) {
+  if (head.length > keep && /^\d+$/.test(head[head.length - 1].trim())) {
     cost = Number(head[head.length - 1].trim());
     head = head.slice(0, -1);
   }
@@ -82,13 +82,13 @@ function parseEntries(text: string, kind: Kind): Entry[] {
     let expiresAt: string | undefined;
     if (raw.includes("\t")) {
       const cols = raw.split("\t").map((c) => c.replace(/\r$/, ""));
-      const taken = takeExpiresAndCost(cols);
+      const taken = takeExpiresAndCost(cols, 2);
       loginId = (taken.head[0] ?? "").trim();
       password = taken.head.slice(1).join("\t");
       cost = taken.cost;
       expiresAt = taken.expiresAt;
     } else if (trimmed.includes(",")) {
-      const taken = takeExpiresAndCost(trimmed.split(","));
+      const taken = takeExpiresAndCost(trimmed.split(","), 2);
       loginId = (taken.head[0] ?? "").trim();
       password = taken.head.slice(1).join(",");
       cost = taken.cost;
