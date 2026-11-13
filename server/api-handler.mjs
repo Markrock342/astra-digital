@@ -706,6 +706,15 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         // Preorder mode of one product: full / deposit / free (preorder.mjs).
         if (/^\/api\/admin\/products\/[^/]+\/preorder$/.test(path))
           return send(200, service.adminPreorderSettings(user, path.split("/")[4]));
+        // Delivery type + checkout fields of one product (delivery.mjs).
+        if (/^\/api\/admin\/products\/[^/]+\/delivery$/.test(path))
+          return send(200, service.adminDelivery(user, path.split("/")[4]));
+        // One shared account / invite link with its seats (masked).
+        if (/^\/api\/admin\/seat-groups\/[^/]+$/.test(path))
+          return send(200, service.adminSeatGroup(user, path.split("/")[4]));
+        // Paid orders of shop-fulfilled products waiting to be sent.
+        if (path === "/api/admin/fulfilment")
+          return send(200, service.fulfilmentQueue(user));
         if (path === "/api/admin/customer-tags")
           return send(200, service.adminCustomerTags(user));
         if (/^\/api\/admin\/variants\/[^/]+\/inventory$/.test(path))
@@ -751,6 +760,14 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminSetProductLimit(user, path.split("/")[4], input));
         if (/^\/api\/admin\/products\/[^/]+\/preorder$/.test(path))
           return send(200, service.adminSavePreorderSettings(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/products\/[^/]+\/delivery$/.test(path))
+          return send(200, service.adminSetDelivery(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/seat-groups\/[^/]+$/.test(path))
+          return send(200, service.adminSetSeatCount(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/seat-groups\/[^/]+\/login$/.test(path))
+          return send(200, service.adminUpdateGroupLogin(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/seats\/[^/]+$/.test(path))
+          return send(200, service.adminUpdateSeat(user, path.split("/")[4], input));
         if (/^\/api\/admin\/customers\/[^/]+\/tags$/.test(path))
           return send(200, service.adminSetCustomerTags(user, path.split("/")[4], input));
         return send(404, { error: "ไม่พบหน้าที่ร้องขอ" });
@@ -968,6 +985,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             200,
             service.replaceOrderCredential(user, path.split("/")[4], input),
           );
+        if (/^\/api\/admin\/orders\/[^/]+\/fulfil$/.test(path))
+          return send(200, service.fulfilOrder(user, path.split("/")[4], input));
         if (/^\/api\/admin\/orders\/[^/]+\/resend-credentials$/.test(path))
           return send(200, service.resendOrderCredentials(user, path.split("/")[4]));
         if (/^\/api\/admin\/orders\/[^/]+\/reveal$/.test(path))

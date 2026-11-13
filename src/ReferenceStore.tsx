@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { deliveryNote } from "./Delivery";
 import {
   ArrowLeft,
   ArrowRight,
@@ -645,7 +646,9 @@ export function ReferenceProduct({ id }: { id: string }) {
           <PurchaseLimitNote variant={variant} />
           <p className="reference-delivery-note">
             <KeyRound size={15} />
-            {product.preorder && product.preorderTerms?.mode === "free"
+            {!product.preorder && deliveryNote(product.deliveryType)
+              ? deliveryNote(product.deliveryType)
+              : product.preorder && product.preorderTerms?.mode === "free"
               ? t("จองฟรี ไม่ต้องจ่ายตอนนี้ ได้เลขคิวทันที")
               : product.preorder
               ? t("ชำระตอนจอง ได้เลขคิว รับของในประวัติการซื้อ")

@@ -31,7 +31,11 @@ export type AdminVariant = Omit<Variant, "stockStatus" | "available"> & {
   stockStatus?: Variant["stockStatus"];
   available?: boolean;
 };
-export type AdminProduct = Omit<Product, "variants"> & { variants: AdminVariant[] };
+export type AdminProduct = Omit<Product, "variants"> & {
+  variants: AdminVariant[];
+  /** Stored delivery type (server/delivery.mjs); null = the old ID+password / code behaviour. */
+  delivery_type?: string | null;
+};
 /** Most one order can buy; also the quantity cap while a variant is available. */
 export const MAX_PER_ORDER = 10;
 export type Product = {
@@ -52,6 +56,10 @@ export type Product = {
   imageUrl?: string | null;
   /** How a preorder product is reserved (server/preorder.mjs); null for ready stock. */
   preorderTerms?: PreorderTerms | null;
+  /** How the item reaches the buyer (server/delivery.mjs). */
+  deliveryType?: "account" | "shared" | "code" | "invite" | "manual";
+  /** Shop-fulfilled product: what the customer fills in at checkout. */
+  checkoutFields?: CheckoutField[];
 };
 export type PreorderMode = "full" | "deposit" | "free";
 export type PreorderTerms = {
@@ -96,6 +104,15 @@ export type Order = {
   codes: string[];
   /** ID + password pairs, only for the owner once delivered (DB-005). */
   credentials?: Credential[];
+  /** Invite links (server/delivery.mjs). */
+  links?: string[];
+  /** Shop-fulfilled product: answers at checkout, queue state and the shop's message. */
+  fulfilment?: {
+    state: "input" | "waiting" | "done";
+    inputs: { id: string; label: string; value: string }[];
+    message: string;
+    deliveredAt: string | null;
+  } | null;
   queueNumber?: number | null;
   /** Fixed at delivery from the option's warranty days; null = no warranty. */
   warranty_until?: string | null;
@@ -238,7 +255,16 @@ export type Review = {
   /** The shop's public reply ("ตอบกลับจากร้าน"); null when there is none. */
   reply?: { text: string; at: string | null } | null;
 };
-export type Credential = { loginId: string; password: string };
+export type Credential = {
+  loginId: string;
+  password: string;
+  /** Shared account (server/delivery.mjs): seat number, profile / screen name and PIN. */
+  seat?: number | null;
+  profile?: string | null;
+  pin?: string | null;
+};
+/** A field a shop-fulfilled product asks for at checkout (server/delivery.mjs). */
+export type CheckoutField = { id: string; label: string; type: "text" | "email"; required: boolean };
 export type Features = {
   credentialPair?: boolean;
   preorderDelivery?: boolean;

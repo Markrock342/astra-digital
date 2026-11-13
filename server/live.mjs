@@ -42,6 +42,12 @@ const LIVE_METHODS = {
   refundOrder: ["orders", "customers", "catalog", "notify"],
   adjustCustomerCredit: ["customers", "notify"],
   replaceOrderCredential: ["orders", "catalog", "notify"],
+  // Delivery types (delivery.mjs).
+  adminSetDelivery: ["catalog"],
+  adminSetSeatCount: ["catalog", "notify"],
+  adminUpdateSeat: ["catalog", "orders", "notify"],
+  adminUpdateGroupLogin: ["catalog", "orders", "notify"],
+  fulfilOrder: ["orders", "notify"],
   resendOrderCredentials: ["orders", "chat", "notify"],
   adminBulkOrderAction: ["orders", "chat", "notify"],
   adminCreateManualOrder: ["orders", "catalog", "notify", "customers"],

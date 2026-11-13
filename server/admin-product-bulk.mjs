@@ -139,6 +139,14 @@ export function createAdminProductBulkApis({
         run("UPDATE products SET usage_instructions=? WHERE id=?", source.usage_instructions, id);
       if (source.max_per_customer != null)
         run("UPDATE products SET max_per_customer=? WHERE id=?", source.max_per_customer, id);
+      // Delivery type + checkout fields (delivery.mjs) follow the copy; stock never does.
+      if (source.delivery_type != null)
+        run(
+          "UPDATE products SET delivery_type=?, delivery_fields=? WHERE id=?",
+          source.delivery_type,
+          source.delivery_fields ?? null,
+          id,
+        );
       const variants = all(
         "SELECT * FROM variants WHERE product_id=? ORDER BY sort_order ASC, id ASC",
         sourceId,

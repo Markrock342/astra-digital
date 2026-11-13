@@ -4,6 +4,7 @@
 import "./admin-shell.css";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { PreorderModeCard } from "./AdminPreorder";
+import { DeliveryTypeCard, FulfilmentQueue } from "./Delivery";
 import {
   ArrowLeft,
   ArrowRight,
@@ -110,6 +111,8 @@ const productTabs = [
 const orderTabs = [
   ["orders", "ออเดอร์ทั้งหมด"],
   ["preorders", "คิวพรีออเดอร์"],
+  // Paid orders of shop-fulfilled products (Delivery.tsx).
+  ["fulfilment", "รอส่งมอบ"],
   // Full tax invoice requests (AdminTaxInvoices.tsx); ADMIN only, hidden for staff below.
   ["tax-invoices", "ใบกำกับภาษี"],
 ];
@@ -869,7 +872,14 @@ export default function Admin() {
               <PreorderModeCard productId={editingProduct.id} />
             )}
             {editingProduct && !newProduct && (
-              <VariantManager productId={editingProduct.id} preorder={!!editingProduct.preorder} />
+              <DeliveryTypeCard productId={editingProduct.id} onChanged={() => void load()} />
+            )}
+            {editingProduct && !newProduct && (
+              <VariantManager
+                productId={editingProduct.id}
+                preorder={!!editingProduct.preorder}
+                deliveryType={editingProduct.delivery_type ?? null}
+              />
             )}
             </div>
             </div>
@@ -980,6 +990,7 @@ export default function Admin() {
             <AdminOrders />
           ))}
         {tab === "preorders" && <PreorderQueue />}
+        {tab === "fulfilment" && <FulfilmentQueue />}
         {tab === "tax-invoices" && <AdminTaxInvoices />}
         {tab === "coupons" && <AdminCoupons id={productId} />}
         {tab === "reviews" && <AdminReviews />}
@@ -1057,6 +1068,7 @@ export default function Admin() {
           "inventory",
           "orders",
           "preorders",
+          "fulfilment",
           "tax-invoices",
           "coupons",
           "categories",

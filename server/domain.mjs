@@ -78,6 +78,7 @@ import { createLaunchCleanupApis } from "./launch-cleanup.mjs";
 import { createRetention } from "./retention.mjs";
 import { createTaxInvoices } from "./tax-invoices.mjs";
 import { createPreorders } from "./preorder.mjs";
+import { createDeliveryApis } from "./delivery.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -180,17 +181,20 @@ export function createCommerceCore({
     credentialFingerprint(key, loginId, password);
   // Duplicate check key: the same account (loginId, any case, any password) or the
   // same single code text. Keyed, so the database never holds a plain loginId.
-  const inventoryLoginKey = (legacy, loginId) =>
-    createHmac("sha256", key)
+  // `legacy` may also name a kind ("link" for invite links, server/delivery.mjs).
+  const inventoryLoginKey = (legacy, loginId) => {
+    const kind = typeof legacy === "string" ? legacy : legacy ? "code" : "login";
+    return createHmac("sha256", key)
       .update(
         JSON.stringify({
           v: 1,
-          kind: legacy ? "code" : "login",
-          value: legacy ? String(loginId).trim() : String(loginId).trim().toLowerCase(),
+          kind,
+          value: kind === "login" ? String(loginId).trim().toLowerCase() : String(loginId).trim(),
         }),
         "utf8",
       )
       .digest("hex");
+  };
   const insertInventoryCredential = (
     variantId,
     loginId,
@@ -249,16 +253,28 @@ export function createCommerceCore({
       throw new Error("invalid inventory bind column");
     const codes = [];
     const credentials = [];
+    // Invite links (server/delivery.mjs) get their own list so the page can show a link button.
+    const links = [];
     for (const row of all(
-      `SELECT login_id_enc, password_enc, legacy_single_secret FROM inventory
-       WHERE ${column}=? AND COALESCE(defective,0)=0 ORDER BY rowid`,
+      `SELECT login_id_enc, password_enc, legacy_single_secret, unit_kind, seat_no, seat_label, seat_pin_enc
+       FROM inventory WHERE ${column}=? AND COALESCE(defective,0)=0 ORDER BY rowid`,
       bindId,
     )) {
       const loginId = decrypt(row.login_id_enc);
-      if (row.legacy_single_secret) codes.push(loginId);
+      if (row.unit_kind === "invite") links.push(loginId);
+      else if (row.legacy_single_secret) codes.push(loginId);
+      else if (row.unit_kind === "seat")
+        // One seat of a shared account: profile / screen name and PIN come with it.
+        credentials.push({
+          loginId,
+          password: decrypt(row.password_enc),
+          seat: row.seat_no ?? null,
+          profile: row.seat_label ?? null,
+          pin: row.seat_pin_enc ? decrypt(row.seat_pin_enc) : null,
+        });
       else credentials.push({ loginId, password: decrypt(row.password_enc) });
     }
-    return { codes, credentials };
+    return { codes, credentials, links };
   };
   // Email verification at sign-up (email-verification.mjs). Mail + templates + fraud are built
   // further down, so they are passed as closures.
@@ -432,7 +448,7 @@ export function createCommerceCore({
       `SELECT v.id,v.label,p.name,
               (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) AS stock
        FROM variants v JOIN products p ON p.id=v.product_id
-       WHERE v.id=? AND p.preorder=0`,
+       WHERE v.id=? AND p.preorder=0 AND COALESCE(p.delivery_type,'')<>'manual'`,
       variantId,
     );
     if (!row || row.stock > getLowStockAt()) return;
@@ -606,6 +622,30 @@ export function createCommerceCore({
   });
   // Sale / compare-at / tag prices / purchase limits (pricing.mjs).
   const pricing = createPricing({ one, all, run, tx, fail, clean, requireAdmin, requireStaff, clock });
+  // Delivery type per product: shared seats, invite links, shop-fulfilled orders (delivery.mjs).
+  const delivery = createDeliveryApis({
+    one,
+    all,
+    run,
+    tx: (fn) => tx(fn),
+    fail,
+    clean,
+    integer,
+    encrypt,
+    decrypt,
+    requireAdmin,
+    requireStaff,
+    randomUUID,
+    inventoryFingerprint,
+    inventoryLoginKey,
+    backfillLoginKeys,
+    notify,
+    notifyStaffRoles,
+    maybeNotifyStockExpiry: (id) => maybeNotifyStockExpiry(id),
+    callPreorders: (id) => preorders.callForVariant(id),
+    clock,
+  });
+
   const categoryApis = createCategoryApis({ requireAdmin, one, all, run, tx, fail, fileStore });
   // ctx: { ip, userAgent } from the request. Only a coarse device label and the IP
   // cut to /24 (IPv6 /48) are stored, for the "my devices" list (account-sessions.mjs).
@@ -688,7 +728,7 @@ export function createCommerceCore({
                 (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) AS stock,
                 (SELECT COUNT(*) FROM stock_watch w WHERE w.variant_id=v.id AND w.notified_at IS NULL) AS waiting
          FROM variants v JOIN products p ON p.id=v.product_id
-         WHERE v.id=? AND p.preorder=0`,
+         WHERE v.id=? AND p.preorder=0 AND COALESCE(p.delivery_type,'')<>'manual'`,
         variantId,
       );
       if (!row) return null;
@@ -1209,6 +1249,8 @@ export function createCommerceCore({
     deleteFile: (key) => fileStore.delete(key),
     eraseChatImages: (userId) => chatAttach.eraseUserChatImages(userId),
     confirmPassword: (...a) => auth.confirmPassword(...a),
+    // Answers typed at checkout for shop-fulfilled products (delivery.mjs).
+    exportDeliveryInputs: (userId) => delivery.exportInputs(userId),
   });
   const { adminSystemHealth } = createAdminHealthApis({
     requireAdmin,
@@ -1232,11 +1274,21 @@ export function createCommerceCore({
   function mapProduct(row, user = null) {
     // Usage instructions are for buyers of a delivered order only (order-extras.mjs).
     // max_per_customer is shown per option as maxPerCustomer (pricing.mjs).
-    const { usage_instructions: _usage, max_per_customer: productLimit, ...p } = row;
+    const {
+      usage_instructions: _usage,
+      max_per_customer: productLimit,
+      delivery_type: _deliveryType,
+      delivery_fields: _deliveryFields,
+      ...p
+    } = row;
     const lowAt = getLowStockAt();
     const at = pricing.nowSql();
+    // Shop-fulfilled products (delivery.mjs) have no stock: always orderable while on sale.
+    const manual = row.delivery_type === "manual";
     return {
       ...p,
+      // deliveryType + the checkout fields a manual product asks for (delivery.mjs).
+      ...delivery.publicDelivery(row),
       ...productImageFields(p.id),
       variants: all(
         `SELECT v.*, CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=? AND COALESCE(v.active,1)=1 ORDER BY v.sort_order ASC, CASE WHEN v.id='stream-plus-full' THEN 0 WHEN v.id LIKE '%-30' THEN 1 ELSE 2 END, price, v.id`,
@@ -1254,8 +1306,8 @@ export function createCommerceCore({
         ),
         // Customers never see a stock number: only a status and whether it can be
         // ordered now (preorder = always). Exact counts stay on the admin APIs.
-        stockStatus: stock <= 0 ? "out" : stock <= lowAt ? "low" : "in",
-        available: !!p.preorder || stock > 0,
+        stockStatus: manual ? "in" : stock <= 0 ? "out" : stock <= lowAt ? "low" : "in",
+        available: manual || !!p.preorder || stock > 0,
       })),
       // Hidden reviews (spam, abuse, off-topic) never count towards the public rating.
       rating: one(
@@ -1491,7 +1543,7 @@ export function createCommerceCore({
    */
   const buyableVariant = (variantId, user) => {
     const variant = one(
-      "SELECT v.*,p.preorder FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.active=1 AND p.hidden_seed=0 AND COALESCE(v.active,1)=1",
+      "SELECT v.*,p.preorder,p.delivery_type FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.active=1 AND p.hidden_seed=0 AND COALESCE(v.active,1)=1",
       variantId,
     );
     if (!variant) fail(404, "ไม่พบสินค้า");
@@ -1571,8 +1623,12 @@ export function createCommerceCore({
       const subtotal = variant.unitPrice * quantity;
       // Per-account limit, counted in this transaction so the last unit is sold once.
       pricing.assertPurchaseLimit(user, variant, quantity);
+      // Shop-fulfilled product: what the customer typed for the shop (delivery.mjs); no stock.
+      const manual = variant.delivery_type === "manual" && !variant.preorder;
+      const deliveryInputs = manual ? delivery.checkoutInputs(variantId, input.deliveryInputs) : null;
       if (
         !variant.preorder &&
+        !manual &&
         one(
           `SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql}`,
           variantId,
@@ -1614,6 +1670,7 @@ export function createCommerceCore({
           reservationId: variant.preorder ? id : null,
           amount: discount,
         });
+      if (deliveryInputs) delivery.recordInputs(id, deliveryInputs);
       audit(user, variant.preorder ? "CREATE_PREORDER" : "CREATE_ORDER", id);
       if (terms && terms.mode !== "full") {
         // Price, deposit, pay window and lapse policy are locked now (what the customer saw).
@@ -1668,7 +1725,7 @@ export function createCommerceCore({
       const delivered =
         ownerView && reservation.status === "DELIVERED"
           ? readDeliveredItems("reservation_id", orderId)
-          : { codes: [], credentials: [] };
+          : { codes: [], credentials: [], links: [] };
       return {
         ...safe,
         preorder: true,
@@ -1688,11 +1745,13 @@ export function createCommerceCore({
     const delivered =
       ownerView && order.status === "DELIVERED"
         ? readDeliveredItems("order_id", orderId)
-        : { codes: [], credentials: [] };
+        : { codes: [], credentials: [], links: [] };
     return {
       ...safe,
       reviewed: !!one("SELECT id FROM reviews WHERE order_id=?", orderId),
       ...delivered,
+      // Shop-fulfilled product: answers given at checkout + the shop's message (delivery.mjs).
+      fulfilment: delivery.orderFulfilment(orderId, ownerView),
       ...orderExtras.customerOrderExtras(orderId, ownerView),
       ...orderRefundState(orderId, false),
       discount: order.discount ?? 0,
@@ -1800,7 +1859,10 @@ export function createCommerceCore({
    * manual-orders.mjs): FEFO units that still cover the order's warranty snapshot.
    */
   const pickUnitsForOrder = (order) =>
-    all(
+    // Shop-fulfilled product (delivery.mjs): nothing to bind, the order goes to the queue.
+    delivery.isManualVariant(order.variant_id)
+      ? Array.from({ length: order.quantity }, () => ({ id: null }))
+      : all(
       `SELECT id FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL
          AND COALESCE(defective,0)=0
          AND (expires_at IS NULL OR datetime(expires_at) > datetime('now', '+' || ? || ' days'))
@@ -1817,7 +1879,8 @@ export function createCommerceCore({
    */
   const deliverPaidOrder = (order, available, payment = {}) => {
     const id = order.id;
-    for (const item of available) {
+    const manual = delivery.isManualVariant(order.variant_id);
+    for (const item of manual ? [] : available) {
       const bound = run(
         `UPDATE inventory SET order_id=?,sold_at=CURRENT_TIMESTAMP WHERE id=? AND ${inventoryAvailableSql}`,
         id,
@@ -1826,13 +1889,17 @@ export function createCommerceCore({
       if (!bound.changes) fail(409, "สินค้าคงเหลือไม่เพียงพอ กรุณาเลือกจำนวนใหม่");
     }
     // Warranty runs from delivery, using the days snapshotted when the order was placed.
+    // A shop-fulfilled order is paid now and waits in the queue; its warranty starts when
+    // staff send it (delivery.mjs fulfilOrder).
     run(
       `UPDATE orders SET status='DELIVERED',
-         warranty_until=CASE WHEN COALESCE(warranty_days,0)>0
+         warranty_until=CASE WHEN ?=0 AND COALESCE(warranty_days,0)>0
            THEN datetime('now','+'||warranty_days||' days') END
        WHERE id=?`,
+      manual ? 1 : 0,
       id,
     );
+    if (manual) delivery.markWaiting(order);
     const paymentId = randomUUID();
     const provider = payment.provider ?? "sandbox";
     const providerRef = payment.providerRef ?? "sandbox:order:" + id;
@@ -1863,15 +1930,15 @@ export function createCommerceCore({
     });
     notify(
       order.user_id,
-      "code_delivery",
-      "ส่งโค้ดสำเร็จ",
-      "คำสั่งซื้อ " + id.slice(0, 8) + " ได้รับโค้ดแล้ว",
+      manual ? "order" : "code_delivery",
+      manual ? "ชำระเงินแล้ว รอร้านส่งมอบ" : "ส่งโค้ดสำเร็จ",
+      "คำสั่งซื้อ " + id.slice(0, 8) + (manual ? " เข้าคิวแล้ว" : " ได้รับโค้ดแล้ว"),
       "/orders/" + id,
     );
     notifyStaffRoles(
       "order_new",
-      "ออเดอร์ใหม่",
-      "คำสั่งซื้อ " + id.slice(0, 8) + (payment.staffText ?? " ชำระแล้วและส่งของแล้ว"),
+      manual ? "ออเดอร์รอส่งมอบ" : "ออเดอร์ใหม่",
+      "คำสั่งซื้อ " + id.slice(0, 8) + (manual ? " ชำระแล้ว รอร้านส่งมอบ" : (payment.staffText ?? " ชำระแล้วและส่งของแล้ว")),
       "/admin/orders/" + id,
     );
     maybeNotifyStockLow(order.variant_id);
@@ -2078,7 +2145,7 @@ export function createCommerceCore({
         return orderDetail(user, id);
       }
       const available = pickUnitsForOrder(order);
-      if (available.length !== order.quantity) {
+      if (available.length !== order.quantity && !delivery.isManualVariant(order.variant_id)) {
         run("UPDATE orders SET status='OUT_OF_STOCK' WHERE id=?", id);
         releaseCouponForOrder(id, "OUT_OF_STOCK");
         audit(user, "OUT_OF_STOCK", id);
@@ -2301,6 +2368,8 @@ export function createCommerceCore({
         "SELECT (SELECT COUNT(*) FROM orders WHERE status='PENDING_PAYMENT')+(SELECT COUNT(*) FROM reservations WHERE status='PENDING_PAYMENT') AS n",
       ).n,
       preorderQueue: one("SELECT COUNT(*) AS n FROM reservations WHERE status='PREORDER'").n,
+      // Paid orders of shop-fulfilled products still to be sent (delivery.mjs).
+      fulfilmentWaiting: one("SELECT COUNT(*) AS n FROM order_fulfilment f JOIN orders o ON o.id=f.order_id WHERE f.state='waiting' AND o.status='DELIVERED'").n,
     };
   }
   const importStatusText = {
@@ -2321,6 +2390,11 @@ export function createCommerceCore({
     const variantId = clean(input.variantId, 1, 80, "ตัวเลือกสินค้า");
     if (!one("SELECT id FROM variants WHERE id=?", variantId))
       fail(404, "ไม่พบตัวเลือกสินค้า");
+    // Delivery type decides the stock format (delivery.mjs).
+    const deliveryType = delivery.typeOfVariant(variantId);
+    if (deliveryType === "manual") fail(409, "สินค้าแบบร้านทำให้หลังสั่งไม่ใช้สต็อก");
+    if (deliveryType === "shared" || deliveryType === "invite")
+      return delivery.importGrouped(user, variantId, deliveryType, input);
     const entries = parseImportEntries(input, fail);
     const dryRun = input.dryRun === true;
     const skipDuplicates = input.skipDuplicates === true;
@@ -2587,9 +2661,11 @@ export function createCommerceCore({
         : 0;
     return tx(() => {
       if (input.id) {
-        const existing = one("SELECT id,preorder FROM products WHERE id=?", id);
+        const existing = one("SELECT id,preorder,delivery_type FROM products WHERE id=?", id);
         if (!existing) fail(404, "ไม่พบสินค้า");
         const preorder = hasPreorder ? preorderFlag : existing.preorder ? 1 : 0;
+        if (preorder && existing.delivery_type === "manual")
+          fail(409, "สินค้าแบบร้านทำให้หลังสั่งเปิดพรีออเดอร์ไม่ได้");
         run(
           "UPDATE products SET name=?,description=?,category=?,active=?,featured=?,preorder=? WHERE id=?",
           name,
@@ -3154,6 +3230,7 @@ export function createCommerceCore({
     run,
     notify,
     readDeliveredItems,
+    delivery,
     inventoryAvailableAliased,
     getLowStockAt,
     bangkokDayRange,
@@ -3688,6 +3765,15 @@ export function createCommerceCore({
     adminCancelOrder,
     adminAddOrderNote,
     replaceOrderCredential,
+    // Delivery type per product, shared seats, invite links, fulfilment queue (delivery.mjs).
+    adminDelivery: delivery.adminDelivery,
+    adminSetDelivery: delivery.adminSetDelivery,
+    adminSeatGroup: delivery.adminSeatGroup,
+    adminSetSeatCount: delivery.adminSetSeatCount,
+    adminUpdateSeat: delivery.adminUpdateSeat,
+    adminUpdateGroupLogin: delivery.adminUpdateGroupLogin,
+    fulfilmentQueue: delivery.fulfilmentQueue,
+    fulfilOrder: delivery.fulfilOrder,
     resendOrderCredentials,
     adminBulkOrderCheck: orderBulk.adminBulkOrderCheck,
     adminBulkOrderAction: orderBulk.adminBulkOrderAction,

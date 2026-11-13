@@ -49,6 +49,7 @@ import {
   ensureEmailTemplates,
   ensurePricing,
   ensurePreorderModes,
+  ensureDeliveryOptions,
 } from "./ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "./auth-hardening.mjs";
 import { ensureCannedReplies } from "./ensure-admin-fr.mjs";
@@ -137,6 +138,7 @@ export function createCommerce(options = {}) {
   ensureFinanceBooks(db);
   ensureTaxInvoices(db);
   ensurePreorderModes(db);
+  ensureDeliveryOptions(db);
   return createCommerceCore({ ...options, db, key });
 }
 export function openLocalCommerce({
