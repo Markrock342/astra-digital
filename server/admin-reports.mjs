@@ -22,9 +22,12 @@ export function createReportApis({ requireAdmin, all, one, fail, bangkokDayRange
   function salesReport(user, query = {}) {
     requireAdmin(user);
     const { range, when, filter, params } = reportRange(query);
-    // One row per successful payment, tied to the order or preorder it paid for.
+    // One row per successful payment, tied to the order or preorder it paid for. A preorder
+    // deposit is money in, but its units / order are counted once, with the balance payment.
     const paid = `
-      SELECT pay.amount, ${when} AS paid_at, x.quantity, x.preorder, v.id AS variant_id, v.label AS variant, p.id AS product_id, p.name AS product, x.user_id
+      SELECT pay.amount, ${when} AS paid_at,
+             CASE WHEN COALESCE(pay.purpose,'')='deposit' THEN 0 ELSE x.quantity END AS quantity,
+             CASE WHEN COALESCE(pay.purpose,'')='deposit' THEN 0 ELSE 1 END AS counted, x.preorder, v.id AS variant_id, v.label AS variant, p.id AS product_id, p.name AS product, x.user_id
       FROM payments pay
       JOIN (
         SELECT id, variant_id, quantity, user_id, 0 AS preorder FROM orders
@@ -36,18 +39,18 @@ export function createReportApis({ requireAdmin, all, one, fail, bangkokDayRange
       WHERE pay.status = 'SUCCEEDED'${paymentScope}${filter}`;
     const byProduct = all(
       `SELECT product_id, product, variant_id, variant, MAX(preorder) AS preorder,
-              COUNT(*) AS orders, SUM(quantity) AS units, SUM(amount) AS revenue
+              SUM(counted) AS orders, SUM(quantity) AS units, SUM(amount) AS revenue
        FROM (${paid}) GROUP BY variant_id ORDER BY revenue DESC, units DESC`,
       ...params,
     ).map((r) => ({ ...r, preorder: !!r.preorder }));
     const byDay = all(
-      `SELECT substr(datetime(paid_at, '+7 hours'), 1, 10) AS day, COUNT(*) AS orders, SUM(quantity) AS units, SUM(amount) AS revenue,
+      `SELECT substr(datetime(paid_at, '+7 hours'), 1, 10) AS day, SUM(counted) AS orders, SUM(quantity) AS units, SUM(amount) AS revenue,
               COUNT(DISTINCT user_id) AS buyers
        FROM (${paid}) GROUP BY day ORDER BY day ASC`,
       ...params,
     );
     const totals = one(
-      `SELECT COUNT(*) AS orders, COALESCE(SUM(quantity),0) AS units, COALESCE(SUM(amount),0) AS revenue,
+      `SELECT COALESCE(SUM(counted),0) AS orders, COALESCE(SUM(quantity),0) AS units, COALESCE(SUM(amount),0) AS revenue,
               COUNT(DISTINCT user_id) AS buyers
        FROM (${paid})`,
       ...params,
@@ -94,7 +97,8 @@ export function createReportApis({ requireAdmin, all, one, fail, bangkokDayRange
     requireAdmin(user);
     const { range, when, filter, params } = reportRange(query);
     const revenue = one(
-      `SELECT COALESCE(SUM(pay.amount),0) AS n, COUNT(*) AS orders
+      `SELECT COALESCE(SUM(pay.amount),0) AS n,
+              COALESCE(SUM(CASE WHEN COALESCE(pay.purpose,'')='deposit' THEN 0 ELSE 1 END),0) AS orders
        FROM payments pay
        WHERE pay.status = 'SUCCEEDED'${paymentScope}${filter}`,
       ...params,
@@ -110,7 +114,7 @@ export function createReportApis({ requireAdmin, all, one, fail, bangkokDayRange
          (pay.order_id IS NOT NULL AND pay.order_id = i.order_id)
          OR (pay.reservation_id IS NOT NULL AND pay.reservation_id = i.reservation_id)
        )
-       WHERE pay.status = 'SUCCEEDED'${paymentScope}${filter}`,
+       WHERE pay.status = 'SUCCEEDED' AND COALESCE(pay.purpose,'')<>'deposit'${paymentScope}${filter}`,
       ...params,
     );
     // Cost per sold unit; revenue per payment (not multiplied by units on the same order).
@@ -127,11 +131,11 @@ export function createReportApis({ requireAdmin, all, one, fail, bangkokDayRange
          )
          JOIN variants v ON v.id = i.variant_id
          JOIN products p ON p.id = v.product_id
-         WHERE pay.status = 'SUCCEEDED'${paymentScope}${filter}
+         WHERE pay.status = 'SUCCEEDED' AND COALESCE(pay.purpose,'')<>'deposit'${paymentScope}${filter}
          GROUP BY v.id
        ) c
        LEFT JOIN (
-         SELECT x.variant_id, COUNT(*) AS orders, COALESCE(SUM(pay.amount),0) AS revenue
+         SELECT x.variant_id, SUM(CASE WHEN COALESCE(pay.purpose,'')='deposit' THEN 0 ELSE 1 END) AS orders, COALESCE(SUM(pay.amount),0) AS revenue
          FROM payments pay
          JOIN (
            SELECT id, variant_id FROM orders

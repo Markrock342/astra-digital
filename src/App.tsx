@@ -89,6 +89,7 @@ import { StockWatchList } from "./StockWatch";
 import { DeliveredExtras, hasReceipt, ReceiptLink, ReceiptPage, receiptRoute } from "./OrderExtras";
 import { AskInChat } from "./ChatAttachments";
 import { ShopClosedNote, useShopOpen } from "./ShopClosed";
+import { CheckoutPreorderRow, isQueueMode, PreorderProgress, preorderHeading } from "./Preorder";
 import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
 import { ContactPage } from "./Contact";
@@ -247,6 +248,9 @@ export function Status({ status }: { status: string }) {
     EXPIRED: t("หมดเวลาชำระเงิน"),
     OUT_OF_STOCK: t("สินค้าหมด"),
     PREORDER: t("รอส่งสินค้าสั่งจอง"),
+    // Deposit / free preorders (Preorder.tsx): called and waiting for the balance, or ran out of time.
+    CALLED: t("ถึงคิวแล้ว · รอชำระ"),
+    LAPSED: t("หมดเวลาชำระ"),
     REFUNDED: t("คืนเงินแล้ว"),
     PARTIALLY_REFUNDED: t("คืนเงินบางส่วน"),
   };
@@ -258,7 +262,11 @@ export function Status({ status }: { status: string }) {
 }
 /** Unpaid order cancelled by the payment window: shown as its own status to the customer. */
 const shownStatus = (o: Order) =>
-  o.refundStatus ?? (o.status === "CANCELLED" && o.expired_at ? "EXPIRED" : o.status);
+  o.status === "PREORDER" && o.stage === "called"
+    ? "CALLED"
+    : o.stage === "lapsed"
+      ? "LAPSED"
+      : o.refundStatus ?? (o.status === "CANCELLED" && o.expired_at ? "EXPIRED" : o.status);
 export function Empty({
   icon,
   heading,
@@ -1278,7 +1286,9 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
         requestKey: key,
         ...(coupon ? { couponCode: coupon.code } : {}),
       });
-      sessionStorage.setItem("astra-pay-" + o.id, o.paymentToken!);
+      // Free preorder reservations (Preorder.tsx) have nothing to pay: no token.
+      if (o.paymentToken) sessionStorage.setItem("astra-pay-" + o.id, o.paymentToken);
+      else if (o.status === "PREORDER") setBasket(null);
       go("/checkout/" + o.id);
     } catch (e) {
       setError((e as Error).message);
@@ -1434,6 +1444,7 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
               <strong>{t("ยอดรวม")}</strong>
               <strong>{money(checkout ? payable : subtotal)}</strong>
             </div>
+            <CheckoutPreorderRow product={p} total={checkout ? payable : subtotal} quantity={basket.quantity} />
             <ErrorMessage message={error} />
             <ShopClosedNote />
             <button
@@ -1452,7 +1463,9 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
             </button>
             {user && (
               <p className="balance-note">
-                {p.preorder
+                {p.preorder && p.preorderTerms?.mode === "free"
+                  ? t("จองฟรี ไม่ต้องจ่ายตอนนี้ ได้เลขคิวทันที")
+                  : p.preorder
                   ? t("สินค้าพรีออเดอร์: ชำระแล้วได้เลขคิว ร้านจะส่ง ID และรหัสผ่านให้ภายหลัง")
                   : t("ชำระแล้วได้รับ ID และรหัสผ่านทันทีในหน้าคำสั่งซื้อ")}
               </p>
@@ -1590,6 +1603,25 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
       setBusy(false);
     }
   }
+  // Deposit / free preorder (Preorder.tsx): balance is paid with a fresh token from /retry.
+  function payBalance() {
+    sessionStorage.removeItem("astra-pay-" + id);
+    return pay("success");
+  }
+  async function cancelReservation() {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/orders/" + id + "/cancel", {});
+      setOrder(await api<Order>("/orders/" + id));
+      await refresh();
+      toast(t("ยกเลิกการจองแล้ว"));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function copy(code: string) {
     try {
       await navigator.clipboard.writeText(code);
@@ -1629,7 +1661,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               </span>
             )}
             <h1>
-              {order.status === "DELIVERED"
+              {preorderHeading(order)?.[0] ?? (order.status === "DELIVERED"
                 ? t("สั่งซื้อสำเร็จ พร้อมรับสินค้า")
                 : order.status === "PREORDER"
                   ? t("บันทึกการสั่งจองแล้ว")
@@ -1641,10 +1673,10 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                         ? t("หมดเวลาชำระเงิน")
                       : order.status === "CANCELLED"
                         ? t("คำสั่งซื้อถูกยกเลิก")
-                        : t("สินค้าหมดก่อนทำรายการ")}
+                        : t("สินค้าหมดก่อนทำรายการ"))}
             </h1>
             <p>
-              {order.status === "DELIVERED"
+              {preorderHeading(order)?.[1] ?? (order.status === "DELIVERED"
                 ? t("ID และรหัสผ่านของคุณอยู่ด้านล่าง")
                 : order.status === "PENDING_PAYMENT"
                   ? t("ชำระเงินเพื่อรับสินค้า")
@@ -1652,7 +1684,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                     ? t("ร้านจะส่งสินค้าให้ตามลำดับคิว และแจ้งเตือนในเว็บเมื่อส่งแล้ว")
                     : order.status === "CANCELLED" && order.expired_at
                       ? t("ระบบยกเลิกคำสั่งซื้อนี้แล้ว ไม่มีการตัดเงิน")
-                      : t("รายการนี้ไม่มีการส่งสินค้า")}
+                      : t("รายการนี้ไม่มีการส่งสินค้า"))}
             </p>
           </div>
           <section className="panel delivery-panel">
@@ -1708,6 +1740,17 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               </dl>
             )}
             {order.status === "DELIVERED" && <WarrantyStatus until={order.warranty_until} />}
+            <PreorderProgress
+              order={order}
+              busy={busy}
+              canPay={user.balance >= (order.amountDue ?? 0)}
+              testPayments={testPayments}
+              balance={user.balance}
+              shopOpen={shopOpen}
+              error={error}
+              onPay={() => void payBalance()}
+              onCancel={cancelReservation}
+            />
             {order.status === "CANCELLED" && order.expired_at ? (
               <div className="note-box expired-note" role="status">
                 <Clock size={20} />
@@ -1721,6 +1764,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                 </div>
               </div>
             ) : order.status === "PREORDER" ? (
+              isQueueMode(order) ? null : (
               <div className="note-box">
                 <Clock size={20} />
                 <div>
@@ -1732,6 +1776,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                   <p>{t("ชำระเงินแล้ว ร้านจะส่ง ID และรหัสผ่านมาที่หน้านี้ และแจ้งเตือนเมื่อส่งแล้ว")}</p>
                 </div>
               </div>
+              )
             ) : order.status === "DELIVERED" ? (
               <div className="delivered-codes">
                 <div className="code-heading">
@@ -1788,7 +1833,10 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                   <div className="note-box">
                     <Clock size={20} />
                     <div>
-                      <strong>{t("ยอดคำสั่งซื้อ")}{" "}{money(order.total)}</strong>
+                      <strong>
+                        {order.preorderMode === "deposit" ? t("ชำระตอนจอง (มัดจำ)") : t("ยอดคำสั่งซื้อ")}{" "}
+                        {money(order.amountDue ?? order.total)}
+                      </strong>
                       <PayDeadline createdAt={order.created_at} />
                       {testPayments ? (
                         <>
@@ -1800,13 +1848,13 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                           <div className="pay-actions">
                             <button
                               className="button primary"
-                              disabled={busy || user.balance < order.total || !shopOpen}
+                              disabled={busy || user.balance < (order.amountDue ?? order.total) || !shopOpen}
                               onClick={() => pay("success")}
                             >
                               {busy ? <LoaderCircle className="spin" size={17} /> : <CreditCard size={17} />}
-                              {t("ชำระเงิน")} {money(order.total)}
+                              {t("ชำระเงิน")} {money(order.amountDue ?? order.total)}
                             </button>
-                            {user.balance < order.total && (
+                            {user.balance < (order.amountDue ?? order.total) && (
                               <Link to="/wallet" className="button secondary">
                                 {t("เติมเครดิตทดลอง")}
                               </Link>
@@ -1819,7 +1867,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                     </div>
                   </div>
                   {/* Bank's PromptPay/slip shell is the UI for the real provider; test mode pays with test credit. */}
-                  {!testPayments && <PayShell total={order.total} />}
+                  {!testPayments && <PayShell total={order.amountDue ?? order.total} />}
                 </>
               )
             )}

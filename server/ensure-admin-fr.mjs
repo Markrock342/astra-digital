@@ -53,6 +53,8 @@ export { ensureManualOrders } from "./manual-orders.mjs";
 export { ensurePricing } from "./pricing.mjs";
 // การเงิน › ปิดยอดรายวัน / กระทบยอด / ถอนเงิน (append-only tables, server/finance-close.mjs).
 export { ensureFinanceBooks } from "./finance-close.mjs";
+// Preorder modes: product settings table + reservation stage / deposit columns (preorder.mjs).
+export { ensurePreorderModes } from "./preorder.mjs";
 
 export function ensureChatThreadReads(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS chat_thread_reads (

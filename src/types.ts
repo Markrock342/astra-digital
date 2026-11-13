@@ -50,6 +50,19 @@ export type Product = {
   /** Uploaded images in display order (W5 uploads); first is the cover. */
   images?: { id: string; url: string }[];
   imageUrl?: string | null;
+  /** How a preorder product is reserved (server/preorder.mjs); null for ready stock. */
+  preorderTerms?: PreorderTerms | null;
+};
+export type PreorderMode = "full" | "deposit" | "free";
+export type PreorderTerms = {
+  mode: PreorderMode;
+  depositType?: "percent" | "fixed" | null;
+  /** Percent (1–90) or satang per unit. */
+  depositValue?: number | null;
+  depositCapPercent?: number;
+  payWindowHours?: number;
+  lapsePolicy?: "refund_credit" | "keep" | null;
+  maxPerCustomer?: number | null;
 };
 export type User = {
   id: string;
@@ -93,6 +106,23 @@ export type Order = {
   /** The shop created this order in the back office (customer paid outside the site). */
   createdByAdmin?: boolean;
   paymentMethodLabel?: string;
+  // Preorder modes (server/preorder.mjs reservationView).
+  preorderMode?: PreorderMode;
+  /** queued → called → delivered, or lapsed / cancelled / shop_cancelled; null in full mode. */
+  stage?: "queued" | "called" | "delivered" | "lapsed" | "cancelled" | "shop_cancelled" | null;
+  deposit?: number;
+  depositPaid?: number;
+  balanceDue?: number;
+  /** What the pay button charges now (deposit, balance or the full total). */
+  amountDue?: number;
+  /** UTC SQL time the balance must be paid by (stage called). */
+  payBy?: string | null;
+  calledAt?: string | null;
+  endedAt?: string | null;
+  payWindowHours?: number;
+  lapsePolicy?: "refund_credit" | "keep" | null;
+  /** Called / waiting reservations ahead of this one (stage queued). */
+  queueAhead?: number | null;
 };
 /** POST /api/coupons/check: a preview only; the order is priced again on the server. */
 export type CouponPreview = { valid: true; code: string; subtotal: number; discount: number; total: number };

@@ -32,6 +32,11 @@ const LIVE_METHODS = {
   markInventoryDefect: ["catalog"],
   deleteInventoryUnit: ["catalog"],
   deliverReservation: ["orders", "notify"],
+  // Preorder modes (preorder.mjs): terms on the product page, queue calls / cancels.
+  adminSavePreorderSettings: ["catalog"],
+  adminCallPreorders: ["orders", "notify", "catalog"],
+  adminCancelPreorder: ["orders", "notify", "customers", "catalog"],
+  cancelMyPreorder: ["orders", "notify", "customers", "catalog"],
   adminCancelOrder: ["orders"],
   adminAddOrderNote: ["orders"],
   refundOrder: ["orders", "customers", "catalog", "notify"],

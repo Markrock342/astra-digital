@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   ArrowLeft,
+  BellRing,
   Boxes,
   CalendarClock,
   CalendarX2,
@@ -57,6 +58,8 @@ import { WarrantyStatus } from "./Warranty";
 import { ReceiptLink } from "./OrderExtras";
 import { AdminTaxInvoiceCard } from "./AdminTaxInvoices";
 import { AdminReviews } from "./AdminReviews";
+import { QueueStage, queueModeText } from "./AdminPreorder";
+import type { PreorderMode } from "./types";
 import { BULK_CAP, OrderBulkBar, useOrderSelection, type BulkExportRow } from "./OrderBulk";
 import { ManualOrderBadge, ManualOrderCard, type ManualOrderInfo } from "./AdminManualOrder";
 import {
@@ -2205,6 +2208,9 @@ type TxnSummary = {
   count: number;
   csvMaxRows?: number;
   customerCredit?: number | null;
+  /** มัดจำค้าง: preorder deposits for reservations not delivered yet (server/preorder.mjs). */
+  depositsHeld?: number | null;
+  depositsHeldCount?: number | null;
   mode?: "sandbox" | "live";
 };
 type TxnDetail = {
@@ -2543,6 +2549,14 @@ export function AdminFinance() {
           <small>เครดิตลูกค้าคงค้าง (หนี้สิน)</small>
           <strong>{summary?.customerCredit != null ? money(summary.customerCredit) : "–"}</strong>
           <small>เงินที่ร้านติดลูกค้า ไม่นับเป็นรายได้ · ทุกช่วงเวลา</small>
+        </div>
+        <div className="reference-admin-card deposits-held-card">
+          <small>มัดจำค้าง (พรีออเดอร์ยังไม่ส่ง)</small>
+          <strong>{summary?.depositsHeld != null ? money(summary.depositsHeld) : "–"}</strong>
+          <small>
+            {summary?.depositsHeldCount ? summary.depositsHeldCount + " คิว · " : ""}
+            รวมอยู่ในเงินเข้าแล้ว ไม่นับซ้ำเมื่อลูกค้าจ่ายส่วนที่เหลือ
+          </small>
         </div>
       </div>
       <FilterBar
@@ -3559,20 +3573,36 @@ type QueueRow = {
   created_at: string;
   customer: string;
   product: string;
+  product_id?: string;
+  variant_id?: string;
   label: string;
+  // Preorder modes (server/preorder.mjs).
+  mode?: PreorderMode;
+  stage?: string | null;
+  deposit_paid?: number;
+  pay_by?: string | null;
+  refunded?: number;
 };
 
-/** FR-O8: preorder queue for admin and team — filter by product, deliver one or many in queue order. */
+/**
+ * FR-O8: preorder queue for admin and team — filter by product, deliver one or many in queue
+ * order. Deposit / free rows (preorder.mjs) are called with "เรียกคิว" and delivered when the
+ * customer pays; ADMIN can cancel them with a reason (deposit back to credit).
+ */
 export function PreorderQueue() {
-  const { toast } = useStore();
+  const { toast, user } = useStore();
+  const admin = user?.role === "ADMIN";
   const [queue, setQueue] = useState<QueueRow[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [product, setProduct] = useState("");
+  const [view, setView] = useState<"open" | "ended">("open");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState("");
   // Delivery sends the account and cannot be undone, so every send asks once more.
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
   const load = () =>
     api<{ queue: QueueRow[] }>("/queue")
       .then((r) => setQueue(r.queue))
@@ -3583,11 +3613,14 @@ export function PreorderQueue() {
   useLive(["orders", "catalog"], () => {
     if (!busy) void load();
   });
-  const waiting = (queue ?? [])
-    .filter((q) => q.status === "PREORDER")
-    .sort((x, y) => x.queue_number - y.queue_number);
-  const products = Array.from(new Set(waiting.map((q) => q.product))).sort();
-  const shown = waiting.filter((q) => !product || q.product === product);
+  const rows = [...(queue ?? [])].sort((x, y) => x.queue_number - y.queue_number);
+  const waiting = rows.filter((q) => q.status === "PREORDER");
+  const ended = rows.filter((q) => q.status !== "PREORDER");
+  const products = Array.from(new Set(rows.map((q) => q.product))).sort();
+  const shown = (view === "open" ? waiting : ended).filter((q) => !product || q.product === product);
+  const isFull = (q: QueueRow) => (q.mode ?? "full") === "full";
+  const deliverable = shown.filter((q) => q.status === "PREORDER" && isFull(q));
+  const queuedCount = shown.filter((q) => q.stage === "queued").length;
   const toggle = (id: string) =>
     setPicked((set) => {
       const next = new Set(set);
@@ -3595,7 +3628,7 @@ export function PreorderQueue() {
       else next.add(id);
       return next;
     });
-  const allPicked = shown.length > 0 && shown.every((q) => picked.has(q.id));
+  const allPicked = deliverable.length > 0 && deliverable.every((q) => picked.has(q.id));
   async function deliver(items: QueueRow[]) {
     setBusy(true);
     setError("");
@@ -3618,13 +3651,78 @@ export function PreorderQueue() {
       await load();
     }
   }
+  /** "เรียกคิว": hold one unit per reservation for as many as the stock covers. */
+  async function callQueue() {
+    setBusy(true);
+    setError("");
+    try {
+      const productId = product ? rows.find((q) => q.product === product)?.product_id : undefined;
+      const result = await api<{ called: number; queueNumbers: number[]; waiting: number }>(
+        "/admin/preorders/call",
+        productId ? { productId } : {},
+      );
+      toast(
+        result.called
+          ? "เรียกแล้ว " + result.called + " คิว (#" + result.queueNumbers.join(", #") + ") แจ้งลูกค้าให้ชำระแล้ว"
+          : "ยังไม่มีสต็อกว่างสำหรับคิวที่รอ เติมสต็อกของตัวเลือกนั้นก่อน",
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      await load();
+    }
+  }
+  async function cancel(q: QueueRow, e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ refunded: number; calledNext: number }>("/admin/preorders/" + q.id + "/cancel", {
+        reason,
+      });
+      toast(
+        "ยกเลิกคิว #" +
+          q.queue_number +
+          " แล้ว" +
+          (result.refunded ? " · คืนมัดจำ " + money(result.refunded) + " เข้าเครดิต" : "") +
+          (result.calledNext ? " · เรียกคิวถัดไปแล้ว" : ""),
+      );
+      setCancelling(null);
+      setReason("");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+      await load();
+    }
+  }
   return (
     <>
       <div className="reference-admin-heading">
         <div>
           <h1>คิวพรีออเดอร์</h1>
-          <p>เลขคิวออกเมื่อลูกค้าชำระเงิน ส่งของตามลำดับคิว ระบบดึง ID และรหัสผ่านจากสต็อกของตัวเลือกนั้นให้อัตโนมัติ</p>
+          <p>
+            แบบจ่ายเต็ม: ส่งของตามลำดับคิว ระบบดึง ID และรหัสผ่านจากสต็อกให้อัตโนมัติ · แบบมัดจำ/จองฟรี:
+            เติมสต็อกแล้วระบบเรียกคิวตามจำนวนของ ลูกค้าจ่ายส่วนที่เหลือแล้วได้ของทันที
+          </p>
         </div>
+        <button
+          className="button primary"
+          disabled={busy || !waiting.some((q) => q.stage === "queued")}
+          onClick={() => void callQueue()}
+        >
+          <BellRing size={15} />
+          เรียกคิว
+        </button>
+      </div>
+      <div className="reference-status-tabs" role="group" aria-label="มุมมองคิว">
+        <button className={view === "open" ? "active" : ""} onClick={() => setView("open")}>
+          รอดำเนินการ ({waiting.length})
+        </button>
+        <button className={view === "ended" ? "active" : ""} onClick={() => setView("ended")}>
+          จบแล้ว 30 วัน ({ended.length})
+        </button>
       </div>
       <div className="admin-filters">
         <Select
@@ -3636,14 +3734,18 @@ export function PreorderQueue() {
           }}
           options={[["", "ทุกสินค้า"], ...products.map((p) => [p, p] as [string, string])]}
         />
-        <span className="muted">รอส่ง {shown.length} คิว</span>
+        <span className="muted">
+          {view === "open"
+            ? "รอส่ง " + shown.length + " คิว" + (queuedCount ? " · รอของ " + queuedCount : "")
+            : shown.length + " คิว"}
+        </span>
         {picked.size > 0 &&
           (confirming === "batch" ? (
             <span className="queue-confirm">
               <button
                 className="button primary"
                 disabled={busy}
-                onClick={() => void deliver(shown.filter((q) => picked.has(q.id)))}
+                onClick={() => void deliver(deliverable.filter((q) => picked.has(q.id)))}
               >
                 <Package size={15} />
                 ยืนยันส่ง {picked.size} คิว
@@ -3661,7 +3763,7 @@ export function PreorderQueue() {
       </div>
       {progress && <p className="admin-callout">{progress}</p>}
       <ErrorMessage message={error} />
-      <div className="table-scroll reference-table admin-list-table">
+      <div className="table-scroll reference-table admin-list-table preorder-queue-table">
         <table>
           <thead>
             <tr>
@@ -3670,14 +3772,17 @@ export function PreorderQueue() {
                   type="checkbox"
                   aria-label="เลือกทุกคิวที่แสดง"
                   checked={allPicked}
-                  disabled={busy || !shown.length}
-                  onChange={() => setPicked(allPicked ? new Set() : new Set(shown.map((q) => q.id)))}
+                  disabled={busy || !deliverable.length}
+                  onChange={() => setPicked(allPicked ? new Set() : new Set(deliverable.map((q) => q.id)))}
                 />
               </th>
               <th>คิว</th>
               <th>ลูกค้า</th>
               <th>สินค้า</th>
-              <th>ชำระเมื่อ</th>
+              <th>วิธีจอง</th>
+              <th>สถานะ</th>
+              <th>มัดจำ</th>
+              <th>จองเมื่อ</th>
               <th />
             </tr>
           </thead>
@@ -3685,13 +3790,15 @@ export function PreorderQueue() {
             {shown.map((q) => (
               <tr key={q.id}>
                 <td>
-                  <input
-                    type="checkbox"
-                    aria-label={"เลือกคิว #" + q.queue_number}
-                    checked={picked.has(q.id)}
-                    disabled={busy}
-                    onChange={() => toggle(q.id)}
-                  />
+                  {q.status === "PREORDER" && isFull(q) && (
+                    <input
+                      type="checkbox"
+                      aria-label={"เลือกคิว #" + q.queue_number}
+                      checked={picked.has(q.id)}
+                      disabled={busy}
+                      onChange={() => toggle(q.id)}
+                    />
+                  )}
                 </td>
                 <td>
                   <Link to={"/admin/orders/" + q.id} className="order-number">
@@ -3702,31 +3809,84 @@ export function PreorderQueue() {
                 <td>
                   {q.product}
                   <small>
-                    {q.label} · {q.quantity} ชิ้น
+                    {q.label} · {q.quantity} ชิ้น · {money(q.total)}
                   </small>
+                </td>
+                <td>
+                  <span className="queue-mode">{queueModeText[q.mode ?? "full"]}</span>
+                </td>
+                <td>
+                  <QueueStage row={q} />
+                </td>
+                <td className="nowrap">
+                  {q.mode === "deposit" ? money(q.deposit_paid ?? 0) : "–"}
+                  {!!q.refunded && <small>คืนแล้ว {money(q.refunded)}</small>}
                 </td>
                 <td className="nowrap">{dateTime(q.created_at)}</td>
                 <td>
-                  {confirming === q.id ? (
-                    <span className="queue-confirm">
-                      <button className="button primary" disabled={busy} onClick={() => void deliver([q])}>
-                        ยืนยันส่งคิว #{q.queue_number}
+                  {q.status === "PREORDER" && isFull(q) ? (
+                    confirming === q.id ? (
+                      <span className="queue-confirm">
+                        <button className="button primary" disabled={busy} onClick={() => void deliver([q])}>
+                          ยืนยันส่งคิว #{q.queue_number}
+                        </button>
+                        <button className="button secondary" disabled={busy} onClick={() => setConfirming(null)}>
+                          ยกเลิก
+                        </button>
+                      </span>
+                    ) : (
+                      <button className="button secondary" disabled={busy} onClick={() => setConfirming(q.id)}>
+                        ส่งของ
                       </button>
-                      <button className="button secondary" disabled={busy} onClick={() => setConfirming(null)}>
-                        ยกเลิก
+                    )
+                  ) : q.status === "PREORDER" && admin ? (
+                    cancelling === q.id ? (
+                      <form className="queue-cancel-form" onSubmit={(e) => void cancel(q, e)}>
+                        <input
+                          aria-label={"เหตุผลที่ยกเลิกคิว #" + q.queue_number}
+                          placeholder="เหตุผล (บันทึกในประวัติ)"
+                          required
+                          minLength={3}
+                          maxLength={300}
+                          value={reason}
+                          onChange={(e) => setReason(e.target.value)}
+                        />
+                        <button className="button danger" disabled={busy || reason.trim().length < 3}>
+                          ยืนยันยกเลิก{q.deposit_paid ? " + คืนมัดจำ" : ""}
+                        </button>
+                        <button
+                          type="button"
+                          className="button secondary"
+                          disabled={busy}
+                          onClick={() => {
+                            setCancelling(null);
+                            setReason("");
+                          }}
+                        >
+                          ไม่ยกเลิก
+                        </button>
+                      </form>
+                    ) : (
+                      <button
+                        className="button secondary"
+                        disabled={busy}
+                        onClick={() => {
+                          setCancelling(q.id);
+                          setReason("");
+                        }}
+                      >
+                        ยกเลิกคิว
                       </button>
-                    </span>
-                  ) : (
-                    <button className="button secondary" disabled={busy} onClick={() => setConfirming(q.id)}>
-                      ส่งของ
-                    </button>
-                  )}
+                    )
+                  ) : null}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {queue && !shown.length && <p className="reference-empty-text">ไม่มีคิวรอส่ง</p>}
+        {queue && !shown.length && (
+          <p className="reference-empty-text">{view === "open" ? "ไม่มีคิวรอส่ง" : "ยังไม่มีคิวที่จบใน 30 วัน"}</p>
+        )}
         {!queue && !error && <p className="reference-empty-text">กำลังโหลดคิว…</p>}
       </div>
     </>

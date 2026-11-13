@@ -287,7 +287,11 @@ export function createAccountEmail({
     const deliver = service.deliverReservation;
     service.pay = (user, id, input, ctx) => {
       const result = pay(user, id, input);
-      if (enabled && input?.outcome === "success") sendOrderConfirmation(result?.id ?? id, ctx);
+      if (enabled && input?.outcome === "success") {
+        // Deposit / free preorder paid in full when called → delivered: "พร้อมแล้ว" email.
+        if (result?.preorder && result.status === "DELIVERED") sendPreorderReady(result.id ?? id, ctx);
+        else sendOrderConfirmation(result?.id ?? id, ctx);
+      }
       return result;
     };
     service.deliverReservation = (user, id, ctx) => {

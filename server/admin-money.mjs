@@ -188,8 +188,13 @@ export function createAdminMoneyApis({
       let released = false;
       let retired = 0;
       if (full && order.preorder && order.status === "PREORDER") {
-        // Undelivered preorder: leave the queue.
-        run("UPDATE reservations SET status='CANCELLED' WHERE id=? AND status='PREORDER'", orderId);
+        // Undelivered preorder: leave the queue. A called deposit / free reservation also
+        // gives back the unit held for it (preorder.mjs), so the next customer can be called.
+        run(
+          "UPDATE reservations SET status='CANCELLED', stage=CASE WHEN stage IS NULL THEN NULL ELSE 'shop_cancelled' END, ended_at=CASE WHEN stage IS NULL THEN ended_at ELSE CURRENT_TIMESTAMP END WHERE id=? AND status='PREORDER'",
+          orderId,
+        );
+        run("UPDATE inventory SET reservation_id=NULL WHERE reservation_id=? AND sold_at IS NULL", orderId);
         released = true;
       }
       if (full && order.status === "DELIVERED") {

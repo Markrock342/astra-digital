@@ -28,6 +28,21 @@ export const escapeHtml = (value) =>
 const baht = (satang) =>
   (Number(satang ?? 0) / 100).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
   " บาท";
+/** UTC "YYYY-MM-DD HH:MM:SS" → "13 พ.ย. 2569 18:30 น." (Bangkok wall time). */
+const bangkokTime = (sql) => {
+  const ms = Date.parse(String(sql ?? "").replace(" ", "T") + "Z");
+  if (!Number.isFinite(ms)) return "-";
+  return (
+    new Date(ms).toLocaleString("th-TH", {
+      timeZone: "Asia/Bangkok",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }) + " น."
+  );
+};
 const isHttpUrl = (value) => /^https?:\/\/[^\s<>"']+$/i.test(String(value ?? ""));
 
 export const AUTOMATED =
@@ -45,6 +60,7 @@ export const PLACEHOLDER_HINTS = {
   จำนวน: "จำนวนที่สั่ง",
   ยอดชำระ: "ยอดเงิน เช่น 150.00 บาท",
   คิวพรีออเดอร์: "เลขคิวพรีออเดอร์",
+  ชำระภายใน: "วันเวลาที่ต้องชำระส่วนที่เหลือให้เสร็จ (เวลาไทย)",
   ลิงก์รีเซ็ต: "ลิงก์ตั้งรหัสผ่านใหม่ (ต้องมี)",
   นาที: "อายุลิงก์เป็นนาที",
   ลิงก์สินค้า: "ลิงก์ไปหน้าสินค้า",
@@ -123,6 +139,47 @@ export const EMAIL_TEMPLATES = {
     values: (a) => orderValues(a),
     rows: (a) => orderRows({ ...a, total: undefined }),
     button: (a) => ({ label: "ดูคำสั่งซื้อ", href: a.link }),
+    footer: NO_SECRETS,
+  },
+  preorder_called: {
+    label: "ถึงคิวพรีออเดอร์ (มัดจำ / จองฟรี)",
+    when: "ส่งเมื่อของพร้อมและร้านเรียกคิว ลูกค้าต้องชำระส่วนที่เหลือภายในเวลาที่กำหนด",
+    placeholders: ["ชื่อร้าน", "ชื่อลูกค้า", "เลขออเดอร์", "ลิงก์ออเดอร์", "สินค้า", "จำนวน", "ยอดชำระ", "คิวพรีออเดอร์", "ชำระภายใน"],
+    required: [],
+    defaults: {
+      subject: "ถึงคิวของคุณแล้ว {คิวพรีออเดอร์} — {ชื่อร้าน}",
+      heading: "ของพร้อมแล้ว ถึงคิวของคุณ",
+      body:
+        "ร้านกันสินค้าไว้ให้คุณแล้ว กรุณาชำระ {ยอดชำระ} ภายใน {ชำระภายใน} เพื่อรับสินค้า หากไม่ชำระภายในเวลา สิทธิ์จะส่งต่อให้คิวถัดไปตามเงื่อนไขที่แจ้งไว้ตอนจอง",
+    },
+    values: (a) => ({
+      ...orderValues(a),
+      ยอดชำระ: baht(a.total),
+      คิวพรีออเดอร์: a.queueNumber ? "#" + a.queueNumber : "-",
+      ชำระภายใน: bangkokTime(a.payBy),
+    }),
+    rows: (a) => [...orderRows(a, true), ["ชำระภายใน", bangkokTime(a.payBy)]],
+    button: (a) => ({ label: "ชำระส่วนที่เหลือ", href: a.link }),
+    footer: NO_SECRETS,
+  },
+  preorder_reminder: {
+    label: "เตือนก่อนหมดเวลาชำระพรีออเดอร์",
+    when: "ส่งครั้งเดียวประมาณ 2 ชั่วโมงก่อนหมดเวลาชำระส่วนที่เหลือ",
+    placeholders: ["ชื่อร้าน", "ชื่อลูกค้า", "เลขออเดอร์", "ลิงก์ออเดอร์", "สินค้า", "จำนวน", "ยอดชำระ", "คิวพรีออเดอร์", "ชำระภายใน"],
+    required: [],
+    defaults: {
+      subject: "ใกล้หมดเวลาชำระ คิว {คิวพรีออเดอร์} — {ชื่อร้าน}",
+      heading: "ใกล้หมดเวลาชำระส่วนที่เหลือ",
+      body: "สินค้าที่กันไว้ให้คุณจะถูกส่งต่อให้คิวถัดไปหากไม่ชำระ {ยอดชำระ} ภายใน {ชำระภายใน}",
+    },
+    values: (a) => ({
+      ...orderValues(a),
+      ยอดชำระ: baht(a.total),
+      คิวพรีออเดอร์: a.queueNumber ? "#" + a.queueNumber : "-",
+      ชำระภายใน: bangkokTime(a.payBy),
+    }),
+    rows: (a) => [...orderRows(a, true), ["ชำระภายใน", bangkokTime(a.payBy)]],
+    button: (a) => ({ label: "ชำระส่วนที่เหลือ", href: a.link }),
     footer: NO_SECRETS,
   },
   password_reset: {
@@ -326,6 +383,8 @@ export function sampleArgs(key, { shopName = "ASIA EXTRA", base = "" } = {}) {
   };
   if (key === "password_reset") return { ...common, link: origin + "/reset-password?token=ตัวอย่าง", minutes: 30 };
   if (key === "back_in_stock") return { ...common, link: origin + "/products" };
+  if (key === "preorder_called" || key === "preorder_reminder")
+    return { ...common, total: 10500, payBy: new Date(Date.now() + 24 * 3600000).toISOString().slice(0, 19).replace("T", " ") };
   if (key === "broadcast")
     return {
       shopName,
