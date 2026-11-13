@@ -39,9 +39,16 @@ import {
   ensureBroadcasts,
   ensureStockWatch,
   ensureReviewModeration,
+  ensureFinanceBooks,
   ensurePrivacyRequests,
+  ensureManualOrders,
+  ensureFraudSignals,
+  ensureEmailTemplates,
+  ensurePricing,
 } from "./ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "./auth-hardening.mjs";
+import { ensureCannedReplies } from "./ensure-admin-fr.mjs";
+import { ensureBanners } from "./ensure-admin-fr.mjs";
 import { createEmailSender } from "./email.mjs";
 import { createTurnstile } from "./turnstile.mjs";
 export { ApiError } from "./domain.mjs";
@@ -96,6 +103,7 @@ export function createCommerce(options = {}) {
   }
   ensureInventoryAvailableIndex(db);
   ensureChatThreadReads(db);
+  ensureCannedReplies(db);
   ensureCustomerAdmin(db);
   ensureAuthHardening(db);
   ensureOrderHistory(db);
@@ -105,6 +113,7 @@ export function createCommerce(options = {}) {
   ensureOrderExtras(db);
   ensureCoupons(db);
   ensureCategories(db);
+  ensureBanners(db);
   ensureEmailAndReset(db);
   ensureBroadcasts(db);
   ensureStockWatch(db);
@@ -113,6 +122,11 @@ export function createCommerce(options = {}) {
   ensureAppendOnlyMoney(db);
   ensureAlertsBackup(db);
   ensurePrivacyRequests(db);
+  ensureManualOrders(db);
+  ensureFraudSignals(db);
+  ensureEmailTemplates(db);
+  ensurePricing(db);
+  ensureFinanceBooks(db);
   return createCommerceCore({ ...options, db, key });
 }
 export function openLocalCommerce({

@@ -9,6 +9,21 @@ export type Variant = {
   stockStatus: "in" | "low" | "out";
   /** Can be ordered now (in stock, or a preorder product). */
   available: boolean;
+  // Pricing rules (server/pricing.mjs). `price` above is what this viewer pays now.
+  /** Normal price before sale / tag price. */
+  regularPrice?: number;
+  /** Struck-through "was" price, only when above `price`. */
+  compareAt?: number | null;
+  discountPercent?: number | null;
+  priceKind?: "regular" | "sale" | "tag";
+  /** Customer tag whose price applies (only sent to that customer). */
+  priceTag?: string | null;
+  /** End of the running sale (UTC SQL time), if it has one. */
+  saleEndsAt?: string | null;
+  /** Per-account purchase limit, the stricter of product / option. */
+  maxPerCustomer?: number | null;
+  /** Units this signed-in customer can still buy (null when signed out / no limit). */
+  remainingForYou?: number | null;
 };
 /** Admin APIs keep the exact ready-stock count. */
 export type AdminVariant = Omit<Variant, "stockStatus" | "available"> & {
@@ -75,6 +90,9 @@ export type Order = {
   /** Price before the discount (total + discount). */
   subtotal?: number;
   coupon_code?: string | null;
+  /** The shop created this order in the back office (customer paid outside the site). */
+  createdByAdmin?: boolean;
+  paymentMethodLabel?: string;
 };
 /** POST /api/coupons/check: a preview only; the order is priced again on the server. */
 export type CouponPreview = { valid: true; code: string; subtotal: number; discount: number; total: number };
@@ -96,6 +114,8 @@ export type Overview = {
   orders: number;
   /** Visible categories with at least one product on sale (count = products on sale). */
   categories: PublicCategory[];
+  /** Home carousel: active banners inside their schedule window, in admin order. */
+  banners?: HomeBanner[];
   activity: {
     kind: string;
     name: string;
@@ -112,6 +132,28 @@ export type PublicCategory = {
   /** Image library slug (/library/<slug>.webp) or null. */
   icon: string | null;
   count: number;
+};
+export type HomeBanner = {
+  id: string;
+  alt: string;
+  /** In-shop path ("/products?category=ai") or an https URL; null = not clickable. */
+  link: string | null;
+  imageUrl: string;
+  mobileImageUrl: string | null;
+};
+export type AdminBanner = Omit<HomeBanner, "imageUrl"> & {
+  /** null until the main image is uploaded (draft: never shown). */
+  imageUrl: string | null;
+  active: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  /** Bangkok wall time for the form ("YYYY-MM-DDTHH:MM"). */
+  startsAtLocal: string | null;
+  endsAtLocal: string | null;
+  sortOrder: number;
+  status: "live" | "scheduled" | "ended" | "off" | "draft";
+  createdAt: string;
+  updatedAt: string | null;
 };
 export type AdminCategory = PublicCategory & {
   name_th: string;
@@ -139,6 +181,8 @@ export type AdminData = {
     customer: string;
     product_id: string;
     product: string;
+    /** Created in the back office for a customer who paid outside the site. */
+    createdByAdmin?: boolean;
   }[];
   pendingPayment: number;
   preorderQueue: number;

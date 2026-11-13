@@ -572,9 +572,27 @@ export const EN_STRINGS: Record<string, string> = {
   "รอแจ้งเตือนได้สูงสุด 50 รายการ ยกเลิกรายการเก่าในหน้าบัญชีก่อน":
     "You can wait for up to 50 items. Cancel an older one on your account page first",
   "กดแจ้งเตือนบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่": "Too many requests. Please wait a moment and try again",
+  // Home promo banners (HomeBanners.tsx)
+  "โปรโมชั่น": "Promotions",
+  "{n} จาก {total}": "{n} of {total}",
+  "แบนเนอร์ก่อนหน้า": "Previous banner",
+  "แบนเนอร์ถัดไป": "Next banner",
+  "ไปที่แบนเนอร์ {n}": "Go to banner {n}",
+  "แบนเนอร์ {n} จาก {total}": "Banner {n} of {total}",
+  "เล่นแบนเนอร์อัตโนมัติ": "Play banners automatically",
+  "หยุดเลื่อนแบนเนอร์อัตโนมัติ": "Pause automatic banner rotation",
+  "(เปิดในแท็บใหม่)": "(opens in a new tab)",
   // Review replies (ReviewReply.tsx, server/review-moderation.mjs)
   "ตอบกลับจากร้าน": "Reply from the store",
   "ร้านตอบกลับรีวิวของคุณ": "The store replied to your review",
   "ทุกรีวิวมาจากลูกค้าที่ซื้อจริง และเขียนได้ภายใน 7 วันหลังซื้อเท่านั้น ร้านแก้ไขข้อความรีวิวไม่ได้ และไม่ซ่อนรีวิวเพราะคะแนนต่ำหรือคำติ จะซ่อนเฉพาะสแปม/โฆษณา คำหยาบหรือข้อมูลส่วนตัว และเนื้อหาที่ไม่เกี่ยวกับสินค้า โดยบันทึกเหตุผลไว้ทุกครั้ง":
     "Every review comes from a verified buyer and can only be written within 7 days of purchase. The store cannot edit reviews and never hides a review for a low rating or criticism. Only spam/ads, abusive language or personal data, and off-topic content are hidden, and the reason is always recorded.",
+  // Pricing rules: sale / compare-at price, tag price, purchase limit (src/Pricing.tsx).
+  "ลด {n}%": "{n}% off",
+  "ราคาปกติ": "Regular price",
+  "ราคาสำหรับ {tag}": "Price for {tag}",
+  "ลดราคาถึง {date}": "Sale ends {date}",
+  "จำกัด {n} ชิ้นต่อบัญชี": "Limit {n} per account",
+  "คุณซื้อครบจำนวนแล้ว": "You have reached the limit",
+  "สั่งได้อีก {n} ชิ้น": "{n} more allowed",
 };

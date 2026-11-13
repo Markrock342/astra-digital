@@ -49,9 +49,16 @@ import {
   ensureBroadcasts,
   ensureStockWatch,
   ensureReviewModeration,
+  ensureFinanceBooks,
   ensurePrivacyRequests,
+  ensureManualOrders,
+  ensureFraudSignals,
+  ensureEmailTemplates,
+  ensurePricing,
 } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
+import { ensureCannedReplies } from "../server/ensure-admin-fr.mjs";
+import { ensureBanners } from "../server/ensure-admin-fr.mjs";
 import {
   createAPIHandler,
   securityHeaders,
@@ -132,6 +139,7 @@ export class Commerce extends DurableObject {
       );
       ensureInventoryAvailableIndex(db);
       ensureChatThreadReads(db);
+      ensureCannedReplies(db);
       ensureCustomerAdmin(db);
       ensureAuthHardening(db);
       ensureOrderHistory(db);
@@ -141,6 +149,7 @@ export class Commerce extends DurableObject {
       ensureOrderExtras(db);
       ensureCoupons(db);
       ensureCategories(db);
+      ensureBanners(db);
       ensureEmailAndReset(db);
       ensureBroadcasts(db);
       ensureStockWatch(db);
@@ -149,6 +158,11 @@ export class Commerce extends DurableObject {
       ensureAppendOnlyMoney(db);
       ensureAlertsBackup(db);
       ensurePrivacyRequests(db);
+      ensureManualOrders(db);
+      ensureFraudSignals(db);
+      ensureEmailTemplates(db);
+      ensurePricing(db);
+      ensureFinanceBooks(db);
     });
     this.db = db;
     const adminPassword =

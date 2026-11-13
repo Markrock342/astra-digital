@@ -47,6 +47,18 @@ import { CopyValue, ResendCredentials } from "./OrderCredentials";
 import { WarrantyStatus } from "./Warranty";
 import { ReceiptLink } from "./OrderExtras";
 import { AdminReviews } from "./AdminReviews";
+import { BULK_CAP, OrderBulkBar, useOrderSelection, type BulkExportRow } from "./OrderBulk";
+import { ManualOrderBadge, ManualOrderCard, type ManualOrderInfo } from "./AdminManualOrder";
+import {
+  CustomerTagChips,
+  CustomerTagsCard,
+  PricingChips,
+  ProductLimitForm,
+  VariantPricingPanel,
+  useCustomerTags,
+  useProductPricing,
+  type CustomerTag,
+} from "./AdminPricing";
 
 type Filters = Record<string, string>;
 
@@ -240,6 +252,8 @@ type OrderRow = {
   variant_label: string;
   preorder: boolean;
   queue_number: number | null;
+  createdByAdmin?: boolean;
+  paymentMethodLabel?: string;
 };
 
 const emptyOrderFilters = { q: "", type: "", from: "", to: "" };
@@ -264,6 +278,26 @@ export function ordersListHref() {
   }
 }
 
+/** Orders CSV (full export and the bulk "selected orders" export use the same columns). */
+function orderCsvRows(rows: BulkExportRow[]): unknown[][] {
+  return [
+    ["เลขออเดอร์", "วันที่", "ลูกค้า", "อีเมล", "สินค้า", "ตัวเลือก", "ประเภท", "คิว", "จำนวน", "ยอด (บาท)", "สถานะ"],
+    ...rows.map((o) => [
+      o.id,
+      o.created_at,
+      o.customer,
+      o.customer_email,
+      o.product,
+      o.variant_label,
+      o.preorder ? "พรีออเดอร์" : "พร้อมส่ง",
+      o.queue_number ?? "",
+      o.quantity,
+      (o.total / 100).toFixed(2),
+      o.status,
+    ]),
+  ];
+}
+
 export function AdminOrders() {
   const { go, user } = useStore();
   const staff = user?.role === "STAFF";
@@ -275,6 +309,15 @@ export function AdminOrders() {
   const serverFilters: Filters = { ...filters, group: tab === "all" ? "" : tab };
   const list = useCursorList<OrderRow>("/admin/orders", "orders", { ...serverFilters, limit: "50" }, ["orders"]);
   const counts = (list.meta?.counts as OrderCounts | undefined) ?? null;
+  // Bulk selection (OrderBulk.tsx): resets whenever the tab or a filter changes.
+  const selection = useOrderSelection(JSON.stringify(serverFilters));
+  const loaded = list.rows ?? [];
+  const matching = counts?.[tab] ?? 0;
+  const pageIds = loaded.slice(0, BULK_CAP).map((o) => o.id);
+  const pagePicked = pageIds.length > 0 && pageIds.every((id) => selection.picked.has(id));
+  const pickedCount = selection.allMatching ? Math.min(matching, BULK_CAP) : selection.picked.size;
+  const isPicked = (id: string, index: number) =>
+    selection.allMatching ? index < BULK_CAP : selection.picked.has(id);
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
   const active = Object.values(filters).some(Boolean);
   useEffect(() => {
@@ -299,22 +342,7 @@ export function AdminOrders() {
         all.push(...page.orders);
         cursor = page.nextCursor;
       } while (cursor && all.length < 10000);
-      downloadCsv("orders.csv", [
-        ["เลขออเดอร์", "วันที่", "ลูกค้า", "อีเมล", "สินค้า", "ตัวเลือก", "ประเภท", "คิว", "จำนวน", "ยอด (บาท)", "สถานะ"],
-        ...all.map((o) => [
-          o.id,
-          o.created_at,
-          o.customer,
-          o.customer_email,
-          o.product,
-          o.variant_label,
-          o.preorder ? "พรีออเดอร์" : "พร้อมส่ง",
-          o.queue_number ?? "",
-          o.quantity,
-          (o.total / 100).toFixed(2),
-          o.status,
-        ]),
-      ]);
+      downloadCsv("orders.csv", orderCsvRows(all));
     } finally {
       setExporting(false);
     }
@@ -326,10 +354,18 @@ export function AdminOrders() {
           <h1>ออเดอร์</h1>
           <p>ออเดอร์พร้อมส่งและคิวพรีออเดอร์ทั้งหมด กรองจากเซิร์ฟเวอร์ เวลาเป็นเวลาไทย</p>
         </div>
-        <button className="button secondary" onClick={exportCsv} disabled={exporting}>
-          <Download size={15} />
-          {exporting ? "กำลังเตรียมไฟล์…" : "ดาวน์โหลด CSV"}
-        </button>
+        <span className="reference-heading-actions">
+          <button className="button secondary" onClick={exportCsv} disabled={exporting}>
+            <Download size={15} />
+            {exporting ? "กำลังเตรียมไฟล์…" : "ดาวน์โหลด CSV"}
+          </button>
+          {!staff && (
+            <Link to="/admin/orders/new" className="button primary">
+              <Plus size={15} />
+              สร้างออเดอร์
+            </Link>
+          )}
+        </span>
       </div>
       <FilterBar
         search={filters.q}
@@ -351,11 +387,65 @@ export function AdminOrders() {
         <DateRange from={filters.from} to={filters.to} onChange={(from, to) => set({ from, to })} />
       </FilterBar>
       <OrderStatusTabs value={tab} counts={counts} staff={staff} onChange={setTab} />
+      {pickedCount > 0 && (
+        <OrderBulkBar
+          count={pickedCount}
+          admin={!staff}
+          target={
+            selection.allMatching
+              ? { filter: { ...serverFilters } }
+              : { ids: loaded.filter((o) => selection.picked.has(o.id)).map((o) => o.id) }
+          }
+          onClear={selection.clear}
+          onExport={(rows) => downloadCsv("orders-selected.csv", orderCsvRows(rows))}
+        />
+      )}
+      {pagePicked && matching > pageIds.length && (
+        <p className="order-bulk-all" role="status">
+          {selection.allMatching ? (
+            <>
+              เลือกทุกออเดอร์ที่ตรงตัวกรองแล้ว {Math.min(matching, BULK_CAP).toLocaleString("th-TH")} รายการ
+              {matching > BULK_CAP && ` (สูงสุด ${BULK_CAP} รายการล่าสุด จากทั้งหมด ${matching.toLocaleString("th-TH")})`}
+              <button type="button" className="button ghost" onClick={selection.clear}>
+                ล้างที่เลือก
+              </button>
+            </>
+          ) : (
+            <>
+              เลือก {pageIds.length} รายการที่แสดงอยู่
+              <button type="button" className="button ghost" onClick={() => selection.setAllMatching(true)}>
+                เลือกทั้งหมดที่ตรงตัวกรอง {Math.min(matching, BULK_CAP).toLocaleString("th-TH")} รายการ
+                {matching > BULK_CAP ? ` (สูงสุด ${BULK_CAP})` : ""}
+              </button>
+            </>
+          )}
+        </p>
+      )}
       <ErrorMessage message={list.error} />
-      <div className="table-scroll reference-table admin-list-table">
+      {loaded.length > 0 && (
+        // Phones hide the table header (rows become cards), so select-all lives here too.
+        <label className="product-select-all checkbox-label order-select-all">
+          <input
+            type="checkbox"
+            checked={pagePicked}
+            onChange={() => selection.setPage(pageIds, !pagePicked)}
+          />
+          เลือกทั้งหมด {pageIds.length} รายการที่แสดง
+        </label>
+      )}
+      <div className="table-scroll reference-table admin-list-table order-bulk-table">
         <table>
           <thead>
             <tr>
+              <th className="select-col">
+                <input
+                  type="checkbox"
+                  aria-label="เลือกออเดอร์ทั้งหมดที่แสดง"
+                  checked={pagePicked}
+                  disabled={!loaded.length}
+                  onChange={() => selection.setPage(pageIds, !pagePicked)}
+                />
+              </th>
               <th>ออเดอร์</th>
               <th>ลูกค้า</th>
               <th>สถานะ</th>
@@ -364,8 +454,28 @@ export function AdminOrders() {
             </tr>
           </thead>
           <tbody>
-            {list.rows?.map((o) => (
-              <tr key={o.id} className="admin-row-link" onClick={() => go("/admin/orders/" + o.id)}>
+            {list.rows?.map((o, index) => (
+              <tr
+                key={o.id}
+                className={
+                  "admin-row-link" + (isPicked(o.id, index) ? " is-picked" : "")
+                }
+                onClick={() => go("/admin/orders/" + o.id)}
+              >
+                <td className="select-col" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    aria-label={"เลือกออเดอร์ " + shortId(o.id)}
+                    checked={isPicked(o.id, index)}
+                    disabled={
+                      !selection.allMatching && !selection.picked.has(o.id) && selection.picked.size >= BULK_CAP
+                    }
+                    onChange={() => {
+                      if (selection.allMatching) selection.setPage(pageIds.filter((id) => id !== o.id), true);
+                      else selection.toggle(o.id);
+                    }}
+                  />
+                </td>
                 <td>
                   <Link to={"/admin/orders/" + o.id} className="order-number">
                     {shortId(o.id)}
@@ -373,6 +483,7 @@ export function AdminOrders() {
                   <small>
                     {o.product} · {o.variant_label} · {o.quantity} ชิ้น
                     {o.preorder && <span className="admin-chip">คิว {o.queue_number ?? "–"}</span>}
+                    {o.createdByAdmin && <ManualOrderBadge method={o.paymentMethodLabel} />}
                   </small>
                 </td>
                 <td>
@@ -425,6 +536,8 @@ type OrderDetail = {
   /** ADMIN only (money). */
   paymentSummary?: PaymentSummary;
   warranty_until?: string | null;
+  /** Created in the back office (customer paid outside the site). */
+  manual?: ManualOrderInfo;
 };
 
 type PaymentSummary = {
@@ -824,6 +937,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
               <p>
                 {dateTime(order.created_at)} · {order.preorder ? "พรีออเดอร์" : "พร้อมส่ง"}
                 {order.queue_number != null && " · คิวที่ " + order.queue_number}
+                {order.manual && <ManualOrderBadge method={order.manual.paymentMethodLabel} />}
               </p>
             </div>
             <span className="reference-heading-actions">
@@ -858,6 +972,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
               )}
             </section>
           )}
+          {order.manual && <ManualOrderCard id={order.id} manual={order.manual} onChanged={() => void reload()} />}
           {order.paymentSummary && (
             <OrderMoney
               id={order.id}
@@ -998,7 +1113,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
               {order.payments.map((p) => (
                 <div className="settings-row" key={p.id}>
                   <span>
-                    {p.provider}
+                    {order.manual && p.provider !== "sandbox" ? order.manual.paymentMethodLabel : p.provider}
                     <small>{p.provider_ref ?? shortId(p.id)} · {dateTime(p.finalized_at ?? p.created_at)}</small>
                   </span>
                   <strong>
@@ -1025,13 +1140,14 @@ type CustomerRow = {
   created_at: string;
   spentSatang?: number;
   orderCount: number;
+  tags?: CustomerTag[];
 };
 
 const statusText: Record<string, string> = { ACTIVE: "ปกติ", SUSPENDED: "ระงับ", BANNED: "แบน" };
 const CustomerStatus = ({ status }: { status: string }) => (
   <span className={"status customer-status-" + status.toLowerCase()}>{statusText[status] ?? status}</span>
 );
-const emptyCustomerFilters = { q: "", status: "", hasOrders: "", sort: "created_at", from: "", to: "" };
+const emptyCustomerFilters = { q: "", status: "", hasOrders: "", tag: "", sort: "created_at", from: "", to: "" };
 
 export function AdminCustomers() {
   const { go, user } = useStore();
@@ -1041,6 +1157,7 @@ export function AdminCustomers() {
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
   const active = Object.entries(filters).some(([k, v]) => v && !(k === "sort" && v === "created_at"));
   const [exporting, setExporting] = useState(false);
+  const customerTags = useCustomerTags();
   async function exportCsv() {
     setExporting(true);
     try {
@@ -1054,12 +1171,13 @@ export function AdminCustomers() {
         cursor = page.nextCursor;
       } while (cursor && rows.length < 20000);
       downloadCsv("customers.csv", [
-        ["ชื่อ", "อีเมล", "เบอร์โทร", "สถานะ", "ออเดอร์", ...(admin ? ["ยอดซื้อสะสม (บาท)"] : []), "สมัครเมื่อ"],
+        ["ชื่อ", "อีเมล", "เบอร์โทร", "สถานะ", "แท็ก", "ออเดอร์", ...(admin ? ["ยอดซื้อสะสม (บาท)"] : []), "สมัครเมื่อ"],
         ...rows.map((c) => [
           c.name,
           c.email,
           c.phone ?? "",
           statusText[c.status] ?? c.status,
+          (c.tags ?? []).map((x) => x.tag).join(", "),
           c.orderCount,
           ...(admin ? [((c.spentSatang ?? 0) / 100).toFixed(2)] : []),
           c.created_at,
@@ -1109,6 +1227,17 @@ export function AdminCustomers() {
             ["false", "ยังไม่เคยสั่ง"],
           ]}
         />
+        {customerTags.tags.length > 0 && (
+          <Select
+            label="แท็ก"
+            value={filters.tag}
+            onChange={(tag) => set({ tag })}
+            options={[
+              ["", "ทุกแท็ก"],
+              ...customerTags.tags.map((x): [string, string] => [x.tag, x.tag + " (" + x.customers + ")"]),
+            ]}
+          />
+        )}
         <Select
           label="เรียงตาม"
           value={filters.sort}
@@ -1143,6 +1272,7 @@ export function AdminCustomers() {
                     <span>
                       <Link to={"/admin/customers/" + c.id}>{c.name}</Link>
                       <small>{c.email.endsWith(".local") ? "—" : c.email}</small>
+                      <CustomerTagChips tags={c.tags} />
                     </span>
                   </div>
                 </td>
@@ -1180,6 +1310,7 @@ type CustomerDetail = {
     statusReason: string | null;
     statusChangedAt: string | null;
     created_at: string;
+    tags?: CustomerTag[];
   };
   orderCount: number;
   activeSessions: number;
@@ -1465,6 +1596,7 @@ export function AdminCustomerDetail({ id }: { id: string }) {
                 )}
               </form>
             </section>
+            <CustomerTagsCard customerId={c.id} tags={c.tags ?? []} onChanged={load} />
             <section className="reference-admin-card admin-detail-card">
               <h2>สถานะบัญชี</h2>
               {!admin && <p className="muted">เฉพาะแอดมินเปลี่ยนสถานะบัญชีได้</p>}
@@ -2843,12 +2975,22 @@ const actionText: Record<string, string> = {
   BACKUP_EXPORT: "ดาวน์โหลดไฟล์สำรองข้อมูล",
   BACKUP_R2_RUN: "สั่งสำรองข้อมูลไป R2",
   SET_PAYMENT_CHANNEL: "แก้ช่องทางรับเงิน",
+  FINANCE_DAY_CLOSE: "ปิดยอดรายวัน",
+  FINANCE_DAY_ADJUST: "บันทึกปรับปรุงยอดที่ปิดแล้ว",
+  WITHDRAWAL_RECORD: "บันทึกการถอนเงิน",
+  WITHDRAWAL_REVERSE: "ยกเลิกรายการถอนเงิน",
+  RECON_RUN: "เริ่มกระทบยอด",
+  RECON_MATCH: "จับคู่กระทบยอด",
+  RECON_UNMATCH: "ยกเลิกคู่กระทบยอด",
+  RECON_COMPLETE: "ตรวจกระทบยอดเสร็จ",
   CUSTOMER_UPDATE: "แก้ข้อมูลลูกค้า",
   CUSTOMER_STATUS: "เปลี่ยนสถานะลูกค้า",
   CUSTOMER_SIGN_OUT: "บังคับลูกค้าออกจากระบบ",
   CUSTOMER_PASSWORD_RESET: "ตั้งรหัสผ่านชั่วคราวให้ลูกค้า",
   UPDATE_PROFILE: "แก้บัญชีตัวเอง",
   CREATE_ORDER: "สร้างออเดอร์",
+  MANUAL_ORDER_CREATE: "สร้างออเดอร์ให้ลูกค้า (โอนนอกเว็บ)",
+  MANUAL_ORDER_SLIP: "แนบสลิปออเดอร์จากหลังบ้าน",
   CREATE_PREORDER: "สร้างพรีออเดอร์",
   PAYMENT_AND_DELIVERY: "ชำระและส่งของ",
   PREORDER_PAID: "ชำระพรีออเดอร์",
@@ -2867,12 +3009,24 @@ const actionText: Record<string, string> = {
   CHAT_ASSIGN: "มอบหมายแชท",
   ORDER_NOTE: "เขียนหมายเหตุออเดอร์",
   CANCEL_ORDER: "ยกเลิกออเดอร์",
+  ORDER_BULK_EXPORT: "ดาวน์โหลด CSV ออเดอร์ที่เลือก",
+  CANNED_REPLY_CREATE: "เพิ่มข้อความสำเร็จรูป",
+  CANNED_REPLY_UPDATE: "แก้ข้อความสำเร็จรูป",
+  CANNED_REPLY_DELETE: "ลบข้อความสำเร็จรูป",
+  CANNED_REPLY_REORDER: "เรียงข้อความสำเร็จรูป",
   COUPON_CREATE: "สร้างคูปอง",
   COUPON_UPDATE: "แก้คูปอง",
   COUPON_DISABLE: "ปิดใช้งานคูปอง",
   PRODUCT_IMAGE_ADD: "เพิ่มรูปสินค้า",
   PRODUCT_IMAGE_REMOVE: "ลบรูปสินค้า",
   PRODUCT_IMAGE_REORDER: "เรียงรูปสินค้า",
+  BANNER_CREATE: "เพิ่มแบนเนอร์หน้าแรก",
+  BANNER_UPDATE: "แก้แบนเนอร์หน้าแรก",
+  BANNER_REORDER: "เรียงแบนเนอร์หน้าแรก",
+  BANNER_DELETE: "ลบแบนเนอร์หน้าแรก",
+  BANNER_IMAGE_SET: "เปลี่ยนรูปแบนเนอร์",
+  BANNER_MOBILE_IMAGE_SET: "เปลี่ยนรูปแบนเนอร์ (มือถือ)",
+  BANNER_MOBILE_IMAGE_REMOVE: "เอารูปแบนเนอร์มือถือออก",
   LOGIN_FAILED: "เข้าสู่ระบบไม่สำเร็จ",
   LOGIN_LOCKED: "พักการเข้าสู่ระบบ (ผิดหลายครั้ง)",
   LOGIN_TOTP_FAILED: "รหัสยืนยัน 2 ขั้นไม่ถูกต้อง",
@@ -2905,6 +3059,8 @@ const detailLabel: Record<string, string> = {
   code: "โค้ด",
   duplicatedFrom: "คัดลอกจาก",
   couponReleased: "คืนสิทธิ์คูปอง",
+  bulk: "ทำหลายรายการพร้อมกัน:",
+  title: "ชื่อ",
 };
 function auditDetailText(detail: Record<string, unknown>) {
   const parts: string[] = [];
@@ -3732,6 +3888,9 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
   const [open, setOpen] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState("");
+  // Sale / compare-at / limit / tag prices (AdminPricing.tsx).
+  const pricing = useProductPricing(productId);
+  const [pricingOpen, setPricingOpen] = useState<string | null>(null);
   const load = () =>
     api<{ variants: Variant[] }>("/admin/products/" + productId + "/variants")
       .then((r) => setVariants(r.variants))
@@ -3789,7 +3948,8 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
           : "ลูกค้าจ่ายแล้วได้ ID และรหัสผ่านจากสต็อกของตัวเลือกนั้นทันที สต็อกหมดหน้าร้านขึ้นว่าหมดเอง"}
         {" · ประกัน 0 วัน = ไม่มีประกัน แก้ภายหลังไม่กระทบออเดอร์ที่ขายไปแล้ว"}
       </p>
-      <ErrorMessage message={error} />
+      <ErrorMessage message={error || pricing.error} />
+      <ProductLimitForm productId={productId} pricing={pricing.data} onSaved={() => void pricing.load()} />
       {variants?.map((v) => (
         <div className={"variant-row" + (v.active ? "" : " inactive")} key={v.id}>
           {editing === v.id ? (
@@ -3821,6 +3981,7 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
                   {money(v.price)} · {v.active ? "เปิดขาย" : "ปิดอยู่"}
                   {(v.warranty_days ?? 0) > 0 ? " · รับประกัน " + v.warranty_days + " วัน" : " · ไม่มีประกัน"}
                 </small>
+                <PricingChips row={pricing.data?.variants[v.id]} />
               </span>
               <button
                 type="button"
@@ -3835,6 +3996,15 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
                 <button type="button" className="button ghost" onClick={() => setEditing(v.id)}>
                   แก้
                 </button>
+                <button
+                  type="button"
+                  className="button ghost"
+                  aria-expanded={pricingOpen === v.id}
+                  disabled={!pricing.data?.variants[v.id]}
+                  onClick={() => setPricingOpen(pricingOpen === v.id ? null : v.id)}
+                >
+                  ราคาโปร
+                </button>
                 <button type="button" className="button ghost" onClick={() => void update(v, { active: !v.active })}>
                   {v.active ? "ปิด" : "เปิด"}
                 </button>
@@ -3845,6 +4015,16 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
             </div>
           )}
           {open === v.id && <VariantStock variant={v} onChanged={() => void load()} />}
+          {pricingOpen === v.id && pricing.data?.variants[v.id] && (
+            <VariantPricingPanel
+              variantId={v.id}
+              regularPrice={v.price}
+              row={pricing.data.variants[v.id]}
+              tags={pricing.data.tags}
+              onSaved={() => void pricing.load()}
+              onClose={() => setPricingOpen(null)}
+            />
+          )}
         </div>
       ))}
       <form className="variant-edit variant-new" onSubmit={create}>

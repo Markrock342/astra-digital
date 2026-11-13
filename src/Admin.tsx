@@ -76,11 +76,16 @@ import { uploadImage } from "./image-upload";
 import { AdminAlerts, AdminBackup } from "./AdminAlerts";
 import { AdminCoupons } from "./AdminCoupons";
 import { AdminCategories } from "./AdminCategories";
+import { AdminBanners } from "./AdminBanners";
 import { AdminReviews } from "./AdminReviews";
 import { AdminIntegrations } from "./AdminIntegrations";
 import { LegalSettings } from "./Legal";
 import { FaqSettingsPanel } from "./FaqAdmin";
 import { AdminBroadcasts } from "./AdminBroadcasts";
+import { AdminManualOrder, ManualOrderBadge } from "./AdminManualOrder";
+import { AdminFraud } from "./AdminFraud";
+import { AdminEmailTemplates } from "./AdminEmailTemplates";
+import { AdminDailyClose, AdminReconcile, AdminWithdrawals } from "./AdminFinanceBooks";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -95,17 +100,27 @@ const orderTabs = [
   ["orders", "ออเดอร์ทั้งหมด"],
   ["preorders", "คิวพรีออเดอร์"],
 ];
+// การเงิน: transactions + daily close / reconciliation / withdrawals (AdminFinanceBooks.tsx).
+const financeTabs = [
+  ["payments", "รายการเงิน"],
+  ["daily-close", "ปิดยอดรายวัน"],
+  ["reconcile", "กระทบยอด"],
+  ["withdrawals", "ถอนเงิน"],
+];
 const customerTabs = [
   ["customers", "ลูกค้าทั้งหมด"],
   ["broadcasts", "ประกาศถึงลูกค้า"],
+  ["fraud", "สัญญาณผิดปกติ"],
 ];
 const settingTabs = [
   ["settings", "ร้าน"],
   ["settings/payment", "รับเงิน"],
+  ["settings/banners", "แบนเนอร์หน้าแรก"],
   ["settings/legal", "ข้อกำหนดและนโยบาย"],
   ["settings/faq", "คำถามที่พบบ่อย"],
   ["settings/account", "บัญชีแอดมิน"],
   ["settings/alerts", "แจ้งเตือนนอกเว็บ"],
+  ["settings/email-templates", "ข้อความอีเมล"],
   ["settings/backup", "สำรองข้อมูล"],
   ["settings/audit", "ประวัติการทำงาน"],
   ["settings/health", "ตรวจระบบ"],
@@ -168,6 +183,7 @@ export default function Admin() {
   const productGroup = productTabs.some(([key]) => key === tab);
   const orderGroup = orderTabs.some(([key]) => key === tab);
   const customerGroup = customerTabs.some(([key]) => key === tab);
+  const financeGroup = ["payments", "top-ups", "ledger", "daily-close", "reconcile", "withdrawals"].includes(tab);
   const productId = path.split("/")[3];
   const detailId = ["orders", "customers"].includes(tab) ? productId : undefined;
   const editingProduct = data?.products.find(
@@ -365,6 +381,7 @@ export default function Admin() {
             <strong>{codeId(o.id)}</strong>
             <small>
               {o.customer} · {dateTime(o.created_at)}
+              {o.createdByAdmin && <ManualOrderBadge />}
             </small>
           </span>
           <span>
@@ -380,6 +397,7 @@ export default function Admin() {
       {productGroup && <Subnav items={productTabs} current={tab} />}{" "}
       {orderGroup && <Subnav items={orderTabs} current={tab} />}{" "}
       {customerGroup && <Subnav items={customerTabs} current={tab} />}{" "}
+      {financeGroup && <Subnav items={financeTabs} current={["top-ups", "ledger"].includes(tab) ? "payments" : tab} />}{" "}
       {tab === "settings" && <Subnav items={settingTabs} current={sub} />}
       <main
         className={
@@ -869,7 +887,13 @@ export default function Admin() {
           </>
         )}
         {tab === "orders" &&
-          (detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />)}
+          (detailId === "new" ? (
+            <AdminManualOrder products={data.products} />
+          ) : detailId ? (
+            <AdminOrderDetail id={detailId} />
+          ) : (
+            <AdminOrders />
+          ))}
         {tab === "preorders" && <PreorderQueue />}
         {tab === "coupons" && <AdminCoupons id={productId} />}
         {tab === "reviews" && <AdminReviews />}
@@ -880,7 +904,11 @@ export default function Admin() {
             <AdminCustomers />
           ))}
         {tab === "broadcasts" && <AdminBroadcasts />}
+        {tab === "fraud" && <AdminFraud />}
         {["payments", "top-ups", "ledger"].includes(tab) && <AdminFinance />}
+        {tab === "daily-close" && <AdminDailyClose />}
+        {tab === "reconcile" && <AdminReconcile />}
+        {tab === "withdrawals" && <AdminWithdrawals />}
         {tab === "settings" &&
           (sub === "settings/payment" ? (
             <PaymentChannelSettings />
@@ -892,12 +920,16 @@ export default function Admin() {
             <AdminAudit />
           ) : sub === "settings/alerts" ? (
             <AdminAlerts />
+          ) : sub === "settings/email-templates" ? (
+            <AdminEmailTemplates />
           ) : sub === "settings/backup" ? (
             <AdminBackup />
           ) : sub === "settings/legal" ? (
             <LegalSettings />
           ) : sub === "settings/faq" ? (
             <FaqSettingsPanel products={data.products} />
+          ) : sub === "settings/banners" ? (
+            <AdminBanners />
           ) : sub === "settings/health" ? (
             <AdminSystemHealth />
           ) : (
@@ -942,9 +974,13 @@ export default function Admin() {
           "reviews",
           "customers",
           "broadcasts",
+          "fraud",
           "payments",
           "top-ups",
           "ledger",
+          "daily-close",
+          "reconcile",
+          "withdrawals",
           "settings",
           "team",
           "guide",

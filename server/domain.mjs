@@ -22,6 +22,8 @@ import {
 import { credentialFingerprint } from "./migrate-005.mjs";
 import { createAdminListApis } from "./admin-list-apis.mjs";
 import { createAdminFinanceApis } from "./admin-finance-apis.mjs";
+import { createFinanceCloseApis } from "./finance-close.mjs";
+import { createReconApis } from "./finance-recon.mjs";
 import { createAdminCustomerApis } from "./admin-customers.mjs";
 import { withLive } from "./live.mjs";
 import { createTeamApis } from "./admin-team.mjs";
@@ -34,7 +36,9 @@ import {
 } from "./admin-variant-stock-apis.mjs";
 import { createAdminProductBulkApis } from "./admin-product-bulk.mjs";
 import { createAdminOrderReplaceApis } from "./admin-order-replace.mjs";
-import { createAdminOrderResendApis } from "./admin-order-resend.mjs";
+import { createAdminOrderResendApis, RESEND_LIMIT } from "./admin-order-resend.mjs";
+import { createAdminOrderBulkApis } from "./admin-order-bulk.mjs";
+import { createCannedReplyApis } from "./canned-replies.mjs";
 import { createOrderHistoryApis } from "./admin-order-history.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createProfileUploadApis } from "./profile-uploads.mjs";
@@ -57,12 +61,17 @@ import {
 } from "./order-extras.mjs";
 import { createCouponApis, normalizeCouponCode } from "./coupons.mjs";
 import { createAccountEmail } from "./account-email.mjs";
-import { templates as emailTemplates } from "./email.mjs";
+import { isRealEmail, maskEmail } from "./email.mjs";
+import { createEmailTemplateApis } from "./email-templates.mjs";
+import { createFraud } from "./fraud.mjs";
 import { createStockWatch } from "./stock-watch.mjs";
+import { createPricing } from "./pricing.mjs";
 import { createReviewModeration, maskReviewer } from "./review-moderation.mjs";
 import { normalizeLegal } from "./legal.mjs";
 import { normalizeFaq } from "./faq.mjs";
 import { createBroadcastApis } from "./broadcast.mjs";
+import { createBannerApis } from "./banners.mjs";
+import { createManualOrderApis } from "./manual-orders.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -522,6 +531,8 @@ export function createCommerceCore({
     moneyScope,
   });
   const { releaseCouponForOrder } = coupons;
+  // Sale / compare-at / tag prices / purchase limits (pricing.mjs).
+  const pricing = createPricing({ one, all, run, tx, fail, clean, requireAdmin, requireStaff, clock });
   const categoryApis = createCategoryApis({ requireAdmin, one, all, run, tx, fail });
   // ctx: { ip, userAgent } from the request. Only a coarse device label and the IP
   // cut to /24 (IPv6 /48) are stored, for the "my devices" list (account-sessions.mjs).
@@ -830,6 +841,10 @@ export function createCommerceCore({
         ...demoIds,
       );
       run(
+        `DELETE FROM variant_tag_prices WHERE variant_id IN (SELECT id FROM variants WHERE product_id IN (${marks}))`,
+        ...demoIds,
+      );
+      run(
         `DELETE FROM variants WHERE product_id IN (${marks})`,
         ...demoIds,
       );
@@ -856,6 +871,7 @@ export function createCommerceCore({
         run(`DELETE FROM ledger WHERE user_id IN (${users})`, ...demoUsers);
         run(`DELETE FROM reviews WHERE user_id IN (${users})`, ...demoUsers);
         run(`DELETE FROM stock_watch WHERE user_id IN (${users})`, ...demoUsers);
+        run(`DELETE FROM customer_tags WHERE user_id IN (${users})`, ...demoUsers);
         // Accounts a demo visitor bought from real products during testing still point at
         // their orders; those units were handed out, so they go with the orders (unsold
         // stock is untouched).
@@ -1074,6 +1090,8 @@ export function createCommerceCore({
     },
     writeShopSettings: (obj) => persistShopSettings(obj),
   });
+  // Promo banners on the storefront home (server/banners.mjs).
+  const bannerApis = createBannerApis({ requireAdmin, one, all, run, tx, fail, randomUUID, fileStore, clock });
   const {
     exportMyData,
     requestAccountDeletion,
@@ -1101,19 +1119,29 @@ export function createCommerceCore({
     all,
     db,
   });
-  function mapProduct(row) {
+  function mapProduct(row, user = null) {
     // Usage instructions are for buyers of a delivered order only (order-extras.mjs).
-    const { usage_instructions: _usage, ...p } = row;
+    // max_per_customer is shown per option as maxPerCustomer (pricing.mjs).
+    const { usage_instructions: _usage, max_per_customer: productLimit, ...p } = row;
     const lowAt = getLowStockAt();
+    const at = pricing.nowSql();
     return {
       ...p,
       ...productImageFields(p.id),
       variants: all(
         `SELECT v.*, CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=? AND COALESCE(v.active,1)=1 ORDER BY v.sort_order ASC, CASE WHEN v.id='stream-plus-full' THEN 0 WHEN v.id LIKE '%-30' THEN 1 ELSE 2 END, price, v.id`,
         p.id,
-      ).map(({ stock, ...v }) => ({
+      ).map(({ stock, compare_at, sale_price, sale_starts_at, sale_ends_at, max_per_customer, ...v }) => ({
         ...v,
-        price: p.preorder && v.id === "cinema-max-30" ? 0 : v.price,
+        // What this viewer pays now (sale / tag price) + the struck-through price (pricing.mjs).
+        // The raw sale price and window stay internal so a scheduled sale is not shown early.
+        ...publicPrice(
+          { ...v, compare_at, sale_price, sale_starts_at, sale_ends_at, max_per_customer },
+          p.preorder && v.id === "cinema-max-30" ? 0 : v.price,
+          productLimit,
+          user,
+          at,
+        ),
         // Customers never see a stock number: only a status and whether it can be
         // ordered now (preorder = always). Exact counts stay on the admin APIs.
         stockStatus: stock <= 0 ? "out" : stock <= lowAt ? "low" : "in",
@@ -1130,19 +1158,35 @@ export function createCommerceCore({
       ).count,
     };
   }
-  function products() {
+  /** Public price fields of one option for one viewer (null = signed out). */
+  function publicPrice(variant, base, productLimit, user, at) {
+    const q = pricing.quote(variant, base, user, at);
+    const limit = pricing.limitFor(variant, productLimit, user);
+    return {
+      price: q.unitPrice,
+      regularPrice: q.regularPrice,
+      compareAt: q.compareAt,
+      discountPercent: q.discountPercent,
+      priceKind: q.priceKind,
+      priceTag: q.priceTag,
+      saleEndsAt: q.saleEndsAt,
+      maxPerCustomer: limit?.max ?? null,
+      remainingForYou: limit?.remaining ?? null,
+    };
+  }
+  function products(user = null) {
     return all("SELECT * FROM products WHERE active=1 AND hidden_seed=0").map(
-      mapProduct,
+      (p) => mapProduct(p, user),
     );
   }
-  function productDetail(id) {
+  function productDetail(id, user = null) {
     const productId = clean(id, 1, 80, "สินค้า");
     const p = one(
       "SELECT * FROM products WHERE id=? AND active=1 AND hidden_seed=0",
       productId,
     );
     if (!p) fail(404, "ไม่พบสินค้า");
-    return mapProduct(p);
+    return mapProduct(p, user);
   }
   function settings() {
     const raw = one(
@@ -1299,6 +1343,8 @@ export function createCommerceCore({
         .n,
       // Visible categories with at least one product on sale: {id,name,name_en,icon,count}.
       categories: categoryApis.publicCategories(),
+      // Home carousel: active banners inside their Bangkok start/end window (banners.mjs).
+      banners: bannerApis.publicBanners(),
       activity: all(
         "SELECT 'purchase' AS kind,u.name,p.name AS product,p.art,v.label,o.created_at AS time FROM orders o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.status='DELIVERED' UNION ALL SELECT 'register' AS kind,u.name,NULL AS product,NULL AS art,NULL AS label,u.created_at AS time FROM users u WHERE role='CUSTOMER' ORDER BY time DESC LIMIT 4",
       ).map((a) => ({
@@ -1307,16 +1353,20 @@ export function createCommerceCore({
       })),
     };
   }
-  /** Variant a customer may buy, with the price the shop charges (never the client's). */
-  const buyableVariant = (variantId) => {
+  /**
+   * Variant a customer may buy, with the price the shop charges this customer (never the
+   * client's): lowest of normal, active sale and their tag price (pricing.mjs).
+   */
+  const buyableVariant = (variantId, user) => {
     const variant = one(
       "SELECT v.*,p.preorder FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.active=1 AND p.hidden_seed=0 AND COALESCE(v.active,1)=1",
       variantId,
     );
     if (!variant) fail(404, "ไม่พบสินค้า");
-    const unitPrice =
+    const base =
       variant.preorder && variant.id === "cinema-max-30" ? 0 : variant.price;
-    return { ...variant, unitPrice };
+    const quote = pricing.quote(variant, base, user);
+    return { ...variant, unitPrice: quote.unitPrice, priceKind: quote.priceKind };
   };
   /**
    * POST /api/coupons/check — discount preview for one line. Same rules as
@@ -1326,7 +1376,7 @@ export function createCommerceCore({
     requireUser(user);
     const variantId = clean(input.variantId, 1, 80, "สินค้า");
     const quantity = integer(input.quantity, 1, 10, "จำนวน");
-    const variant = buyableVariant(variantId);
+    const variant = buyableVariant(variantId, user);
     try {
       const result = coupons.evaluate(user, input.code, {
         productId: variant.product_id,
@@ -1384,8 +1434,10 @@ export function createCommerceCore({
           fail(409, "รหัสคำขอถูกใช้กับคำสั่งซื้ออื่นแล้ว");
         return { ...orderDetail(user, prior.id), paymentToken: null };
       }
-      const variant = buyableVariant(variantId);
+      const variant = buyableVariant(variantId, user);
       const subtotal = variant.unitPrice * quantity;
+      // Per-account limit, counted in this transaction so the last unit is sold once.
+      pricing.assertPurchaseLimit(user, variant, quantity);
       if (
         !variant.preorder &&
         one(
@@ -1588,6 +1640,158 @@ export function createCommerceCore({
     audit(user, "SET_PAYMENT_CHANNEL", provider);
     return getPaymentChannel();
   }
+  /**
+   * Shared settlement for a paid order (sandbox pay and admin manual orders,
+   * manual-orders.mjs): FEFO units that still cover the order's warranty snapshot.
+   */
+  const pickUnitsForOrder = (order) =>
+    all(
+      `SELECT id FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL
+         AND COALESCE(defective,0)=0
+         AND (expires_at IS NULL OR datetime(expires_at) > datetime('now', '+' || ? || ' days'))
+       ORDER BY ${inventoryOrderSql()} LIMIT ?`,
+      order.variant_id,
+      // Also enforce order snapshot warranty_days (may differ from current variant).
+      order.warranty_days ?? 0,
+      order.quantity,
+    );
+  /**
+   * Paid order -> DELIVERED: bind the units, start the warranty, record the SUCCEEDED
+   * payment + PAYMENT_IN row, notify customer and staff, raise alerts. Runs inside the
+   * caller's transaction. `payment` overrides the sandbox defaults (manual orders).
+   */
+  const deliverPaidOrder = (order, available, payment = {}) => {
+    const id = order.id;
+    for (const item of available) {
+      const bound = run(
+        `UPDATE inventory SET order_id=?,sold_at=CURRENT_TIMESTAMP WHERE id=? AND ${inventoryAvailableSql}`,
+        id,
+        item.id,
+      );
+      if (!bound.changes) fail(409, "สินค้าคงเหลือไม่เพียงพอ กรุณาเลือกจำนวนใหม่");
+    }
+    // Warranty runs from delivery, using the days snapshotted when the order was placed.
+    run(
+      `UPDATE orders SET status='DELIVERED',
+         warranty_until=CASE WHEN COALESCE(warranty_days,0)>0
+           THEN datetime('now','+'||warranty_days||' days') END
+       WHERE id=?`,
+      id,
+    );
+    const paymentId = randomUUID();
+    const provider = payment.provider ?? "sandbox";
+    const providerRef = payment.providerRef ?? "sandbox:order:" + id;
+    run(
+      `INSERT OR IGNORE INTO payments(
+        id, order_id, reservation_id, user_id, amount, currency, status,
+        provider, provider_ref, idempotency_key, created_at, finalized_at
+      ) VALUES(?,?,NULL,?,?,'THB','SUCCEEDED',?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+      paymentId,
+      id,
+      order.user_id,
+      order.total,
+      provider,
+      providerRef,
+      payment.idempotencyKey ?? "pay:order:" + id,
+    );
+    insertLedgerEntry({
+      userId: order.user_id,
+      amount: order.total,
+      reference: "payment-in:" + paymentId,
+      label: payment.label ?? "รับชำระออเดอร์ " + id.slice(0, 8),
+      kind: "PAYMENT_IN",
+      direction: "in",
+      orderId: id,
+      paymentId,
+      providerRef,
+      actorId: payment.actorId ?? null,
+    });
+    notify(
+      order.user_id,
+      "code_delivery",
+      "ส่งโค้ดสำเร็จ",
+      "คำสั่งซื้อ " + id.slice(0, 8) + " ได้รับโค้ดแล้ว",
+      "/orders/" + id,
+    );
+    notifyStaffRoles(
+      "order_new",
+      "ออเดอร์ใหม่",
+      "คำสั่งซื้อ " + id.slice(0, 8) + (payment.staffText ?? " ชำระแล้วและส่งของแล้ว"),
+      "/admin/orders/" + id,
+    );
+    maybeNotifyStockLow(order.variant_id);
+    alerts.emit("order_paid", {
+      id,
+      variantId: order.variant_id,
+      quantity: order.quantity,
+      total: order.total,
+    });
+    alerts.stockAfterSale(order.variant_id);
+    return paymentId;
+  };
+  /**
+   * Paid preorder -> PREORDER with a queue number: SUCCEEDED payment, PAYMENT_IN
+   * (when total > 0), notifications, alert. Runs inside the caller's transaction.
+   */
+  const settlePaidReservation = (o, payment = {}) => {
+    const id = o.id;
+    const queueNumber = o.queue_number ?? nextQueueNumber();
+    run(
+      "UPDATE reservations SET status='PREORDER', queue_number=? WHERE id=?",
+      queueNumber,
+      id,
+    );
+    const paymentId = randomUUID();
+    const provider = payment.provider ?? "sandbox";
+    const providerRef = payment.providerRef ?? "sandbox:preorder:" + id;
+    run(
+      `INSERT OR IGNORE INTO payments(
+        id, order_id, reservation_id, user_id, amount, currency, status,
+        provider, provider_ref, idempotency_key, created_at, finalized_at
+      ) VALUES(?,NULL,?,?,?,'THB','SUCCEEDED',?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+      paymentId,
+      id,
+      o.user_id,
+      o.total,
+      provider,
+      providerRef,
+      payment.idempotencyKey ?? "pay:reservation:" + id,
+    );
+    if (o.total)
+      insertLedgerEntry({
+        userId: o.user_id,
+        amount: o.total,
+        reference: "payment-in:" + paymentId,
+        label: payment.label ?? "รับชำระพรีออเดอร์ " + id.slice(0, 8),
+        kind: "PAYMENT_IN",
+        direction: "in",
+        orderId: id,
+        paymentId,
+        providerRef,
+        actorId: payment.actorId ?? null,
+      });
+    notify(
+      o.user_id,
+      "preorder_queue",
+      "ได้รับเลขคิวพรีออเดอร์",
+      "คิวของคุณคือ #" + queueNumber,
+      "/orders/" + id,
+    );
+    notifyStaffRoles(
+      "preorder_queue_admin",
+      "คิวพรีออเดอร์ใหม่",
+      "คิว #" + queueNumber + " · " + id.slice(0, 8),
+      "/admin/orders/" + id,
+    );
+    alerts.emit("preorder_paid", {
+      id,
+      queueNumber,
+      variantId: o.variant_id,
+      quantity: o.quantity,
+      total: o.total,
+    });
+    return { paymentId, queueNumber };
+  };
   function pay(user, id, input) {
     requireUser(user);
     assertSandboxPayAllowed();
@@ -1631,57 +1835,7 @@ export function createCommerceCore({
             direction: "out",
             orderId: id,
           });
-        const queueNumber = o.queue_number ?? nextQueueNumber();
-        run(
-          "UPDATE reservations SET status='PREORDER', queue_number=? WHERE id=?",
-          queueNumber,
-          id,
-        );
-        const paymentId = randomUUID();
-        run(
-          `INSERT OR IGNORE INTO payments(
-            id, order_id, reservation_id, user_id, amount, currency, status,
-            provider, provider_ref, idempotency_key, created_at, finalized_at
-          ) VALUES(?,NULL,?,?,?,'THB','SUCCEEDED','sandbox',?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
-          paymentId,
-          id,
-          user.id,
-          o.total,
-          "sandbox:preorder:" + id,
-          "pay:reservation:" + id,
-        );
-        if (o.total)
-          insertLedgerEntry({
-            userId: user.id,
-            amount: o.total,
-            reference: "payment-in:" + paymentId,
-            label: "รับชำระพรีออเดอร์ " + id.slice(0, 8),
-            kind: "PAYMENT_IN",
-            direction: "in",
-            orderId: id,
-            paymentId,
-            providerRef: "sandbox:preorder:" + id,
-          });
-        notify(
-          user.id,
-          "preorder_queue",
-          "ได้รับเลขคิวพรีออเดอร์",
-          "คิวของคุณคือ #" + queueNumber,
-          "/orders/" + id,
-        );
-        notifyStaffRoles(
-          "preorder_queue_admin",
-          "คิวพรีออเดอร์ใหม่",
-          "คิว #" + queueNumber + " · " + id.slice(0, 8),
-          "/admin/orders/" + id,
-        );
-        alerts.emit("preorder_paid", {
-          id,
-          queueNumber,
-          variantId: o.variant_id,
-          quantity: o.quantity,
-          total: o.total,
-        });
+        settlePaidReservation(o);
         audit(user, "PREORDER_PAID", id);
         return orderDetail(user, id);
       });
@@ -1712,17 +1866,7 @@ export function createCommerceCore({
         audit(user, "PAYMENT_FAILED", id);
         return orderDetail(user, id);
       }
-      // Also enforce order snapshot warranty_days (may differ from current variant).
-      const warrantyDays = order.warranty_days ?? 0;
-      const available = all(
-        `SELECT id FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL
-           AND COALESCE(defective,0)=0
-           AND (expires_at IS NULL OR datetime(expires_at) > datetime('now', '+' || ? || ' days'))
-         ORDER BY ${inventoryOrderSql()} LIMIT ?`,
-        order.variant_id,
-        warrantyDays,
-        order.quantity,
-      );
+      const available = pickUnitsForOrder(order);
       if (available.length !== order.quantity) {
         run("UPDATE orders SET status='OUT_OF_STOCK' WHERE id=?", id);
         releaseCouponForOrder(id, "OUT_OF_STOCK");
@@ -1741,65 +1885,7 @@ export function createCommerceCore({
         direction: "out",
         orderId: id,
       });
-      for (const item of available)
-        run(
-          `UPDATE inventory SET order_id=?,sold_at=CURRENT_TIMESTAMP WHERE id=? AND ${inventoryAvailableSql}`,
-          id,
-          item.id,
-        );
-      // Warranty runs from delivery, using the days snapshotted when the order was placed.
-      run(
-        `UPDATE orders SET status='DELIVERED',
-           warranty_until=CASE WHEN COALESCE(warranty_days,0)>0
-             THEN datetime('now','+'||warranty_days||' days') END
-         WHERE id=?`,
-        id,
-      );
-      const paymentId = randomUUID();
-      run(
-        `INSERT OR IGNORE INTO payments(
-          id, order_id, reservation_id, user_id, amount, currency, status,
-          provider, provider_ref, idempotency_key, created_at, finalized_at
-        ) VALUES(?,?,NULL,?,?,'THB','SUCCEEDED','sandbox',?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
-        paymentId,
-        id,
-        user.id,
-        order.total,
-        "sandbox:order:" + id,
-        "pay:order:" + id,
-      );
-      insertLedgerEntry({
-        userId: user.id,
-        amount: order.total,
-        reference: "payment-in:" + paymentId,
-        label: "รับชำระออเดอร์ " + id.slice(0, 8),
-        kind: "PAYMENT_IN",
-        direction: "in",
-        orderId: id,
-        paymentId,
-        providerRef: "sandbox:order:" + id,
-      });
-      notify(
-        user.id,
-        "code_delivery",
-        "ส่งโค้ดสำเร็จ",
-        "คำสั่งซื้อ " + id.slice(0, 8) + " ได้รับโค้ดแล้ว",
-        "/orders/" + id,
-      );
-      notifyStaffRoles(
-        "order_new",
-        "ออเดอร์ใหม่",
-        "คำสั่งซื้อ " + id.slice(0, 8) + " ชำระแล้วและส่งของแล้ว",
-        "/admin/orders/" + id,
-      );
-      maybeNotifyStockLow(order.variant_id);
-      alerts.emit("order_paid", {
-        id,
-        variantId: order.variant_id,
-        quantity: order.quantity,
-        total: order.total,
-      });
-      alerts.stockAfterSale(order.variant_id);
+      deliverPaidOrder(order, available);
       audit(user, "PAYMENT_AND_DELIVERY", id);
       return orderDetail(user, id);
     });
@@ -2678,7 +2764,13 @@ export function createCommerceCore({
     paymentSummaryFor,
     history: orderHistory,
   });
-  const { adminOrders, adminRevealOrderCredentials, adminCustomers } = listApis;
+  const { adminOrders, adminRevealOrderCredentials } = listApis;
+  /** Customer list + each row's tags (the ?tag= filter is applied in admin-list-apis.mjs). */
+  function adminCustomers(user, query) {
+    const page = listApis.adminCustomers(user, query);
+    const tags = pricing.tagsFor(page.customers.map((c) => c.id));
+    return { ...page, customers: page.customers.map((c) => ({ ...c, tags: tags[c.id] ?? [] })) };
+  }
   // NFR-3: team members handle orders but never see money movement (payment rows,
   // provider refs, refunds, fees). Admins get the full record.
   function adminOrderDetail(user, id) {
@@ -2710,6 +2802,23 @@ export function createCommerceCore({
     moneyScope,
     outstandingCredit,
   });
+  // การเงิน › ปิดยอดรายวัน, ถอนเงิน (finance-close.mjs) and กระทบยอด (finance-recon.mjs).
+  const financeClose = createFinanceCloseApis({
+    requireAdmin,
+    confirmPassword: auth.confirmPassword,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    integer,
+    clock,
+    moneyScope,
+    bangkokDayRange,
+    fileStore,
+  });
+  const recon = createReconApis({ requireAdmin, one, all, run, tx, fail, clean, clock, moneyScope, bangkokDayRange });
   const {
     adminCustomerDetail: adminCustomerDetailRaw,
     adminUpdateCustomer,
@@ -2750,6 +2859,8 @@ export function createCommerceCore({
       customer: {
         ...detail.customer,
         avatarUrl: key ? "/api/files/" + key : null,
+        // Customer tags (pricing.mjs): STAFF sees them, only ADMIN changes them.
+        tags: pricing.tagsOf(detail.customer.id),
       },
     };
   }
@@ -2854,6 +2965,34 @@ export function createCommerceCore({
     notify,
     randomUUID,
   });
+  // Orders list bulk actions (admin-order-bulk.mjs) reuse the single-order rules above.
+  const orderBulk = createAdminOrderBulkApis({
+    requireStaff,
+    requireAdmin,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    ApiError,
+    adminOrders,
+    cancelUnpaidOrder,
+    resendOrderCredentials,
+    resendLimit: RESEND_LIMIT,
+  });
+  // Chat inbox ข้อความสำเร็จรูป (canned-replies.mjs).
+  const cannedReplyApis = createCannedReplyApis({
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    requireStaff,
+    requireAdmin,
+    randomUUID,
+  });
   /** S2: in live mode an order paid with sandbox money is not real spend. */
   const liveOnlySql = (idCol, payCol) =>
     moneyScope.live
@@ -2891,6 +3030,25 @@ export function createCommerceCore({
       spentSatang: row.spent_satang,
     }));
   }
+  // Admin-editable email text (email-templates.mjs); every sender renders through it.
+  const emailTemplateApis = createEmailTemplateApis({
+    one,
+    all,
+    run,
+    fail,
+    clock,
+    requireAdmin,
+    shopName: () => {
+      const name = String(settings()?.shopName ?? "").trim();
+      return name && name !== "ร้านค้า" ? name : "ASIA EXTRA";
+    },
+    queue: (...args) => accountEmail.queue(...args),
+    enabled: !!mailer?.enabled,
+    isRealEmail,
+    maskEmail,
+    publicBaseUrl,
+  });
+  const renderEmail = emailTemplateApis.render;
   const accountEmail = createAccountEmail({
     one,
     all,
@@ -2906,7 +3064,10 @@ export function createCommerceCore({
     turnstile,
     publicBaseUrl,
     waitUntil,
+    renderEmail,
   });
+  // สัญญาณผิดปกติ + temporary email / domain blocklist (fraud.mjs). Flags only, never bans.
+  const fraud = createFraud({ one, all, run, tx, fail, clock, requireAdmin, notify, alerts, maskEmail });
   const broadcasts = createBroadcastApis({
     one,
     all,
@@ -2923,6 +3084,7 @@ export function createCommerceCore({
       return name && name !== "ร้านค้า" ? name : "ASIA EXTRA";
     },
     publicBaseUrl,
+    renderEmail: (args) => renderEmail("broadcast", args),
   });
   // "แจ้งเตือนเมื่อสินค้าเข้า" (stock-watch.mjs) and review replies / moderation.
   const stockWatch = createStockWatch({
@@ -2938,12 +3100,35 @@ export function createCommerceCore({
     clock,
     inventoryAvailableAliased,
     email: accountEmail,
-    emailTemplate: emailTemplates.backInStock,
+    emailTemplate: (args) => renderEmail("back_in_stock", args),
     shopName: () => {
       const name = String(settings()?.shopName ?? "").trim();
       return name && name !== "ร้านค้า" ? name : "ASIA EXTRA";
     },
     publicBaseUrl,
+  });
+  // Orders an ADMIN creates for a customer who paid outside the site (manual-orders.mjs).
+  const manualOrders = createManualOrderApis({
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    integer,
+    clock,
+    requireAdmin,
+    isAdmin,
+    confirmPassword: auth.confirmPassword,
+    buyableVariant,
+    coupons,
+    normalizeCouponCode,
+    pickUnitsForOrder,
+    deliverPaidOrder,
+    settlePaidReservation,
+    allowSandbox,
+    fileStore,
+    sendOrderConfirmation: accountEmail.sendOrderConfirmation,
   });
   const reviewModeration = createReviewModeration({
     one,
@@ -2985,6 +3170,14 @@ export function createCommerceCore({
     overview,
     createOrder,
     checkCoupon,
+    // Sale / compare-at / tag prices / purchase limits / customer tags (pricing.mjs).
+    adminProductPricing: pricing.adminProductPricing,
+    adminSetVariantPricing: pricing.adminSetVariantPricing,
+    adminSetProductLimit: pricing.adminSetProductLimit,
+    adminCustomerTags: pricing.adminCustomerTags,
+    adminSaveCustomerTag: pricing.adminSaveCustomerTag,
+    adminDeleteCustomerTag: pricing.adminDeleteCustomerTag,
+    adminSetCustomerTags: pricing.adminSetCustomerTags,
     adminCoupons: coupons.adminCoupons,
     adminCoupon: coupons.adminCoupon,
     adminCreateCoupon: coupons.adminCreateCoupon,
@@ -2999,6 +3192,15 @@ export function createCommerceCore({
     adminUpdateCategory: categoryApis.adminUpdateCategory,
     adminReorderCategories: categoryApis.adminReorderCategories,
     adminDeleteCategory: categoryApis.adminDeleteCategory,
+    // Promo banners (server/banners.mjs).
+    publicBanners: bannerApis.publicBanners,
+    adminBanners: bannerApis.adminBanners,
+    adminCreateBanner: bannerApis.adminCreateBanner,
+    adminUpdateBanner: bannerApis.adminUpdateBanner,
+    adminReorderBanners: bannerApis.adminReorderBanners,
+    adminSetBannerImage: bannerApis.adminSetBannerImage,
+    adminRemoveBannerMobileImage: bannerApis.adminRemoveBannerMobileImage,
+    adminDeleteBanner: bannerApis.adminDeleteBanner,
     // For code that ends an unpaid order (e.g. auto-expiry); see server/coupons.mjs.
     releaseCouponForOrder,
     orderDetail,
@@ -3010,6 +3212,8 @@ export function createCommerceCore({
     adminProducts,
     adminTransactions,
     adminTransactionDetail,
+    ...financeClose,
+    ...recon,
     adminOrderPaymentSummary,
     refundOrder,
     adjustCustomerCredit,
@@ -3023,6 +3227,17 @@ export function createCommerceCore({
     adminAddOrderNote,
     replaceOrderCredential,
     resendOrderCredentials,
+    adminBulkOrderCheck: orderBulk.adminBulkOrderCheck,
+    adminBulkOrderAction: orderBulk.adminBulkOrderAction,
+    cannedReplies: cannedReplyApis.cannedReplies,
+    adminCreateCannedReply: cannedReplyApis.adminCreateCannedReply,
+    adminUpdateCannedReply: cannedReplyApis.adminUpdateCannedReply,
+    adminDeleteCannedReply: cannedReplyApis.adminDeleteCannedReply,
+    adminReorderCannedReplies: cannedReplyApis.adminReorderCannedReplies,
+    adminManualOrderQuote: manualOrders.adminManualOrderQuote,
+    adminCreateManualOrder: manualOrders.adminCreateManualOrder,
+    adminSetManualOrderSlip: manualOrders.adminSetManualOrderSlip,
+    adminManualOrderSlip: manualOrders.adminManualOrderSlip,
     loginTotp: (rawInput, ctx) => auth.loginTotp(rawInput, ctx),
     confirmPassword: auth.confirmPassword,
     reauthAdmin: auth.reauthAdmin,
@@ -3146,8 +3361,14 @@ export function createCommerceCore({
       faq: true,
       broadcasts: true,
       categories: true,
+      homeBanners: true,
       stockWatch: true,
       reviewModeration: true,
+      manualOrders: true,
+      fraudSignals: true,
+      emailTemplates: true,
+      pricingRules: true,
+      financeClose: true,
       // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
       email: accountEmail.enabled,
       passwordReset: accountEmail.enabled,
@@ -3159,6 +3380,18 @@ export function createCommerceCore({
     sendOrderConfirmation: accountEmail.sendOrderConfirmation,
     adminIntegrations: accountEmail.integrationsStatus,
     emailIdle: accountEmail.idle,
+    // Admin › ตั้งค่า › ข้อความอีเมล (email-templates.mjs).
+    adminEmailTemplates: emailTemplateApis.adminEmailTemplates,
+    adminSaveEmailTemplate: emailTemplateApis.adminSaveEmailTemplate,
+    adminResetEmailTemplate: emailTemplateApis.adminResetEmailTemplate,
+    adminPreviewEmailTemplate: emailTemplateApis.adminPreviewEmailTemplate,
+    adminSendTestEmail: emailTemplateApis.adminSendTestEmail,
+    // Admin › ลูกค้า › สัญญาณผิดปกติ (fraud.mjs).
+    adminFraud: fraud.adminFraud,
+    adminReviewFraudSignal: fraud.reviewSignal,
+    adminSaveFraudSettings: fraud.saveFraudSettings,
+    adminBlockEmail: fraud.addBlock,
+    adminLiftEmailBlock: fraud.liftBlock,
     salesRevenueSatang,
     logout: (token) =>
       run("DELETE FROM sessions WHERE token_hash=?", hash(token ?? "")),
@@ -3185,8 +3418,12 @@ export function createCommerceCore({
   };
   // Order emails run after pay / deliverReservation returned; money logic is untouched.
   accountEmail.hookOrderEmails(service);
+  // Blocklist before register / login; fraud rules after pay / report (committed) — fraud.mjs.
+  fraud.hook(service);
   // Import / re-activation that brings a waited-for option back notifies the waiting customers.
   stockWatch.hook(service);
+  // "สร้างโดยแอดมิน" marker + payment method on the existing order views.
+  manualOrders.hook(service);
   const live = withLive(service, { run, all });
   // Unpaid-order expiry runs lazily on these calls (pending-expiry.mjs). The bump goes
   // through live.mjs so listeners hear "orders changed" only when something expired.

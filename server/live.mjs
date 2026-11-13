@@ -23,6 +23,12 @@ const LIVE_METHODS = {
   createVariant: ["catalog"],
   updateVariant: ["catalog", "notify"],
   deleteVariant: ["catalog"],
+  // pricing.mjs: storefront prices / limits change; customer tags change tag prices.
+  adminSetVariantPricing: ["catalog"],
+  adminSetProductLimit: ["catalog"],
+  adminSetCustomerTags: ["customers", "catalog"],
+  adminSaveCustomerTag: ["customers"],
+  adminDeleteCustomerTag: ["customers", "catalog"],
   markInventoryDefect: ["catalog"],
   deleteInventoryUnit: ["catalog"],
   deliverReservation: ["orders", "notify"],
@@ -32,6 +38,9 @@ const LIVE_METHODS = {
   adjustCustomerCredit: ["customers", "notify"],
   replaceOrderCredential: ["orders", "catalog", "notify"],
   resendOrderCredentials: ["orders", "chat", "notify"],
+  adminBulkOrderAction: ["orders", "chat", "notify"],
+  adminCreateManualOrder: ["orders", "catalog", "notify", "customers"],
+  adminSetManualOrderSlip: ["orders"],
   addProductImage: ["catalog"],
   reorderProductImages: ["catalog"],
   deleteProductImage: ["catalog"],
@@ -53,6 +62,13 @@ const LIVE_METHODS = {
   adminUpdateCustomer: ["customers"],
   adminSetCustomerStatus: ["customers"],
   saveSettings: ["catalog"],
+  // Home banners ride on /api/overview, which the storefront refetches on "catalog".
+  adminCreateBanner: ["catalog"],
+  adminUpdateBanner: ["catalog"],
+  adminReorderBanners: ["catalog"],
+  adminSetBannerImage: ["catalog"],
+  adminRemoveBannerMobileImage: ["catalog"],
+  adminDeleteBanner: ["catalog"],
   saveStaff: ["team"],
   setMemberRole: ["team", "customers", "notify"],
   setStaffActive: ["team"],
@@ -86,6 +102,13 @@ export function withLive(service, { run, all }) {
     if (typeof original !== "function") continue;
     wrapped[name] = (...args) => {
       const result = original(...args);
+      // Async calls (uploads) change rows after awaiting the file store: tell listeners
+      // once the change is saved, so their refetch never sees the old state.
+      if (result && typeof result.then === "function")
+        return result.then((value) => {
+          bump(topics);
+          return value;
+        });
       bump(topics);
       return result;
     };

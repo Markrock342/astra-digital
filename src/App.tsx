@@ -89,7 +89,10 @@ import { DeliveredExtras, hasReceipt, ReceiptLink, ReceiptPage, receiptRoute } f
 import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
 import { RebuyActions } from "./Rebuy";
+import { ManualOrderNote } from "./ManualOrderNote";
+import { DiscountBadge, PriceNote, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
 import { HomeCategoryRow } from "./Categories";
+import { HomeBanners } from "./HomeBanners";
 import {
   ReferenceCatalog,
   ReferenceCatalogPage,
@@ -512,6 +515,11 @@ function Footer() {
 }
 export function ProductCard({ product }: { product: Product }) {
   const soldOut = product.variants.every((v) => v.stockStatus === "out");
+  // Cheapest option for this viewer (sale / tag price already applied by the server).
+  const cheapest = product.variants.reduce<Product["variants"][number] | undefined>(
+    (best, v) => (!best || v.price < best.price ? v : best),
+    undefined,
+  );
   return (
     <Link to={"/products/" + product.id} className="product-card">
       <div className="product-image">
@@ -528,11 +536,15 @@ export function ProductCard({ product }: { product: Product }) {
           <h3>{product.name}</h3>
           <ArrowUpRight size={18} />
         </div>
-        <p>
-          {t("เริ่ม")}{" "}
-          <strong>
-            {money(Math.min(...product.variants.map((v) => v.price)))}
-          </strong>
+        <p className="product-card-price">
+          <span>
+            {t("เริ่ม")}{" "}
+            <strong>
+              {money(Math.min(...product.variants.map((v) => v.price)))}
+            </strong>
+          </span>
+          {cheapest && <WasPrice variant={cheapest} />}
+          {cheapest && <DiscountBadge variant={cheapest} />}
         </p>
         {(product.sold > 0 || product.rating?.count > 0) && (
           <div className="product-sold">
@@ -575,6 +587,7 @@ function Home() {
   return (
     <>
       <main className="container home-main">
+        <HomeBanners />
         <section className="home-hero">
           <div className="hero-grid" aria-hidden="true">
             <i className="grid-streak streak-y streak-y-one" />
@@ -1297,12 +1310,18 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
               <div className="cart-info">
                 <Link to={"/products/" + p.id}>{p.name}</Link>
                 <p>{variant.label}</p>
-                <strong>{money(variant.price)}</strong>
+                <span className="cart-price">
+                  <strong>{money(variant.price)}</strong>
+                  <WasPrice variant={variant} />
+                  <DiscountBadge variant={variant} />
+                  <PriceNote variant={variant} />
+                </span>
                 <Quantity
                   value={basket.quantity}
-                  max={variant.available ? MAX_PER_ORDER : 0}
+                  max={quantityCap(variant)}
                   onChange={(quantity) => setBasket({ ...basket, quantity })}
                 />
+                <PurchaseLimitNote variant={variant} />
               </div>
               <button
                 className="icon-button"
@@ -1641,6 +1660,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
             <div className="order-meta">
               <span>{t("คำสั่งซื้อ #")}{order.id.slice(0, 8).toUpperCase()}</span>
               <span>{dateTime(order.created_at)}</span>
+              {order.createdByAdmin && <ManualOrderNote method={order.paymentMethodLabel} />}
               {hasReceipt(order) && <ReceiptLink id={order.id} />}
             </div>
             {!!order.discount && (
@@ -1902,6 +1922,7 @@ function HistoryPage() {
                       <p>
                         {o.label} · {o.quantity}{" "}{t("ชิ้น")}
                       </p>
+                      {o.createdByAdmin && <ManualOrderNote method={o.paymentMethodLabel} />}
                     </div>
                     <strong>{money(o.total)}</strong>
                     <ArrowUpRight size={18} />

@@ -1,5 +1,6 @@
 /** Idempotent schema helpers for Admin FR Work 1 (no numbered migration — 006 reserved for ledger). */
 import { ACCOUNT_SHOP_CATEGORIES, DEFAULT_CATEGORIES } from "./catalog.mjs";
+import { DEFAULT_CANNED_REPLIES } from "./canned-replies.mjs";
 
 /**
  * Product categories (idempotent, no numbered migration). products.category holds the id.
@@ -47,6 +48,11 @@ export function ensureCategories(db) {
 }
 
 export { ensurePrivacyRequests } from "./privacy.mjs";
+export { ensureManualOrders } from "./manual-orders.mjs";
+// Compare-at / sale / purchase limit / customer tags + tag prices (server/pricing.mjs).
+export { ensurePricing } from "./pricing.mjs";
+// การเงิน › ปิดยอดรายวัน / กระทบยอด / ถอนเงิน (append-only tables, server/finance-close.mjs).
+export { ensureFinanceBooks } from "./finance-close.mjs";
 
 export function ensureChatThreadReads(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS chat_thread_reads (
@@ -55,6 +61,32 @@ export function ensureChatThreadReads(db) {
     last_read_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, thread_id)
   )`);
+}
+
+/**
+ * ข้อความสำเร็จรูปในแชท (canned-replies.mjs). Idempotent; the formal Thai defaults are
+ * seeded only when the table is first created, so a default the admin deleted stays gone.
+ */
+export function ensureCannedReplies(db) {
+  const existed = !!db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='canned_replies'")
+    .get();
+  db.exec(`CREATE TABLE IF NOT EXISTS canned_replies (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  if (existed) return;
+  const insert = db.prepare(
+    "INSERT OR IGNORE INTO canned_replies(id,title,body,sort_order) VALUES(?,?,?,?)",
+  );
+  DEFAULT_CANNED_REPLIES.forEach((r, i) =>
+    insert.run("default-" + (i + 1), r.title, r.body, (i + 1) * 10),
+  );
 }
 
 /**
@@ -419,4 +451,99 @@ export function ensureReviewModeration(db) {
   ])
     if (!has(column)) db.exec(`ALTER TABLE reviews ADD COLUMN ${column} TEXT`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_reviews_created ON reviews(created_at)");
+}
+
+/**
+ * Promo banners on the storefront home (server/banners.mjs). Idempotent, no numbered migration.
+ * - image_key / mobile_image_key: file-store keys (public /api/files/<key>); a row without
+ *   image_key is a draft and never shown. starts_at / ends_at: UTC "YYYY-MM-DD HH:MM:SS"
+ *   (the admin enters Bangkok time); NULL = no limit. At most MAX_BANNERS rows (app rule).
+ */
+export function ensureBanners(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS banners (
+    id TEXT PRIMARY KEY,
+    image_key TEXT,
+    mobile_image_key TEXT,
+    alt TEXT NOT NULL,
+    link TEXT,
+    starts_at TEXT,
+    ends_at TEXT,
+    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_banners_order ON banners(sort_order)");
+}
+
+/**
+ * Fraud signals (server/fraud.mjs). Idempotent; nothing here blocks an order by itself.
+ * - fraud_events: cheap counters the rules read (payment_failed / issue_report per account,
+ *   signup per masked IP prefix — the same /24 or /48 that sessions keep, never a full IP).
+ *   Rows older than 31 days are pruned.
+ * - fraud_signals: one "สัญญาณผิดปกติ" per rule + subject (account or IP prefix) per window;
+ *   repeats inside the window only bump hits / last_at_ms. Admin marks it REVIEWED + note.
+ * - fraud_blocks: temporary block of one email or a whole email domain from registering and
+ *   logging in. Expires by itself (expires_ms); lifting early keeps the row (lifted_at).
+ */
+export function ensureFraudSignals(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS fraud_events (
+    kind TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    user_id TEXT,
+    at_ms INTEGER NOT NULL
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_fraud_events_subject ON fraud_events(kind, subject, at_ms)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_fraud_events_at ON fraud_events(at_ms)");
+  db.exec(`CREATE TABLE IF NOT EXISTS fraud_signals (
+    id TEXT PRIMARY KEY,
+    rule TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    user_id TEXT,
+    ip_masked TEXT,
+    value INTEGER NOT NULL DEFAULT 0,
+    threshold INTEGER NOT NULL DEFAULT 0,
+    window_hours INTEGER NOT NULL DEFAULT 1,
+    detail TEXT,
+    hits INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'OPEN',
+    at_ms INTEGER NOT NULL,
+    last_at_ms INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by TEXT,
+    reviewed_at TEXT,
+    review_note TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_fraud_signals_dedupe ON fraud_signals(rule, subject, at_ms)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_fraud_signals_status ON fraud_signals(status, at_ms)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_fraud_signals_user ON fraud_signals(user_id)");
+  db.exec(`CREATE TABLE IF NOT EXISTS fraud_blocks (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    value TEXT NOT NULL,
+    reason TEXT,
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    at_ms INTEGER NOT NULL,
+    expires_ms INTEGER NOT NULL,
+    lifted_at TEXT,
+    lifted_by TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_fraud_blocks_value ON fraud_blocks(value, expires_ms)");
+}
+
+/**
+ * Admin-edited email templates (server/email-templates.mjs). One row per edited template;
+ * no row = the built-in default ("reset to default" deletes the row).
+ */
+export function ensureEmailTemplates(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS email_templates (
+    key TEXT PRIMARY KEY,
+    subject TEXT NOT NULL,
+    heading TEXT NOT NULL,
+    body TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by TEXT
+  )`);
 }

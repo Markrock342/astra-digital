@@ -1,0 +1,570 @@
+/* Home promo carousel (HomeBanners.tsx). shadcn/ui Carousel anatomy (MIT) on CSS scroll-snap,
+   storefront tokens only (--surface, --border, --accent, --radius…), so all accents and
+   light/dark themes work. Desktop frame 8:3 (1600×600); phones 3:2 when banners have a
+   mobile image. object-fit: cover matches the admin crop preview exactly. */
+
+.home-banners {
+  margin-top: 24px;
+  position: relative;
+  /* Above the hero's decorative grid / glow layers, which reach up behind the dots. */
+  z-index: 1;
+}
+.home-banners + .home-hero {
+  padding-top: 52px;
+}
+.home-banners-frame {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  isolation: isolate;
+}
+.home-banners-viewport {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.home-banners-viewport::-webkit-scrollbar {
+  display: none;
+}
+.home-banner-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  aspect-ratio: 8 / 3;
+  position: relative;
+}
+.home-banner-slide picture,
+.home-banner-link {
+  display: block;
+  position: absolute;
+  inset: 0;
+}
+.home-banner-slide img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.home-banner-link:focus-visible {
+  outline: none;
+}
+.home-banner-link:focus-visible::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: calc(var(--radius) - 3px);
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--accent);
+  pointer-events: none;
+}
+
+/* Prev / next: round outline icon buttons on top of the frame. */
+.home-banners-arrow {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 6px 16px -6px rgb(0 0 0 / 0.25);
+  cursor: pointer;
+  opacity: 0.94;
+  transition:
+    opacity 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease;
+}
+.home-banners-arrow.prev {
+  left: 12px;
+}
+.home-banners-arrow.next {
+  right: 12px;
+}
+.home-banners-arrow:hover {
+  opacity: 1;
+  background: var(--hover);
+}
+.home-banners-arrow:active {
+  transform: scale(0.94);
+}
+.home-banners-arrow:focus-visible,
+.home-banners-dot:focus-visible,
+.home-banners-pause:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Dots + pause under the frame. */
+.home-banners-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.home-banners-dots {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.home-banners-dot {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 999px;
+}
+.home-banners-dot::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  translate: -50% -50%;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 24%, transparent);
+  transition:
+    width 0.3s var(--ease-out-expo, ease),
+    background-color 0.2s ease;
+}
+.home-banners-dot:hover::before {
+  background: color-mix(in srgb, var(--text) 45%, transparent);
+}
+.home-banners-dot.active::before {
+  width: 20px;
+  background: var(--accent);
+}
+.home-banners-pause {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+.home-banners-pause:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+@media (max-width: 640px) {
+  .home-banners {
+    margin-top: 16px;
+  }
+  .home-banners + .home-hero {
+    padding-top: 36px;
+  }
+  /* Every banner (or some) has a phone image: 3:2 frame. Banners without one show the
+     whole wide image centred instead of cutting its sides off. */
+  .home-banners:not([data-mobile="none"]) .home-banner-slide {
+    aspect-ratio: 3 / 2;
+  }
+  .home-banners[data-mobile="mixed"] .home-banner-slide img:not(.has-mobile) {
+    object-fit: contain;
+  }
+  .home-banners-arrow {
+    width: 32px;
+    height: 32px;
+  }
+  .home-banners-arrow.prev {
+    left: 8px;
+  }
+  .home-banners-arrow.next {
+    right: 8px;
+  }
+  .home-banners-controls {
+    margin-top: 8px;
+  }
+}
+
+@media (hover: none) and (max-width: 640px) {
+  /* Touch phones swipe; the arrows stay but lighter so the artwork shows. */
+  .home-banners-arrow {
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-banners-viewport {
+    scroll-behavior: auto;
+  }
+  .home-banners-dot::before,
+  .home-banners-arrow {
+    transition: none;
+  }
+}
+:root[data-motion="calm"] .home-banners-dot::before,
+:root[data-motion="calm"] .home-banners-arrow {
+  transition: none;
+}
+
+/* ---------- Admin: ตั้งค่า › แบนเนอร์หน้าแรก (AdminBanners.tsx) ---------- */
+.merchant-shell .banner-admin {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.merchant-shell .banner-admin .reference-admin-heading {
+  margin-bottom: 0;
+}
+.merchant-shell .banner-admin-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--brand-soft);
+  color: #1e2a8a;
+  font-size: 13px;
+}
+.merchant-shell .banner-admin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.merchant-shell .banner-admin-row {
+  display: grid;
+  grid-template-columns: auto 176px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.05);
+}
+.merchant-shell .banner-admin-order {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.merchant-shell .banner-admin-index {
+  width: 22px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.merchant-shell .banner-admin-order .icon-button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+}
+.merchant-shell .banner-admin-order .icon-button:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.merchant-shell .banner-admin-order .icon-button:disabled {
+  opacity: 0.35;
+}
+.merchant-shell .banner-admin-thumb {
+  display: grid;
+  place-items: center;
+  width: 176px;
+  aspect-ratio: 8 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--raised);
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.merchant-shell .banner-admin-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.merchant-shell .banner-admin-info {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.merchant-shell .banner-admin-info strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.merchant-shell .banner-admin-info small {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.merchant-shell .banner-admin-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--text);
+}
+.merchant-shell .banner-admin-mobile {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  color: var(--brand);
+}
+.merchant-shell .banner-admin-row.is-muted .banner-admin-thumb img {
+  opacity: 0.55;
+}
+.merchant-shell .banner-admin-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.merchant-shell .banner-admin-status::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.merchant-shell .banner-admin-status.live {
+  background: #ecfdf3;
+  color: #15803d;
+}
+.merchant-shell .banner-admin-status.scheduled {
+  background: var(--brand-soft);
+  color: #1e2a8a;
+}
+.merchant-shell .banner-admin-status.ended,
+.merchant-shell .banner-admin-status.off {
+  background: #f1f3f6;
+  color: #4b5563;
+}
+.merchant-shell .banner-admin-status.draft {
+  background: #fff1f2;
+  color: #be123c;
+}
+.merchant-shell .banner-admin-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.merchant-shell .banner-admin-actions .button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.merchant-shell .banner-admin-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 36px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  color: var(--muted);
+  text-align: center;
+}
+.merchant-shell .banner-admin-empty p {
+  margin: 0;
+}
+
+/* Editor dialog: image fields with the storefront crop. */
+.banner-dialog {
+  width: min(720px, 100%);
+}
+.banner-dialog .banner-image-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 14px;
+  margin-top: 8px;
+}
+.banner-dialog .banner-image-field {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--raised);
+  min-width: 0;
+}
+.banner-dialog .banner-image-head {
+  display: grid;
+  gap: 2px;
+}
+.banner-dialog .banner-field-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+.banner-dialog .banner-crop {
+  position: relative;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface, #fff);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.banner-dialog .banner-crop img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.banner-dialog .banner-crop-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 26px 8px 8px;
+}
+.banner-dialog .banner-crop-tag {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgb(9 9 11 / 0.72);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.banner-dialog .banner-crop-warning,
+.banner-dialog .banner-link-problem {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #fff1f2;
+  color: #be123c;
+}
+.banner-dialog .banner-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.banner-dialog .field input {
+  width: 100%;
+}
+.banner-dialog .banner-time-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+.banner-dialog .banner-active-field {
+  margin-top: 16px;
+  color: var(--text);
+  font-size: 13px;
+}
+.banner-delete-dialog .banner-delete-body {
+  padding: 0 24px 24px;
+}
+.banner-delete-dialog .banner-delete-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 8 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.banner-delete-dialog .banner-delete-body p {
+  margin: 0;
+  line-height: 1.6;
+}
+.banner-delete-dialog .form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+@media (max-width: 860px) {
+  .merchant-shell .banner-admin-row {
+    grid-template-columns: 120px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "thumb info info"
+      "order status actions";
+    gap: 10px 12px;
+  }
+  .merchant-shell .banner-admin-thumb {
+    grid-area: thumb;
+    width: 120px;
+  }
+  .merchant-shell .banner-admin-info {
+    grid-area: info;
+  }
+  .merchant-shell .banner-admin-order {
+    grid-area: order;
+  }
+  .merchant-shell .banner-admin-status {
+    grid-area: status;
+    justify-self: start;
+  }
+  .merchant-shell .banner-admin-actions {
+    grid-area: actions;
+  }
+}
+@media (max-width: 600px) {
+  .merchant-shell .banner-admin-row {
+    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-areas:
+      "thumb info"
+      "status order"
+      "actions actions";
+  }
+  .merchant-shell .banner-admin-thumb {
+    width: 96px;
+  }
+  .merchant-shell .banner-admin-order {
+    justify-self: end;
+  }
+  .merchant-shell .banner-admin-actions {
+    justify-content: flex-start;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+  }
+  .banner-dialog .banner-image-grid,
+  .banner-dialog .banner-time-grid {
+    grid-template-columns: 1fr;
+  }
+  .banner-delete-dialog .banner-delete-body {
+    padding: 0 16px 20px;
+  }
+}
+.merchant-shell .banner-admin .reference-admin-heading > .button {
+  flex: none;
+  white-space: nowrap;
+}
