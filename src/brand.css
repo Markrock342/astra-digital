@@ -1740,6 +1740,79 @@ html.lang-swap .storefront-shell .main-nav {
 .storefront-shell .chat-composer textarea {
   border-radius: var(--radius-btn, 12px);
 }
+.storefront-shell .chat-composer,
+.admin-chat .chat-composer {
+  flex-wrap: wrap;
+}
+.storefront-shell .chat-quote,
+.admin-chat .chat-quote {
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  font-size: 12px;
+}
+.storefront-shell .chat-quote small,
+.admin-chat .chat-quote small {
+  display: block;
+  font-weight: 700;
+}
+.storefront-shell .chat-bubble.mine .chat-quote,
+.admin-chat .chat-bubble.mine .chat-quote {
+  background: color-mix(in srgb, var(--accent-ink) 14%, transparent);
+}
+.storefront-shell .chat-reply-bar,
+.admin-chat .chat-reply-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 0 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--raised);
+  color: var(--text);
+  font-size: 12px;
+}
+.storefront-shell .chat-reply-bar span,
+.admin-chat .chat-reply-bar span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.storefront-shell .chat-reply-bar small,
+.admin-chat .chat-reply-bar small {
+  display: block;
+  color: var(--accent-text);
+  font-weight: 700;
+}
+.storefront-shell .chat-reply-button,
+.admin-chat .chat-reply-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  min-height: 32px;
+  cursor: pointer;
+}
+@media (max-width: 600px) {
+  .storefront-shell .chat-reply-button,
+  .admin-chat .chat-reply-button,
+  .storefront-shell .chat-reply-bar .icon-button,
+  .admin-chat .chat-reply-bar .icon-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
 .chat-fab {
   position: fixed;
   right: 20px;

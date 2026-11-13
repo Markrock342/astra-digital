@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Bell,
   CheckCheck,
+  CornerUpLeft,
   LoaderCircle,
   MessageCircle,
   Send,
@@ -41,6 +42,32 @@ export type ChatMessage = {
   order_id?: string | null;
   report_reason?: string | null;
 };
+
+/** A reply is the same text message, with the quoted line marked so both sides can show it. */
+const REPLY_MARK = "\u200b↩ ";
+type ChatReply = { author: string; text: string };
+
+export function splitReply(body: string): { quote: ChatReply | null; text: string } {
+  if (!body.startsWith(REPLY_MARK)) return { quote: null, text: body };
+  const breakAt = body.indexOf("\n");
+  const head = body.slice(REPLY_MARK.length, breakAt < 0 ? undefined : breakAt);
+  const sep = head.indexOf(": ");
+  if (sep < 1 || breakAt < 0) return { quote: null, text: body };
+  return {
+    quote: { author: head.slice(0, sep), text: head.slice(sep + 2) },
+    text: body.slice(breakAt + 1),
+  };
+}
+
+function replyTarget(message: ChatMessage, author: string): ChatReply {
+  const text = splitReply(message.body).text.replace(/\s+/g, " ").trim().slice(0, 80);
+  return { author: author.replace(/[:\n]/g, "").trim().slice(0, 40) || "?", text };
+}
+
+function withReply(body: string, reply: ChatReply | null) {
+  if (!reply) return body;
+  return `${REPLY_MARK}${reply.author}: ${reply.text}\n${body}`;
+}
 export type Notice = {
   id: string;
   kind: string;
@@ -242,12 +269,16 @@ function MessageList({
   mine,
   customerName,
   admin = false,
+  onReply,
+  replyLabel = "ตอบกลับ",
 }: {
   messages: ChatMessage[];
   mine: (m: ChatMessage) => boolean;
   customerName: (m: ChatMessage) => string;
   /** Team view: order links open the back-office order instead. */
   admin?: boolean;
+  onReply?: (m: ChatMessage) => void;
+  replyLabel?: string;
 }) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -255,25 +286,58 @@ function MessageList({
   }, [messages.length]);
   return (
     <div className="chat-messages" aria-live="polite">
-      {messages.map((m) => (
-        <div key={m.id} className={mine(m) ? "chat-bubble mine" : "chat-bubble"}>
-          <small>{customerName(m)}</small>
-          {m.order_id && <ChatOrderTag orderId={m.order_id} reason={m.report_reason} admin={admin} />}
-          <p>
-            {m.body.split(ORDER_PATH).map((part, i) =>
-              i % 2 ? (
-                <Link key={i} to={admin ? "/admin" + part : part} className="chat-order-link">
-                  {part}
-                </Link>
-              ) : (
-                part
-              ),
+      {messages.map((m) => {
+        const shown = splitReply(m.body);
+        return (
+          <div key={m.id} className={mine(m) ? "chat-bubble mine" : "chat-bubble"}>
+            <small>{customerName(m)}</small>
+            {m.order_id && <ChatOrderTag orderId={m.order_id} reason={m.report_reason} admin={admin} />}
+            {shown.quote && (
+              <blockquote className="chat-quote">
+                <small>{shown.quote.author}</small>
+                <span>{shown.quote.text}</span>
+              </blockquote>
             )}
-          </p>
-          <time>{time(m.created_at)}</time>
-        </div>
-      ))}
+            <p>
+              {shown.text.split(ORDER_PATH).map((part, i) =>
+                i % 2 ? (
+                  <Link key={i} to={admin ? "/admin" + part : part} className="chat-order-link">
+                    {part}
+                  </Link>
+                ) : (
+                  part
+                ),
+              )}
+            </p>
+            <time>{time(m.created_at)}</time>
+            {onReply && (
+              <button
+                type="button"
+                className="chat-reply-button"
+                onClick={() => onReply(m)}
+              >
+                <CornerUpLeft size={14} />
+                {replyLabel}
+              </button>
+            )}
+          </div>
+        );
+      })}
       <div ref={end} />
+    </div>
+  );
+}
+
+function ReplyBar({ reply, clearLabel, onClear }: { reply: ChatReply; clearLabel: string; onClear: () => void }) {
+  return (
+    <div className="chat-reply-bar">
+      <span>
+        <small>{reply.author}</small>
+        {reply.text}
+      </span>
+      <button type="button" className="icon-button" aria-label={clearLabel} onClick={onClear}>
+        <X size={16} />
+      </button>
     </div>
   );
 }
@@ -285,6 +349,7 @@ export function CustomerChat() {
   const [thread, setThread] = useState<ChatThread | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
+  const [replyTo, setReplyTo] = useState<ChatReply | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -357,6 +422,11 @@ export function CustomerChat() {
     e.preventDefault();
     const body = text.trim();
     if (!body || busy) return;
+    const payload = withReply(body, replyTo);
+    if (payload.length > 1000) {
+      setError("ข้อความยาวเกิน 1,000 ตัวอักษร");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -364,20 +434,21 @@ export function CustomerChat() {
         setMessages(
           (
             await api<{ messages: ChatMessage[] }>("/chat/threads/" + thread.id + "/messages", {
-              body,
+              body: payload,
               ...report.payload,
             })
           ).messages,
         );
       } else {
         const opened = await api<{ thread: ChatThread; messages: ChatMessage[] }>("/chat/threads", {
-          body,
+          body: payload,
           ...report.payload,
         });
         setThread(opened.thread);
         setMessages(opened.messages);
       }
       setText("");
+      setReplyTo(null);
       report.clear();
     } catch (e) {
       setError((e as Error).message);
@@ -441,6 +512,10 @@ export function CustomerChat() {
                   messages={messages}
                   mine={(m) => m.sender_type === "USER"}
                   customerName={(m) => (m.sender_type === "USER" ? t("คุณ") : t("ทีมงาน"))}
+                  onReply={(m) =>
+                    setReplyTo(replyTarget(m, m.sender_type === "USER" ? t("คุณ") : t("ทีมงาน")))
+                  }
+                  replyLabel={t("ตอบกลับ")}
                 />
               ) : (
                 <div className="chat-login">
@@ -453,6 +528,13 @@ export function CustomerChat() {
               <ErrorMessage message={error} />
               {report.bar}
               <form className="chat-composer" onSubmit={send}>
+                {replyTo && (
+                  <ReplyBar
+                    reply={replyTo}
+                    clearLabel={t("ยกเลิกการตอบกลับ")}
+                    onClear={() => setReplyTo(null)}
+                  />
+                )}
                 <textarea
                   aria-label={t("ข้อความ")}
                   placeholder={t("พิมพ์ข้อความ…")}
@@ -492,9 +574,13 @@ export function AdminChat() {
   const [current, setCurrent] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
+  const [replyTo, setReplyTo] = useState<ChatReply | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"OPEN" | "MINE" | "ALL">("OPEN");
+  useEffect(() => {
+    setReplyTo(null);
+  }, [current]);
   // Deep link from a notification: /admin/chat?thread=<id> opens that thread,
   // also when the bell is used while this page is already open.
   useEffect(() => {
@@ -547,13 +633,19 @@ export function AdminChat() {
     e.preventDefault();
     const body = text.trim();
     if (!current || !body || busy) return;
+    const payload = withReply(body, replyTo);
+    if (payload.length > 1000) {
+      setError("ข้อความยาวเกิน 1,000 ตัวอักษร");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       setMessages(
-        (await api<{ messages: ChatMessage[] }>("/chat/threads/" + current + "/messages", { body })).messages,
+        (await api<{ messages: ChatMessage[] }>("/chat/threads/" + current + "/messages", { body: payload })).messages,
       );
       setText("");
+      setReplyTo(null);
       void loadThreads();
     } catch (e) {
       setError((e as Error).message);
@@ -684,9 +776,27 @@ export function AdminChat() {
                 customerName={(m) =>
                   m.sender_type === "USER" ? (thread.customer ?? "ลูกค้า") : m.sender_type === "ADMIN" ? "แอดมิน" : "ทีมงาน"
                 }
+                onReply={
+                  thread.status === "OPEN"
+                    ? (m) =>
+                        setReplyTo(
+                          replyTarget(
+                            m,
+                            m.sender_type === "USER"
+                              ? (thread.customer ?? "ลูกค้า")
+                              : m.sender_type === "ADMIN"
+                                ? "แอดมิน"
+                                : "ทีมงาน",
+                          ),
+                        )
+                    : undefined
+                }
               />
               {thread.status === "OPEN" ? (
                 <form className="chat-composer" onSubmit={reply}>
+                  {replyTo && (
+                    <ReplyBar reply={replyTo} clearLabel="ยกเลิกการตอบกลับ" onClear={() => setReplyTo(null)} />
+                  )}
                   <textarea
                     aria-label="ข้อความตอบกลับ"
                     placeholder="พิมพ์ข้อความตอบลูกค้า…"

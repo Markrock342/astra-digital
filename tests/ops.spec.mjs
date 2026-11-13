@@ -54,6 +54,14 @@ test("customer chats from the storefront and sees the delivery notification", as
   await panel.getByLabel("ข้อความ").fill("สินค้าใช้ได้กี่วันครับ");
   await panel.getByRole("button", { name: "ส่ง" }).click();
   await expect(panel.locator(".chat-bubble.mine")).toContainText("สินค้าใช้ได้กี่วันครับ");
+  await panel.getByRole("button", { name: "ตอบกลับ" }).click();
+  await expect(panel.locator(".chat-reply-bar")).toContainText("สินค้าใช้ได้กี่วันครับ");
+  await panel.getByLabel("ข้อความ").fill("ขอรายละเอียดเพิ่มครับ");
+  await panel.getByRole("button", { name: "ส่ง" }).click();
+  await expect(panel.locator(".chat-quote")).toContainText("คุณ");
+  await expect(panel.locator(".chat-quote")).toContainText("สินค้าใช้ได้กี่วันครับ");
+  await expect(panel.locator(".chat-bubble.mine").last()).toContainText("ขอรายละเอียดเพิ่มครับ");
+  await expect(panel.locator(".chat-reply-bar")).toHaveCount(0);
 });
 
 test("admin answers from the inbox, sees ranking and notifications", async ({ page }) => {
