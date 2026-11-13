@@ -51,6 +51,8 @@ export { ensurePrivacyRequests } from "./privacy.mjs";
 export { ensureManualOrders } from "./manual-orders.mjs";
 // Compare-at / sale / purchase limit / customer tags + tag prices (server/pricing.mjs).
 export { ensurePricing } from "./pricing.mjs";
+// การเงิน › ปิดยอดรายวัน / กระทบยอด / ถอนเงิน (append-only tables, server/finance-close.mjs).
+export { ensureFinanceBooks } from "./finance-close.mjs";
 
 export function ensureChatThreadReads(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS chat_thread_reads (

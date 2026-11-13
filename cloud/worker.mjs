@@ -49,6 +49,7 @@ import {
   ensureBroadcasts,
   ensureStockWatch,
   ensureReviewModeration,
+  ensureFinanceBooks,
   ensurePrivacyRequests,
   ensureManualOrders,
   ensureFraudSignals,
@@ -161,6 +162,7 @@ export class Commerce extends DurableObject {
       ensureFraudSignals(db);
       ensureEmailTemplates(db);
       ensurePricing(db);
+      ensureFinanceBooks(db);
     });
     this.db = db;
     const adminPassword =

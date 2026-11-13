@@ -1,0 +1,409 @@
+/* การเงิน › ปิดยอดรายวัน / กระทบยอด / ถอนเงิน.
+   Reference: shadcn/ui (MIT, github.com/shadcn-ui/ui) data table, Card, Tabs, Dialog and Sheet,
+   on the admin brand pass (white cards on cool grey, one brand blue, soft elevation).
+   Colours come from the shell tokens (--surface, --border, --muted, --text, --brand), so the
+   pages follow whatever the back-office theme sets. */
+
+.merchant-shell .finance-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.merchant-shell .finance-stats .reference-admin-card {
+  min-width: 0;
+}
+.merchant-shell .finance-stats .finance-negative {
+  color: #b91c1c;
+}
+.merchant-shell .finance-stat-warning strong {
+  color: #b45309;
+}
+.merchant-shell .finance-footnote {
+  margin: 12px 0 0;
+}
+
+/* Status chips */
+.merchant-shell .finance-status-closed {
+  color: #15803d;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.merchant-shell .finance-status-changed {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.merchant-shell .finance-status-open {
+  color: var(--muted);
+  background: var(--raised);
+}
+.merchant-shell .finance-status-today {
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-color: color-mix(in srgb, var(--brand) 25%, transparent);
+}
+.merchant-shell .finance-status-reversed {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.merchant-shell .finance-diff {
+  color: #b45309;
+  font-weight: 600;
+}
+.merchant-shell tr.finance-row-changed td:first-child {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+.merchant-shell tr.finance-row-reversed td:not(:last-child) {
+  color: var(--muted);
+}
+.merchant-shell tr.finance-row-reversed td.num strong {
+  text-decoration: line-through;
+}
+.merchant-shell .finance-row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.merchant-shell .finance-row-actions .button {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* Changed-after-close callout */
+.merchant-shell .admin-callout.finance-changed {
+  display: grid;
+  gap: 2px;
+}
+.merchant-shell .admin-callout.finance-changed strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+/* Day detail sheet: line items as a ledger */
+.merchant-shell .finance-day-sheet {
+  background: var(--surface);
+  color: var(--text);
+}
+.merchant-shell .finance-lines {
+  display: grid;
+  margin: 0 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.merchant-shell .finance-lines > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.merchant-shell .finance-lines > div:first-child,
+.merchant-shell .finance-lines-title + div {
+  border-top: 0;
+}
+.merchant-shell .finance-lines-title {
+  padding: 8px 12px;
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.merchant-shell .finance-lines dt {
+  min-width: 0;
+}
+.merchant-shell .finance-lines dt small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+.merchant-shell .finance-lines dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.merchant-shell .finance-lines-total {
+  background: var(--raised);
+  font-weight: 600;
+}
+.merchant-shell .finance-sheet-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.merchant-shell .finance-sheet-actions .button {
+  justify-content: center;
+}
+
+/* Dialogs */
+.merchant-shell .finance-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.merchant-shell .finance-dialog form {
+  display: grid;
+  gap: 12px;
+}
+.merchant-shell .finance-dialog-lead p {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.merchant-shell .finance-dialog-lead strong {
+  color: var(--text);
+}
+.merchant-shell .finance-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.merchant-shell .finance-dialog .field input[type="file"] {
+  padding: 6px;
+  font-size: 12px;
+}
+
+/* Withdrawals: monthly totals */
+.merchant-shell .finance-months ul {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.merchant-shell .finance-months li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.merchant-shell .finance-months li strong {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* Reconciliation */
+.merchant-shell .recon-upload {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 20px;
+  min-width: 0;
+}
+.merchant-shell .recon-upload .field-help {
+  margin: 0;
+}
+.merchant-shell .recon-file {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 12px 16px;
+  border: 1px dashed color-mix(in srgb, var(--brand) 45%, var(--border));
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 600;
+  cursor: pointer;
+  overflow: hidden;
+}
+.merchant-shell .recon-file span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.merchant-shell .recon-file input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.merchant-shell .recon-file:focus-within {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.merchant-shell .recon-mapping {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.merchant-shell .recon-preview {
+  max-height: 220px;
+  overflow: auto;
+}
+.merchant-shell .recon-preview th,
+.merchant-shell .recon-preview td {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.merchant-shell .recon-stats .recon-stat {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.merchant-shell .recon-stat.is-active {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+}
+.merchant-shell .recon-stat-matched strong {
+  color: #15803d;
+}
+.merchant-shell .recon-stat-mismatch strong {
+  color: #b45309;
+}
+.merchant-shell .recon-stat-statement_only strong,
+.merchant-shell .recon-stat-system_only strong {
+  color: #b91c1c;
+}
+.merchant-shell .recon-status-matched {
+  color: #15803d;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.merchant-shell .recon-status-mismatch {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.merchant-shell .recon-status-statement_only {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.merchant-shell .recon-flag {
+  color: #b45309;
+}
+.merchant-shell .recon-ref {
+  min-width: 140px;
+  max-width: 240px;
+  word-break: break-all;
+}
+.merchant-shell .recon-table td small {
+  display: block;
+}
+.merchant-shell .recon-back {
+  margin: 0 0 6px -10px;
+  white-space: nowrap;
+}
+.merchant-shell .admin-callout.recon-done {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+.merchant-shell .recon-history {
+  margin-top: 16px;
+  padding: 16px 20px;
+}
+.merchant-shell .recon-history h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.merchant-shell .recon-candidates {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 0;
+}
+.merchant-shell .recon-candidates legend {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.merchant-shell .recon-candidate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.merchant-shell .recon-candidate:has(input:checked) {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+.merchant-shell .recon-candidate > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.merchant-shell .recon-candidate small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .merchant-shell .finance-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .merchant-shell .finance-heading-actions {
+    width: 100%;
+  }
+  .merchant-shell .finance-heading-actions .button {
+    flex: 1;
+    justify-content: center;
+  }
+  .merchant-shell .recon-preview {
+    max-height: none;
+  }
+  .merchant-shell .recon-ref {
+    max-width: none;
+  }
+  .merchant-shell .finance-row-actions {
+    justify-content: flex-end;
+    gap: 8px;
+  }
+}
+
+/* One brand colour for the main action on these pages (the generic admin primary is near-black). */
+.merchant-shell .finance-heading-actions .button.primary,
+.merchant-shell .finance-dialog .button.primary,
+.merchant-shell .finance-day-sheet .button.primary,
+.merchant-shell .recon-upload .button.primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.merchant-shell .finance-heading-actions .button.primary:hover:not(:disabled),
+.merchant-shell .finance-dialog .button.primary:hover:not(:disabled),
+.merchant-shell .finance-day-sheet .button.primary:hover:not(:disabled),
+.merchant-shell .recon-upload .button.primary:hover:not(:disabled) {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+}
+.merchant-shell .finance-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.merchant-shell .finance-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.merchant-shell .finance-check input {
+  accent-color: var(--brand);
+}

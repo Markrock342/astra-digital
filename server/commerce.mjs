@@ -39,6 +39,7 @@ import {
   ensureBroadcasts,
   ensureStockWatch,
   ensureReviewModeration,
+  ensureFinanceBooks,
   ensurePrivacyRequests,
   ensureManualOrders,
   ensureFraudSignals,
@@ -125,6 +126,7 @@ export function createCommerce(options = {}) {
   ensureFraudSignals(db);
   ensureEmailTemplates(db);
   ensurePricing(db);
+  ensureFinanceBooks(db);
   return createCommerceCore({ ...options, db, key });
 }
 export function openLocalCommerce({

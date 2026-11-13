@@ -50,10 +50,25 @@ const MAX_JSON_BYTES = 32768;
 // Shop settings carry the legal pages text (Thai is 3 bytes per character in UTF-8).
 const MAX_SETTINGS_BYTES = 262144;
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+// การเงิน › กระทบยอด: a CSV of up to 2 MB sent as a JSON string (escaping can double it).
+const MAX_RECON_JSON_BYTES = 4.5 * 1024 * 1024;
+const reconUploadPaths = ["/api/admin/finance/reconciliations", "/api/admin/finance/reconciliations/preview"];
+/** Admin finance CSV download response. */
+const financeCsv = (csv, name) =>
+  new Response(csv, {
+    status: 200,
+    headers: {
+      ...securityHeaders,
+      "Content-Type": "text/csv; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Disposition": 'attachment; filename="' + name + '"',
+    },
+  });
 function isImageUploadPath(method, path) {
   if (method !== "POST") return false;
   return (
     /^\/api\/admin\/products\/[^/]+\/images$/.test(path) ||
+    path === "/api/admin/finance/withdrawals/proof" ||
     path === "/api/profile/avatar" ||
     path === "/api/admin/settings/logo" ||
     /^\/api\/admin\/banners\/[^/]+\/(?:image|mobile-image)$/.test(path) ||
@@ -214,7 +229,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
       const jsonLimit =
         path === "/api/admin/settings" && user?.role === "ADMIN"
           ? MAX_SETTINGS_BYTES
-          : MAX_JSON_BYTES;
+          : reconUploadPaths.includes(path) && user?.role === "ADMIN"
+            ? MAX_RECON_JSON_BYTES
+            : MAX_JSON_BYTES;
       if (mutating) {
         const length = Number(request.headers.get("Content-Length") ?? 0);
         const maxBytes = imageUpload ? MAX_UPLOAD_BYTES : jsonLimit;
@@ -499,6 +516,33 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           );
         if (path === "/api/admin/health")
           return send(200, service.adminSystemHealth(user));
+        // การเงิน › ปิดยอดรายวัน / ถอนเงิน / กระทบยอด (finance-close.mjs, finance-recon.mjs).
+        if (path === "/api/admin/finance/days") {
+          const result = service.adminFinanceDays(user, Object.fromEntries(url.searchParams));
+          return result.csv != null ? financeCsv(result.csv, "daily-close.csv") : send(200, result);
+        }
+        if (path === "/api/admin/finance/withdrawals") {
+          const result = service.adminWithdrawals(user, Object.fromEntries(url.searchParams));
+          return result.csv != null ? financeCsv(result.csv, "withdrawals.csv") : send(200, result);
+        }
+        if (/^\/api\/admin\/finance\/withdrawals\/[^/]+\/proof$/.test(path)) {
+          const file = await service.withdrawalProof(user, path.split("/")[5]);
+          return new Response(file.bytes, {
+            status: 200,
+            headers: {
+              ...securityHeaders,
+              "Content-Type": file.mime,
+              "Content-Disposition": "inline",
+              "Cache-Control": "private, no-store",
+            },
+          });
+        }
+        if (path === "/api/admin/finance/reconciliations")
+          return send(200, service.adminReconciliations(user));
+        if (/^\/api\/admin\/finance\/reconciliations\/[^/]+$/.test(path)) {
+          const result = service.reconciliationDetail(user, path.split("/")[5], Object.fromEntries(url.searchParams));
+          return result.csv != null ? financeCsv(result.csv, "reconciliation.csv") : send(200, result);
+        }
         if (path === "/api/admin/reports/sales") {
           const report = service.salesReport(user, {
             from: url.searchParams.get("from") ?? undefined,
@@ -955,6 +999,30 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           );
         if (path === "/api/admin/settings")
           return send(200, service.saveSettings(user, input));
+        if (path === "/api/admin/finance/days/close")
+          return send(200, service.closeFinanceDay(user, input));
+        if (path === "/api/admin/finance/days/adjust")
+          return send(200, service.adjustFinanceDay(user, input));
+        if (path === "/api/admin/finance/withdrawals/proof")
+          return send(200, await service.uploadWithdrawalProof(user, input));
+        if (path === "/api/admin/finance/withdrawals")
+          return send(200, service.recordWithdrawal(user, input));
+        if (/^\/api\/admin\/finance\/withdrawals\/[^/]+\/reverse$/.test(path))
+          return send(200, service.reverseWithdrawal(user, path.split("/")[5], input));
+        if (path === "/api/admin/finance/reconciliations/preview")
+          return send(200, service.previewReconciliation(user, input));
+        if (path === "/api/admin/finance/reconciliations")
+          return send(200, service.createReconciliation(user, input));
+        if (/^\/api\/admin\/finance\/reconciliations\/[^/]+\/(match|unmatch|complete)$/.test(path)) {
+          const [, , , , , runId, action] = path.split("/");
+          const call =
+            action === "match"
+              ? service.matchReconRow
+              : action === "unmatch"
+                ? service.unmatchReconRow
+                : service.completeReconciliation;
+          return send(200, call(user, runId, input));
+        }
         if (path === "/api/admin/settings/logo")
           return send(200, await service.setLogo(user, input));
         if (path === "/api/profile/avatar")

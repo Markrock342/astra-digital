@@ -22,6 +22,8 @@ import {
 import { credentialFingerprint } from "./migrate-005.mjs";
 import { createAdminListApis } from "./admin-list-apis.mjs";
 import { createAdminFinanceApis } from "./admin-finance-apis.mjs";
+import { createFinanceCloseApis } from "./finance-close.mjs";
+import { createReconApis } from "./finance-recon.mjs";
 import { createAdminCustomerApis } from "./admin-customers.mjs";
 import { withLive } from "./live.mjs";
 import { createTeamApis } from "./admin-team.mjs";
@@ -2800,6 +2802,23 @@ export function createCommerceCore({
     moneyScope,
     outstandingCredit,
   });
+  // การเงิน › ปิดยอดรายวัน, ถอนเงิน (finance-close.mjs) and กระทบยอด (finance-recon.mjs).
+  const financeClose = createFinanceCloseApis({
+    requireAdmin,
+    confirmPassword: auth.confirmPassword,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    integer,
+    clock,
+    moneyScope,
+    bangkokDayRange,
+    fileStore,
+  });
+  const recon = createReconApis({ requireAdmin, one, all, run, tx, fail, clean, clock, moneyScope, bangkokDayRange });
   const {
     adminCustomerDetail: adminCustomerDetailRaw,
     adminUpdateCustomer,
@@ -3193,6 +3212,8 @@ export function createCommerceCore({
     adminProducts,
     adminTransactions,
     adminTransactionDetail,
+    ...financeClose,
+    ...recon,
     adminOrderPaymentSummary,
     refundOrder,
     adjustCustomerCredit,
@@ -3347,6 +3368,7 @@ export function createCommerceCore({
       fraudSignals: true,
       emailTemplates: true,
       pricingRules: true,
+      financeClose: true,
       // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
       email: accountEmail.enabled,
       passwordReset: accountEmail.enabled,
