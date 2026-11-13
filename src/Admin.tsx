@@ -924,9 +924,18 @@ export default function Admin() {
                           }}
                         >
                           <td>
-                            <Link to={"/admin/inventory/" + v.id} className="table-title-link">
-                              {p.name}
-                            </Link>
+                            <span className="stock-product-cell">
+                              <span className="stock-product-thumb" aria-hidden="true">
+                                {p.imageUrl || p.images?.[0]?.url ? (
+                                  <img src={p.imageUrl || p.images?.[0]?.url} alt="" loading="lazy" />
+                                ) : (
+                                  <Art small type={p.art} name={p.name} />
+                                )}
+                              </span>
+                              <Link to={"/admin/inventory/" + v.id} className="table-title-link">
+                                {p.name}
+                              </Link>
+                            </span>
                           </td>
                           <td>{v.label}</td>
                           <td>{money(v.price)}</td>

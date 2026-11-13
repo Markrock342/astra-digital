@@ -72,6 +72,7 @@ function isImageUploadPath(method, path) {
     path === "/api/admin/finance/withdrawals/proof" ||
     path === "/api/profile/avatar" ||
     path === "/api/chat/images" ||
+    path === "/api/admin/categories/image" ||
     path === "/api/admin/settings/logo" ||
     /^\/api\/admin\/banners\/[^/]+\/(?:image|mobile-image)$/.test(path) ||
     /^\/api\/admin\/orders\/[^/]+\/slip$/.test(path)
@@ -1053,6 +1054,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, await service.setAvatar(user, input));
         if (path === "/api/chat/images")
           return send(201, await service.uploadChatImage(user, input));
+        if (path === "/api/admin/categories/image")
+          return send(201, await service.adminUploadCategoryImage(user, input));
         if (path === "/api/admin/products")
           return send(200, service.saveProduct(user, input, { origin: url.origin }));
         if (/^\/api\/admin\/products\/[^/]+\/images$/.test(path))

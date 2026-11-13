@@ -16,11 +16,16 @@
  * everywhere) are re-pointed to moveTo or the first remaining category.
  */
 
+import { randomUUID } from "node:crypto";
+import { assertAllowedImage } from "./file-store.mjs";
+
 export const CATEGORY_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** Icon uploaded by the admin (not from the library): "upload-<file key>", served by /api/files. */
+export const UPLOADED_ICON = /^upload-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ICON = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const MAX_CATEGORIES = 60;
 
-export function createCategoryApis({ requireAdmin, one, all, run, tx, fail }) {
+export function createCategoryApis({ requireAdmin, one, all, run, tx, fail, fileStore }) {
   const audit = (user, action, entity, detail) =>
     run(
       "INSERT INTO audit(user_id,action,entity_id,detail) VALUES(?,?,?,?)",
@@ -45,9 +50,28 @@ export function createCategoryApis({ requireAdmin, one, all, run, tx, fail }) {
   const icon = (value) => {
     if (value === undefined || value === null || value === "") return null;
     if (typeof value !== "string" || value.length > 60 || !ICON.test(value))
-      fail(400, "ไอคอนต้องเป็นรูปจากคลังรูป");
+      fail(400, "ไอคอนต้องเป็นรูปจากคลังรูปหรือรูปที่อัปโหลด");
+    if (value.startsWith("upload-") && !UPLOADED_ICON.test(value)) fail(400, "รูปไอคอนไม่ถูกต้อง");
     return value;
   };
+  /** An uploaded icon nobody uses any more: delete its file after the change is saved. */
+  const dropUploadedIcon = (value) => {
+    if (!value || !UPLOADED_ICON.test(value) || !fileStore) return;
+    if (one("SELECT 1 AS n FROM categories WHERE icon=? LIMIT 1", value)) return;
+    Promise.resolve()
+      .then(() => fileStore.delete(value.slice("upload-".length)))
+      .catch(() => {});
+  };
+  /** POST /api/admin/categories/image (raw JPEG/PNG/WebP). Returns the icon value to save. */
+  async function adminUploadCategoryImage(user, { bytes, contentType } = {}) {
+    requireAdmin(user);
+    if (!fileStore) fail(503, "ยังไม่ได้เปิดที่เก็บไฟล์");
+    if (!bytes || bytes.byteLength === 0) fail(415, "ชนิดไฟล์ไม่ถูกต้อง");
+    const mime = assertAllowedImage(contentType, bytes, fail);
+    const key = randomUUID();
+    await fileStore.put(key, bytes, mime);
+    return { icon: "upload-" + key, url: "/api/files/" + key };
+  }
   const exists = (id) => !!one("SELECT id FROM categories WHERE id=?", id);
   const shape = (row) => ({
     id: row.id,
@@ -155,6 +179,7 @@ export function createCategoryApis({ requireAdmin, one, all, run, tx, fail }) {
         changed.id = { from: id, to: newId, products: moved };
       }
       if (Object.keys(changed).length) audit(user, "CATEGORY_UPDATE", newId, { changed });
+      if (changed.icon) dropUploadedIcon(changed.icon.from);
       return { category: get(newId), changed: Object.keys(changed), moved };
     });
   }
@@ -217,6 +242,7 @@ export function createCategoryApis({ requireAdmin, one, all, run, tx, fail }) {
         run("UPDATE products SET category=? WHERE category=?", to, id);
       }
       run("DELETE FROM categories WHERE id=?", id);
+      dropUploadedIcon(row.icon);
       audit(user, "CATEGORY_DELETE", id, {
         name_th: row.name_th,
         ...(moved ? { movedTo: moveTo, moved } : {}),
@@ -235,5 +261,6 @@ export function createCategoryApis({ requireAdmin, one, all, run, tx, fail }) {
     adminUpdateCategory,
     adminReorderCategories,
     adminDeleteCategory,
+    adminUploadCategoryImage,
   };
 }

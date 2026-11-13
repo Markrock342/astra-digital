@@ -553,7 +553,7 @@ export function createCommerceCore({
   const { releaseCouponForOrder } = coupons;
   // Sale / compare-at / tag prices / purchase limits (pricing.mjs).
   const pricing = createPricing({ one, all, run, tx, fail, clean, requireAdmin, requireStaff, clock });
-  const categoryApis = createCategoryApis({ requireAdmin, one, all, run, tx, fail });
+  const categoryApis = createCategoryApis({ requireAdmin, one, all, run, tx, fail, fileStore });
   // ctx: { ip, userAgent } from the request. Only a coarse device label and the IP
   // cut to /24 (IPv6 /48) are stored, for the "my devices" list (account-sessions.mjs).
   const issueSession = (user, ctx = {}) => {
@@ -3259,6 +3259,7 @@ export function createCommerceCore({
     adminCouponRedemptions: coupons.adminCouponRedemptions,
     // Categories (server/categories.mjs).
     publicCategories: categoryApis.publicCategories,
+    adminUploadCategoryImage: (...a) => categoryApis.adminUploadCategoryImage(...a),
     adminCategories: categoryApis.adminCategories,
     adminCreateCategory: categoryApis.adminCreateCategory,
     adminUpdateCategory: categoryApis.adminUpdateCategory,
