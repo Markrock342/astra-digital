@@ -70,6 +70,8 @@ export function createBroadcastApis({
   emailEnabled = false,
   shopName = () => "ASIA EXTRA",
   publicBaseUrl = "",
+  // Admin-edited template (email-templates.mjs); defaults to the built-in one.
+  renderEmail = (args) => templates.broadcast(args),
 }) {
   const L = BROADCAST_LIMITS;
 
@@ -286,7 +288,7 @@ export function createBroadcastApis({
     if (wantsEmail && emailTargets.length) {
       const base = baseUrl(ctx);
       const link = content.link ? (content.link.startsWith("/") ? (base ? base + content.link : "") : content.link) : "";
-      const message = templates.broadcast({
+      const message = renderEmail({
         shopName: shopName(),
         title: content.title,
         body: content.body,

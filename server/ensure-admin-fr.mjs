@@ -420,3 +420,74 @@ export function ensureReviewModeration(db) {
     if (!has(column)) db.exec(`ALTER TABLE reviews ADD COLUMN ${column} TEXT`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_reviews_created ON reviews(created_at)");
 }
+
+/**
+ * Fraud signals (server/fraud.mjs). Idempotent; nothing here blocks an order by itself.
+ * - fraud_events: cheap counters the rules read (payment_failed / issue_report per account,
+ *   signup per masked IP prefix — the same /24 or /48 that sessions keep, never a full IP).
+ *   Rows older than 31 days are pruned.
+ * - fraud_signals: one "สัญญาณผิดปกติ" per rule + subject (account or IP prefix) per window;
+ *   repeats inside the window only bump hits / last_at_ms. Admin marks it REVIEWED + note.
+ * - fraud_blocks: temporary block of one email or a whole email domain from registering and
+ *   logging in. Expires by itself (expires_ms); lifting early keeps the row (lifted_at).
+ */
+export function ensureFraudSignals(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS fraud_events (
+    kind TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    user_id TEXT,
+    at_ms INTEGER NOT NULL
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_fraud_events_subject ON fraud_events(kind, subject, at_ms)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_fraud_events_at ON fraud_events(at_ms)");
+  db.exec(`CREATE TABLE IF NOT EXISTS fraud_signals (
+    id TEXT PRIMARY KEY,
+    rule TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    user_id TEXT,
+    ip_masked TEXT,
+    value INTEGER NOT NULL DEFAULT 0,
+    threshold INTEGER NOT NULL DEFAULT 0,
+    window_hours INTEGER NOT NULL DEFAULT 1,
+    detail TEXT,
+    hits INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'OPEN',
+    at_ms INTEGER NOT NULL,
+    last_at_ms INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by TEXT,
+    reviewed_at TEXT,
+    review_note TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_fraud_signals_dedupe ON fraud_signals(rule, subject, at_ms)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_fraud_signals_status ON fraud_signals(status, at_ms)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_fraud_signals_user ON fraud_signals(user_id)");
+  db.exec(`CREATE TABLE IF NOT EXISTS fraud_blocks (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    value TEXT NOT NULL,
+    reason TEXT,
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    at_ms INTEGER NOT NULL,
+    expires_ms INTEGER NOT NULL,
+    lifted_at TEXT,
+    lifted_by TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_fraud_blocks_value ON fraud_blocks(value, expires_ms)");
+}
+
+/**
+ * Admin-edited email templates (server/email-templates.mjs). One row per edited template;
+ * no row = the built-in default ("reset to default" deletes the row).
+ */
+export function ensureEmailTemplates(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS email_templates (
+    key TEXT PRIMARY KEY,
+    subject TEXT NOT NULL,
+    heading TEXT NOT NULL,
+    body TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by TEXT
+  )`);
+}

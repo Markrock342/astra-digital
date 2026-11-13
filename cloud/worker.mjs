@@ -50,6 +50,8 @@ import {
   ensureStockWatch,
   ensureReviewModeration,
   ensurePrivacyRequests,
+  ensureFraudSignals,
+  ensureEmailTemplates,
 } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
 import {
@@ -149,6 +151,8 @@ export class Commerce extends DurableObject {
       ensureAppendOnlyMoney(db);
       ensureAlertsBackup(db);
       ensurePrivacyRequests(db);
+      ensureFraudSignals(db);
+      ensureEmailTemplates(db);
     });
     this.db = db;
     const adminPassword =

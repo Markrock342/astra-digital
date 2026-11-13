@@ -24,6 +24,8 @@ export const ALERT_EVENTS = [
   "chat_assigned",
   "refund",
   "daily_summary",
+  // Basic fraud signals (fraud.mjs): flag only, never a ban.
+  "fraud_signal",
 ];
 export const ALERT_RATE_MAX = 30;
 export const ALERT_RATE_WINDOW_MS = 10 * 60000;
@@ -370,6 +372,16 @@ export function createAlerts({
             link(cfg, "/admin/reports"),
         };
       }
+      case "fraud_signal":
+        // Masked email / IP prefix only; the admin opens the shop for details.
+        return {
+          title: "สัญญาณผิดปกติ: " + oneLine(data.label, 60),
+          body:
+            oneLine(data.value, 40) + " ใน " + oneLine(data.window, 20) +
+            (data.who ? "\nลูกค้า: " + oneLine(data.who, 80) : "") +
+            "\nระบบไม่ได้ระงับบัญชีให้อัตโนมัติ กรุณาตรวจสอบ" +
+            link(cfg, "/admin/fraud"),
+        };
       default:
         return null;
     }

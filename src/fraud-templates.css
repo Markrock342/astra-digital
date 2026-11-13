@@ -1,0 +1,448 @@
+/* Admin › ลูกค้า › สัญญาณผิดปกติ and › ตั้งค่า › ข้อความอีเมล.
+   Reference: shadcn/ui (MIT) Tabs, Card, Badge, Switch, Input/Textarea and the "Mail" list +
+   reading pane, on the admin brand pass from alerts.css (white cards, cool-grey background,
+   one brand colour, soft elevation). Builds on alerts.css classes (alert-badge, alert-switch). */
+
+/* ------------------------------------------------------------ signals */
+.merchant-shell .fraud-signal-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
+}
+.merchant-shell .fraud-signal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+  min-width: 0;
+  border-left: 3px solid #dc2626;
+}
+.merchant-shell .fraud-signal-card[data-status="reviewed"] {
+  border-left-color: #16a34a;
+}
+.merchant-shell .fraud-signal-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.merchant-shell .fraud-rule {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text);
+}
+.merchant-shell .fraud-rule svg {
+  flex: none;
+  color: #dc2626;
+}
+.merchant-shell .fraud-signal-card[data-status="reviewed"] .fraud-rule svg {
+  color: #16a34a;
+}
+.merchant-shell .fraud-rule strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.merchant-shell .fraud-value {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.merchant-shell .fraud-value strong {
+  font-size: 18px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.merchant-shell .fraud-value small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.merchant-shell .fraud-meta {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.merchant-shell .fraud-meta > div {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 8px;
+  font-size: 13px;
+}
+.merchant-shell .fraud-meta dt {
+  color: var(--muted);
+}
+.merchant-shell .fraud-meta dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.merchant-shell .fraud-meta dd a {
+  color: var(--brand);
+  font-weight: 550;
+}
+.merchant-shell .fraud-meta dd small {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}
+.merchant-shell .fraud-meta code {
+  font-size: 12px;
+  background: #f4f4f5;
+  border: 1px solid #e4e4e7;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.merchant-shell .fraud-note {
+  flex-basis: 100%;
+  color: var(--text);
+  font-size: 13px;
+  quotes: "“" "”";
+}
+.merchant-shell .fraud-actions {
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+.merchant-shell .fraud-inline-form .field {
+  margin: 0;
+}
+.merchant-shell .fraud-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #15803d;
+}
+.merchant-shell .fraud-empty p {
+  margin: 0;
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------ blocks + rules */
+.merchant-shell .fraud-block-card h2,
+.merchant-shell .fraud-rules-card h2 {
+  font-size: 16px;
+  margin: 0 0 4px;
+}
+.merchant-shell .fraud-block-card > .field-help,
+.merchant-shell .fraud-rules-card > .field-help {
+  margin: 0 0 14px;
+  line-height: 1.6;
+}
+.merchant-shell .fraud-block-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.merchant-shell .fraud-block-form .segmented-control {
+  align-self: flex-end;
+  min-height: 40px;
+}
+.merchant-shell .fraud-block-form .segmented-control button {
+  min-height: 32px;
+  font-size: 13px;
+  padding: 5px 12px;
+}
+.merchant-shell .fraud-block-form .field {
+  margin: 0;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.merchant-shell .fraud-block-form .field select,
+.merchant-shell .fraud-block-form .field input {
+  width: 100%;
+}
+.merchant-shell .fraud-block-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.merchant-shell .fraud-block-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafafa;
+}
+.merchant-shell .fraud-block-list li > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.merchant-shell .fraud-block-list strong {
+  font-size: 14px;
+}
+.merchant-shell .fraud-block-list small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.merchant-shell .fraud-rule-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+.merchant-shell .fraud-rule-list li {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 0;
+}
+.merchant-shell .fraud-rule-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.merchant-shell .fraud-rule-head > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.merchant-shell .fraud-rule-head strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.merchant-shell .fraud-rule-head small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.merchant-shell .fraud-rule-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.merchant-shell .fraud-rule-inputs .field {
+  margin: 0;
+  font-size: 12px;
+}
+.merchant-shell .fraud-rule-inputs input {
+  width: 100%;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------ email templates */
+.merchant-shell .email-template-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.merchant-shell .email-template-notice svg {
+  flex: none;
+  margin-top: 3px;
+}
+.merchant-shell .email-template-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+}
+.merchant-shell .email-template-list {
+  display: grid;
+  padding: 6px;
+  gap: 2px;
+  min-width: 0;
+}
+.merchant-shell .email-template-list button {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.merchant-shell .email-template-list button:hover {
+  background: #f4f4f5;
+}
+.merchant-shell .email-template-list button.active {
+  background: var(--brand-soft);
+}
+.merchant-shell .email-template-list button svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--muted);
+}
+.merchant-shell .email-template-list button.active svg {
+  color: var(--brand);
+}
+.merchant-shell .email-template-list button > span:not(.alert-badge) {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.merchant-shell .email-template-list strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.merchant-shell .email-template-list small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.merchant-shell .email-template-editor {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.merchant-shell .email-template-editor .field {
+  margin: 0;
+}
+.merchant-shell .email-template-editor .field input,
+.merchant-shell .email-template-editor .field textarea {
+  width: 100%;
+  min-width: 0;
+}
+.merchant-shell .email-template-editor textarea {
+  min-height: 140px;
+  line-height: 1.6;
+  resize: vertical;
+}
+.merchant-shell .email-template-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.merchant-shell .email-template-title h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.merchant-shell .email-placeholders {
+  display: grid;
+  gap: 8px;
+}
+.merchant-shell .email-placeholders > span,
+.merchant-shell .email-placeholders small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.merchant-shell .email-placeholders > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.merchant-shell .email-chip {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.merchant-shell .email-chip:hover {
+  border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  background: var(--brand-soft);
+}
+.merchant-shell .email-chip.required {
+  border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  color: var(--brand);
+  font-weight: 600;
+}
+.merchant-shell .email-template-actions {
+  flex-wrap: wrap;
+}
+.merchant-shell .email-reset-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.merchant-shell .email-preview {
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.merchant-shell .email-preview-subject {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.merchant-shell .email-preview-subject span {
+  color: var(--muted);
+}
+.merchant-shell .email-preview iframe {
+  width: 100%;
+  height: 560px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f1f3f6;
+}
+
+@media (max-width: 1000px) {
+  .merchant-shell .fraud-signal-list,
+  .merchant-shell .fraud-rule-list {
+    grid-template-columns: 1fr;
+  }
+  .merchant-shell .email-template-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .merchant-shell .fraud-signal-card {
+    padding: 16px;
+  }
+  .merchant-shell .fraud-actions .button,
+  .merchant-shell .fraud-block-form .button,
+  .merchant-shell .email-template-actions .button {
+    width: 100%;
+    justify-content: center;
+  }
+  .merchant-shell .fraud-block-form .segmented-control {
+    width: 100%;
+  }
+  .merchant-shell .fraud-block-form .segmented-control button {
+    flex: 1;
+  }
+  .merchant-shell .fraud-block-form .field {
+    flex-basis: 100%;
+  }
+  .merchant-shell .email-reset-confirm {
+    width: 100%;
+  }
+  .merchant-shell .email-preview iframe {
+    height: 480px;
+  }
+}
+
+/* Dark preference: .merchant-shell defines its own light tokens (styles.css), so the back
+   office stays light and readable whichever theme the storefront uses; nothing to add. */
