@@ -13,6 +13,22 @@ import { ensureCategories } from "../server/ensure-admin-fr.mjs";
 import { ACCOUNT_SHOP_CATEGORIES, DEFAULT_CATEGORIES, categories as legacyExport } from "../server/catalog.mjs";
 import { categoryMeta, categoryIdFromQuery, metaTags, sitemapXml } from "../server/seo.mjs";
 
+/** Close DBs then remove the temp dir; Windows may EPERM if the file lock lingers. */
+function cleanupTempDir(dir, ...dbs) {
+  for (const db of dbs) {
+    try {
+      db?.close?.();
+    } catch {
+      /* already closed */
+    }
+  }
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch (e) {
+    if (e && e.code !== "EPERM" && e.code !== "ENOENT") throw e;
+  }
+}
+
 const ORIGINAL = ["streaming", "music", "software", "games", "gift"];
 const FRESH = [...ORIGINAL, "ai", "productivity", "vpn"];
 
@@ -44,10 +60,11 @@ const newProduct = (s, admin, category, extra = {}) =>
 
 test("seeding: fresh shop gets the 5 original + ai/productivity/vpn, idempotent, deleted rows stay deleted", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "astra-categories-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const path = join(dir, "shop.sqlite");
   const key = randomBytes(32);
   const first = createCommerce({ path, key, allowDemoAdmin: true });
+  let again;
+  t.after(() => cleanupTempDir(dir, first.db, again?.db));
   const admin = first.session(first.demoMerchant().token);
   const all = first.adminCategories(admin).categories;
   assert.deepEqual(ids(all), FRESH, "original ids kept, in order, then the account-shop defaults");
@@ -69,8 +86,7 @@ test("seeding: fresh shop gets the 5 original + ai/productivity/vpn, idempotent,
   // A category the admin deleted is not brought back on the next start.
   first.adminDeleteCategory(admin, "vpn");
   first.db.close();
-  const again = createCommerce({ path, key, allowDemoAdmin: true });
-  t.after(() => again.db.close());
+  again = createCommerce({ path, key, allowDemoAdmin: true });
   const admin2 = again.session(again.demoMerchant().token);
   assert.deepEqual(ids(again.adminCategories(admin2).categories), FRESH.filter((id) => id !== "vpn"));
   // catalog.mjs keeps its old export for older importers.
@@ -102,16 +118,16 @@ test("upgrade: an existing shop with products in the old categories keeps them v
 
 test("upgrade on a real database: drop the table, reopen, products and saveProduct keep working", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "astra-categories-up-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const path = join(dir, "shop.sqlite");
   const key = randomBytes(32);
   const old = createCommerce({ path, key, allowDemoAdmin: true });
+  let s;
+  t.after(() => cleanupTempDir(dir, old.db, s?.db));
   newProduct(old, old.session(old.demoMerchant().token), "music");
   // Simulate the database as it was before this feature.
   old.db.exec("DROP TABLE categories");
   old.db.close();
-  const s = createCommerce({ path, key, allowDemoAdmin: true });
-  t.after(() => s.db.close());
+  s = createCommerce({ path, key, allowDemoAdmin: true });
   const admin = s.session(s.demoMerchant().token);
   assert.deepEqual(ids(s.adminCategories(admin).categories), ORIGINAL);
   const product = s.db.prepare("SELECT * FROM products WHERE category='music' AND hidden_seed=0 LIMIT 1").get();
