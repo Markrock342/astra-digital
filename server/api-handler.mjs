@@ -882,6 +882,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           );
         if (/^\/api\/admin\/privacy\/requests\/[^/]+\/reject$/.test(path))
           return send(200, service.rejectPrivacyRequest(user, path.split("/")[5]));
+        // Wipe test-mode customers / orders before go-live (launch-cleanup.mjs). Default dryRun.
+        if (path === "/api/admin/launch/cleanup")
+          return send(200, service.adminLaunchCleanup(user, input));
         if (path === "/api/reviews")
           return send(201, service.addReview(user, input));
         if (path === "/api/stock-watch") {
