@@ -6,7 +6,7 @@
 // follow the WAI-ARIA APG carousel pattern (auto-rotation stops on hover / focus and can be
 // paused; no auto-rotation with reduced motion). Colours come from the storefront tokens,
 // so every accent × light/dark works unchanged. No banners → renders nothing.
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import { Link, useStore } from "./App";
 import { t } from "./i18n";
@@ -19,7 +19,15 @@ const calmMotion = () =>
   matchMedia("(prefers-reduced-motion: reduce)").matches ||
   document.documentElement.dataset.motion === "calm";
 
-function Slide({ banner, eager }: { banner: HomeBanner; eager: boolean }) {
+function Slide({
+  banner,
+  eager,
+  onRatio,
+}: {
+  banner: HomeBanner;
+  eager: boolean;
+  onRatio: (id: string, ratio: number) => void;
+}) {
   const picture = (
     <picture>
       {banner.mobileImageUrl && <source media="(max-width: 640px)" srcSet={banner.mobileImageUrl} />}
@@ -32,6 +40,10 @@ function Slide({ banner, eager }: { banner: HomeBanner; eager: boolean }) {
         decoding="async"
         draggable={false}
         className={banner.mobileImageUrl ? "has-mobile" : ""}
+        onLoad={(e) => {
+          const img = e.currentTarget;
+          if (img.naturalWidth && img.naturalHeight) onRatio(banner.id, img.naturalWidth / img.naturalHeight);
+        }}
       />
     </picture>
   );
@@ -67,6 +79,24 @@ function BannerCarousel({ banners }: { banners: HomeBanner[] }) {
   const [focused, setFocused] = useState(false);
   const [visible, setVisible] = useState(() => document.visibilityState === "visible");
   const current = Math.min(index, count - 1);
+  // The frame takes the shape of the tallest banner (clamped), and every image is shown whole
+  // (object-fit: contain) — an announcement poster must never lose its top or bottom.
+  const [ratios, setRatios] = useState<Record<string, number>>({});
+  const [phone, setPhone] = useState(() => matchMedia("(max-width: 640px)").matches);
+  useEffect(() => {
+    const mq = matchMedia("(max-width: 640px)");
+    const on = () => setPhone(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  const onRatio = useCallback(
+    (id: string, ratio: number) => setRatios((r) => (r[id] === ratio ? r : { ...r, [id]: ratio })),
+    [],
+  );
+  const known = banners.map((b) => ratios[b.id]).filter((r): r is number => !!r);
+  const frameRatio = known.length
+    ? Math.min(4, Math.max(phone ? 4 / 5 : 16 / 9, Math.min(...known)))
+    : 8 / 3;
   const mobileMode = banners.every((b) => b.mobileImageUrl)
     ? "all"
     : banners.some((b) => b.mobileImageUrl)
@@ -172,6 +202,7 @@ function BannerCarousel({ banners }: { banners: HomeBanner[] }) {
       aria-roledescription="carousel"
       aria-label={t("โปรโมชั่น")}
       data-mobile={mobileMode}
+      style={{ "--banner-ratio": String(frameRatio) } as CSSProperties}
       onKeyDown={onKeyDown}
       onPointerEnter={(e) => e.pointerType === "mouse" && setHovered(true)}
       onPointerLeave={(e) => e.pointerType === "mouse" && setHovered(false)}
@@ -193,7 +224,7 @@ function BannerCarousel({ banners }: { banners: HomeBanner[] }) {
               inert={i !== current}
               data-banner={banner.id}
             >
-              <Slide banner={banner} eager={i === 0} />
+              <Slide banner={banner} eager={i === 0} onRatio={onRatio} />
             </div>
           ))}
         </div>

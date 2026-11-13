@@ -2,7 +2,7 @@
 // List + dialog follow the shadcn/ui patterns already used in the back office (MIT):
 // a list of rows with up/down ordering and row actions, Dialog with a form, AlertDialog for
 // delete. The image fields show the exact crop the storefront uses (object-fit: cover in an
-// 8:3 frame, 3:2 on phones). Admin pass: white cards on cool grey, one brand colour.
+// recommended 8:3, 3:2 on phones; the storefront never crops). Admin pass: white cards on cool grey, one brand colour.
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   ArrowDown,
@@ -300,7 +300,7 @@ function ImageField({
       </div>
       {off && (
         <small className="field-help banner-crop-warning" role="note">
-          รูปนี้ {picked!.width}×{picked!.height} px สัดส่วนไม่ตรง ส่วนที่อยู่นอกกรอบจะถูกครอปตามตัวอย่าง
+          รูปนี้ {picked!.width}×{picked!.height} px สัดส่วนไม่ตรงกับที่แนะนำ หน้าร้านจะแสดงครบทั้งรูป (กรอบปรับตามรูป อาจมีขอบว่างด้านข้าง)
         </small>
       )}
       <span className="banner-image-actions">
