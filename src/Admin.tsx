@@ -85,6 +85,7 @@ import { AdminAlerts, AdminBackup } from "./AdminAlerts";
 import { AdminCoupons } from "./AdminCoupons";
 import { AdminCategories } from "./AdminCategories";
 import { AdminBanners } from "./AdminBanners";
+import { AdminAppearance } from "./AdminAppearance";
 import { AdminReviews } from "./AdminReviews";
 import { AdminIntegrations } from "./AdminIntegrations";
 import { LegalSettings } from "./Legal";
@@ -126,6 +127,7 @@ const customerTabs = [
 ];
 const settingTabs = [
   ["settings", "ร้าน"],
+  ["settings/appearance", "หน้าตาร้าน"],
   ["settings/payment", "รับเงิน"],
   ["settings/banners", "แบนเนอร์หน้าแรก"],
   ["settings/legal", "ข้อกำหนดและนโยบาย"],
@@ -1013,6 +1015,8 @@ export default function Admin() {
             <LegalSettings />
           ) : sub === "settings/faq" ? (
             <FaqSettingsPanel products={data.products} />
+          ) : sub === "settings/appearance" ? (
+            <AdminAppearance />
           ) : sub === "settings/banners" ? (
             <AdminBanners />
           ) : sub === "settings/receipts" ? (

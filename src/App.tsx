@@ -2933,6 +2933,10 @@ export default function App() {
       const page = e.data.path;
       if (typeof page === "string" && page.startsWith("/") && !page.startsWith("//") && page !== location.pathname)
         go(page + "?shop-preview=1");
+      // The editor's tab changed: bring the part being edited into view.
+      if (e.data.focus === "footer")
+        setTimeout(() => document.querySelector(".site-footer")?.scrollIntoView({ block: "end" }), 120);
+      else if (e.data.focus === "top") setTimeout(() => scrollTo({ top: 0 }), 120);
     };
     addEventListener("message", onMessage);
     window.parent.postMessage({ type: "shop-preview-ready" }, location.origin);

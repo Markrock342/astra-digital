@@ -27,6 +27,30 @@ export async function toWebp(file: File, maxSide: number): Promise<Blob> {
   throw new Error("ย่อรูปให้เล็กกว่า 2MB ไม่ได้ ลองรูปที่เล็กลง");
 }
 
+/**
+ * Like toWebp, for files that other apps read: link-preview images (JPEG, which every chat app
+ * and social site shows) and favicons (PNG, which every browser shows).
+ */
+export async function toImage(file: File, maxSide: number, type: "image/jpeg" | "image/png"): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const ctx = canvas.getContext("2d")!;
+  if (type === "image/jpeg") {
+    ctx.fillStyle = "#ffffff"; // JPEG has no transparency
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  for (const quality of [0.88, 0.78, 0.66, 0.5]) {
+    const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, type, quality));
+    if (blob && blob.size <= MAX_UPLOAD_BYTES) return blob;
+  }
+  throw new Error("ย่อรูปให้เล็กกว่า 2MB ไม่ได้ ลองรูปที่เล็กลง");
+}
+
 /** POST raw image bytes (not JSON) to an upload endpoint. */
 export async function uploadImage<T>(path: string, blob: Blob): Promise<T> {
   const response = await fetch("/api" + path, {
