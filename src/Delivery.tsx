@@ -444,7 +444,7 @@ export function SeatGroupPanel({ groupId, onChanged, onClose }: { groupId: strin
             ขายแล้ว {sold}/{live} {unit}
           </small>
         </span>
-        <button type="button" className="icon-button" aria-label="ปิด" onClick={onClose}>
+        <button type="button" className="icon-button" aria-label="ปิดรายการที่นั่ง" onClick={onClose}>
           <X size={16} />
         </button>
       </div>

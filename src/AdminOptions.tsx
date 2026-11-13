@@ -178,7 +178,7 @@ export function OptionGroupsEditor({
           name: g.name.trim(),
           values: g.values.filter((v) => v.label.trim()).map((v) => ({ id: v.id, label: v.label.trim() })),
         })),
-      });
+      }, "PATCH");
       toast(result.created ? "บันทึกแล้ว · เพิ่ม " + result.created + " แบบ (ปิดไว้ ตั้งราคาแล้วเปิดขาย)" : "บันทึกกลุ่มแล้ว");
       setEditing(false);
       onSaved();
@@ -356,7 +356,7 @@ export function OptionGrid({
     setBusy(true);
     setError("");
     try {
-      const r = await api<{ changed: number }>("/admin/products/" + encodeURIComponent(productId) + "/variants/bulk", body);
+      const r = await api<{ changed: number }>("/admin/products/" + encodeURIComponent(productId) + "/variants/bulk", body, "PATCH");
       toast("แก้แล้ว " + r.changed + " แถว");
       setValue("");
       onChanged();
