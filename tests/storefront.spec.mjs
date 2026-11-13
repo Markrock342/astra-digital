@@ -209,3 +209,16 @@ test("account photo uploads, shows in the header, and can be removed", async ({ 
   await expect(page.locator(".account-button .avatar img")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "ลบรูปโปรไฟล์" })).toHaveCount(0);
 });
+
+test("light theme on a dark-mode phone opts out of forced dark (color-scheme: only light)", async ({ browser }) => {
+  const ctx = await browser.newContext({ colorScheme: "dark", viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  await page.goto(base + "/");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe("dark");
+  await page.evaluate(() => localStorage.setItem("asiax-mode", "light"));
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toMatch(/^(only light|light only)$/);
+  await ctx.close();
+});
