@@ -65,6 +65,9 @@ export type ChatMessage = {
   order?: ChatOrderCard | null;
 };
 
+/** Window event: the notification bell reloads its list. */
+const NOTICES_REFRESH = "notices-refresh";
+
 /** A reply is the same text message, with the quoted line marked so both sides can show it. */
 const REPLY_MARK = "\u200b↩ ";
 type ChatReply = { author: string; text: string };
@@ -204,6 +207,12 @@ export function NotificationBell({ admin = false }: { admin?: boolean }) {
     }
   }, []);
   usePoll(load, 60000, !!user, ["notify"]);
+  // Opening a chat thread clears its alerts on the server: refresh the badge right away.
+  useEffect(() => {
+    const again = () => void load();
+    addEventListener(NOTICES_REFRESH, again);
+    return () => removeEventListener(NOTICES_REFRESH, again);
+  }, [load]);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
@@ -740,8 +749,9 @@ export function AdminChat() {
       setMessages(
         (await api<{ messages: ChatMessage[] }>("/chat/threads/" + current + "/messages")).messages,
       );
-      // Opening a thread marks it read on the server.
+      // Opening a thread marks it read on the server (and clears its bell alerts).
       setThreads((list) => list?.map((x) => (x.id === current ? { ...x, unreadCount: 0 } : x)) ?? list);
+      dispatchEvent(new Event(NOTICES_REFRESH));
     } catch (e) {
       setError((e as Error).message);
     }
