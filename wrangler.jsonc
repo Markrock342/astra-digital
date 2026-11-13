@@ -40,13 +40,13 @@
     // Turnstile widget "asia-extra-shop" (domain astra-demo-133.pages.dev). The secret is a
     // Worker secret: npx wrangler secret put TURNSTILE_SECRET
     "TURNSTILE_SITE_KEY": "0x4AAAAAAF-jasVnNavNr3-A",
-    // Cloudflare Email Sending (asiaextra.xyz onboarded in the dashboard).
+    // Email via Resend (domain asiaextra.xyz verified in Resend). The API key is a Worker
+    // secret set by Mark: npx wrangler secret put RESEND_API_KEY — without it email stays off.
     "EMAIL_FROM": "no-reply@asiaextra.xyz",
     "EMAIL_FROM_NAME": "ASIA EXTRA",
     // Links in emails (order page, password reset) always use the shop domain.
     "PUBLIC_BASE_URL": "https://asiaextra.xyz",
   },
-  "send_email": [{ "name": "EMAIL" }],
   "observability": {
     "enabled": true,
   },
