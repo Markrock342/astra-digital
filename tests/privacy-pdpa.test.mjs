@@ -97,6 +97,25 @@ test("delete request + admin anonymize keeps ledger/orders; no append-only delet
   assert.ok(ledgerBefore > 0);
   const auditBefore = s.db.prepare("SELECT COUNT(*) AS n FROM audit").get().n;
 
+  // Seed side tables that must go away with the account (Mark review #62).
+  const nowMs = Date.now();
+  s.db
+    .prepare(
+      "INSERT INTO password_resets(token_hash, user_id, expires_at, created_at) VALUES(?,?,?,?)",
+    )
+    .run("pdpa-reset-hash-" + user.id, user.id, nowMs + 30 * 60 * 1000, nowMs);
+  s.db
+    .prepare("INSERT INTO stock_watch(id, user_id, variant_id, created_at) VALUES(?,?,?,?)")
+    .run("pdpa-watch-" + user.id, user.id, "stream-plus-30", new Date().toISOString().slice(0, 19).replace("T", " "));
+  assert.equal(
+    s.db.prepare("SELECT COUNT(*) AS n FROM password_resets WHERE user_id=?").get(user.id).n,
+    1,
+  );
+  assert.equal(
+    s.db.prepare("SELECT COUNT(*) AS n FROM stock_watch WHERE user_id=?").get(user.id).n,
+    1,
+  );
+
   const req = s.requestAccountDeletion(user, { reason: "ขอถอนความยินยอม" });
   assert.equal(req.status, "PENDING");
   assert.throws(
@@ -114,6 +133,16 @@ test("delete request + admin anonymize keeps ledger/orders; no append-only delet
     (e) => e.status === 403,
   );
   assert.equal(s.db.prepare("SELECT status FROM users WHERE id=?").get(user.id).status, "ACTIVE");
+  assert.equal(
+    s.db.prepare("SELECT COUNT(*) AS n FROM password_resets WHERE user_id=?").get(user.id).n,
+    1,
+    "wrong password must not clear password_resets",
+  );
+  assert.equal(
+    s.db.prepare("SELECT COUNT(*) AS n FROM stock_watch WHERE user_id=?").get(user.id).n,
+    1,
+    "wrong password must not clear stock_watch",
+  );
 
   const approved = s.approvePrivacyDeletion(admin, req.id, { currentPassword: BOSS_PW });
   assert.equal(approved.status, "APPROVED");
@@ -125,6 +154,15 @@ test("delete request + admin anonymize keeps ledger/orders; no append-only delet
   assert.equal(row.name, "ผู้ใช้ที่ลบแล้ว");
   assert.equal(row.phone, null);
   assert.equal(row.avatar_key, null);
+
+  assert.equal(
+    s.db.prepare("SELECT COUNT(*) AS n FROM password_resets WHERE user_id=?").get(user.id).n,
+    0,
+  );
+  assert.equal(
+    s.db.prepare("SELECT COUNT(*) AS n FROM stock_watch WHERE user_id=?").get(user.id).n,
+    0,
+  );
 
   assert.equal(
     s.db.prepare("SELECT COUNT(*) AS n FROM ledger WHERE user_id=?").get(user.id).n,
