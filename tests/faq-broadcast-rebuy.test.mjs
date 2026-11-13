@@ -22,6 +22,7 @@ import {
 import { BROADCAST_LIMITS, cleanBroadcastLink } from "../server/broadcast.mjs";
 import { rebuyAction, renewalDue } from "../server/rebuy.mjs";
 import { sitemapXml } from "../server/seo.mjs";
+import { emailVerificationOff } from "./fixtures/email-verification-off.mjs";
 
 const adminPassword = randomBytes(24).toString("hex");
 const fail = (status, message) => {
@@ -43,7 +44,7 @@ function fakeMailer() {
 
 function shop(t, options = {}) {
   let now = Date.parse("2026-11-13T05:00:00Z");
-  const s = createCommerce({ adminPassword, clock: () => now, ...options });
+  const s = emailVerificationOff(createCommerce({ adminPassword, clock: () => now, ...options }));
   t.after(() => s.db.close());
   const admin = s.session(s.login({ email: "admin@astra.local", password: adminPassword }).token);
   s.setPaymentChannel(admin, { provider: "sandbox", active: true });

@@ -9,6 +9,7 @@ import { createCommerce } from "../server/commerce.mjs";
 import { createAPIHandler } from "../server/api-handler.mjs";
 import { ROLES } from "../server/auth-policy.mjs";
 import { walletRowSql } from "../server/money.mjs";
+import { emailVerificationOff } from "./fixtures/email-verification-off.mjs";
 
 const ADMIN_PASSWORD = "manual-admin-pass-" + randomBytes(6).toString("hex");
 const BUYER_PASSWORD = "Manual-buyer-Password-123";
@@ -16,7 +17,7 @@ let keySeq = 0;
 const key = () => "manual-test-" + String(++keySeq).padStart(6, "0");
 
 function fixture(t, options = {}) {
-  const s = createCommerce({ adminPassword: ADMIN_PASSWORD, ...options });
+  const s = emailVerificationOff(createCommerce({ adminPassword: ADMIN_PASSWORD, ...options }));
   t.after(() => s.db.close());
   // Demo catalog: make every seeded product buyable so tests can pick any option.
   s.db.prepare("UPDATE products SET hidden_seed=0").run();

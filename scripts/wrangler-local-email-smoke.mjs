@@ -9,8 +9,8 @@
  *             Resend server, and Cloudflare's public Turnstile TEST keys with
  *             TURNSTILE_VERIFY_URL pointing at a local mock siteverify (both started here;
  *             the mock accepts only the test secret + dummy token, like Cloudflare does).
- *             Runs register → forgot → reset (link captured by the mock) → login →
- *             admin email log.
+ *             Runs register → verify email (link captured by the mock) → forgot → reset →
+ *             login → admin email log.
  *
  * Usage:  npm run build && node scripts/wrangler-local-email-smoke.mjs
  */
@@ -102,11 +102,14 @@ const baseVars = {
     ok("off: storage is Durable Object SQLite", health.data.storage === "cloudflare-durable-sqlite", health.data);
     ok("off: features.email false", health.data.features?.email === false);
     ok("off: features.turnstile false", health.data.features?.turnstile === false);
+    ok("off: features.emailVerification true (gate stays off without email)", health.data.features?.emailVerification === true);
     ok("off: no site key", health.data.turnstileSiteKey === null);
     const forgot = await api.call("POST", "/api/password/forgot", { email: "smoke@mail.example.com" });
     ok("off: forgot-password 404 with Thai text", forgot.status === 404 && /ติดต่อร้าน/.test(forgot.data.error), forgot);
     const reg = await api.call("POST", "/api/register", { name: "Smoke Off", username: "smoke_off", password: "Smoke-off-Password-1" });
     ok("off: register works without a Turnstile token", reg.status === 200, reg);
+    const offMe = await api.call("GET", "/api/me");
+    ok("off: no email → verification not required", offMe.data.user?.emailVerification?.required === false, offMe.data);
     const page = await fetch(w.base + "/login");
     ok("off: storefront CSP unchanged", page.headers.get("content-security-policy")?.includes("script-src 'self';"));
   } finally {
@@ -169,6 +172,23 @@ const mockBase = "http://127.0.0.1:" + mock.address().port;
     ok("on: register with the test token", reg.status === 200, [reg, w.log().slice(-800)]);
     ok("on: siteverify got secret + token + client IP", verifyCalls.at(-1)?.secret === TEST_SECRET && verifyCalls.at(-1)?.response === DUMMY_TOKEN && !!verifyCalls.at(-1)?.remoteip, verifyCalls);
     {
+      // Email verification: sign-up link → verify on the Worker (Durable Object SQLite).
+      ok("on: features.emailVerification true", health.data.features?.emailVerification === true);
+      const before = await api.call("GET", "/api/me");
+      ok("on: new account unverified, gate on", before.data.user?.emailVerified === false && before.data.user?.emailVerification?.required === true, before.data);
+      for (let i = 0; i < 40 && !outbox.length; i++) await new Promise((r) => setTimeout(r, 250));
+      const verifyMail = outbox[0];
+      const verifyLink = /\/verify-email\?token=([a-f0-9]{64})/.exec(verifyMail?.text ?? "");
+      ok("on: verification email reached the mock with a link", !!verifyLink && verifyMail.to[0] === "smoke-on@mail.example.com", outbox);
+      const bad = await api.call("POST", "/api/verify-email", { token: "f".repeat(64) });
+      ok("on: wrong token → 400", bad.status === 400, bad);
+      const verified = await api.call("POST", "/api/verify-email", { token: verifyLink[1] });
+      ok("on: verify 200", verified.status === 200 && verified.data.alreadyVerified === false, verified);
+      const after = await api.call("GET", "/api/me");
+      ok("on: account verified", after.data.user?.emailVerified === true, after.data);
+      const noMail = await api.call("POST", "/api/register", { name: "No Mail", username: "smoke_nomail", password: "Smoke-on-Password-12", turnstileToken: DUMMY_TOKEN });
+      ok("on: sign-up without an email refused while verification is on", noMail.status === 400, noMail);
+      outbox.length = 0;
       api.jar.clear();
       const forgot = await api.call("POST", "/api/password/forgot", { email: "smoke-on@mail.example.com", turnstileToken: DUMMY_TOKEN });
       const unknown = await api.call("POST", "/api/password/forgot", { email: "nobody@mail.example.com", turnstileToken: DUMMY_TOKEN });

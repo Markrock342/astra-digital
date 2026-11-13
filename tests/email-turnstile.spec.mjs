@@ -5,12 +5,14 @@
 import { test, expect } from "@playwright/test";
 import { createCommerce } from "../server/commerce.mjs";
 import { createApp } from "../server/http.mjs";
+import { emailVerificationOff } from "./fixtures/email-verification-off.mjs";
 import { createTurnstile } from "../server/turnstile.mjs";
 
 test.describe.configure({ mode: "serial" });
 
 async function start(options) {
-  const service = createCommerce(options);
+  // Verification gate is not what this file tests (tests/email-verification.spec.mjs).
+  const service = emailVerificationOff(createCommerce(options));
   const server = createApp(service, { production: true });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   return { service, server, base: "http://127.0.0.1:" + server.address().port };

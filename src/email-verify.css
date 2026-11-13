@@ -1,0 +1,117 @@
+/* "ยืนยันอีเมลของคุณ" card (EmailVerify.tsx). shadcn/ui Alert + Card pattern (MIT,
+   https://ui.shadcn.com): white card, brand-tinted icon chip, title + description + actions.
+   Theme tokens only (--surface/--border/--accent…), so every storefront theme and dark mode
+   follow along. Buttons keep the shared 44px tap height. */
+.storefront-shell .email-verify-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 12px 0 16px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent, #1534ff) 28%, var(--border));
+  border-radius: var(--radius, 14px);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.06);
+  color: var(--text);
+  min-width: 0;
+}
+.storefront-shell .email-verify-card.compact {
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+.storefront-shell .email-verify-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  color: var(--accent-text, var(--text));
+  background: color-mix(in srgb, var(--accent, #1534ff) 12%, transparent);
+}
+.storefront-shell .email-verify-card.compact .email-verify-icon {
+  width: 32px;
+  height: 32px;
+}
+.storefront-shell .email-verify-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.storefront-shell .email-verify-body strong {
+  font-size: 15px;
+  line-height: 1.4;
+}
+.storefront-shell .email-verify-card.compact .email-verify-body strong {
+  font-size: 14px;
+}
+.storefront-shell .email-verify-body p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.storefront-shell .email-verify-body .error-message {
+  margin: 4px 0 0;
+}
+.storefront-shell .email-verify-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.storefront-shell .email-verify-actions .button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: normal;
+  text-align: center;
+}
+.storefront-shell .email-verify-check {
+  min-height: 44px;
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-text, var(--text));
+}
+.storefront-shell .email-verify-check:hover {
+  text-decoration: underline;
+}
+.storefront-shell .email-verify-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+.storefront-shell .email-verify-form .field input {
+  min-height: 44px;
+}
+@media (max-width: 480px) {
+  .storefront-shell .email-verify-card {
+    padding: 14px;
+  }
+  .storefront-shell .email-verify-actions .button {
+    flex: 1 1 100%;
+  }
+}
+
+/* /verify-email page: reuses the recovery-done card from email-turnstile.css. */
+.storefront-shell .verify-email-page .recovery-icon.verify-email-error-icon {
+  color: #dc2626;
+  background: color-mix(in srgb, #dc2626 12%, transparent);
+  border-color: color-mix(in srgb, #dc2626 32%, var(--border));
+}
+:root[data-theme="dark"] .storefront-shell .verify-email-page .recovery-icon.verify-email-error-icon {
+  color: #f87171;
+}
+.storefront-shell .verify-email-page .recovery-done .button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}

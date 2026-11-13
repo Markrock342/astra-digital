@@ -28,6 +28,8 @@ import {
   ShieldBan,
   ShieldCheck,
   UserRound,
+  MailCheck,
+  MailWarning,
 } from "lucide-react";
 import { useLive, type LiveTopic } from "./live";
 import { AdminChat as AdminChatLazy, BuyerRankingCard as BuyerRankingInline } from "./Ops";
@@ -1161,6 +1163,13 @@ const statusText: Record<string, string> = { ACTIVE: "ปกติ", SUSPENDED: 
 const CustomerStatus = ({ status }: { status: string }) => (
   <span className={"status customer-status-" + status.toLowerCase()}>{statusText[status] ?? status}</span>
 );
+/** "ยืนยันอีเมลแล้ว / ยังไม่ยืนยัน" (email-verification.mjs). */
+const EmailVerifiedBadge = ({ at }: { at: string | null }) => (
+  <span className={"status email-verified-badge " + (at ? "verified" : "unverified")}>
+    {at ? <MailCheck size={13} aria-hidden="true" /> : <MailWarning size={13} aria-hidden="true" />}
+    {at ? "ยืนยันอีเมลแล้ว" : "ยังไม่ยืนยันอีเมล"}
+  </span>
+);
 const emptyCustomerFilters = { q: "", status: "", hasOrders: "", tag: "", sort: "created_at", from: "", to: "" };
 
 export function AdminCustomers() {
@@ -1323,6 +1332,8 @@ type CustomerDetail = {
     status: string;
     statusReason: string | null;
     statusChangedAt: string | null;
+    /** null = email not verified yet (email-verification.mjs). */
+    emailVerifiedAt?: string | null;
     created_at: string;
     tags?: CustomerTag[];
   };
@@ -1466,6 +1477,7 @@ const historyText = (h: CustomerDetail["history"][number]) => {
   }
   if (h.action === "CUSTOMER_SIGN_OUT") return "บังคับออกจากระบบทุกอุปกรณ์";
   if (h.action === "CUSTOMER_PASSWORD_RESET") return "ตั้งรหัสผ่านชั่วคราว";
+  if (h.action === "CUSTOMER_EMAIL_VERIFIED") return "ยืนยันอีเมลให้ลูกค้า";
   if (h.action === "CREDIT_ADJUST") {
     const a = h.detail as { amount: number; reason?: string };
     return (a.amount > 0 ? "เพิ่มเครดิต " : "หักเครดิต ") + money(Math.abs(a.amount)) + (a.reason ? " · " + a.reason : "");
@@ -1548,7 +1560,10 @@ export function AdminCustomerDetail({ id }: { id: string }) {
                 {c.email.endsWith(".local") ? c.username ?? "—" : c.email} · สมัคร {dateTime(c.created_at)}
               </p>
             </div>
-            <CustomerStatus status={c.status} />
+            <div className="customer-heading-badges">
+              <EmailVerifiedBadge at={c.emailVerifiedAt ?? null} />
+              <CustomerStatus status={c.status} />
+            </div>
           </div>
           {c.status !== "ACTIVE" && (
             <p className="admin-callout danger">
@@ -1595,6 +1610,30 @@ export function AdminCustomerDetail({ id }: { id: string }) {
                   อีเมล
                   <input name="email" type="email" required maxLength={160} defaultValue={c.email} disabled={!admin} />
                 </label>
+                <div className="span-2 customer-email-verify">
+                  <EmailVerifiedBadge at={c.emailVerifiedAt ?? null} />
+                  {c.emailVerifiedAt ? (
+                    <small className="muted">ยืนยันเมื่อ {dateTime(c.emailVerifiedAt)}</small>
+                  ) : admin ? (
+                    <>
+                      <button
+                        type="button"
+                        className="button secondary"
+                        disabled={busy}
+                        onClick={() => void act("/verify-email", {}, "ยืนยันอีเมลให้ลูกค้าแล้ว")}
+                      >
+                        <MailCheck size={15} />
+                        ยืนยันให้
+                      </button>
+                      <small className="muted">
+                        ใช้เมื่อลูกค้ารับอีเมลไม่ได้และร้านยืนยันตัวตนทางช่องทางอื่นแล้ว · บันทึกในประวัติ ·
+                        แก้อีเมลแล้วต้องยืนยันใหม่
+                      </small>
+                    </>
+                  ) : (
+                    <small className="muted">ลูกค้ายังสั่งซื้อไม่ได้จนกว่าจะยืนยันอีเมล (แอดมินยืนยันให้ได้)</small>
+                  )}
+                </div>
                 <label className="field span-2">
                   เบอร์โทร
                   <input name="phone" type="tel" maxLength={20} defaultValue={c.phone ?? ""} disabled={!admin} />
@@ -3012,6 +3051,10 @@ const actionText: Record<string, string> = {
   CUSTOMER_STATUS: "เปลี่ยนสถานะลูกค้า",
   CUSTOMER_SIGN_OUT: "บังคับลูกค้าออกจากระบบ",
   CUSTOMER_PASSWORD_RESET: "ตั้งรหัสผ่านชั่วคราวให้ลูกค้า",
+  CUSTOMER_EMAIL_VERIFIED: "ยืนยันอีเมลให้ลูกค้า",
+  EMAIL_VERIFIED: "ลูกค้ายืนยันอีเมล",
+  EMAIL_VERIFY_RESEND: "ลูกค้าขอลิงก์ยืนยันอีเมลใหม่",
+  EMAIL_CHANGE: "ลูกค้าเปลี่ยนอีเมล",
   UPDATE_PROFILE: "แก้บัญชีตัวเอง",
   CREATE_ORDER: "สร้างออเดอร์",
   MANUAL_ORDER_CREATE: "สร้างออเดอร์ให้ลูกค้า (โอนนอกเว็บ)",

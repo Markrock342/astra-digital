@@ -9,6 +9,7 @@ import { createEmailSender, isRealEmail, maskEmail, templates } from "../server/
 import { createTurnstile, SITEVERIFY_URL } from "../server/turnstile.mjs";
 import { totpCode, base32Decode } from "../server/auth-hardening.mjs";
 import { RESET_TOKEN_MS } from "../server/account-email.mjs";
+import { emailVerificationOff } from "./fixtures/email-verification-off.mjs";
 
 const BASE = "https://shop.example.com";
 const MIN = 60000;
@@ -40,7 +41,7 @@ function fakeSiteverify() {
 
 function shop(t, options = {}) {
   let now = Date.UTC(2026, 10, 13, 3, 0, 0);
-  const s = createCommerce({ allowDemoAdmin: true, clock: () => now, ...options });
+  const s = emailVerificationOff(createCommerce({ allowDemoAdmin: true, clock: () => now, ...options }));
   t.after(async () => {
     await s.emailIdle();
     s.db.close();
