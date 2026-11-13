@@ -50,15 +50,24 @@ export const money = (value: number) =>
     currencyDisplay: "narrowSymbol",
     minimumFractionDigits: 2,
   }).format(value / 100);
+/** Parse shop timestamps: SQLite "YYYY-MM-DD HH:MM:SS" or API ISO (with/without Z). */
+export function shopInstant(value: string): Date {
+  const v = String(value ?? "").trim();
+  if (!v) return new Date(NaN);
+  if (v.includes("T")) {
+    return new Date(/Z$|[+-]\d{2}:?\d{2}$/.test(v) ? v : v + "Z");
+  }
+  return new Date(v.replace(" ", "T") + "Z");
+}
 export const dateTime = (value: string) =>
-  new Date(value.replace(" ", "T") + "Z").toLocaleString(locale(), {
+  shopInstant(value).toLocaleString(locale(), {
     dateStyle: "medium",
     timeStyle: "short",
   });
 export function relativeTime(value: string) {
   const seconds = Math.max(
     0,
-    (Date.now() - new Date(value.replace(" ", "T") + "Z").getTime()) / 1000,
+    (Date.now() - shopInstant(value).getTime()) / 1000,
   );
   return seconds < 60
     ? t("เมื่อสักครู่")
