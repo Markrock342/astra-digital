@@ -37,6 +37,7 @@ import { CategoryChips, categoryName, useCategoryParam } from "./Categories";
 import { ForgotPassword, TURNSTILE_WAIT, TurnstileBox, useAuthConfig } from "./AccountRecovery";
 import { StockWatchButton } from "./StockWatch";
 import { AskInChat } from "./ChatAttachments";
+import { ShopClosedNote } from "./ShopClosed";
 import { ReviewReply } from "./ReviewReply";
 import { PriceDisplay, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
 /**
@@ -595,6 +596,7 @@ export function ReferenceProduct({ id }: { id: string }) {
               </button>
             ))}
           </fieldset>
+          <ShopClosedNote />
           {!product.preorder && !variant.available ? (
             // Out of stock (ready-stock only): ask to be told when it is back instead of buy.
             <StockWatchButton key={variant.id} variantId={variant.id} productId={product.id} />

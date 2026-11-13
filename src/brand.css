@@ -2448,3 +2448,33 @@ html.lang-swap .storefront-shell .main-nav {
     overflow-wrap: anywhere;
   }
 }
+
+/* "ร้านปิดให้บริการชั่วคราว" note (ShopClosed.tsx): tinted surface + icon, no side stripe. */
+.storefront-shell .shop-closed-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, #d97706 35%, var(--border));
+  border-radius: var(--radius-sm, 10px);
+  background: color-mix(in srgb, #f59e0b 10%, var(--surface));
+  color: var(--text);
+}
+.storefront-shell .shop-closed-note svg {
+  flex: none;
+  margin-top: 2px;
+  color: #b45309;
+}
+:root[data-theme="dark"] .storefront-shell .shop-closed-note svg {
+  color: #fbbf24;
+}
+.storefront-shell .shop-closed-note strong {
+  display: block;
+  font-size: 14px;
+}
+.storefront-shell .shop-closed-note p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
