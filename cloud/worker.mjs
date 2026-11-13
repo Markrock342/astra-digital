@@ -52,6 +52,7 @@ import {
   ensurePrivacyRequests,
 } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
+import { ensureCannedReplies } from "../server/ensure-admin-fr.mjs";
 import {
   createAPIHandler,
   securityHeaders,
@@ -132,6 +133,7 @@ export class Commerce extends DurableObject {
       );
       ensureInventoryAvailableIndex(db);
       ensureChatThreadReads(db);
+      ensureCannedReplies(db);
       ensureCustomerAdmin(db);
       ensureAuthHardening(db);
       ensureOrderHistory(db);

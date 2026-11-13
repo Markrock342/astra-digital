@@ -1,0 +1,281 @@
+/* แชท › ข้อความสำเร็จรูป. shadcn/ui Command / Popover / Dialog patterns (MIT) on the
+   back-office tokens: white card, cool-grey page, --brand as the one accent, soft shadow. */
+.canned-host {
+  position: relative;
+}
+.canned-trigger {
+  align-self: flex-end;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.canned-trigger:hover,
+.canned-trigger.is-open {
+  border-color: var(--brand, #1534ff);
+  color: var(--brand, #1534ff);
+  background: var(--brand-soft, #eef1ff);
+}
+.canned-picker {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% - 4px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  max-height: min(360px, 60vh);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+.canned-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.canned-picker-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand, #1534ff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.canned-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+}
+.canned-picker-search input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+}
+/* The search box sits in the card header; the header shows focus instead of a ring. */
+.merchant-shell .canned-picker-search input:focus-visible {
+  outline: none;
+}
+.canned-picker-head:focus-within {
+  box-shadow: inset 0 -2px 0 var(--brand, #1534ff);
+}
+.canned-picker .error-message {
+  margin: 8px 12px 0;
+}
+.canned-picker-list {
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  overflow-y: auto;
+}
+.canned-picker-list li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.canned-picker-list li.is-active {
+  background: var(--brand-soft, #eef1ff);
+}
+.canned-picker-list strong {
+  font-size: 13px;
+  color: var(--text);
+}
+.canned-picker-list li.is-active strong {
+  color: var(--brand, #1534ff);
+}
+.canned-picker-list span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.canned-picker-list small,
+.canned-missing {
+  color: #b54708;
+  font-size: 12px;
+}
+.canned-picker-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 16px 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.canned-picker-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 12px;
+}
+.canned-picker-foot .button {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.canned-missing {
+  flex-basis: 100%;
+  margin: 0 0 2px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fffaeb;
+  border: 1px solid #fedf89;
+}
+
+/* Manager dialog (ADMIN). */
+.canned-manager {
+  width: 640px;
+}
+.canned-manager .reference-card-heading {
+  align-items: flex-start;
+}
+.canned-manager-lead {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.canned-manager-body {
+  padding: 0 24px 24px;
+}
+.canned-manager-list {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.canned-manager-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.canned-manager-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.canned-manager-text strong {
+  font-size: 14px;
+}
+.canned-manager-text span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.canned-manager-actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+.canned-manager-actions .button {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.reference-import-modal .canned-manager-form {
+  padding: 0;
+}
+.canned-manager-form .field {
+  margin-top: 12px;
+}
+.canned-manager-form textarea {
+  min-height: 150px !important;
+  line-height: 1.6;
+  resize: vertical;
+}
+.canned-counter {
+  align-self: flex-end;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.canned-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.canned-tokens .admin-chip {
+  margin: 0;
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  background: var(--brand-soft, #eef1ff);
+  color: var(--brand, #1534ff);
+  font-size: 12px;
+  cursor: pointer;
+}
+.canned-tokens .admin-chip:hover {
+  border-color: var(--brand, #1534ff);
+}
+
+@media (max-width: 600px) {
+  .canned-picker {
+    left: 8px;
+    right: 8px;
+    max-height: min(320px, 55vh);
+  }
+  .canned-picker-foot > span {
+    display: none;
+  }
+  .canned-picker-foot {
+    justify-content: flex-end;
+  }
+  .canned-picker-foot:not(:has(.button)) {
+    display: none;
+  }
+  .canned-manager-body {
+    padding: 0 16px 16px;
+  }
+  .canned-manager-list li {
+    flex-wrap: wrap;
+  }
+  .canned-manager-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

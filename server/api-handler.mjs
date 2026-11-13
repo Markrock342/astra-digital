@@ -425,6 +425,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, {
             notifications: service.notifications(user),
           });
+        if (path === "/api/admin/canned-replies")
+          return send(200, service.cannedReplies(user, {
+            threadId: url.searchParams.get("thread") ?? undefined,
+          }));
         if (path === "/api/rankings/buyers")
           return send(200, {
             buyers: service.buyerRanking(user, {
@@ -619,6 +623,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             }),
           );
       } else if (request.method === "PATCH") {
+        if (/^\/api\/admin\/canned-replies\/[^/]+$/.test(path))
+          return send(200, service.adminUpdateCannedReply(user, path.split("/")[4], input));
         if (/^\/api\/admin\/categories\/[^/]+$/.test(path))
           return send(200, service.adminUpdateCategory(user, path.split("/")[4], input));
         if (/^\/api\/admin\/coupons\/[^/]+$/.test(path))
@@ -648,6 +654,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
               : {},
           );
         }
+        if (/^\/api\/admin\/canned-replies\/[^/]+$/.test(path))
+          return send(200, service.adminDeleteCannedReply(user, path.split("/")[4]));
         // ?moveTo=<id>: move the category's products there, then delete (one transaction).
         if (/^\/api\/admin\/categories\/[^/]+$/.test(path))
           return send(
@@ -781,6 +789,18 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adjustCustomerCredit(user, path.split("/")[4], input));
         if (/^\/api\/admin\/orders\/[^/]+\/cancel$/.test(path))
           return send(200, service.adminCancelOrder(user, path.split("/")[4], input));
+        // Bulk: dry run / export only read; cancel / resend run per order (admin-order-bulk.mjs).
+        if (path === "/api/admin/orders/bulk")
+          return send(
+            200,
+            input.dryRun === true || input.action === "export"
+              ? service.adminBulkOrderCheck(user, input)
+              : service.adminBulkOrderAction(user, input),
+          );
+        if (path === "/api/admin/canned-replies")
+          return send(201, service.adminCreateCannedReply(user, input));
+        if (path === "/api/admin/canned-replies/reorder")
+          return send(200, service.adminReorderCannedReplies(user, input));
         if (/^\/api\/admin\/orders\/[^/]+\/replace$/.test(path))
           return send(
             200,

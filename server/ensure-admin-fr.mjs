@@ -1,5 +1,6 @@
 /** Idempotent schema helpers for Admin FR Work 1 (no numbered migration — 006 reserved for ledger). */
 import { ACCOUNT_SHOP_CATEGORIES, DEFAULT_CATEGORIES } from "./catalog.mjs";
+import { DEFAULT_CANNED_REPLIES } from "./canned-replies.mjs";
 
 /**
  * Product categories (idempotent, no numbered migration). products.category holds the id.
@@ -55,6 +56,32 @@ export function ensureChatThreadReads(db) {
     last_read_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, thread_id)
   )`);
+}
+
+/**
+ * ข้อความสำเร็จรูปในแชท (canned-replies.mjs). Idempotent; the formal Thai defaults are
+ * seeded only when the table is first created, so a default the admin deleted stays gone.
+ */
+export function ensureCannedReplies(db) {
+  const existed = !!db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='canned_replies'")
+    .get();
+  db.exec(`CREATE TABLE IF NOT EXISTS canned_replies (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  if (existed) return;
+  const insert = db.prepare(
+    "INSERT OR IGNORE INTO canned_replies(id,title,body,sort_order) VALUES(?,?,?,?)",
+  );
+  DEFAULT_CANNED_REPLIES.forEach((r, i) =>
+    insert.run("default-" + (i + 1), r.title, r.body, (i + 1) * 10),
+  );
 }
 
 /**

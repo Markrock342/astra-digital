@@ -42,6 +42,7 @@ import {
   ensurePrivacyRequests,
 } from "./ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "./auth-hardening.mjs";
+import { ensureCannedReplies } from "./ensure-admin-fr.mjs";
 import { createEmailSender } from "./email.mjs";
 import { createTurnstile } from "./turnstile.mjs";
 export { ApiError } from "./domain.mjs";
@@ -96,6 +97,7 @@ export function createCommerce(options = {}) {
   }
   ensureInventoryAvailableIndex(db);
   ensureChatThreadReads(db);
+  ensureCannedReplies(db);
   ensureCustomerAdmin(db);
   ensureAuthHardening(db);
   ensureOrderHistory(db);

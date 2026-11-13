@@ -1,0 +1,154 @@
+/* ออเดอร์ › เลือกหลายรายการ. shadcn/ui data-table row selection + dialog (MIT), on the
+   back-office tokens (white cards, cool-grey page, --brand accent, soft elevation). */
+.order-bulk-table .select-col {
+  width: 44px;
+  padding-right: 0;
+}
+.order-bulk-table input[type="checkbox"],
+.order-select-all input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand, #1534ff);
+  cursor: pointer;
+}
+.order-bulk-table tr.is-picked td,
+.order-bulk-table tr.is-picked:hover td {
+  background: var(--brand-soft, #eef1ff);
+}
+.order-bulk-all {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 10px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--raised);
+  color: var(--text);
+  font-size: 13px;
+  text-align: center;
+}
+.order-bulk-all .button {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 13px;
+  color: var(--brand, #1534ff);
+  font-weight: 600;
+}
+.order-bulk-dialog {
+  width: 520px;
+}
+.order-bulk-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 8px;
+  margin: 4px 0 0;
+}
+.order-bulk-counts div {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.order-bulk-counts dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.order-bulk-counts dd {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.order-bulk-counts .is-ok {
+  border-color: color-mix(in srgb, var(--brand, #1534ff) 35%, var(--border));
+  background: var(--brand-soft, #eef1ff);
+}
+.order-bulk-counts .is-ok dd {
+  color: var(--brand, #1534ff);
+}
+.order-bulk-counts .is-failed dd {
+  color: #b42318;
+}
+.order-bulk-lead,
+.order-bulk-note {
+  margin: 14px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.order-bulk-note {
+  padding: 8px 10px;
+  border: 1px solid #fedf89;
+  border-radius: 8px;
+  background: #fffaeb;
+  color: #93370d;
+}
+.order-bulk-results {
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  margin: 14px 0 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--raised);
+}
+.order-bulk-results li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 13px;
+}
+.order-bulk-results li > span {
+  font-size: 12px;
+  font-weight: 600;
+}
+.order-bulk-results li.is-ok > span {
+  color: var(--green);
+}
+.order-bulk-results li.is-skipped > span {
+  color: var(--muted);
+}
+.order-bulk-results li.is-failed > span {
+  color: #b42318;
+}
+.order-bulk-results small {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}
+.order-bulk-dialog .form-actions .button {
+  white-space: normal;
+}
+
+@media (max-width: 600px) {
+  .order-bulk-table tbody td.select-col {
+    justify-content: flex-start;
+    padding: 6px 0 4px;
+  }
+  .merchant-shell .order-bulk-table tbody tr.is-picked {
+    border-color: color-mix(in srgb, var(--brand, #1534ff) 45%, var(--border));
+    background: var(--brand-soft, #eef1ff);
+  }
+  .order-bulk-table tr.is-picked td,
+  .order-bulk-table tr.is-picked:hover td {
+    background: none;
+  }
+  .order-bulk-dialog form {
+    padding: 0 16px 16px;
+  }
+  .order-bulk-dialog .form-actions {
+    flex-direction: column-reverse;
+  }
+  .order-bulk-dialog .form-actions .button {
+    width: 100%;
+    justify-content: center;
+  }
+}
