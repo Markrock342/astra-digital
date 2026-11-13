@@ -31,12 +31,20 @@ export function useCategoryParam() {
   return value;
 }
 
-/** Library logo when the category has one, otherwise a neutral grid icon. */
+/** Image URL of a category icon: an admin upload ("upload-<file key>") or a library logo. */
+export const categoryIconSrc = (icon: string) =>
+  icon.startsWith("upload-") ? "/api/files/" + icon.slice("upload-".length) : "/library/" + icon + ".webp";
+
+/** The category's picture (uploaded or from the library), otherwise a neutral grid icon. */
 export function CategoryIcon({ icon, size = 20 }: { icon: string | null; size?: number }) {
   return (
-    <span className="category-icon" style={{ width: size, height: size }} aria-hidden="true">
+    <span
+      className={"category-icon" + (icon?.startsWith("upload-") ? " category-icon-upload" : "")}
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    >
       {icon ? (
-        <img src={"/library/" + icon + ".webp"} alt="" width={size} height={size} loading="lazy" decoding="async" />
+        <img src={categoryIconSrc(icon)} alt="" width={size} height={size} loading="lazy" decoding="async" />
       ) : (
         <LayoutGrid size={Math.round(size * 0.62)} />
       )}

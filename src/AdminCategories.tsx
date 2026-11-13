@@ -14,6 +14,7 @@ import {
   Pencil,
   Plus,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import { ErrorMessage, Link, useStore } from "./App";
@@ -22,6 +23,7 @@ import { useDialog } from "./dialog";
 import { useLive } from "./live";
 import { ImageLibraryDialog } from "./ImageLibrary";
 import { CategoryIcon } from "./Categories";
+import { checkSource, toWebp, uploadImage } from "./image-upload";
 import type { AdminCategory } from "./types";
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -270,6 +272,23 @@ function CategoryEditor({
   };
   useDialog(!picking, ".category-dialog", close);
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
+  // The shop's own picture: resized in the browser, stored as "upload-<key>" (saved with the form).
+  const uploadInput = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  async function uploadIcon(file: File) {
+    const problem = checkSource(file);
+    if (problem) return setError(problem);
+    setUploading(true);
+    setError("");
+    try {
+      const { icon } = await uploadImage<{ icon: string }>("/admin/categories/image", await toWebp(file, 256));
+      set({ icon });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }
   const slugChanged = !!category && draft.id !== category.id;
   const slugValid = SLUG.test(draft.id) && draft.id.length <= 40;
   async function submit(e: FormEvent) {
@@ -338,7 +357,16 @@ function CategoryEditor({
                 <span className="category-icon-actions">
                   <button type="button" className="button secondary" onClick={() => setPicking(true)}>
                     <ImagePlus size={15} />
-                    {draft.icon ? "เปลี่ยนรูป" : "เลือกจากคลังรูป"}
+                    เลือกจากคลังรูป
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={uploading}
+                    onClick={() => uploadInput.current?.click()}
+                  >
+                    {uploading ? <LoaderCircle className="spin" size={15} /> : <Upload size={15} />}
+                    อัปโหลดรูปเอง
                   </button>
                   {draft.icon && (
                     <button type="button" className="button ghost" onClick={() => set({ icon: null })}>
@@ -346,6 +374,19 @@ function CategoryEditor({
                     </button>
                   )}
                 </span>
+                <small className="category-icon-hint">รูปของร้านเอง: JPG, PNG หรือ WebP · แนะนำสี่เหลี่ยมจัตุรัส ระบบย่อให้อัตโนมัติ</small>
+                <input
+                  ref={uploadInput}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  hidden
+                  aria-label="เลือกรูปหมวด"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void uploadIcon(file);
+                    e.target.value = "";
+                  }}
+                />
               </div>
             </div>
             <label className="field">

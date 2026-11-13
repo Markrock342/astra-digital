@@ -532,3 +532,16 @@
     padding: 0 16px 20px;
   }
 }
+/* The shop's own uploaded picture: shown whole, no zoom (library logos are zoomed to trim padding). */
+.category-icon-upload img {
+  transform: none;
+}
+.category-icon-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted, #5d5f69);
+  font-size: 12px;
+}
+.category-icon-actions {
+  flex-wrap: wrap;
+}
