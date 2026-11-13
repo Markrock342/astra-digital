@@ -33,6 +33,7 @@ import {
   MessageCircle,
   Minus,
   Package,
+  Phone,
   Plus,
   Search,
   ShieldCheck,
@@ -89,6 +90,7 @@ import { DeliveredExtras, hasReceipt, ReceiptLink, ReceiptPage, receiptRoute } f
 import { AskInChat } from "./ChatAttachments";
 import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
+import { ContactPage } from "./Contact";
 import { RebuyActions } from "./Rebuy";
 import { ManualOrderNote } from "./ManualOrderNote";
 import { DiscountBadge, PriceNote, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
@@ -443,6 +445,7 @@ function Footer() {
   const { overview } = useStore();
   const line = overview?.shop?.line ?? "";
   const email = overview?.shop?.email ?? "";
+  const phone = overview?.shop?.phone ?? "";
   return (
     <footer className="site-footer">
       <div className="container footer-main">
@@ -454,9 +457,9 @@ function Footer() {
             {overview?.shop?.description || t("ร้านสินค้าดิจิทัล")}
           </p>
         </div>
-        {(line || email) && (
+        {(line || phone || email) && (
           <div className="footer-contact">
-            <h3>{t("ติดต่อร้าน")}</h3>
+            <h3>{t("ติดต่อเรา")}</h3>
             <div className="contact-links">
               {line && (
                 <Link to="/support" className="contact-card">
@@ -465,6 +468,18 @@ function Footer() {
                   </span>
                   <span>
                     LINE<small>{line}</small>
+                  </span>
+                  <ArrowUpRight size={16} />
+                </Link>
+              )}
+              {phone && (
+                <Link to="/support" className="contact-card">
+                  <span className="phone-icon">
+                    <Phone size={21} />
+                  </span>
+                  <span>
+                    {t("โทรศัพท์")}
+                    <small>{phone}</small>
                   </span>
                   <ArrowUpRight size={16} />
                 </Link>
@@ -490,6 +505,7 @@ function Footer() {
           <Link to="/reviews">{t("เครดิตร้าน")}</Link>
           <Link to="/orders">{t("ประวัติการซื้อ")}</Link>
           <Link to="/faq">{t("คำถามที่พบบ่อย")}</Link>
+          <Link to="/support">{t("ติดต่อเรา")}</Link>
         </div>
       </div>
       <div className="footer-bottom">
@@ -2548,19 +2564,15 @@ function PrivacyDataPanel() {
 function InfoPage({ kind }: { kind: string }) {
   const { overview } = useStore();
   const name = shopName(overview?.shop?.shopName);
-  const title =
-    kind === "credits"
-      ? t("เครดิตร้าน")
-      : t("ติดต่อร้าน");
+  if (kind === "support") return <ContactPage shop={overview?.shop} shopName={name} />;
+  const title = t("เครดิตร้าน");
   return (
     <main className="container page-main narrow-main reference-info-page">
       <div className="page-heading">
         <span className="eyebrow">{name}</span>
         <h1>{title}</h1>
         <p>
-          {kind === "credits"
-            ? t("ข้อมูลร้านค้าและมาตรฐานการให้บริการ")
-            : t("ข้อมูลสำหรับการใช้งานเว็บไซต์")}
+          {t("ข้อมูลร้านค้าและมาตรฐานการให้บริการ")}
         </p>
       </div>
       <div className="panel prose">
@@ -2596,35 +2608,6 @@ function InfoPage({ kind }: { kind: string }) {
               {t("เลือกดูสินค้า")}
               <ArrowRight size={17} />
             </Link>
-          </>
-        ) : kind === "support" ? (
-          <>
-            <h2>{t("เราพร้อมช่วยเหลือคุณ")}</h2>
-            <p>
-              {t("หากมีปัญหาเกี่ยวกับการรับโค้ด ให้ตรวจสอบหน้าคำสั่งซื้อของคุณก่อน โดยโค้ดจะปรากฏเมื่อสถานะเป็น “จัดส่งสำเร็จ”")}
-            </p>
-            <Link to="/orders" className="button secondary">
-              {t("ตรวจสอบคำสั่งซื้อ")}
-              <ArrowRight size={16} />
-            </Link>
-            {(overview?.shop?.line || overview?.shop?.email) && (
-              <>
-                <h3>{t("ช่องทางติดต่อ")}</h3>
-                <p>
-                  {overview?.shop?.line ? <>LINE {overview?.shop?.line}</> : null}
-                  {overview?.shop?.line && overview?.shop?.email ? <br /> : null}
-                  {overview?.shop?.email ? (
-                    <>
-                      {t("อีเมล")} {overview?.shop?.email}
-                    </>
-                  ) : null}
-                </p>
-              </>
-            )}
-            <h3 id="email">{t("ข้อมูลที่ควรเตรียมเมื่อแจ้งปัญหา")}</h3>
-            <p>
-              {t("เลขคำสั่งซื้อ ชื่อสินค้า และรายละเอียดปัญหา กรุณาอย่าส่งรหัสผ่านหรือข้อมูลส่วนตัวที่ไม่เกี่ยวข้อง")}
-            </p>
           </>
         ) : null}
       </div>
@@ -2689,7 +2672,7 @@ function Router() {
     "/top-up": t("บัญชีของร้าน"),
     "/reviews": t("เครดิตร้าน"),
     "/credits": t("เครดิตร้าน"),
-    "/support": t("ติดต่อร้าน"),
+    "/support": t("ติดต่อเรา"),
     "/faq": t("คำถามที่พบบ่อย"),
     "/terms": t("ข้อกำหนดการใช้บริการ"),
     "/privacy": t("นโยบายความเป็นส่วนตัว"),

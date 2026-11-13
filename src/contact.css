@@ -1,0 +1,180 @@
+/* "ติดต่อเรา" page (/support) + footer phone card.
+   Cards follow the shadcn/ui Card pattern (MIT, https://ui.shadcn.com/docs/components/card):
+   surface + 1px border + radius + soft shadow, header row (icon, title) and content.
+   Only storefront theme tokens from brand.css are used, so light/dark and every accent work. */
+
+.contact-page .contact-intro,
+.contact-page .contact-channels,
+.contact-page .contact-tips {
+  margin-top: 16px;
+}
+.contact-page .contact-intro {
+  margin-top: 0;
+}
+.contact-page .contact-message {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+/* ---------- Channel cards ---------- */
+.contact-channels > h2 {
+  margin: 28px 0 12px;
+  font-size: 18px;
+  color: var(--text);
+}
+.contact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+}
+.contact-channel {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 14px);
+  box-shadow: var(--shadow, 0 1px 2px rgba(16, 24, 40, 0.06));
+  animation: rise 0.7s var(--ease-out-expo, ease-out) both;
+}
+.contact-channel.is-link {
+  transition:
+    transform 0.3s var(--spring, ease),
+    border-color 0.2s ease;
+}
+.contact-channel.is-link:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent, var(--brand, #1534ff));
+}
+.contact-channel.is-link:focus-visible {
+  outline: 2px solid var(--accent, var(--brand, #1534ff));
+  outline-offset: 2px;
+}
+.contact-channel-icon {
+  flex: none;
+  display: grid;
+  place-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-sm, 10px);
+  color: var(--accent-text, var(--brand, #1534ff));
+  background: color-mix(in srgb, var(--accent, #1534ff) 14%, transparent);
+}
+.contact-channel-icon svg {
+  width: 21px;
+  height: 21px;
+}
+.contact-channel-line .contact-channel-icon {
+  color: #fff;
+  background: #06c755;
+}
+.contact-channel-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.contact-channel-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.contact-channel-value {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.contact-channel-value.is-multiline {
+  white-space: pre-line;
+  font-weight: 500;
+}
+.contact-channel-hint {
+  margin-top: 4px;
+  color: var(--accent-text, var(--brand, #1534ff));
+  font-size: 13px;
+  font-weight: 600;
+}
+.contact-channel-go {
+  flex: none;
+  margin-top: 2px;
+  color: var(--muted);
+}
+.contact-channel.is-link:hover .contact-channel-go {
+  color: var(--accent-text, var(--brand, #1534ff));
+}
+
+/* ---------- Tips card ---------- */
+.contact-page .contact-tips h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0;
+}
+.contact-page .contact-tips h3 svg {
+  flex: none;
+  color: var(--accent-text, var(--brand, #1534ff));
+}
+.contact-page .contact-tips p {
+  margin-bottom: 0;
+}
+
+@media (max-width: 600px) {
+  .contact-channel {
+    padding: 14px;
+    gap: 12px;
+  }
+  .contact-channel-icon {
+    width: 38px;
+    height: 38px;
+  }
+  .contact-page .contact-message {
+    font-size: 14px;
+  }
+}
+
+/* ---------- Footer: phone card next to LINE / email ---------- */
+.phone-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-content: center;
+  flex-shrink: 0;
+  color: var(--accent-text, var(--brand, #1534ff));
+  background: color-mix(in srgb, var(--accent, #1534ff) 14%, transparent);
+}
+.site-footer .contact-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+}
+@media (max-width: 1100px) and (min-width: 861px), (max-width: 600px) {
+  .site-footer .contact-links {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .phone-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+  }
+  .phone-icon svg {
+    width: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .contact-channel {
+    animation: none;
+  }
+  .contact-channel.is-link:hover {
+    transform: none;
+  }
+}

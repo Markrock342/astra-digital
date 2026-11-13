@@ -1214,6 +1214,9 @@ export function createCommerceCore({
       phone: "",
       facebook: "",
       discord: "",
+      // Contact page (/support): free text + address, both public and shown with line breaks.
+      address: "",
+      contactMessage: "",
       policy: "",
       requireTerms: true,
       stockOrder: "oldest",
@@ -1274,6 +1277,15 @@ export function createCommerceCore({
           max,
           field,
         );
+    }
+    // Contact page texts (multi-line; CRLF from form posts normalised to LF).
+    for (const [field, max, label] of [
+      ["address", 500, "ที่อยู่"],
+      ["contactMessage", 1000, "ข้อความหน้าติดต่อเรา"],
+    ]) {
+      if (input[field] === undefined) continue;
+      const value = typeof input[field] === "string" ? input[field].replace(/\r\n?/g, "\n") : input[field];
+      current[field] = clean(value, 0, max, label);
     }
     if (input.requireTerms !== undefined)
       current.requireTerms =
