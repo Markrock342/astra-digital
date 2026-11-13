@@ -45,7 +45,9 @@
   --button-text: #fff;
   color: var(--text);
   background: var(--bg);
-  color-scheme: light;
+  /* "only light": phones with forced dark mode (Chrome "darken websites", Samsung Internet)
+     must not repaint the light theme the visitor picked. */
+  color-scheme: only light;
 }
 :root:not([data-theme="light"]) {
   color-scheme: dark;
