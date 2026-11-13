@@ -219,7 +219,9 @@ test("admin pages stay light and readable when the visitor prefers dark", async 
       const s = getComputedStyle(el);
       return { bg: s.backgroundColor, text: getComputedStyle(el.querySelector("h2, p, strong, button") ?? el).color };
     });
-    expect(colors.bg).toBe("rgb(255, 255, 255)");
+    // Light card (white, or the faint status tint of a fraud signal card), never a dark surface.
+    const [r, g, b] = colors.bg.match(/\d+/g).map(Number);
+    expect(Math.min(r, g, b)).toBeGreaterThanOrEqual(240);
     expect(colors.text).not.toBe("rgb(255, 255, 255)");
     expect(await noSideScroll(page)).toBe(true);
   }

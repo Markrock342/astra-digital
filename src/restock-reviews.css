@@ -130,9 +130,9 @@
 .review-shop-reply {
   margin: 10px 0 12px;
   padding: 10px 12px;
-  border-left: 3px solid var(--accent);
-  background: var(--raised);
-  border-radius: 0 var(--radius-sm, 10px) var(--radius-sm, 10px) 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+  border-radius: var(--radius-sm, 10px);
   font-size: 13px;
 }
 .review-shop-reply-head {
@@ -194,7 +194,7 @@
   border-style: dashed;
 }
 .review-admin-card.is-hidden .review-admin-comment {
-  color: #71717a;
+  color: #5d5f69;
 }
 .review-admin-head {
   display: flex;
@@ -205,7 +205,7 @@
 .review-admin-head time {
   margin-left: auto;
   font-size: 12px;
-  color: #71717a;
+  color: #5d5f69;
 }
 .review-admin-stars {
   display: inline-flex;
@@ -229,7 +229,7 @@
   gap: 4px 12px;
   margin: 0 0 12px;
   font-size: 12px;
-  color: #71717a;
+  color: #5d5f69;
 }
 .review-admin-meta strong {
   color: #18181b;
@@ -249,9 +249,9 @@
 .review-admin-reply {
   margin-bottom: 12px;
   padding: 10px 12px;
-  border-left: 3px solid var(--brand, #1534ff);
+  border: 1px solid #c7d0ff;
   background: var(--brand-soft, #eef1ff);
-  border-radius: 0 8px 8px 0;
+  border-radius: 8px;
 }
 .review-admin-reply-head {
   display: flex;

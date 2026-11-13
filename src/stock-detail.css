@@ -40,10 +40,9 @@
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  border: 1px solid #e3e6eb;
-  border-left: 4px solid var(--tone);
+  border: 1px solid color-mix(in srgb, var(--tone) 22%, #e3e6eb);
   border-radius: 12px;
-  background: linear-gradient(135deg, var(--tone-soft) 0%, #fff 70%);
+  background: color-mix(in srgb, var(--tone-soft) 45%, #fff);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 .stock-summary-icon {
@@ -73,7 +72,7 @@
   font-variant-numeric: tabular-nums;
 }
 .stock-summary-card.is-zero:not(.tone-total):not(.tone-ready) {
-  border-left-color: #d5d9e0;
+  border-color: #e3e6eb;
   background: #fff;
 }
 .stock-summary-card.is-zero:not(.tone-total):not(.tone-ready) strong {

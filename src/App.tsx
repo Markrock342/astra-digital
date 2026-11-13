@@ -174,7 +174,7 @@ export function Art({
 }) {
   if (image)
     return (
-      <div className={`product-art art-photo ${small ? "art-small" : ""}`} aria-label={name}>
+      <div className={`product-art art-photo ${small ? "art-small" : ""}`} role="img" aria-label={name}>
         <img src={image} alt="" loading={small ? "eager" : "lazy"} />
       </div>
     );
@@ -182,6 +182,7 @@ export function Art({
     return (
       <div
         className={`product-art art-${type} ${small ? "art-small" : ""}`}
+        role="img"
         aria-label={name}
       >
         <img
@@ -196,6 +197,7 @@ export function Art({
   return (
     <div
       className={`product-art art-${type} ${small ? "art-small" : ""}`}
+      role="img"
       aria-label={name}
     >
       <div className="art-grain" />

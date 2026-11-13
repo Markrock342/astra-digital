@@ -16,10 +16,12 @@
   gap: 10px;
   padding: 18px 20px;
   min-width: 0;
-  border-left: 3px solid #dc2626;
+  border-color: #fecaca;
+  background: #fffafa;
 }
 .merchant-shell .fraud-signal-card[data-status="reviewed"] {
-  border-left-color: #16a34a;
+  border-color: #bbf7d0;
+  background: #f8fefa;
 }
 .merchant-shell .fraud-signal-card header {
   display: flex;
@@ -39,7 +41,7 @@
   color: #dc2626;
 }
 .merchant-shell .fraud-signal-card[data-status="reviewed"] .fraud-rule svg {
-  color: #16a34a;
+  color: #15803d;
 }
 .merchant-shell .fraud-rule strong {
   font-size: 15px;

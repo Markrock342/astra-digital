@@ -55,7 +55,7 @@
 .manual-order-hits small {
   display: block;
   font-weight: 400;
-  color: #71717a;
+  color: #5d5f69;
   font-size: 12px;
 }
 .manual-order-hits {
@@ -140,7 +140,7 @@
   font-size: 14px;
 }
 .manual-order-totals dt {
-  color: #71717a;
+  color: #5d5f69;
 }
 .manual-order-totals dd {
   margin: 0;
@@ -224,7 +224,7 @@
 }
 .manual-order-facts dt {
   font-size: 12px;
-  color: #71717a;
+  color: #5d5f69;
 }
 .manual-order-facts dd {
   margin: 2px 0 0;
@@ -232,7 +232,7 @@
   overflow-wrap: anywhere;
 }
 .manual-order-facts small {
-  color: #71717a;
+  color: #5d5f69;
 }
 .manual-order-reason {
   display: block;

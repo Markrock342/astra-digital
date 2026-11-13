@@ -255,7 +255,7 @@
   color: var(--brand);
 }
 .merchant-shell .backup-card[data-r2="off"] .backup-card-title {
-  color: #71717a;
+  color: #5d5f69;
 }
 .merchant-shell .backup-card-title h2 {
   color: var(--text);
