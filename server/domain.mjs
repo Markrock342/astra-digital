@@ -2548,6 +2548,7 @@ export function createCommerceCore({
     if (isStaff(user))
       return all(
         `SELECT t.*,u.name AS customer,u.email AS customer_email,a.name AS assignee,
+                CASE WHEN u.avatar_key IS NOT NULL THEN '/api/files/' || u.avatar_key END AS customer_avatar,
                 (SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id=t.id) AS messages,
                 COALESCE(
                   (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.thread_id=t.id),

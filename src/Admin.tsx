@@ -94,6 +94,7 @@ import { AdminFraud } from "./AdminFraud";
 import { AdminEmailTemplates } from "./AdminEmailTemplates";
 import { AdminDailyClose, AdminReconcile, AdminWithdrawals } from "./AdminFinanceBooks";
 import { AdminReceiptSettings, AdminTaxInvoices } from "./AdminTaxInvoices";
+import { AdminLogoSetting } from "./AdminLogo";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -1411,15 +1412,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
             />
           </label>
         </section>
-        <section className="reference-admin-card editor-panel">
-          <h2>โลโก้</h2>
-          <p>แนะนำรูปสี่เหลี่ยมจัตุรัสอย่างน้อย 256×256 px</p>
-          <img
-            src="/brand/favicon-64.png"
-            className="settings-logo"
-            alt=""
-          />
-        </section>
+        <AdminLogoSetting />
         <section className="reference-admin-card editor-panel">
           <h2>ช่องทางติดต่อ</h2>
           <p>

@@ -29,6 +29,7 @@ import { useDialog } from "./dialog";
 import { api } from "./api";
 import { NotificationBell } from "./Ops";
 import { useLiveStatus } from "./live";
+import { ShopMark } from "./AdminLogo";
 
 function LiveDot() {
   const on = useLiveStatus();
@@ -88,8 +89,8 @@ export function MerchantHeader() {
     <>
       <header className="reference-merchant-header">
         <div className="reference-merchant-identity">
-          <Link to="/admin" className="platform-mark" aria-label="ASIA EXTRA หลังบ้าน">
-            AX
+          <Link to="/admin" className="platform-mark" aria-label={shop + " หลังบ้าน"}>
+            <ShopMark />
           </Link>
           <span className="header-slash">/</span>
           {admin ? (
