@@ -153,9 +153,14 @@ Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์
 - `GET /api/admin/variants/:id/inventory?status=available|sold|defective&cursor&limit` — STAFF+ · ปิดบังรหัส (`credentialsMasked`)
 - `POST /api/admin/inventory/:id/defect` — ADMIN · `{ reason }` เฉพาะ available
 - `DELETE /api/admin/inventory/:id` — ADMIN · ลบได้เฉพาะ available
-- `POST /api/admin/inventory` รับ `csv` ข้อความเพิ่มจาก `codes`/`items` เดิม (บรรทัดละโค้ด หรือ `loginId,password`)
+- `POST /api/admin/inventory` รับ `csv` ข้อความเพิ่มจาก `codes`/`items` เดิม (บรรทัดละโค้ด หรือ `loginId,password`) · ฟิลด์ท้ายทางเลือก `cost` (สตางค์, integer ≥0) ทั้ง `items[].cost` และ `CODE,cost` / `loginId,password,cost`
 - `POST /api/admin/settings` รับ `lowStockAt` (1–100, default 3) · แจ้งเตือน `stock_low` และ `stockStatus` ใช้ค่านี้
 - สต็อก available ไม่นับแถว `defective=1` · Migration 007 เพิ่มคอลัมน์ defective*
+- Migration `009_inventory_cost.sql`: `inventory.cost INTEGER NULL` (สตางค์)
+- Migration `010_inventory_expires.sql`: `inventory.expires_at TEXT NULL` + index `(variant_id, expires_at)`
+- กติกาขาย: ไม่จัดสรรแถวที่ `expires_at` อยู่ในหน้าต่าง `warranty_days` นับจากตอนจัดสรร (pay / deliver) · นับสต็อกพร้อมขายใช้กติกาเดียวกัน
+- `GET /api/admin/variants/:id/inventory?status=expiring|expired` · `GET /api/admin/inventory/expiring` — STAFF+
+- นำเข้า: `expiresAt` / ฟิลด์ท้าย `YYYY-MM-DD` · notify `stock_expiry` เมื่อมีแถวหมดอายุหรือใกล้หมด (7 วัน)
 
 ### สต็อกที่หน้าร้านเห็น
 
@@ -177,12 +182,42 @@ Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์
 **นำเข้า ID + รหัสผ่าน** — `POST /api/admin/inventory` (ADMIN)
 
 ```json
-{ "variantId": "…", "items": [{ "loginId": "…", "password": "…" }] }
+{ "variantId": "…", "items": [{ "loginId": "…", "password": "…", "cost": 1500 }] }
 ```
 
 - 1–100 รายการต่อครั้ง · `loginId` ถูก trim · `password` **ไม่ trim** ส่งมาตามที่กรอก (อาจมีช่องว่าง `:` `|` หรือแท็บ)
+- `cost` ทางเลือก = ต้นทุนสตางค์ (integer ≥0) · เก็บใน `inventory.cost` · ไม่ส่ง = NULL
+- `codes` รองรับ `CODE,cost` ต่อบรรทัด · CSV รองรับ `loginId,password,cost`
 - ตอบ `{ "imported": n }` · ซ้ำ (fingerprint ชน) ตอบ 409 ทั้งชุด ไม่บันทึกบางส่วน
 - ยังรับ `codes` แบบเดิมได้ระหว่างเปลี่ยนผ่าน
+
+### ตรวจระบบ (Admin)
+
+`GET /api/admin/health` — **ADMIN only**
+
+- คืน `{ ok, checkedAt, migrations, checks[] }`
+- ตรวจ: migrations ครบตาม Track A · append-only triggers · เครดิตไม่ติดลบ · payments SUCCEEDED มี `PAYMENT_IN` · สต็อกไม่กำพร้า/ไม่ค้างกับ PENDING_PAYMENT · คอลัมน์ inventory (cost/expires_at/…)
+- หน้า UI: `/admin/settings/health`
+
+### ประสิทธิภาพ (~10k ออเดอร์)
+
+- Migration `011_perf_indexes.sql`: index บน payments/orders/reservations/inventory/ledger สำหรับรายการแอดมิน
+- สคริปต์วัด: `npm run perf:10k` (`scripts/perf-10k-orders.mjs`) · เป้า p95 &lt; 500ms หลัง index
+
+### PDPA (FR-C9)
+
+- `GET /api/account/privacy/export` — CUSTOMER · JSON สำเนาข้อมูลตัวเอง (โปรไฟล์ ออเดอร์ ledger แชท ฯลฯ)
+- `POST /api/account/privacy/delete` — CUSTOMER · สร้างคำขอลบ `{ reason? }` → `{ id, status: "PENDING" }`
+- `GET /api/admin/privacy/requests?status=` — ADMIN
+- `POST /api/admin/privacy/requests/:id/approve` — ADMIN · anonymize ชื่อ/อีเมล/เบอร์/username/avatar/แชท · `status=DELETED` · **เก็บ** orders/payments/ledger · **ห้าม** ลบแถว append-only
+
+### รายงานกำไร (หลัง MIG-009)
+
+`GET /api/admin/reports/profit?from&to&format` — **ADMIN only** (STAFF → 403)
+
+- สูตร: `profit = revenue(payments SUCCEEDED) − refunds(ledger REFUND) − SUM(COALESCE(inventory.cost,0))` ของหน่วยที่ผูก `order_id`/`reservation_id` ในช่วง
+- ใช้ `moneyScope` เหมือนรายงานยอดขาย · live ตัด sandbox
+- `format=csv` → ไฟล์ CSV
 
 **ส่งของพรีออเดอร์** — `POST /api/admin/reservations/:id/deliver` (STAFF+, body `{}`)
 

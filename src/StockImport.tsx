@@ -10,7 +10,17 @@ const BATCH = 100;
 
 type Kind = "pair" | "code";
 type LineStatus = "ok" | "duplicate_batch" | "existing" | "invalid";
-type Entry = { line: number; key: string; loginId?: string; password?: string; code?: string };
+type Entry = {
+  line: number;
+  key: string;
+  loginId?: string;
+  password?: string;
+  code?: string;
+  /** Optional purchase cost in satang. */
+  cost?: number;
+  /** Optional expiry YYYY-MM-DD. */
+  expiresAt?: string;
+};
 type ServerLine = {
   line: number;
   status: LineStatus;
@@ -29,7 +39,27 @@ const statusText: Record<LineStatus, string> = {
   invalid: "รูปแบบผิด",
 };
 
-/** Excel/Sheets paste uses tabs; "id,password", "id:password" and "id password" also work. */
+/** Trailing YYYY-MM-DD… then optional cost digits. */
+function takeExpiresAndCost(parts: string[]): {
+  head: string[];
+  cost?: number;
+  expiresAt?: string;
+} {
+  let head = parts;
+  let expiresAt: string | undefined;
+  let cost: number | undefined;
+  if (head.length >= 2 && /^\d{4}-\d{2}-\d{2}/.test(head[head.length - 1].trim())) {
+    expiresAt = head[head.length - 1].trim().slice(0, 10);
+    head = head.slice(0, -1);
+  }
+  if (head.length >= 2 && /^\d+$/.test(head[head.length - 1].trim())) {
+    cost = Number(head[head.length - 1].trim());
+    head = head.slice(0, -1);
+  }
+  return { head, cost, expiresAt };
+}
+
+/** Excel/Sheets paste; optional trailing cost (satang) and expiry date. */
 function parseEntries(text: string, kind: Kind): Entry[] {
   const entries: Entry[] = [];
   text.split(/\r?\n/).forEach((raw, index) => {
@@ -37,15 +67,32 @@ function parseEntries(text: string, kind: Kind): Entry[] {
     if (!trimmed) return;
     const line = index + 1;
     if (kind === "code") {
-      entries.push({ line, code: trimmed, key: trimmed });
+      if (trimmed.includes(",")) {
+        const { head, cost, expiresAt } = takeExpiresAndCost(trimmed.split(","));
+        const code = head.join(",").trim();
+        entries.push({ line, code, key: code, cost, expiresAt });
+      } else {
+        entries.push({ line, code: trimmed, key: trimmed });
+      }
       return;
     }
     let loginId = trimmed;
     let password = "";
+    let cost: number | undefined;
+    let expiresAt: string | undefined;
     if (raw.includes("\t")) {
-      const [id, ...rest] = raw.split("\t");
-      loginId = id.trim();
-      password = rest.join("\t").replace(/[\t\r]+$/, "");
+      const cols = raw.split("\t").map((c) => c.replace(/\r$/, ""));
+      const taken = takeExpiresAndCost(cols);
+      loginId = (taken.head[0] ?? "").trim();
+      password = taken.head.slice(1).join("\t");
+      cost = taken.cost;
+      expiresAt = taken.expiresAt;
+    } else if (trimmed.includes(",")) {
+      const taken = takeExpiresAndCost(trimmed.split(","));
+      loginId = (taken.head[0] ?? "").trim();
+      password = taken.head.slice(1).join(",");
+      cost = taken.cost;
+      expiresAt = taken.expiresAt;
     } else {
       const match = trimmed.match(/^([^\t,:\s]+)[\t,:\s]+(.+)$/);
       if (match) {
@@ -53,7 +100,14 @@ function parseEntries(text: string, kind: Kind): Entry[] {
         password = match[2].trim();
       }
     }
-    entries.push({ line, loginId, password, key: loginId.trim().toLowerCase() });
+    entries.push({
+      line,
+      loginId,
+      password,
+      key: loginId.trim().toLowerCase(),
+      cost,
+      expiresAt,
+    });
   });
   return entries;
 }
@@ -66,8 +120,28 @@ function chunks<T>(items: T[]) {
 
 function body(variantId: string, kind: Kind, chunk: Entry[], extra: Record<string, unknown>) {
   return kind === "pair"
-    ? { variantId, items: chunk.map((e) => ({ loginId: e.loginId, password: e.password })), ...extra }
-    : { variantId, codes: chunk.map((e) => e.code).join("\n"), ...extra };
+    ? {
+        variantId,
+        items: chunk.map((e) => ({
+          loginId: e.loginId,
+          password: e.password,
+          ...(e.cost != null ? { cost: e.cost } : {}),
+          ...(e.expiresAt ? { expiresAt: e.expiresAt } : {}),
+        })),
+        ...extra,
+      }
+    : {
+        variantId,
+        codes: chunk
+          .map((e) => {
+            let line = e.code ?? "";
+            if (e.cost != null) line += `,${e.cost}`;
+            if (e.expiresAt) line += `,${e.expiresAt}`;
+            return line;
+          })
+          .join("\n"),
+        ...extra,
+      };
 }
 
 export function StockImport({
@@ -268,8 +342,8 @@ export function StockImport({
           placeholder={
             placeholder ??
             (kind === "pair"
-              ? "user1@mail.com,password1\nuser2@mail.com,password2"
-              : "รหัสสินค้าหนึ่งรายการต่อบรรทัด")
+              ? "user1@mail.com,password1\nuser2@mail.com,password2,1500,2027-12-31"
+              : "รหัสสินค้าหนึ่งรายการต่อบรรทัด\nCODE-WITH-COST,1500,2027-12-31")
           }
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -277,8 +351,8 @@ export function StockImport({
       </label>
       <p className="field-help">
         {kind === "pair"
-          ? "วางจาก Excel ได้ (2 คอลัมน์) · คั่นด้วย , หรือ : ก็ได้ · รหัสผ่านเก็บแบบเข้ารหัส ลูกค้าเห็นหลังจ่ายเงินเท่านั้น"
-          : "ระบบตรวจโค้ดซ้ำก่อนบันทึก และยังไม่ส่งให้ลูกค้าก่อนยืนยันการชำระเงิน"}
+          ? "วางจาก Excel ได้ · คั่นด้วย , หรือแท็บ · คอลัมน์ท้ายเป็นต้นทุนสตางค์และวันหมดอายุ YYYY-MM-DD (ไม่บังคับ) · รหัสผ่านเก็บแบบเข้ารหัส ลูกค้าเห็นหลังจ่ายเงินเท่านั้น"
+          : "ระบบตรวจโค้ดซ้ำก่อนบันทึก · ต่อท้าย ,ต้นทุน และ/หรือ ,YYYY-MM-DD ได้ (ไม่บังคับ) · ยังไม่ส่งให้ลูกค้าก่อนยืนยันการชำระเงิน"}
         {entries.length > 0 && ` · พร้อมเติม ${entries.length} ${unit}`}
         {entries.length > BATCH && ` (แบ่งส่ง ${batches.length} ชุด ชุดละ ${BATCH})`}
         {missing > 0 && <strong className="danger-text"> · {missing} บรรทัดไม่มีรหัสผ่าน</strong>}

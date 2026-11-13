@@ -477,6 +477,17 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (path === "/api/account/totp") return send(200, service.totpStatus(user));
         if (path === "/api/account/sessions")
           return send(200, service.listSessions(user, token));
+        if (path === "/api/account/privacy/export")
+          return send(200, service.exportMyData(user));
+        if (path === "/api/admin/privacy/requests")
+          return send(
+            200,
+            service.adminPrivacyRequests(user, {
+              status: url.searchParams.get("status") ?? undefined,
+            }),
+          );
+        if (path === "/api/admin/health")
+          return send(200, service.adminSystemHealth(user));
         if (path === "/api/admin/reports/sales") {
           const report = service.salesReport(user, {
             from: url.searchParams.get("from") ?? undefined,
@@ -505,6 +516,24 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, { categories: service.publicCategories() });
         if (path === "/api/admin/categories")
           return send(200, service.adminCategories(user));
+        if (path === "/api/admin/reports/profit") {
+          const report = service.profitReport(user, {
+            from: url.searchParams.get("from") ?? undefined,
+            to: url.searchParams.get("to") ?? undefined,
+            format: url.searchParams.get("format") ?? undefined,
+          });
+          if (report.csv != null)
+            return new Response(report.csv, {
+              status: 200,
+              headers: {
+                ...securityHeaders,
+                "Content-Type": "text/csv; charset=utf-8",
+                "Cache-Control": "no-store",
+                "Content-Disposition": 'attachment; filename="profit-report.csv"',
+              },
+            });
+          return send(200, report);
+        }
         if (path === "/api/admin/coupons")
           return send(200, service.adminCoupons(user, {
             q: url.searchParams.get("q") ?? undefined,
@@ -579,6 +608,13 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             service.adminVariantInventory(user, path.split("/")[4], {
               status: url.searchParams.get("status") ?? undefined,
               cursor: url.searchParams.get("cursor") ?? undefined,
+              limit: url.searchParams.get("limit") ?? undefined,
+            }),
+          );
+        if (path === "/api/admin/inventory/expiring")
+          return send(
+            200,
+            service.adminExpiringInventory(user, {
               limit: url.searchParams.get("limit") ?? undefined,
             }),
           );
@@ -692,6 +728,15 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, { user: service.topup(user, input) });
         if (path === "/api/profile")
           return send(200, { user: service.profile(user, input) });
+        if (path === "/api/account/privacy/delete")
+          return send(201, service.requestAccountDeletion(user, input));
+        if (/^\/api\/admin\/privacy\/requests\/[^/]+\/approve$/.test(path))
+          return send(
+            200,
+            service.approvePrivacyDeletion(user, path.split("/")[5], input),
+          );
+        if (/^\/api\/admin\/privacy\/requests\/[^/]+\/reject$/.test(path))
+          return send(200, service.rejectPrivacyRequest(user, path.split("/")[5]));
         if (path === "/api/reviews")
           return send(201, service.addReview(user, input));
         if (path === "/api/stock-watch") {
