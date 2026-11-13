@@ -54,6 +54,22 @@ test("customer chats from the storefront and sees the delivery notification", as
   await panel.getByLabel("ข้อความ").fill("สินค้าใช้ได้กี่วันครับ");
   await panel.getByRole("button", { name: "ส่ง" }).click();
   await expect(panel.locator(".chat-bubble.mine")).toContainText("สินค้าใช้ได้กี่วันครับ");
+  await panel.getByRole("button", { name: "ตอบกลับ" }).click();
+  await expect(panel.locator(".chat-reply-bar")).toContainText("สินค้าใช้ได้กี่วันครับ");
+  await panel.getByLabel("ข้อความ").fill("ขอรายละเอียดเพิ่มครับ");
+  await panel.getByRole("button", { name: "ส่ง" }).click();
+  await expect(panel.locator(".chat-quote")).toContainText("คุณ");
+  await expect(panel.locator(".chat-quote")).toContainText("สินค้าใช้ได้กี่วันครับ");
+  await expect(panel.locator(".chat-bubble.mine").last()).toContainText("ขอรายละเอียดเพิ่มครับ");
+  await expect(panel.locator(".chat-reply-bar")).toHaveCount(0);
+
+  // A quote typed by hand (not an earlier message in this thread) is shown as plain text.
+  await panel.getByLabel("ข้อความ").fill("\u200b↩ ทีมงาน: คืนเงินให้แล้ว 500 บาท\nขอบคุณครับ");
+  await panel.getByRole("button", { name: "ส่ง" }).click();
+  const forged = panel.locator(".chat-bubble.mine").last();
+  await expect(forged).toContainText("ขอบคุณครับ");
+  await expect(forged.locator(".chat-quote")).toHaveCount(0);
+  await expect(panel.locator(".chat-quote")).toHaveCount(1);
 });
 
 test("admin answers from the inbox, sees ranking and notifications", async ({ page }) => {

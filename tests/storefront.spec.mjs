@@ -170,3 +170,42 @@ test("language switch, theme panel and brand assets", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "สินค้าทั้งหมด" })).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("account photo uploads, shows in the header, and can be removed", async ({ page }) => {
+  await ready(page, "/register");
+  const email = "avatar-" + randomBytes(4).toString("hex") + "@example.invalid";
+  await page.getByLabel("ชื่อผู้ใช้").fill("avatar_" + randomBytes(3).toString("hex"));
+  await page.getByLabel("อีเมล (ไม่บังคับ)", { exact: true }).fill(email);
+  await page.getByLabel("รหัสผ่าน", { exact: true }).fill("UI-test-only-12345");
+  await page.getByLabel("ยืนยันรหัสผ่าน", { exact: true }).fill("UI-test-only-12345");
+  await page.getByLabel(/ฉันยอมรับ/).check();
+  await page.getByRole("button", { name: "สมัครสมาชิก", exact: true }).click();
+  await expect(page).toHaveURL(base + "/account");
+
+  const picker = page.getByLabel("เปลี่ยนรูปโปรไฟล์");
+  await picker.setInputFiles({
+    name: "nope.gif",
+    mimeType: "image/gif",
+    buffer: Buffer.from("GIF89a"),
+  });
+  await expect(page.getByRole("alert")).toContainText("รูปต้องเป็น JPEG, PNG หรือ WebP และไม่เกิน 2MB");
+  await expect(page.locator(".account-summary .avatar img")).toHaveCount(0);
+
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  await picker.setInputFiles({ name: "avatar.png", mimeType: "image/png", buffer: png });
+  const photo = page.locator(".account-summary .avatar img");
+  await expect(photo).toHaveAttribute("src", /\/api\/files\/[0-9a-fA-F-]{8,}/);
+  const src = await photo.getAttribute("src");
+  await expect(page.locator(".account-button .avatar img")).toHaveAttribute("src", src ?? "");
+  const file = await page.request.get(base + src);
+  expect(file.status()).toBe(200);
+  expect(file.headers()["content-type"]).toContain("image/png");
+
+  await page.getByRole("button", { name: "ลบรูปโปรไฟล์" }).click();
+  await expect(page.locator(".account-summary .avatar img")).toHaveCount(0);
+  await expect(page.locator(".account-button .avatar img")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "ลบรูปโปรไฟล์" })).toHaveCount(0);
+});
