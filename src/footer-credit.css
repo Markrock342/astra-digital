@@ -1,5 +1,18 @@
 /* "Theme By limitcode studio" line at the very bottom of the storefront footer.
    Uses the theme tokens, so it reads in all 8 themes (light/dark × 4 accents). */
+/* The owner's rule: this credit is always shown. No setting in ตั้งค่า › หน้าตาร้าน touches it
+   (the shop colours only change accent tokens, never --text / --muted / --bg), and these
+   !important rules keep it on screen even if another stylesheet tries to hide it. */
+.footer-credit {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+.footer-credit a {
+  display: inline !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
 .footer-credit {
   padding: 0 0 14px;
   font-size: 11px;

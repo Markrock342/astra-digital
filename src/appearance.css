@@ -1,0 +1,105 @@
+/* Storefront pieces added by ตั้งค่า › หน้าตาร้าน (Appearance.tsx). Storefront tokens only
+   (--surface, --border, --text, --muted, --accent…), so all accents and light/dark work.
+   Card anatomy follows shadcn/ui Card (MIT, https://ui.shadcn.com/docs/components/card). */
+
+/* Optional second hero line under the tagline. */
+.storefront-shell .home-hero .hero-subtext {
+  max-width: 560px;
+  margin: 8px auto 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+  animation: rise 0.8s var(--ease-out-expo) 0.65s both;
+}
+
+/* "ซื้อสินค้าอย่างมั่นใจ" block on the เครดิตร้าน page (off unless the admin turns it on). */
+.trust-block {
+  margin: 0 0 40px;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 14px);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.trust-block-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.35;
+  color: var(--text);
+}
+.trust-block-head h2 svg {
+  flex: none;
+  color: var(--accent-text);
+}
+.trust-block-head p {
+  margin: 8px 0 0;
+  max-width: 720px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.75;
+}
+.trust-block-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+.trust-block-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--raised);
+}
+.trust-block-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent-text);
+}
+.trust-block-card h3 {
+  margin: 12px 0 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.trust-block-card p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.trust-block-cta {
+  margin-top: 22px;
+}
+@media (max-width: 640px) {
+  .trust-block {
+    padding: 20px 16px;
+  }
+  .trust-block-head h2 {
+    font-size: 18px;
+  }
+  .trust-block-cards {
+    grid-template-columns: 1fr;
+  }
+  .trust-block-cta {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+}
+
+/* Long admin texts never push the page sideways. */
+.storefront-shell .hero-tagline,
+.storefront-shell .footer-about p,
+.storefront-shell .footer-menu a {
+  overflow-wrap: anywhere;
+}

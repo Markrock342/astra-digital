@@ -1,6 +1,7 @@
 import { useLive } from "./live";
 import {
   createContext,
+  Fragment,
   useContext,
   useEffect,
   useRef,
@@ -105,6 +106,8 @@ import {
   ReferenceReviews,
   ReferenceProduct,
 } from "./ReferenceStore";
+import { AppearanceEffects, ShopLink, text, useAppearance } from "./Appearance";
+import type { Appearance } from "../server/appearance-rules.mjs";
 const Admin = lazy(() => import("./Admin"));
 const LegalPage = lazy(() =>
   import("./Legal").then((m) => ({ default: m.LegalPage })),
@@ -457,6 +460,8 @@ function Footer() {
   const line = overview?.shop?.line ?? "";
   const email = overview?.shop?.email ?? "";
   const phone = overview?.shop?.phone ?? "";
+  // ตั้งค่า › หน้าตาร้าน › ส่วนท้าย: description (empty = automatic) and the menu links.
+  const footer = useAppearance().footer;
   return (
     <footer className="site-footer">
       <div className="container footer-main">
@@ -465,7 +470,7 @@ function Footer() {
             <BrandLogo />
           </Link>
           <p>
-            {overview?.shop?.description || t("ร้านสินค้าดิจิทัล")}
+            {text(footer.description) || overview?.shop?.description || t("ร้านสินค้าดิจิทัล")}
           </p>
         </div>
         {(line || phone || email) && (
@@ -510,14 +515,16 @@ function Footer() {
             </div>
           </div>
         )}
-        <div className="footer-menu">
-          <h3>{t("เมนู")}</h3>
-          <Link to="/products">{t("สินค้าทั้งหมด")}</Link>
-          <Link to="/reviews">{t("เครดิตร้าน")}</Link>
-          <Link to="/orders">{t("ประวัติการซื้อ")}</Link>
-          <Link to="/faq">{t("คำถามที่พบบ่อย")}</Link>
-          <Link to="/support">{t("ติดต่อเรา")}</Link>
-        </div>
+        {footer.links.length > 0 && (
+          <div className="footer-menu">
+            <h3>{t("เมนู")}</h3>
+            {footer.links.map((item, i) => (
+              <ShopLink to={item.link} key={i}>
+                {text(item.label)}
+              </ShopLink>
+            ))}
+          </div>
+        )}
       </div>
       <div className="footer-bottom">
         <div className="container footer-bottom-inner">
@@ -612,10 +619,15 @@ function Home() {
       (value) => (value ?? 0) > 0,
     );
   const showActivity = loading || (overview?.activity.length ?? 0) > 0;
-  return (
-    <>
-      <main className="container home-main">
-        <HomeBanners />
+  // ตั้งค่า › หน้าตาร้าน: hero texts and buttons, marquee items, which blocks show and in
+  // what order. Defaults = the page as it always was.
+  const appearance = useAppearance();
+  const hero = appearance.hero;
+  const subtext = text(hero.subtext);
+  const secondary = text(hero.secondary.label);
+  const blocks: Record<string, ReactNode> = {
+    banners: <HomeBanners />,
+    hero: (
         <section className="home-hero">
           <div className="hero-grid" aria-hidden="true">
             <i className="grid-streak streak-y streak-y-one" />
@@ -646,25 +658,30 @@ function Home() {
             </span>
           </h1>
           <p className="hero-tagline">
-            {overview?.shop?.description ||
+            {text(hero.headline) ||
+              overview?.shop?.description ||
               t("ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที")}
           </p>
+          {subtext && <p className="hero-subtext">{subtext}</p>}
           <div className="hero-actions">
-            <Link to="/products" className="button primary hero-cta">
-              {t("เลือกซื้อสินค้า")}
+            <ShopLink to={hero.primary.link} className="button primary hero-cta">
+              {text(hero.primary.label)}
               <ArrowRight size={18} />
-            </Link>
-            <Link to="/reviews" className="button hero-ghost">
-              {t("ดูรีวิวจากลูกค้า")}
-            </Link>
+            </ShopLink>
+            {secondary && hero.secondary.link && (
+              <ShopLink to={hero.secondary.link} className="button hero-ghost">
+                {secondary}
+              </ShopLink>
+            )}
           </div>
           <div className="hero-orbs" aria-hidden="true">
             <i className="orb orb-blue" />
             <i className="orb orb-yellow" />
           </div>
         </section>
-        <Marquee />
-        {showStats && (
+    ),
+    marquee: <Marquee items={appearance.marquee.map(text)} />,
+    stats: showStats && (
         <section className="stats-panel" aria-label={t("สถิติร้านค้า")}>
           {[
             [Users, t("ลูกค้า"), overview?.customers, t("คน")],
@@ -690,8 +707,8 @@ function Home() {
             );
           })}
         </section>
-        )}
-        {showActivity && (
+    ),
+    activity: showActivity && (
         <section className="activity-panel">
           {latestActivity && (
             <div className="mobile-activity-ticker">
@@ -772,8 +789,8 @@ function Home() {
             </div>
           )}
         </section>
-        )}
-        {overview?.shop?.announcement ? (
+    ),
+    announcement: overview?.shop?.announcement ? (
           <aside className="announcement">
             <span className="announcement-icon">
               <Megaphone size={22} />
@@ -783,9 +800,18 @@ function Home() {
               <p>{overview.shop.announcement}</p>
             </div>
           </aside>
-        ) : null}
-        <HomeCategoryRow />
-        <ReferenceCatalog />
+        ) : null,
+    categories: <HomeCategoryRow />,
+    products: <ReferenceCatalog />,
+  };
+  return (
+    <>
+      <main className="container home-main">
+        {appearance.sections
+          .filter((section) => section.visible)
+          .map((section) => (
+            <Fragment key={section.id}>{blocks[section.id]}</Fragment>
+          ))}
       </main>
     </>
   );
@@ -2698,19 +2724,28 @@ function writeMeta(name: string, content: string, property = false) {
 }
 export function usePageTitle(page: string, description = "") {
   const { overview } = useStore();
-  const name = shopName(overview?.shop?.shopName);
+  // ตั้งค่า › หน้าตาร้าน › SEO: site title / description / share image (empty = automatic).
+  const seo = useAppearance().seo;
+  const name = text(seo.title) || shopName(overview?.shop?.shopName);
+  const siteDescription = text(seo.description);
+  const image = location.origin + (seo.ogImageUrl || "/brand/og.png");
   useEffect(() => {
     if (!page) return;
-    const text = (description || t("ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที")).slice(0, 180);
+    const summary = (
+      description ||
+      siteDescription ||
+      t("ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที")
+    ).slice(0, 180);
     document.title = page + " — " + name;
-    writeMeta("description", text);
+    writeMeta("description", summary);
     writeMeta("og:title", page + " — " + name, true);
-    writeMeta("og:description", text, true);
-    writeMeta("og:image", location.origin + "/brand/og.png", true);
-  }, [page, description, name, getLang()]);
+    writeMeta("og:description", summary, true);
+    writeMeta("og:image", image, true);
+  }, [page, description, name, siteDescription, image, getLang()]);
 }
 function Router() {
   const { path } = useStore();
+  const siteSeo = useAppearance().seo;
   const testPayments = useTestPayments();
   const walletHidden = (path === "/wallet" || path === "/top-up") && !testPayments;
   const titles: Record<string, string> = {
@@ -2735,7 +2770,7 @@ function Router() {
     "/admin": t("แดชบอร์ด"),
   };
   const descriptions: Record<string, string> = {
-    "/": t("ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที"),
+    "/": text(siteSeo.description) || t("ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที"),
     "/products": t("สินค้าดิจิทัลทั้งหมดของร้าน"),
     "/cart": t("สินค้าที่คุณเลือกไว้ พร้อมเมื่อคุณพร้อม"),
     "/reset-password": t("ตั้งรหัสผ่านใหม่สำหรับบัญชีของคุณ"),
@@ -2884,20 +2919,32 @@ export default function App() {
   // Admin's live preview embeds the storefront with ?shop-preview and posts
   // unsaved shop fields here; they only change this framed page.
   const [previewShop, setPreviewShop] = useState<Record<string, string> | null>(null);
+  // ตั้งค่า › หน้าตาร้าน posts the unsaved appearance (and which page to show) the same way.
+  const [previewAppearance, setPreviewAppearance] = useState<Appearance | null>(null);
+  const [preview] = useState(
+    () => window.parent !== window && new URLSearchParams(location.search).has("shop-preview"),
+  );
   useEffect(() => {
-    if (window.parent === window || !new URLSearchParams(location.search).has("shop-preview"))
-      return;
+    if (!preview) return;
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== location.origin || e.data?.type !== "shop-preview") return;
       setPreviewShop(e.data.shop ?? null);
+      setPreviewAppearance(e.data.appearance ?? null);
+      const page = e.data.path;
+      if (typeof page === "string" && page.startsWith("/") && !page.startsWith("//") && page !== location.pathname)
+        go(page + "?shop-preview=1");
     };
     addEventListener("message", onMessage);
     window.parent.postMessage({ type: "shop-preview-ready" }, location.origin);
     return () => removeEventListener("message", onMessage);
   }, []);
   const shownOverview =
-    overview && previewShop
-      ? ({ ...overview, shop: { ...overview.shop, ...previewShop } } as Overview)
+    overview && (previewShop || previewAppearance)
+      ? ({
+          ...overview,
+          shop: { ...overview.shop, ...previewShop },
+          appearance: previewAppearance ?? overview.appearance,
+        } as Overview)
       : overview;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -2994,6 +3041,7 @@ export default function App() {
         {t("ข้ามไปเนื้อหา")}
       </a>
       <div className={merchant ? "merchant-shell" : "storefront-shell"}>
+        <AppearanceEffects preview={preview} />
         {!merchant && <ScrollProgress />}
         {merchant ? <MerchantHeader /> : <Header />}
         <div id="content" tabIndex={-1}>
