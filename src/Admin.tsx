@@ -1,3 +1,7 @@
+// Back-office-only rules split out of styles.css so storefront visitors never download them.
+// First import on purpose: it must come before the other back-office CSS (same order as when
+// these rules lived in styles.css), so later files still override it.
+import "./admin-shell.css";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
@@ -1469,6 +1473,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
           <label className="field">
             <textarea
               name="announcement"
+              aria-label="ข้อความประกาศหน้าแรก"
               defaultValue={shop?.announcement ?? ""}
               maxLength={1000}
             />
@@ -1495,6 +1500,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
           <label className="field">
             <select
               name="stockOrder"
+              aria-label="ลำดับการส่งสต็อก"
               defaultValue={shop?.stockOrder ?? "oldest"}
             >
               <option value="oldest">

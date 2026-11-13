@@ -6,7 +6,7 @@
 :root {
   --brand-blue: #1534ff;
   --brand-yellow: #ffcc00;
-  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --spring: cubic-bezier(0.22, 1, 0.36, 1); /* ease-out-quint: settles without bouncing */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -1748,9 +1748,9 @@ html.lang-swap .storefront-shell .main-nav {
 .admin-chat .chat-quote {
   margin: 0 0 6px;
   padding: 6px 8px;
-  border-left: 3px solid var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--text) 8%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   font-size: 12px;
 }
 .storefront-shell .chat-quote small,
@@ -2346,4 +2346,76 @@ html.lang-swap .storefront-shell .main-nav {
   .storefront-shell .reference-order-page .code-heading strong {
     min-width: 0;
   }
+}
+
+/* ---------- Phone type floor (audit 13 Nov) ----------
+   Nothing a customer reads or taps on a phone goes below 12px: bottom tab bar, footer,
+   order filters and history actions, account forms. Count badges and decorative product
+   art keep their own sizes. */
+@media (max-width: 600px) {
+  .storefront-shell .mobile-bottom-nav > a,
+  .storefront-shell .mobile-bottom-nav > button,
+  .storefront-shell .footer-menu a,
+  .storefront-shell .footer-about p,
+  .storefront-shell .footer-legal a,
+  .storefront-shell .footer-bottom-inner,
+  .storefront-shell .footer-credit,
+  .storefront-shell .footer-credit a,
+  .storefront-shell .category-chip,
+  .storefront-shell .history-card-bottom,
+  .storefront-shell .history-card-top,
+  .storefront-shell .receipt-link,
+  .storefront-shell .subtle-link,
+  .storefront-shell .form-actions .button,
+  .storefront-shell .profile-form > .muted,
+  .storefront-shell .sessions-current,
+  .storefront-shell .review-owner > span,
+  .storefront-shell .credit-review-owner small,
+  .storefront-shell .account-shortcuts .panel > span {
+    font-size: 12px;
+  }
+}
+/* Bottom tab bar: inactive labels at full text colour (the glass bar made --muted read at
+   ~3.4:1 in dark mode); the active tab keeps the accent + tint. */
+.storefront-shell .mobile-bottom-nav > a:not(.active),
+.storefront-shell .mobile-bottom-nav > button:not(.active) {
+  color: var(--text);
+}
+
+/* ---------- Phone tap targets (audit 13 Nov) ----------
+   The header row (language, theme, bell, cart, account) cannot grow to 44px each without
+   overflowing 390px, so each control keeps its look and gets an invisible hit area that
+   fills the header height and the gap to its neighbour (≈36×44, no overlap). */
+@media (max-width: 600px) {
+  .storefront-shell .site-header .icon-button,
+  .storefront-shell .site-header .account-button,
+  .storefront-shell .site-header .lang-toggle button,
+  .storefront-shell .site-header .brand {
+    position: relative;
+  }
+  .storefront-shell .site-header .icon-button::after,
+  .storefront-shell .site-header .account-button::after {
+    content: "";
+    position: absolute;
+    inset: -6px -3px;
+  }
+  .storefront-shell .site-header .lang-toggle button::after {
+    content: "";
+    position: absolute;
+    inset: -9px 0;
+  }
+  .storefront-shell .site-header .brand::after {
+    content: "";
+    position: absolute;
+    inset: -10px 0;
+  }
+  .storefront-shell .site-footer .theme-switch button {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Money in / positive amounts: dark green on light, light green on dark (both ≥4.5:1). */
+:root[data-theme="dark"] .storefront-shell .positive {
+  color: #4ade80;
 }

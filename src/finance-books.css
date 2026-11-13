@@ -51,8 +51,8 @@
   color: #b45309;
   font-weight: 600;
 }
-.merchant-shell tr.finance-row-changed td:first-child {
-  box-shadow: inset 3px 0 0 #f59e0b;
+.merchant-shell tr.finance-row-changed td {
+  background: #fffbeb;
 }
 .merchant-shell tr.finance-row-reversed td:not(:last-child) {
   color: var(--muted);
