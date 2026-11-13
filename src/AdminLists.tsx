@@ -47,6 +47,16 @@ import { CopyValue, ResendCredentials } from "./OrderCredentials";
 import { WarrantyStatus } from "./Warranty";
 import { ReceiptLink } from "./OrderExtras";
 import { AdminReviews } from "./AdminReviews";
+import {
+  CustomerTagChips,
+  CustomerTagsCard,
+  PricingChips,
+  ProductLimitForm,
+  VariantPricingPanel,
+  useCustomerTags,
+  useProductPricing,
+  type CustomerTag,
+} from "./AdminPricing";
 
 type Filters = Record<string, string>;
 
@@ -1025,13 +1035,14 @@ type CustomerRow = {
   created_at: string;
   spentSatang?: number;
   orderCount: number;
+  tags?: CustomerTag[];
 };
 
 const statusText: Record<string, string> = { ACTIVE: "ปกติ", SUSPENDED: "ระงับ", BANNED: "แบน" };
 const CustomerStatus = ({ status }: { status: string }) => (
   <span className={"status customer-status-" + status.toLowerCase()}>{statusText[status] ?? status}</span>
 );
-const emptyCustomerFilters = { q: "", status: "", hasOrders: "", sort: "created_at", from: "", to: "" };
+const emptyCustomerFilters = { q: "", status: "", hasOrders: "", tag: "", sort: "created_at", from: "", to: "" };
 
 export function AdminCustomers() {
   const { go, user } = useStore();
@@ -1041,6 +1052,7 @@ export function AdminCustomers() {
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
   const active = Object.entries(filters).some(([k, v]) => v && !(k === "sort" && v === "created_at"));
   const [exporting, setExporting] = useState(false);
+  const customerTags = useCustomerTags();
   async function exportCsv() {
     setExporting(true);
     try {
@@ -1054,12 +1066,13 @@ export function AdminCustomers() {
         cursor = page.nextCursor;
       } while (cursor && rows.length < 20000);
       downloadCsv("customers.csv", [
-        ["ชื่อ", "อีเมล", "เบอร์โทร", "สถานะ", "ออเดอร์", ...(admin ? ["ยอดซื้อสะสม (บาท)"] : []), "สมัครเมื่อ"],
+        ["ชื่อ", "อีเมล", "เบอร์โทร", "สถานะ", "แท็ก", "ออเดอร์", ...(admin ? ["ยอดซื้อสะสม (บาท)"] : []), "สมัครเมื่อ"],
         ...rows.map((c) => [
           c.name,
           c.email,
           c.phone ?? "",
           statusText[c.status] ?? c.status,
+          (c.tags ?? []).map((x) => x.tag).join(", "),
           c.orderCount,
           ...(admin ? [((c.spentSatang ?? 0) / 100).toFixed(2)] : []),
           c.created_at,
@@ -1109,6 +1122,17 @@ export function AdminCustomers() {
             ["false", "ยังไม่เคยสั่ง"],
           ]}
         />
+        {customerTags.tags.length > 0 && (
+          <Select
+            label="แท็ก"
+            value={filters.tag}
+            onChange={(tag) => set({ tag })}
+            options={[
+              ["", "ทุกแท็ก"],
+              ...customerTags.tags.map((x): [string, string] => [x.tag, x.tag + " (" + x.customers + ")"]),
+            ]}
+          />
+        )}
         <Select
           label="เรียงตาม"
           value={filters.sort}
@@ -1143,6 +1167,7 @@ export function AdminCustomers() {
                     <span>
                       <Link to={"/admin/customers/" + c.id}>{c.name}</Link>
                       <small>{c.email.endsWith(".local") ? "—" : c.email}</small>
+                      <CustomerTagChips tags={c.tags} />
                     </span>
                   </div>
                 </td>
@@ -1180,6 +1205,7 @@ type CustomerDetail = {
     statusReason: string | null;
     statusChangedAt: string | null;
     created_at: string;
+    tags?: CustomerTag[];
   };
   orderCount: number;
   activeSessions: number;
@@ -1465,6 +1491,7 @@ export function AdminCustomerDetail({ id }: { id: string }) {
                 )}
               </form>
             </section>
+            <CustomerTagsCard customerId={c.id} tags={c.tags ?? []} onChanged={load} />
             <section className="reference-admin-card admin-detail-card">
               <h2>สถานะบัญชี</h2>
               {!admin && <p className="muted">เฉพาะแอดมินเปลี่ยนสถานะบัญชีได้</p>}
@@ -3732,6 +3759,9 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
   const [open, setOpen] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState("");
+  // Sale / compare-at / limit / tag prices (AdminPricing.tsx).
+  const pricing = useProductPricing(productId);
+  const [pricingOpen, setPricingOpen] = useState<string | null>(null);
   const load = () =>
     api<{ variants: Variant[] }>("/admin/products/" + productId + "/variants")
       .then((r) => setVariants(r.variants))
@@ -3789,7 +3819,8 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
           : "ลูกค้าจ่ายแล้วได้ ID และรหัสผ่านจากสต็อกของตัวเลือกนั้นทันที สต็อกหมดหน้าร้านขึ้นว่าหมดเอง"}
         {" · ประกัน 0 วัน = ไม่มีประกัน แก้ภายหลังไม่กระทบออเดอร์ที่ขายไปแล้ว"}
       </p>
-      <ErrorMessage message={error} />
+      <ErrorMessage message={error || pricing.error} />
+      <ProductLimitForm productId={productId} pricing={pricing.data} onSaved={() => void pricing.load()} />
       {variants?.map((v) => (
         <div className={"variant-row" + (v.active ? "" : " inactive")} key={v.id}>
           {editing === v.id ? (
@@ -3821,6 +3852,7 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
                   {money(v.price)} · {v.active ? "เปิดขาย" : "ปิดอยู่"}
                   {(v.warranty_days ?? 0) > 0 ? " · รับประกัน " + v.warranty_days + " วัน" : " · ไม่มีประกัน"}
                 </small>
+                <PricingChips row={pricing.data?.variants[v.id]} />
               </span>
               <button
                 type="button"
@@ -3835,6 +3867,15 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
                 <button type="button" className="button ghost" onClick={() => setEditing(v.id)}>
                   แก้
                 </button>
+                <button
+                  type="button"
+                  className="button ghost"
+                  aria-expanded={pricingOpen === v.id}
+                  disabled={!pricing.data?.variants[v.id]}
+                  onClick={() => setPricingOpen(pricingOpen === v.id ? null : v.id)}
+                >
+                  ราคาโปร
+                </button>
                 <button type="button" className="button ghost" onClick={() => void update(v, { active: !v.active })}>
                   {v.active ? "ปิด" : "เปิด"}
                 </button>
@@ -3845,6 +3886,16 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
             </div>
           )}
           {open === v.id && <VariantStock variant={v} onChanged={() => void load()} />}
+          {pricingOpen === v.id && pricing.data?.variants[v.id] && (
+            <VariantPricingPanel
+              variantId={v.id}
+              regularPrice={v.price}
+              row={pricing.data.variants[v.id]}
+              tags={pricing.data.tags}
+              onSaved={() => void pricing.load()}
+              onClose={() => setPricingOpen(null)}
+            />
+          )}
         </div>
       ))}
       <form className="variant-edit variant-new" onSubmit={create}>

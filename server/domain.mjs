@@ -59,6 +59,7 @@ import { createCouponApis, normalizeCouponCode } from "./coupons.mjs";
 import { createAccountEmail } from "./account-email.mjs";
 import { templates as emailTemplates } from "./email.mjs";
 import { createStockWatch } from "./stock-watch.mjs";
+import { createPricing } from "./pricing.mjs";
 import { createReviewModeration, maskReviewer } from "./review-moderation.mjs";
 import { normalizeLegal } from "./legal.mjs";
 import { normalizeFaq } from "./faq.mjs";
@@ -522,6 +523,8 @@ export function createCommerceCore({
     moneyScope,
   });
   const { releaseCouponForOrder } = coupons;
+  // Sale / compare-at / tag prices / purchase limits (pricing.mjs).
+  const pricing = createPricing({ one, all, run, tx, fail, clean, requireAdmin, requireStaff, clock });
   const categoryApis = createCategoryApis({ requireAdmin, one, all, run, tx, fail });
   // ctx: { ip, userAgent } from the request. Only a coarse device label and the IP
   // cut to /24 (IPv6 /48) are stored, for the "my devices" list (account-sessions.mjs).
@@ -830,6 +833,10 @@ export function createCommerceCore({
         ...demoIds,
       );
       run(
+        `DELETE FROM variant_tag_prices WHERE variant_id IN (SELECT id FROM variants WHERE product_id IN (${marks}))`,
+        ...demoIds,
+      );
+      run(
         `DELETE FROM variants WHERE product_id IN (${marks})`,
         ...demoIds,
       );
@@ -856,6 +863,7 @@ export function createCommerceCore({
         run(`DELETE FROM ledger WHERE user_id IN (${users})`, ...demoUsers);
         run(`DELETE FROM reviews WHERE user_id IN (${users})`, ...demoUsers);
         run(`DELETE FROM stock_watch WHERE user_id IN (${users})`, ...demoUsers);
+        run(`DELETE FROM customer_tags WHERE user_id IN (${users})`, ...demoUsers);
         // Accounts a demo visitor bought from real products during testing still point at
         // their orders; those units were handed out, so they go with the orders (unsold
         // stock is untouched).
@@ -1101,19 +1109,29 @@ export function createCommerceCore({
     all,
     db,
   });
-  function mapProduct(row) {
+  function mapProduct(row, user = null) {
     // Usage instructions are for buyers of a delivered order only (order-extras.mjs).
-    const { usage_instructions: _usage, ...p } = row;
+    // max_per_customer is shown per option as maxPerCustomer (pricing.mjs).
+    const { usage_instructions: _usage, max_per_customer: productLimit, ...p } = row;
     const lowAt = getLowStockAt();
+    const at = pricing.nowSql();
     return {
       ...p,
       ...productImageFields(p.id),
       variants: all(
         `SELECT v.*, CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=? AND COALESCE(v.active,1)=1 ORDER BY v.sort_order ASC, CASE WHEN v.id='stream-plus-full' THEN 0 WHEN v.id LIKE '%-30' THEN 1 ELSE 2 END, price, v.id`,
         p.id,
-      ).map(({ stock, ...v }) => ({
+      ).map(({ stock, compare_at, sale_price, sale_starts_at, sale_ends_at, max_per_customer, ...v }) => ({
         ...v,
-        price: p.preorder && v.id === "cinema-max-30" ? 0 : v.price,
+        // What this viewer pays now (sale / tag price) + the struck-through price (pricing.mjs).
+        // The raw sale price and window stay internal so a scheduled sale is not shown early.
+        ...publicPrice(
+          { ...v, compare_at, sale_price, sale_starts_at, sale_ends_at, max_per_customer },
+          p.preorder && v.id === "cinema-max-30" ? 0 : v.price,
+          productLimit,
+          user,
+          at,
+        ),
         // Customers never see a stock number: only a status and whether it can be
         // ordered now (preorder = always). Exact counts stay on the admin APIs.
         stockStatus: stock <= 0 ? "out" : stock <= lowAt ? "low" : "in",
@@ -1130,19 +1148,35 @@ export function createCommerceCore({
       ).count,
     };
   }
-  function products() {
+  /** Public price fields of one option for one viewer (null = signed out). */
+  function publicPrice(variant, base, productLimit, user, at) {
+    const q = pricing.quote(variant, base, user, at);
+    const limit = pricing.limitFor(variant, productLimit, user);
+    return {
+      price: q.unitPrice,
+      regularPrice: q.regularPrice,
+      compareAt: q.compareAt,
+      discountPercent: q.discountPercent,
+      priceKind: q.priceKind,
+      priceTag: q.priceTag,
+      saleEndsAt: q.saleEndsAt,
+      maxPerCustomer: limit?.max ?? null,
+      remainingForYou: limit?.remaining ?? null,
+    };
+  }
+  function products(user = null) {
     return all("SELECT * FROM products WHERE active=1 AND hidden_seed=0").map(
-      mapProduct,
+      (p) => mapProduct(p, user),
     );
   }
-  function productDetail(id) {
+  function productDetail(id, user = null) {
     const productId = clean(id, 1, 80, "สินค้า");
     const p = one(
       "SELECT * FROM products WHERE id=? AND active=1 AND hidden_seed=0",
       productId,
     );
     if (!p) fail(404, "ไม่พบสินค้า");
-    return mapProduct(p);
+    return mapProduct(p, user);
   }
   function settings() {
     const raw = one(
@@ -1307,16 +1341,20 @@ export function createCommerceCore({
       })),
     };
   }
-  /** Variant a customer may buy, with the price the shop charges (never the client's). */
-  const buyableVariant = (variantId) => {
+  /**
+   * Variant a customer may buy, with the price the shop charges this customer (never the
+   * client's): lowest of normal, active sale and their tag price (pricing.mjs).
+   */
+  const buyableVariant = (variantId, user) => {
     const variant = one(
       "SELECT v.*,p.preorder FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=? AND p.active=1 AND p.hidden_seed=0 AND COALESCE(v.active,1)=1",
       variantId,
     );
     if (!variant) fail(404, "ไม่พบสินค้า");
-    const unitPrice =
+    const base =
       variant.preorder && variant.id === "cinema-max-30" ? 0 : variant.price;
-    return { ...variant, unitPrice };
+    const quote = pricing.quote(variant, base, user);
+    return { ...variant, unitPrice: quote.unitPrice, priceKind: quote.priceKind };
   };
   /**
    * POST /api/coupons/check — discount preview for one line. Same rules as
@@ -1326,7 +1364,7 @@ export function createCommerceCore({
     requireUser(user);
     const variantId = clean(input.variantId, 1, 80, "สินค้า");
     const quantity = integer(input.quantity, 1, 10, "จำนวน");
-    const variant = buyableVariant(variantId);
+    const variant = buyableVariant(variantId, user);
     try {
       const result = coupons.evaluate(user, input.code, {
         productId: variant.product_id,
@@ -1384,8 +1422,10 @@ export function createCommerceCore({
           fail(409, "รหัสคำขอถูกใช้กับคำสั่งซื้ออื่นแล้ว");
         return { ...orderDetail(user, prior.id), paymentToken: null };
       }
-      const variant = buyableVariant(variantId);
+      const variant = buyableVariant(variantId, user);
       const subtotal = variant.unitPrice * quantity;
+      // Per-account limit, counted in this transaction so the last unit is sold once.
+      pricing.assertPurchaseLimit(user, variant, quantity);
       if (
         !variant.preorder &&
         one(
@@ -2678,7 +2718,13 @@ export function createCommerceCore({
     paymentSummaryFor,
     history: orderHistory,
   });
-  const { adminOrders, adminRevealOrderCredentials, adminCustomers } = listApis;
+  const { adminOrders, adminRevealOrderCredentials } = listApis;
+  /** Customer list + each row's tags (the ?tag= filter is applied in admin-list-apis.mjs). */
+  function adminCustomers(user, query) {
+    const page = listApis.adminCustomers(user, query);
+    const tags = pricing.tagsFor(page.customers.map((c) => c.id));
+    return { ...page, customers: page.customers.map((c) => ({ ...c, tags: tags[c.id] ?? [] })) };
+  }
   // NFR-3: team members handle orders but never see money movement (payment rows,
   // provider refs, refunds, fees). Admins get the full record.
   function adminOrderDetail(user, id) {
@@ -2750,6 +2796,8 @@ export function createCommerceCore({
       customer: {
         ...detail.customer,
         avatarUrl: key ? "/api/files/" + key : null,
+        // Customer tags (pricing.mjs): STAFF sees them, only ADMIN changes them.
+        tags: pricing.tagsOf(detail.customer.id),
       },
     };
   }
@@ -2985,6 +3033,14 @@ export function createCommerceCore({
     overview,
     createOrder,
     checkCoupon,
+    // Sale / compare-at / tag prices / purchase limits / customer tags (pricing.mjs).
+    adminProductPricing: pricing.adminProductPricing,
+    adminSetVariantPricing: pricing.adminSetVariantPricing,
+    adminSetProductLimit: pricing.adminSetProductLimit,
+    adminCustomerTags: pricing.adminCustomerTags,
+    adminSaveCustomerTag: pricing.adminSaveCustomerTag,
+    adminDeleteCustomerTag: pricing.adminDeleteCustomerTag,
+    adminSetCustomerTags: pricing.adminSetCustomerTags,
     adminCoupons: coupons.adminCoupons,
     adminCoupon: coupons.adminCoupon,
     adminCreateCoupon: coupons.adminCreateCoupon,
@@ -3148,6 +3204,7 @@ export function createCommerceCore({
       categories: true,
       stockWatch: true,
       reviewModeration: true,
+      pricingRules: true,
       // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
       email: accountEmail.enabled,
       passwordReset: accountEmail.enabled,

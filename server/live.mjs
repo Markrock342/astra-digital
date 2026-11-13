@@ -23,6 +23,12 @@ const LIVE_METHODS = {
   createVariant: ["catalog"],
   updateVariant: ["catalog", "notify"],
   deleteVariant: ["catalog"],
+  // pricing.mjs: storefront prices / limits change; customer tags change tag prices.
+  adminSetVariantPricing: ["catalog"],
+  adminSetProductLimit: ["catalog"],
+  adminSetCustomerTags: ["customers", "catalog"],
+  adminSaveCustomerTag: ["customers"],
+  adminDeleteCustomerTag: ["customers", "catalog"],
   markInventoryDefect: ["catalog"],
   deleteInventoryUnit: ["catalog"],
   deliverReservation: ["orders", "notify"],

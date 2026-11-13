@@ -528,6 +528,11 @@ export function createAdminListApis({
     }
     if (hasOrders === true) where.push(`(${orderCountExpr}) > 0`);
     if (hasOrders === false) where.push(`(${orderCountExpr}) = 0`);
+    // Customer tag (pricing.mjs), case-insensitive.
+    if (query.tag != null && String(query.tag).trim() !== "") {
+      where.push("EXISTS (SELECT 1 FROM customer_tags ct WHERE ct.user_id=u.id AND ct.tag=?)");
+      params.push(clean(query.tag, 1, 24, "แท็ก"));
+    }
 
     if (cursorParts) {
       const [cursorVal, cursorId] = cursorParts;

@@ -9,6 +9,21 @@ export type Variant = {
   stockStatus: "in" | "low" | "out";
   /** Can be ordered now (in stock, or a preorder product). */
   available: boolean;
+  // Pricing rules (server/pricing.mjs). `price` above is what this viewer pays now.
+  /** Normal price before sale / tag price. */
+  regularPrice?: number;
+  /** Struck-through "was" price, only when above `price`. */
+  compareAt?: number | null;
+  discountPercent?: number | null;
+  priceKind?: "regular" | "sale" | "tag";
+  /** Customer tag whose price applies (only sent to that customer). */
+  priceTag?: string | null;
+  /** End of the running sale (UTC SQL time), if it has one. */
+  saleEndsAt?: string | null;
+  /** Per-account purchase limit, the stricter of product / option. */
+  maxPerCustomer?: number | null;
+  /** Units this signed-in customer can still buy (null when signed out / no limit). */
+  remainingForYou?: number | null;
 };
 /** Admin APIs keep the exact ready-stock count. */
 export type AdminVariant = Omit<Variant, "stockStatus" | "available"> & {

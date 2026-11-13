@@ -365,8 +365,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             user: service.publicUser(user),
             features: service.features ?? {},
           });
+        // Prices are per viewer (sale window, tag price, purchase limit left): pricing.mjs.
         if (path === "/api/products")
-          return send(200, { products: service.products() });
+          return send(200, { products: service.products(user) });
         if (/^\/api\/products\/[^/]+$/.test(path)) {
           let productId;
           try {
@@ -375,7 +376,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             throw new ApiError(400, "รหัสสินค้าไม่ถูกต้อง");
           }
           return send(200, {
-            product: service.productDetail(productId),
+            product: service.productDetail(productId, user),
           });
         }
         if (path === "/api/overview") return send(200, service.overview());
@@ -582,6 +583,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             minSpent: url.searchParams.get("minSpent") ?? undefined,
             maxSpent: url.searchParams.get("maxSpent") ?? undefined,
             hasOrders: url.searchParams.get("hasOrders") ?? undefined,
+            tag: url.searchParams.get("tag") ?? undefined,
             sort: url.searchParams.get("sort") ?? undefined,
             cursor: url.searchParams.get("cursor") ?? undefined,
             limit: url.searchParams.get("limit") ?? undefined,
@@ -602,6 +604,11 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             200,
             service.adminProductVariants(user, path.split("/")[4]),
           );
+        // Pricing rules + customer tags (pricing.mjs).
+        if (/^\/api\/admin\/products\/[^/]+\/pricing$/.test(path))
+          return send(200, service.adminProductPricing(user, path.split("/")[4]));
+        if (path === "/api/admin/customer-tags")
+          return send(200, service.adminCustomerTags(user));
         if (/^\/api\/admin\/variants\/[^/]+\/inventory$/.test(path))
           return send(
             200,
@@ -633,6 +640,12 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             200,
             service.updateVariant(user, path.split("/")[4], input, { origin: url.origin }),
           );
+        if (/^\/api\/admin\/variants\/[^/]+\/pricing$/.test(path))
+          return send(200, service.adminSetVariantPricing(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/products\/[^/]+\/limit$/.test(path))
+          return send(200, service.adminSetProductLimit(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/customers\/[^/]+\/tags$/.test(path))
+          return send(200, service.adminSetCustomerTags(user, path.split("/")[4], input));
         return send(404, { error: "ไม่พบหน้าที่ร้องขอ" });
       } else if (request.method === "DELETE") {
         if (/^\/api\/account\/sessions\/[^/]+$/.test(path)) {
@@ -677,6 +690,15 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         }
         if (/^\/api\/admin\/variants\/[^/]+$/.test(path))
           return send(200, service.deleteVariant(user, path.split("/")[4]));
+        if (/^\/api\/admin\/customer-tags\/[^/]+$/.test(path)) {
+          let tag;
+          try {
+            tag = decodeURIComponent(path.split("/")[4]);
+          } catch {
+            throw new ApiError(400, "ชื่อแท็กไม่ถูกต้อง");
+          }
+          return send(200, service.adminDeleteCustomerTag(user, tag));
+        }
         if (/^\/api\/admin\/inventory\/[^/]+$/.test(path))
           return send(
             200,
@@ -801,6 +823,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminResetCustomerPassword(user, path.split("/")[4]));
         if (/^\/api\/admin\/customers\/[^/]+\/sign-out$/.test(path))
           return send(200, service.adminSignOutCustomer(user, path.split("/")[4]));
+        if (path === "/api/admin/customer-tags")
+          return send(200, service.adminSaveCustomerTag(user, input));
         if (path === "/api/admin/payment-channel") {
           // Sensitive: the admin re-enters their password (input.currentPassword).
           service.reauthAdmin(user, input);

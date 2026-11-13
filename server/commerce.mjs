@@ -40,6 +40,7 @@ import {
   ensureStockWatch,
   ensureReviewModeration,
   ensurePrivacyRequests,
+  ensurePricing,
 } from "./ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "./auth-hardening.mjs";
 import { createEmailSender } from "./email.mjs";
@@ -113,6 +114,7 @@ export function createCommerce(options = {}) {
   ensureAppendOnlyMoney(db);
   ensureAlertsBackup(db);
   ensurePrivacyRequests(db);
+  ensurePricing(db);
   return createCommerceCore({ ...options, db, key });
 }
 export function openLocalCommerce({

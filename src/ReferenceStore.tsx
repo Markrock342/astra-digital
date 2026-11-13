@@ -33,11 +33,11 @@ import { WarrantyDays } from "./Warranty";
 import { ProductFaq } from "./Faq";
 import { api, dateTime, money } from "./api";
 import type { Order, Product, Review } from "./types";
-import { MAX_PER_ORDER } from "./types";
 import { CategoryChips, categoryName, useCategoryParam } from "./Categories";
 import { ForgotPassword, TURNSTILE_WAIT, TurnstileBox, useAuthConfig } from "./AccountRecovery";
 import { StockWatchButton } from "./StockWatch";
 import { ReviewReply } from "./ReviewReply";
+import { PriceDisplay, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
 /**
  * Product list with search + sort. On /products (`routed`) it also shows the category chips
  * and filters by ?category=<id>; the URL loads filtered and works with search and sort.
@@ -557,7 +557,7 @@ export function ReferenceProduct({ id }: { id: string }) {
               <span>{t("ขายแล้ว")}{" "}{product.sold}</span>
             </div>
           )}
-          <div className="reference-price">{money(variant.price)}</div>
+          <PriceDisplay variant={variant} className="reference-price" />
           {!!product.preorder && (
             <p className="preorder-how">
               {t("สินค้าพรีออเดอร์: ชำระแล้วได้เลขคิวทันที ร้านส่ง ID และรหัสผ่านตามลำดับคิว และแจ้งเตือนในเว็บเมื่อส่งแล้ว")}
@@ -587,7 +587,10 @@ export function ReferenceProduct({ id }: { id: string }) {
                   </small>
                   <WarrantyDays days={v.warranty_days} />
                 </span>
-                <strong>{money(v.price)}</strong>
+                <span className="variant-price-stack">
+                  <strong>{money(v.price)}</strong>
+                  <WasPrice variant={v} />
+                </span>
               </button>
             ))}
           </fieldset>
@@ -598,12 +601,12 @@ export function ReferenceProduct({ id }: { id: string }) {
           <div className="reference-buy-row">
             <Quantity
               value={quantity}
-              max={variant.available ? MAX_PER_ORDER : 0}
+              max={quantityCap(variant)}
               onChange={setQuantity}
             />
             <button
               className="button secondary"
-              disabled={!available}
+              disabled={!available || quantityCap(variant) === 0}
               onClick={() => buy(false)}
             >
               <ShoppingBag size={17} />
@@ -611,13 +614,14 @@ export function ReferenceProduct({ id }: { id: string }) {
             </button>
             <button
               className="button primary"
-              disabled={!available}
+              disabled={!available || quantityCap(variant) === 0}
               onClick={() => buy(true)}
             >
               {product.preorder ? t("จองเลย") : t("ซื้อเลย")}
             </button>
           </div>
           )}
+          <PurchaseLimitNote variant={variant} />
           <p className="reference-delivery-note">
             <KeyRound size={15} />
             {product.preorder
