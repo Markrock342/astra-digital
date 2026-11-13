@@ -8,7 +8,8 @@ import { api } from "./api";
 
 const BATCH = 100;
 
-type Kind = "pair" | "code";
+// seat = shared account "id,password,seats" · link = invite link "https://…,uses" (Delivery.tsx).
+type Kind = "pair" | "code" | "seat" | "link";
 type LineStatus = "ok" | "duplicate_batch" | "existing" | "invalid";
 type Entry = {
   line: number;
@@ -20,6 +21,8 @@ type Entry = {
   cost?: number;
   /** Optional expiry YYYY-MM-DD. */
   expiresAt?: string;
+  /** seat / link: the pasted line as is (the server parses it). */
+  raw?: string;
 };
 type ServerLine = {
   line: number;
@@ -28,9 +31,12 @@ type ServerLine = {
   passwordMasked?: string;
   reason?: string;
   duplicateOf?: number;
+  /** seat: seats on this account · link: uses of this link. */
+  seats?: number;
+  uses?: number;
 };
 type PreviewLine = ServerLine & { key: string };
-type ImportResult = { imported: number; skipped: number };
+type ImportResult = { imported: number; skipped: number; units?: number };
 
 const statusText: Record<LineStatus, string> = {
   ok: "พร้อมเพิ่ม",
@@ -71,6 +77,11 @@ function parseEntries(text: string, kind: Kind): Entry[] {
     const trimmed = raw.trim();
     if (!trimmed) return;
     const line = index + 1;
+    if (kind === "seat" || kind === "link") {
+      const first = trimmed.split(/[,\t]/)[0].trim();
+      entries.push({ line, raw: trimmed, key: kind === "seat" ? first.toLowerCase() : first });
+      return;
+    }
     if (kind === "code") {
       if (trimmed.includes(",")) {
         const { head, cost, expiresAt } = takeExpiresAndCost(trimmed.split(","));
@@ -124,6 +135,8 @@ function chunks<T>(items: T[]) {
 }
 
 function body(variantId: string, kind: Kind, chunk: Entry[], extra: Record<string, unknown>) {
+  if (kind === "seat" || kind === "link")
+    return { variantId, [kind === "seat" ? "seats" : "links"]: chunk.map((e) => e.raw).join("\n"), ...extra };
   return kind === "pair"
     ? {
         variantId,
@@ -173,7 +186,7 @@ export function StockImport({
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const entries = parseEntries(text, kind);
-  const unit = kind === "pair" ? "บัญชี" : "โค้ด";
+  const unit = kind === "pair" || kind === "seat" ? "บัญชี" : kind === "link" ? "ลิงก์" : "โค้ด";
   const batches = chunks(entries);
 
   async function check(e: FormEvent) {
@@ -227,6 +240,7 @@ export function StockImport({
     setBusy(true);
     setError("");
     let imported = 0;
+    let units = 0;
     let skipped = 0;
     let done = 0;
     try {
@@ -237,10 +251,15 @@ export function StockImport({
           body(variantId, kind, chunk, skip ? { skipDuplicates: true } : {}),
         );
         imported += result.imported;
+        units += result.units ?? result.imported;
         skipped += result.skipped ?? 0;
         done++;
       }
-      toast(`นำเข้า ${imported} ${unit}สำเร็จ` + (skipped ? ` · ข้าม ${skipped} รายการที่ซ้ำหรือรูปแบบผิด` : ""));
+      toast(
+        `นำเข้า ${imported} ${unit}สำเร็จ` +
+          (kind === "seat" ? ` (${units} ที่นั่ง)` : kind === "link" ? ` (${units} ครั้ง)` : "") +
+          (skipped ? ` · ข้าม ${skipped} รายการที่ซ้ำหรือรูปแบบผิด` : ""),
+      );
       setText("");
       setPreview(null);
       onDone?.({ imported, skipped });
@@ -292,9 +311,11 @@ export function StockImport({
             <thead>
               <tr>
                 <th className="num">บรรทัด</th>
-                <th>{kind === "pair" ? "ไอดี" : "โค้ด"}</th>
-                {kind === "pair" && <th>รหัสผ่าน</th>}
-                <th className="num">ต้นทุน (บาท)</th>
+                <th>{kind === "pair" || kind === "seat" ? "ไอดี" : kind === "link" ? "ลิงก์" : "โค้ด"}</th>
+                {(kind === "pair" || kind === "seat") && <th>รหัสผ่าน</th>}
+                {kind === "seat" && <th className="num">ที่นั่ง</th>}
+                {kind === "link" && <th className="num">ใช้ได้</th>}
+                {(kind === "pair" || kind === "code") && <th className="num">ต้นทุน (บาท)</th>}
                 <th>ผลตรวจ</th>
               </tr>
             </thead>
@@ -307,8 +328,12 @@ export function StockImport({
                   <td>
                     <code className="stock-import-id">{l.display || "–"}</code>
                   </td>
-                  {kind === "pair" && <td>{l.passwordMasked ?? "–"}</td>}
-                  <td className="num">{entryCost != null ? formatBaht(entryCost) : "–"}</td>
+                  {(kind === "pair" || kind === "seat") && <td>{l.passwordMasked ?? "–"}</td>}
+                  {kind === "seat" && <td className="num">{l.seats ?? "–"}</td>}
+                  {kind === "link" && <td className="num">{l.uses ?? "–"}</td>}
+                  {(kind === "pair" || kind === "code") && (
+                    <td className="num">{entryCost != null ? formatBaht(entryCost) : "–"}</td>
+                  )}
                   <td>
                     <span className={"import-status import-" + l.status}>{statusText[l.status]}</span>
                     {l.status !== "ok" && l.reason && <small>{l.reason}</small>}
@@ -348,19 +373,27 @@ export function StockImport({
         {label}
         <textarea
           aria-label={label}
-          rows={kind === "pair" ? 5 : 7}
+          rows={kind === "code" ? 7 : 5}
           placeholder={
             placeholder ??
-            (kind === "pair"
-              ? "user1@mail.com,password1\nuser2@mail.com,password2,15.00,2027-12-31"
-              : "รหัสสินค้าหนึ่งรายการต่อบรรทัด\nCODE-WITH-COST,15.00,2027-12-31")
+            (kind === "seat"
+              ? "family@mail.com,password,5\nfamily2@mail.com,password,จอ1:1234|จอ2:5678|จอ3"
+              : kind === "link"
+                ? "https://invite.example/abc,5\nhttps://invite.example/xyz"
+                : kind === "pair"
+                  ? "user1@mail.com,password1\nuser2@mail.com,password2,15.00,2027-12-31"
+                  : "รหัสสินค้าหนึ่งรายการต่อบรรทัด\nCODE-WITH-COST,15.00,2027-12-31")
           }
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
       </label>
       <p className="field-help">
-        {kind === "pair"
+        {kind === "seat"
+          ? "ไอดี,รหัสผ่าน,จำนวนที่นั่ง หรือ โปรไฟล์:PIN|โปรไฟล์:PIN"
+          : kind === "link"
+            ? "ลิงก์,จำนวนครั้งที่ใช้ได้ (ไม่ใส่ = 1)"
+            : kind === "pair"
           ? "วางจาก Excel ได้ · คั่นด้วย , หรือแท็บ · คอลัมน์ท้ายเป็นต้นทุนบาท (ทศนิยมได้ 2 ตำแหน่ง) และวันหมดอายุ YYYY-MM-DD (ไม่บังคับ) · รหัสผ่านเก็บแบบเข้ารหัส ลูกค้าเห็นหลังจ่ายเงินเท่านั้น"
           : "ระบบตรวจโค้ดซ้ำก่อนบันทึก · ต่อท้าย ,ต้นทุนบาท และ/หรือ ,YYYY-MM-DD ได้ (ไม่บังคับ) · ยังไม่ส่งให้ลูกค้าก่อนยืนยันการชำระเงิน"}
         {entries.length > 0 && ` · พร้อมเติม ${entries.length} ${unit}`}

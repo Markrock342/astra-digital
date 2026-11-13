@@ -95,6 +95,7 @@ import { EmailVerifyNotice, useEmailVerifyNeeded, VerifyEmailPage } from "./Emai
 import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
 import { ContactPage } from "./Contact";
+import { CheckoutFields, DeliveredLinks, FulfilmentCard, checkoutFieldsReady } from "./Delivery";
 import { RebuyActions } from "./Rebuy";
 import { ManualOrderNote } from "./ManualOrderNote";
 import { DiscountBadge, PriceNote, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
@@ -252,6 +253,8 @@ export function Status({ status }: { status: string }) {
     EXPIRED: t("หมดเวลาชำระเงิน"),
     OUT_OF_STOCK: t("สินค้าหมด"),
     PREORDER: t("รอส่งสินค้าสั่งจอง"),
+    // Shop-fulfilled product (Delivery.tsx): paid, the shop still has to send it.
+    WAITING: t("รอร้านส่งมอบ"),
     // Deposit / free preorders (Preorder.tsx): called and waiting for the balance, or ran out of time.
     CALLED: t("ถึงคิวแล้ว · รอชำระ"),
     LAPSED: t("หมดเวลาชำระ"),
@@ -266,7 +269,9 @@ export function Status({ status }: { status: string }) {
 }
 /** Unpaid order cancelled by the payment window: shown as its own status to the customer. */
 const shownStatus = (o: Order) =>
-  o.status === "PREORDER" && o.stage === "called"
+  o.status === "DELIVERED" && o.fulfilment?.state === "waiting"
+    ? "WAITING"
+    : o.status === "PREORDER" && o.stage === "called"
     ? "CALLED"
     : o.stage === "lapsed"
       ? "LAPSED"
@@ -1272,6 +1277,10 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
   const [coupon, setCoupon] = useState<CouponPreview | null>(null);
   const [couponError, setCouponError] = useState("");
   const [checking, setChecking] = useState(false);
+  // Shop-fulfilled product (Delivery.tsx): what the shop needs from the customer.
+  const fields = p?.checkoutFields ?? [];
+  const [deliveryValues, setDeliveryValues] = useState<Record<string, string>>({});
+  const fieldsReady = checkoutFieldsReady(fields, deliveryValues);
   async function checkCode(raw: string) {
     if (!variant || !basket) return;
     setChecking(true);
@@ -1313,6 +1322,7 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
         quantity: basket!.quantity,
         requestKey: key,
         ...(coupon ? { couponCode: coupon.code } : {}),
+        ...(fields.length ? { deliveryInputs: deliveryValues } : {}),
       });
       // Free preorder reservations (Preorder.tsx) have nothing to pay: no token.
       if (o.paymentToken) sessionStorage.setItem("astra-pay-" + o.id, o.paymentToken);
@@ -1390,6 +1400,9 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
                 <Trash2 size={18} />
               </button>
             </div>
+            {checkout && (
+              <CheckoutFields fields={fields} values={deliveryValues} onChange={setDeliveryValues} />
+            )}
             <p className="small-note">
               <ShieldCheck size={16} />
               {t("โค้ดถูกส่งไปยังบัญชีที่ใช้สั่งซื้อเท่านั้น")}
@@ -1478,7 +1491,7 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
             <EmailVerifyNotice compact />
             <button
               className="button primary full"
-              disabled={busy || !variant.available || !shopOpen || (checkout && verifyEmail)}
+              disabled={busy || !variant.available || !shopOpen || (checkout && (verifyEmail || !fieldsReady))}
               onClick={checkout ? order : () => go("/checkout")}
             >
               {busy ? (
@@ -1492,7 +1505,9 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
             </button>
             {user && (
               <p className="balance-note">
-                {p.preorder && p.preorderTerms?.mode === "free"
+                {p.deliveryType === "manual"
+                  ? t("ร้านทำรายการให้หลังชำระ แจ้งเตือนเมื่อเสร็จ")
+                  : p.preorder && p.preorderTerms?.mode === "free"
                   ? t("จองฟรี ไม่ต้องจ่ายตอนนี้ ได้เลขคิวทันที")
                   : p.preorder
                   ? t("สินค้าพรีออเดอร์: ชำระแล้วได้เลขคิว ร้านจะส่ง ID และรหัสผ่านให้ภายหลัง")
@@ -1691,7 +1706,9 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               </span>
             )}
             <h1>
-              {preorderHeading(order)?.[0] ?? (order.status === "DELIVERED"
+              {preorderHeading(order)?.[0] ?? (order.status === "DELIVERED" && order.fulfilment?.state === "waiting"
+                ? t("ชำระแล้ว รอร้านส่งมอบ")
+                : order.status === "DELIVERED"
                 ? t("สั่งซื้อสำเร็จ พร้อมรับสินค้า")
                 : order.status === "PREORDER"
                   ? t("บันทึกการสั่งจองแล้ว")
@@ -1706,7 +1723,9 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                         : t("สินค้าหมดก่อนทำรายการ"))}
             </h1>
             <p>
-              {preorderHeading(order)?.[1] ?? (order.status === "DELIVERED"
+              {preorderHeading(order)?.[1] ?? (order.status === "DELIVERED" && order.fulfilment
+                ? t("ร้านกำลังทำรายการให้คุณ")
+                : order.status === "DELIVERED"
                 ? t("ID และรหัสผ่านของคุณอยู่ด้านล่าง")
                 : order.status === "PENDING_PAYMENT"
                   ? t("ชำระเงินเพื่อรับสินค้า")
@@ -1807,6 +1826,11 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                 </div>
               </div>
               )
+            ) : order.status === "DELIVERED" && order.fulfilment ? (
+              <>
+                <FulfilmentCard order={order} />
+                <DeliveredExtras order={order} />
+              </>
             ) : order.status === "DELIVERED" ? (
               <div className="delivered-codes">
                 <div className="code-heading">
@@ -1824,9 +1848,18 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                 </div>
                 {order.credentials?.map((pair, i) => (
                   <div className="credential-pair" key={"pair-" + i}>
+                    {pair.seat != null && (
+                      // Shared account: which seat / profile is the customer's.
+                      <span className="seat-label">
+                        <Users size={14} />
+                        {t("ที่นั่ง {n}", { n: pair.seat })}
+                      </span>
+                    )}
                     {[
                       [t("ไอดี"), pair.loginId],
                       [t("รหัสผ่าน"), pair.password],
+                      ...(pair.profile ? [[t("โปรไฟล์"), pair.profile]] : []),
+                      ...(pair.pin ? [["PIN", pair.pin]] : []),
                     ].map(([label, value]) => (
                       <div className="code-row" key={label}>
                         <small>{label}</small>
@@ -1854,6 +1887,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                     </button>
                   </div>
                 ))}
+                <DeliveredLinks links={order.links ?? []} />
                 <p className="sandbox-note">{t("เก็บโค้ดนี้ไว้ในที่ปลอดภัย")}</p>
                 <DeliveredExtras order={order} />
               </div>

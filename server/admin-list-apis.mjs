@@ -1,4 +1,5 @@
 /** Admin FR Work 2 — cursor-paginated list/detail/reveal APIs (FR-O2–O4, C1–C2, P1). */
+import { maskLink } from "./delivery.mjs";
 
 function parseLimit(limit, fail, { fallback = 25, max = 100 } = {}) {
   if (limit == null || String(limit).trim() === "") return fallback;
@@ -36,6 +37,10 @@ function maskCredential(item) {
   return {
     loginId: maskSecret(item.loginId),
     password: "••••••••",
+    // Shared account seat (delivery.mjs): the profile name is not a secret, the PIN is.
+    ...(item.seat != null
+      ? { seat: item.seat, profile: item.profile ?? null, pin: item.pin ? "••••" : null }
+      : {}),
   };
 }
 
@@ -66,7 +71,8 @@ const ORDER_UNION = `
   SELECT o.id,o.status,o.total,o.quantity,o.created_at,o.variant_id,
          u.id AS customer_id,u.name AS customer,u.email AS customer_email,
          p.id AS product_id,p.name AS product,v.label AS variant_label,
-         0 AS preorder,CAST(NULL AS INTEGER) AS queue_number
+         0 AS preorder,CAST(NULL AS INTEGER) AS queue_number,
+         (SELECT f.state FROM order_fulfilment f WHERE f.order_id=o.id) AS fulfil
   FROM orders o
   JOIN users u ON u.id=o.user_id
   JOIN variants v ON v.id=o.variant_id
@@ -75,7 +81,7 @@ const ORDER_UNION = `
   SELECT o.id,o.status,o.total,o.quantity,o.created_at,o.variant_id,
          u.id AS customer_id,u.name AS customer,u.email AS customer_email,
          p.id AS product_id,p.name AS product,v.label AS variant_label,
-         1 AS preorder,o.queue_number
+         1 AS preorder,o.queue_number,CAST(NULL AS TEXT) AS fulfil
   FROM reservations o
   JOIN users u ON u.id=o.user_id
   JOIN variants v ON v.id=o.variant_id
@@ -93,6 +99,7 @@ export function createAdminListApis({
   run,
   notify,
   readDeliveredItems,
+  delivery,
   inventoryAvailableAliased,
   getLowStockAt,
   bangkokDayRange,
@@ -189,7 +196,10 @@ export function createAdminListApis({
       params.push(status);
     }
     if (group) {
-      where.push(`status IN (${group.map(() => "?").join(",")})`);
+      // "todo" also holds paid orders of shop-fulfilled products still to be sent (delivery.mjs).
+      where.push(
+        `(status IN (${group.map(() => "?").join(",")})` + (groupRaw === "todo" ? " OR fulfil='waiting')" : ")"),
+      );
       params.push(...group);
     }
     if (cursorParts) {
@@ -216,7 +226,7 @@ export function createAdminListApis({
                 COALESCE(SUM(status IN (${inList("preorder")})),0) AS preorder,
                 COALESCE(SUM(status IN (${inList("delivered")})),0) AS delivered,
                 COALESCE(SUM(status IN (${inList("failed")})),0) AS failed,
-                COALESCE(SUM(status IN (${inList("todo")})),0) AS todo
+                COALESCE(SUM(status IN (${inList("todo")}) OR fulfil='waiting'),0) AS todo
          FROM (${ORDER_UNION})
          ${baseWhere.length ? " WHERE " + baseWhere.join(" AND ") : ""}`,
         ...baseParams,
@@ -246,6 +256,8 @@ export function createAdminListApis({
       preorder: !!row.preorder,
       queue_number: row.queue_number,
       type: row.preorder ? "preorder" : "ready",
+      // 'waiting' = paid, the shop still has to send it (delivery.mjs).
+      fulfil: row.fulfil ?? null,
     }));
     const nextCursor =
       rows.length > lim
@@ -338,16 +350,20 @@ export function createAdminListApis({
     const delivered =
       row.status === "DELIVERED"
         ? readDeliveredItems(bind, orderId)
-        : { codes: [], credentials: [] };
+        : { codes: [], credentials: [], links: [] };
     // Inventory ids in rowid order — UI replace button + FR-O5 POST body.
     const units =
       row.status === "DELIVERED"
         ? all(
-            `SELECT id, legacy_single_secret FROM inventory
+            `SELECT id, legacy_single_secret, unit_kind, group_id, seat_no FROM inventory
              WHERE ${bind}=? AND COALESCE(defective,0)=0
              ORDER BY rowid`,
             orderId,
-          ).map((u) => ({ id: u.id, kind: u.legacy_single_secret ? "code" : "pair" }))
+          ).map((u) => ({
+            id: u.id,
+            kind: u.unit_kind === "seat" ? "seat" : u.unit_kind === "invite" ? "invite" : u.legacy_single_secret ? "code" : "pair",
+            ...(u.group_id ? { groupId: u.group_id, seatNo: u.seat_no ?? null } : {}),
+          }))
         : [];
     return {
       id: row.id,
@@ -388,7 +404,11 @@ export function createAdminListApis({
       units,
       codes: delivered.codes.map(maskCredential),
       credentials: delivered.credentials.map(maskCredential),
+      links: (delivered.links ?? []).map(maskLink),
       credentialsMasked: true,
+      // Shop-fulfilled product: what the customer typed + queue state (delivery.mjs).
+      fulfilment: row.preorder ? null : delivery.adminOrderFulfilment(orderId),
+      deliveryType: one("SELECT delivery_type FROM products WHERE id=?", row.product_id)?.delivery_type ?? null,
     };
   }
 
@@ -442,6 +462,9 @@ export function createAdminListApis({
         id: orderId,
         codes: delivered.codes,
         credentials: delivered.credentials,
+        links: delivered.links ?? [],
+        // Shop-fulfilled order: the message the shop sent (same audited reveal).
+        message: row.preorder ? "" : delivery.revealMessage(orderId),
         credentialsMasked: false,
       };
     });
@@ -656,7 +679,9 @@ export function createAdminListApis({
       + COALESCE((SELECT SUM(r.quantity) FROM reservations r JOIN variants v ON v.id=r.variant_id WHERE v.product_id=p.id AND r.status IN ('PREORDER','DELIVERED')),0)
     )`;
     const lowAt = getLowStockAt();
+    // Shop-fulfilled products (delivery.mjs) have no stock and are never "out".
     const stockStatusExpr = `CASE
+      WHEN p.delivery_type='manual' THEN 'in'
       WHEN (${stockExpr}) <= 0 THEN 'out'
       WHEN (${stockExpr}) <= ${lowAt} THEN 'low'
       ELSE 'in' END`;
@@ -734,6 +759,7 @@ export function createAdminListApis({
       stockStatus: row.stockStatus,
       sold: row.sold,
       type: row.preorder ? "preorder" : "ready",
+      deliveryType: row.delivery_type ?? null,
       status: row.active ? "active" : "inactive",
       variants: [],
     }));

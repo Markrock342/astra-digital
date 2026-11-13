@@ -32,6 +32,7 @@ export function createPrivacyApis({
   /** Clears the customer's chat image links; returns the file keys to delete. */
   eraseChatImages,
   confirmPassword,
+  exportDeliveryInputs,
 }) {
   function exportMyData(user) {
     requireUser(user);
@@ -125,6 +126,8 @@ export function createPrivacyApis({
       sessions,
       taxInvoiceRequests,
       taxInvoices,
+      // What the customer typed at checkout for shop-fulfilled products (delivery.mjs).
+      deliveryInputs: typeof exportDeliveryInputs === "function" ? exportDeliveryInputs(user.id) : [],
     };
   }
 
@@ -226,6 +229,11 @@ export function createPrivacyApis({
       );
       run(
         `UPDATE reviews SET comment='' WHERE user_id=?`,
+        subject.id,
+      );
+      // Checkout answers for shop-fulfilled products (e.g. a Gmail to invite) are personal data.
+      run(
+        `UPDATE order_fulfilment SET inputs_enc=NULL WHERE order_id IN (SELECT id FROM orders WHERE user_id=?)`,
         subject.id,
       );
       // Buyer details typed for receipts / tax-invoice requests are cleared; an open request is
