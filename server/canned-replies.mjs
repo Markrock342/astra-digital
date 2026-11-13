@@ -118,11 +118,12 @@ export function createCannedReplyApis({ one, all, run, tx, fail, clean, requireS
     const latest = thread.order_id
       ? null
       : one(
+          // created_at has 1-second precision: break ties by insert order (rowid), not the random id.
           `SELECT id FROM (
-             SELECT id,created_at FROM orders WHERE user_id=?
+             SELECT id,created_at,rowid AS seq FROM orders WHERE user_id=?
              UNION ALL
-             SELECT id,created_at FROM reservations WHERE user_id=?
-           ) ORDER BY created_at DESC, id DESC LIMIT 1`,
+             SELECT id,created_at,rowid AS seq FROM reservations WHERE user_id=?
+           ) ORDER BY created_at DESC, seq DESC LIMIT 1`,
           thread.user_id,
           thread.user_id,
         );
