@@ -437,3 +437,57 @@ test("ensurePricing is idempotent and PDPA deletion drops the customer's tags", 
   s.approvePrivacyDeletion(admin, req.id, { currentPassword: "Boss-Pricing-Pass-123" });
   assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM customer_tags WHERE user_id=?").get(user.id).n, 0);
 });
+
+test("duplicate product copies sale/compare/limit/tag prices; editing the copy leaves the source alone", (t) => {
+  const { s, admin } = fixture(t);
+  s.adminSetProductLimit(admin, "stream-plus", { maxPerCustomer: 3 });
+  s.adminSetVariantPricing(admin, READY, {
+    compareAt: 15000,
+    salePrice: 7900,
+    saleStartsAt: "2025-12-31T17:00",
+    saleEndsAt: "2026-12-31T23:59",
+    maxPerCustomer: 2,
+    tagPrices: [{ tag: "ตัวแทน", price: 7000 }],
+  });
+  const sourcePricing = (id) =>
+    s.db
+      .prepare(
+        "SELECT compare_at,sale_price,sale_starts_at,sale_ends_at,max_per_customer FROM variants WHERE id=?",
+      )
+      .get(id);
+  const before = sourcePricing(READY);
+  const copy = s.duplicateProduct(admin, "stream-plus");
+  assert.equal(
+    s.db.prepare("SELECT max_per_customer FROM products WHERE id=?").get(copy.id).max_per_customer,
+    3,
+  );
+  const copyVariants = s.db
+    .prepare("SELECT id,label FROM variants WHERE product_id=? ORDER BY sort_order,id")
+    .all(copy.id);
+  const sourceVariants = s.db
+    .prepare("SELECT id,label FROM variants WHERE product_id=? ORDER BY sort_order,id")
+    .all("stream-plus");
+  assert.equal(copyVariants.length, sourceVariants.length);
+  const copyReady = copyVariants.find((v) => v.label === sourceVariants.find((x) => x.id === READY).label);
+  assert.ok(copyReady);
+  assert.notEqual(copyReady.id, READY);
+  assert.deepEqual({ ...sourcePricing(copyReady.id) }, { ...before });
+  const tags = (variantId) =>
+    s.db
+      .prepare("SELECT tag,price FROM variant_tag_prices WHERE variant_id=? ORDER BY tag")
+      .all(variantId)
+      .map((r) => ({ ...r }));
+  assert.deepEqual(tags(copyReady.id), tags(READY));
+  // Edit the copy: source pricing stays the same.
+  s.adminSetVariantPricing(admin, copyReady.id, {
+    compareAt: 20000,
+    salePrice: 5000,
+    maxPerCustomer: 9,
+    tagPrices: [{ tag: "ตัวแทน", price: 4500 }],
+  });
+  assert.deepEqual({ ...sourcePricing(READY) }, { ...before });
+  assert.deepEqual(tags(READY), [{ tag: "ตัวแทน", price: 7000 }]);
+  assert.equal(s.db.prepare("SELECT max_per_customer FROM products WHERE id=?").get("stream-plus").max_per_customer, 3);
+  const audit = s.db.prepare("SELECT detail FROM audit WHERE action='DUPLICATE_PRODUCT' AND entity_id=?").get(copy.id);
+  assert.ok(JSON.parse(audit.detail).tagPrices >= 1);
+});

@@ -177,6 +177,8 @@ export function AdminManualOrder({ products }: { products: AdminProduct[] }) {
   const [confirming, setConfirming] = useState(false);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [overLimitPrompt, setOverLimitPrompt] = useState(false);
+  const [overLimitReason, setOverLimitReason] = useState("");
   const requestKey = useRef(crypto.randomUUID());
 
   const sellable = products.filter((p) => p.active && p.variants.length > 0);
@@ -205,6 +207,8 @@ export function AdminManualOrder({ products }: { products: AdminProduct[] }) {
   // Server price preview: the order is priced again on the server when created.
   useEffect(() => {
     setConfirming(false);
+    setOverLimitPrompt(false);
+    setOverLimitReason("");
     if (!customer || !variantId || !qtyOk || priceInvalid) {
       setQuote(null);
       setQuoteError("");
@@ -261,6 +265,8 @@ export function AdminManualOrder({ products }: { products: AdminProduct[] }) {
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!customer || !variant || !quote) return;
+    if (overLimitPrompt && overLimitReason.trim().length < 3)
+      return setError("กรุณาใส่เหตุผลที่ยืนยันเกินลิมิตอย่างน้อย 3 ตัวอักษร");
     setBusy(true);
     setError("");
     try {
@@ -276,6 +282,9 @@ export function AdminManualOrder({ products }: { products: AdminProduct[] }) {
         note: note.trim() || undefined,
         requestKey: requestKey.current,
         currentPassword: password,
+        ...(overLimitPrompt
+          ? { confirmOverLimit: true, overLimitReason: overLimitReason.trim() }
+          : {}),
       });
       let slipNote = "";
       if (slip) {
@@ -292,7 +301,15 @@ export function AdminManualOrder({ products }: { products: AdminProduct[] }) {
       );
       go("/admin/orders/" + result.order.id);
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message;
+      // Storefront limit copy: "สินค้านี้จำกัด N ชิ้นต่อบัญชี…" — offer an audited override.
+      if (!overLimitPrompt && /จำกัด\s*\d+\s*ชิ้นต่อบัญชี/.test(message)) {
+        setOverLimitPrompt(true);
+        setOverLimitReason("");
+        setError(message);
+      } else {
+        setError(message);
+      }
       setPassword("");
     } finally {
       setBusy(false);
@@ -556,6 +573,21 @@ export function AdminManualOrder({ products }: { products: AdminProduct[] }) {
                 สร้างออเดอร์ให้ <strong>{customer?.name}</strong> ยอด <strong>{money(quote.total)}</strong>
               </p>
               <small>โอนนอกเว็บ · อ้างอิง {reference.trim()} · ยกเลิกเองไม่ได้ ต้องใช้การคืนเงิน</small>
+              {overLimitPrompt && (
+                <label className="field">
+                  เหตุผลที่ยืนยันเกินลิมิตต่อบัญชี
+                  <textarea
+                    name="overLimitReason"
+                    rows={2}
+                    maxLength={300}
+                    required
+                    value={overLimitReason}
+                    onChange={(e) => setOverLimitReason(e.target.value)}
+                    placeholder="เช่น ลูกค้าโอนเพิ่มนอกเว็บตามตกลง"
+                    autoFocus
+                  />
+                </label>
+              )}
               <label className="field">
                 รหัสผ่านของคุณ
                 <input
@@ -566,15 +598,31 @@ export function AdminManualOrder({ products }: { products: AdminProduct[] }) {
                   maxLength={128}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoFocus
+                  autoFocus={!overLimitPrompt}
                 />
               </label>
               <div className="admin-action-row">
-                <button type="button" className="button secondary" disabled={busy} onClick={() => setConfirming(false)}>
+                <button
+                  type="button"
+                  className="button secondary"
+                  disabled={busy}
+                  onClick={() => {
+                    setConfirming(false);
+                    setOverLimitPrompt(false);
+                    setOverLimitReason("");
+                  }}
+                >
                   แก้ไข
                 </button>
-                <button className="button primary" disabled={busy || !password}>
-                  {busy ? "กำลังสร้าง…" : "ยืนยันสร้างออเดอร์ " + money(quote.total)}
+                <button
+                  className="button primary"
+                  disabled={busy || !password || (overLimitPrompt && overLimitReason.trim().length < 3)}
+                >
+                  {busy
+                    ? "กำลังสร้าง…"
+                    : overLimitPrompt
+                      ? "ยืนยันเกินลิมิต " + money(quote.total)
+                      : "ยืนยันสร้างออเดอร์ " + money(quote.total)}
                 </button>
               </div>
             </div>

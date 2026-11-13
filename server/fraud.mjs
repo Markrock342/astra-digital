@@ -551,11 +551,12 @@ export function createFraud({
   // ------------------------------------------------------------------ hooks
 
   /**
-   * Wrap register / login / pay / postChatMessage. The block check runs before register and
-   * login; the rules run after the original returned (committed) and never throw.
+   * Wrap register / login / pay / adminCreateManualOrder / postChatMessage.
+   * The block check runs before register and login; the rules run after the original
+   * returned (committed) and never throw. Manual admin orders count as paid for the customer.
    */
   function hook(service) {
-    const { register, login, pay, openChatThread, postChatMessage } = service;
+    const { register, login, pay, openChatThread, postChatMessage, adminCreateManualOrder } = service;
     service.register = (input, ctx = {}) => {
       assertCanRegister(input);
       const result = register(input, ctx);
@@ -592,6 +593,14 @@ export function createFraud({
         });
       return result;
     };
+    if (typeof adminCreateManualOrder === "function")
+      service.adminCreateManualOrder = (user, input = {}, ctx = {}) => {
+        const result = adminCreateManualOrder(user, input, ctx);
+        const customerId = typeof input?.customerId === "string" ? input.customerId : null;
+        if (customerId && result && !result.replayed)
+          safely("manual_paid", () => checkPaid(customerId));
+        return result;
+      };
     // A customer "แจ้งปัญหา" is a chat message linked to an order (order-extras.mjs); it can
     // open a new thread or go into the open one. Both only succeed for a valid report.
     const countReport = (user, input) => {
