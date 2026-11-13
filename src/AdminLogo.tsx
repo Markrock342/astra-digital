@@ -8,6 +8,11 @@ import { api } from "./api";
 import { checkSource, toWebp, uploadImage } from "./image-upload";
 import "./logo.css";
 
+/** The shop's built-in mark (blue square, yellow X), used until the admin uploads a logo. */
+export const DEFAULT_LOGO = "/brand/icon-512.png";
+/** Uploaded logo, else the built-in mark. */
+export const shopLogo = (url?: string | null) => url || DEFAULT_LOGO;
+
 export function AdminLogoSetting() {
   const { overview, refresh, toast } = useStore();
   const logo = overview?.shop?.logoUrl ?? null;
@@ -30,7 +35,7 @@ export function AdminLogoSetting() {
     }
   }
   async function remove() {
-    if (!confirm("ลบโลโก้ร้าน? หลังบ้านและแชทจะกลับไปใช้ตัวอักษร AX")) return;
+    if (!confirm("ลบโลโก้ที่อัปโหลด? หลังบ้านและแชทจะกลับไปใช้โลโก้เดิมของร้าน (รูป X)")) return;
     setBusy(true);
     setError("");
     try {
@@ -51,23 +56,23 @@ export function AdminLogoSetting() {
         JPG, PNG หรือ WebP
       </p>
       <div className="logo-setting-row">
-        {logo ? (
-          <img src={logo} className="settings-logo" alt="โลโก้ร้านปัจจุบัน" />
-        ) : (
-          <span className="settings-logo logo-placeholder" aria-label="ยังไม่มีโลโก้">
-            AX
-          </span>
-        )}
+        <img
+          src={shopLogo(logo)}
+          className="settings-logo"
+          alt={logo ? "โลโก้ร้านปัจจุบัน" : "โลโก้เดิมของร้าน"}
+        />
         <div className="logo-setting-actions">
           <button type="button" className="button secondary" disabled={busy} onClick={() => input.current?.click()}>
             {busy ? <LoaderCircle className="spin" size={16} /> : <ImageUp size={16} />}
-            {logo ? "เปลี่ยนโลโก้" : "อัปโหลดโลโก้"}
+            เปลี่ยนโลโก้
           </button>
-          {logo && (
+          {logo ? (
             <button type="button" className="button ghost logo-remove" disabled={busy} onClick={() => void remove()}>
               <Trash2 size={16} />
-              ลบโลโก้
+              กลับไปใช้โลโก้เดิม
             </button>
+          ) : (
+            <span className="logo-default-note">ตอนนี้ใช้โลโก้เดิมของร้าน</span>
           )}
         </div>
       </div>
@@ -88,15 +93,8 @@ export function AdminLogoSetting() {
   );
 }
 
-/** Square shop mark: the uploaded logo, else the AX letters. */
+/** Square shop mark: the uploaded logo, else the built-in X mark. */
 export function ShopMark({ className = "", label }: { className?: string; label?: string }) {
   const { overview } = useStore();
-  const logo = overview?.shop?.logoUrl;
-  return logo ? (
-    <img src={logo} className={className + " shop-mark-img"} alt={label ?? ""} />
-  ) : (
-    <span className={className} aria-hidden={label ? undefined : true}>
-      AX
-    </span>
-  );
+  return <img src={shopLogo(overview?.shop?.logoUrl)} className={className + " shop-mark-img"} alt={label ?? ""} />;
 }

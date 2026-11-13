@@ -44,3 +44,8 @@
 .logo-remove {
   color: #b42318;
 }
+.logo-default-note {
+  align-self: center;
+  color: var(--muted, #5d5f69);
+  font-size: 13px;
+}

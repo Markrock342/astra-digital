@@ -10,15 +10,20 @@ import {
   MessageCircle,
   Pin,
   PinOff,
+  Receipt,
   Search,
   Send,
+  ShieldAlert,
   Trophy,
+  Users,
+  Wallet,
   X,
 } from "lucide-react";
-import { ErrorMessage, Link, useStore } from "./App";
+import { Art, ErrorMessage, Link, useStore } from "./App";
 import { NAVIGATE_EVENT } from "./navigation";
 import { api, dateTime, money, relativeTime } from "./api";
 import { t } from "./i18n";
+import { shopLogo } from "./AdminLogo";
 import { ChatOrderTag, useReportDraft } from "./OrderExtras";
 import {
   AttachMenu,
@@ -154,7 +159,58 @@ export type Notice = {
   link?: string | null;
   read_at: string | null;
   created_at: string;
+  /** Product of the order / stock line, or the customer who wrote (server/domain.mjs noticePictures). */
+  picture?:
+    | { type: "product"; name: string; art: string; imageUrl: string | null }
+    | { type: "person"; name: string; imageUrl: string | null }
+    | { type: "photo"; imageUrl: string }
+    | null;
 };
+const NOTICE_ICONS: Record<string, typeof Bell> = {
+  credit: Wallet,
+  fraud_signal: ShieldAlert,
+  team: Users,
+  tax_invoice: Receipt,
+  chat_assigned: MessageCircle,
+};
+/** Picture at the left of a bell item: product cover, customer photo/letter, shop logo or an icon. */
+function NoticePicture({ n, admin }: { n: Notice; admin: boolean }) {
+  const { overview } = useStore();
+  const p = n.picture;
+  if (p?.type === "photo")
+    return (
+      <span className="notice-pic photo">
+        <img src={p.imageUrl} alt="" loading="lazy" />
+      </span>
+    );
+  if (p?.type === "product")
+    return (
+      <span className="notice-pic">
+        {p.imageUrl ? <img src={p.imageUrl} alt="" loading="lazy" /> : <Art small type={p.art} name={p.name} />}
+      </span>
+    );
+  if (p?.type === "person")
+    return p.imageUrl ? (
+      <span className="notice-pic round">
+        <img src={p.imageUrl} alt="" loading="lazy" />
+      </span>
+    ) : (
+      <span className="notice-pic round letter">{(p.name.trim()[0] ?? "?").toUpperCase()}</span>
+    );
+  // Customer side: everything else comes from the shop (team replies, announcements, credit).
+  if (!admin || n.kind === "broadcast")
+    return (
+      <span className="notice-pic">
+        <img src={shopLogo(overview?.shop?.logoUrl)} alt="" />
+      </span>
+    );
+  const Icon = NOTICE_ICONS[n.kind] ?? Bell;
+  return (
+    <span className="notice-pic icon">
+      <Icon size={18} />
+    </span>
+  );
+}
 export type Buyer = {
   rank: number;
   name: string;
@@ -357,7 +413,8 @@ export function NotificationBell({ admin = false }: { admin?: boolean }) {
                       }}
                     >
                       <span className="notice-dot" aria-hidden="true" />
-                      <span>
+                      <NoticePicture n={n} admin={admin} />
+                      <span className="notice-text">
                         <strong>{text.title}</strong>
                         <small>{text.body}</small>
                         <time>{relativeTime(n.created_at)}</time>
@@ -732,7 +789,7 @@ export function CustomerChat() {
                     m.sender_type === "USER"
                       ? { url: user.avatarUrl, name: user.name }
                       : {
-                          url: overview?.shop?.logoUrl,
+                          url: shopLogo(overview?.shop?.logoUrl),
                           name: overview?.shop?.shopName || "ASIA EXTRA",
                         }
                   }
@@ -1267,7 +1324,7 @@ export function AdminChat() {
                         name: thread.customer ?? "ลูกค้า",
                       }
                     : {
-                        url: overview?.shop?.logoUrl,
+                        url: shopLogo(overview?.shop?.logoUrl),
                         name: overview?.shop?.shopName || "แอดมิน",
                       }
                 }
