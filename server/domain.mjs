@@ -419,6 +419,7 @@ export function createCommerceCore({
       "stock_low",
       "สต็อกใกล้หมด",
       row.name + " / " + row.label + " เหลือ " + row.stock,
+      "/admin/inventory/" + encodeURIComponent(variantId),
     );
   };
   const expiryNotifyCooldown = new Map();
@@ -2794,11 +2795,98 @@ export function createCommerceCore({
       return one("SELECT * FROM chat_threads WHERE id=?", id);
     });
   }
+  /**
+   * Picture for a bell item, from its link: the product of an order / preorder / stock line,
+   * or the customer who wrote in a chat thread. Older stock alerts (no link) match by name.
+   */
+  function noticePictures(rows) {
+    const covers = new Map();
+    const productOf = (productId) => {
+      if (!productId) return null;
+      if (!covers.has(productId)) {
+        const p = one("SELECT id,name,art FROM products WHERE id=?", productId);
+        const img = p
+          ? one("SELECT file_key FROM product_images WHERE product_id=? ORDER BY sort_order ASC, id ASC LIMIT 1", p.id)
+          : null;
+        covers.set(productId, p ? { name: p.name, art: p.art, imageUrl: img ? "/api/files/" + img.file_key : null } : null);
+      }
+      return covers.get(productId);
+    };
+    const productOfOrder = (id) =>
+      productOf(
+        (one("SELECT v.product_id FROM orders o JOIN variants v ON v.id=o.variant_id WHERE o.id=?", id) ??
+          one("SELECT v.product_id FROM reservations r JOIN variants v ON v.id=r.variant_id WHERE r.id=?", id))?.product_id,
+      );
+    const decode = (v) => {
+      try {
+        return decodeURIComponent(v);
+      } catch {
+        return v;
+      }
+    };
+    // Image sent in a thread within 2 s of the alert (alerts are written in the same transaction).
+    const sentImage = (threadId, row, from) => {
+      const hit = one(
+        `SELECT image_key FROM chat_messages
+         WHERE thread_id=? AND image_key IS NOT NULL AND ${from === "USER" ? "sender_type='USER'" : "sender_type<>'USER'"}
+           AND created_at BETWEEN datetime(?, '-2 seconds') AND datetime(?, '+2 seconds')
+         ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+        threadId,
+        row.created_at,
+        row.created_at,
+      );
+      return hit ? "/api/chat/files/" + hit.image_key : null;
+    };
+    let threadsOfUser = null;
+    const userThreads = () =>
+      (threadsOfUser ??= rows.length
+        ? all("SELECT id FROM chat_threads WHERE user_id=(SELECT user_id FROM notifications WHERE id=?)", rows[0].id).map((r) => r.id)
+        : []);
+    return rows.map((row) => {
+      const link = row.link ?? "";
+      let m;
+      let picture = null;
+      if ((m = /^\/(?:admin\/)?orders\/([^/?#]+)/.exec(link))) {
+        const product = productOfOrder(decode(m[1]));
+        if (product) picture = { type: "product", ...product };
+      } else if ((m = /^\/admin\/inventory\/([^/?#]+)/.exec(link))) {
+        const product = productOf(one("SELECT product_id FROM variants WHERE id=?", decode(m[1]))?.product_id);
+        if (product) picture = { type: "product", ...product };
+      } else if ((m = /^\/(?:admin\/)?products\/([^/?#]+)/.exec(link))) {
+        const product = productOf(decode(m[1]));
+        if (product) picture = { type: "product", ...product };
+      } else if ((m = /^\/admin\/chat\?thread=([^&#]+)/.exec(link)) && sentImage(decode(m[1]), row, "USER")) {
+        picture = { type: "photo", imageUrl: sentImage(decode(m[1]), row, "USER") };
+      } else if ((m = /^\/admin\/chat\?thread=([^&#]+)/.exec(link))) {
+        const who = one(
+          "SELECT u.name,u.avatar_key FROM chat_threads t JOIN users u ON u.id=t.user_id WHERE t.id=?",
+          decode(m[1]),
+        );
+        if (who) picture = { type: "person", name: who.name, imageUrl: who.avatar_key ? "/api/files/" + who.avatar_key : null };
+      } else if (row.kind === "chat" && !link && userThreads().length) {
+        // Customer bell: a picture the team sent.
+        for (const t of userThreads()) {
+          const url = sentImage(t, row, "TEAM");
+          if (url) {
+            picture = { type: "photo", imageUrl: url };
+            break;
+          }
+        }
+      } else if (row.kind === "stock_low" && row.body) {
+        const name = String(row.body).split(" / ")[0];
+        const product = productOf(one("SELECT id FROM products WHERE name=? ORDER BY rowid DESC LIMIT 1", name)?.id);
+        if (product) picture = { type: "product", ...product };
+      }
+      return { ...row, picture };
+    });
+  }
   function notifications(user) {
     requireUser(user);
-    return all(
-      "SELECT id,kind,title,body,link,read_at,created_at FROM notifications WHERE user_id=? ORDER BY created_at DESC,rowid DESC LIMIT 100",
-      user.id,
+    return noticePictures(
+      all(
+        "SELECT id,kind,title,body,link,read_at,created_at FROM notifications WHERE user_id=? ORDER BY created_at DESC,rowid DESC LIMIT 100",
+        user.id,
+      ),
     );
   }
   function markNotificationRead(user, notificationId) {

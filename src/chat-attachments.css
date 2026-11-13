@@ -436,3 +436,60 @@
     max-width: min(220px, 58vw);
   }
 }
+/* Bell items: product cover, customer photo / letter, shop logo or a kind icon. */
+.notice-pic {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--raised);
+  color: var(--muted);
+}
+.notice-pic.round {
+  border-radius: 999px;
+}
+.notice-pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.notice-pic .product-art {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: 0;
+}
+.notice-pic.letter {
+  background: var(--brand-soft, var(--raised));
+  color: var(--brand, var(--text));
+  font-weight: 700;
+}
+.notice-pic.icon {
+  background: var(--brand-soft, var(--raised));
+  color: var(--brand, var(--text));
+}
+.notice-text {
+  min-width: 0;
+}
+/* Phones: the bell sits near the right edge, so a right-anchored 360px panel ran off the left
+   side. Pin it to the screen edges under the header instead. */
+@media (max-width: 600px) {
+  /* "body" outranks the base .notice-panel rule in styles.css, which loads after this file. */
+  body .notice-panel {
+    position: fixed;
+    top: 64px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: calc(100dvh - 160px);
+    overflow-y: auto;
+  }
+}
+/* A picture the customer sent, shown in the bell instead of "[รูปภาพ]". */
+.notice-pic.photo img {
+  object-fit: cover;
+}

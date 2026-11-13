@@ -82,9 +82,13 @@ test("library dialog works as a bottom sheet at 390px", async ({ page }) => {
   await page.getByRole("button", { name: "เลือกรูปจากคลัง" }).click();
   const dialog = page.getByRole("dialog", { name: "คลังรูปสินค้า" });
   await expect(dialog).toBeVisible();
+  // The sheet slides up; measure once it has settled (under load the first frame is mid-animation).
+  await expect.poll(async () => {
+    const b = await dialog.boundingBox();
+    return b.y + b.height;
+  }).toBeLessThanOrEqual(845);
   const box = await dialog.boundingBox();
   expect(box.width).toBeLessThanOrEqual(390);
-  expect(box.y + box.height).toBeLessThanOrEqual(845);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   // Several cover cards per row even on a phone.
   const [a, b] = await dialog.locator(".image-library-item").evaluateAll((els) =>
