@@ -89,6 +89,7 @@ import { DeliveredExtras, hasReceipt, ReceiptLink, ReceiptPage, receiptRoute } f
 import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
 import { RebuyActions } from "./Rebuy";
+import { ManualOrderNote } from "./ManualOrderNote";
 import { HomeCategoryRow } from "./Categories";
 import { HomeBanners } from "./HomeBanners";
 import {
@@ -1643,6 +1644,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
             <div className="order-meta">
               <span>{t("คำสั่งซื้อ #")}{order.id.slice(0, 8).toUpperCase()}</span>
               <span>{dateTime(order.created_at)}</span>
+              {order.createdByAdmin && <ManualOrderNote method={order.paymentMethodLabel} />}
               {hasReceipt(order) && <ReceiptLink id={order.id} />}
             </div>
             {!!order.discount && (
@@ -1904,6 +1906,7 @@ function HistoryPage() {
                       <p>
                         {o.label} · {o.quantity}{" "}{t("ชิ้น")}
                       </p>
+                      {o.createdByAdmin && <ManualOrderNote method={o.paymentMethodLabel} />}
                     </div>
                     <strong>{money(o.total)}</strong>
                     <ArrowUpRight size={18} />

@@ -82,6 +82,7 @@ import { AdminIntegrations } from "./AdminIntegrations";
 import { LegalSettings } from "./Legal";
 import { FaqSettingsPanel } from "./FaqAdmin";
 import { AdminBroadcasts } from "./AdminBroadcasts";
+import { AdminManualOrder, ManualOrderBadge } from "./AdminManualOrder";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -367,6 +368,7 @@ export default function Admin() {
             <strong>{codeId(o.id)}</strong>
             <small>
               {o.customer} · {dateTime(o.created_at)}
+              {o.createdByAdmin && <ManualOrderBadge />}
             </small>
           </span>
           <span>
@@ -871,7 +873,13 @@ export default function Admin() {
           </>
         )}
         {tab === "orders" &&
-          (detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />)}
+          (detailId === "new" ? (
+            <AdminManualOrder products={data.products} />
+          ) : detailId ? (
+            <AdminOrderDetail id={detailId} />
+          ) : (
+            <AdminOrders />
+          ))}
         {tab === "preorders" && <PreorderQueue />}
         {tab === "coupons" && <AdminCoupons id={productId} />}
         {tab === "reviews" && <AdminReviews />}

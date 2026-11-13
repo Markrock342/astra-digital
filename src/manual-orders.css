@@ -1,0 +1,278 @@
+/* Orders created in the back office for customers who paid outside the site.
+   Back office: shadcn/ui-style neutrals + --brand like the rest of /admin (white cards on
+   the cool-grey page). Storefront note: theme tokens, so all 8 themes (light/dark × 4
+   accents) follow. Layout idea: Medusa Admin "Create draft order" (MIT). */
+
+/* ---------- Back office: create page ---------- */
+.manual-order-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 16px;
+  align-items: start;
+}
+.manual-order-main {
+  min-width: 0;
+}
+.manual-order-summary {
+  position: sticky;
+  top: 16px;
+}
+.manual-order-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(70px, 0.5fr);
+  gap: 12px;
+}
+.manual-order-row:has(> :nth-child(2):last-child) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.manual-order-row .field select,
+.manual-order-main .field select {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #e4e4e7;
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #fff;
+  font-size: 14px;
+  min-width: 0;
+}
+.manual-order-picked {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--brand);
+  background: var(--brand-soft);
+  border-radius: 8px;
+}
+.manual-order-picked > span {
+  flex: 1;
+  min-width: 0;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.manual-order-picked small,
+.manual-order-hits small {
+  display: block;
+  font-weight: 400;
+  color: #71717a;
+  font-size: 12px;
+}
+.manual-order-hits {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.manual-order-hits li + li {
+  border-top: 1px solid #f0f0f2;
+}
+.manual-order-hits button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  color: inherit;
+}
+.manual-order-hits button > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.manual-order-hits button:hover:not(:disabled) {
+  background: var(--brand-soft);
+}
+.manual-order-hits button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.manual-order-method {
+  grid-template-columns: 1fr;
+}
+.manual-order-method label span svg {
+  vertical-align: -2px;
+  color: var(--brand);
+}
+.manual-order-file {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+.manual-order-file input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.manual-order-slip-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.manual-order-slip-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #3f3f46;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.manual-order-totals {
+  margin: 0 0 10px;
+  display: grid;
+  gap: 8px;
+}
+.manual-order-totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+.manual-order-totals dt {
+  color: #71717a;
+}
+.manual-order-totals dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.manual-order-totals .negative {
+  color: #b91c1c;
+}
+.manual-order-totals .is-total {
+  border-top: 1px solid #e4e4e7;
+  padding-top: 10px;
+  font-size: 16px;
+  font-weight: 650;
+}
+.manual-order-totals .is-total dt {
+  color: #18181b;
+}
+.manual-order-warn {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+}
+.manual-confirm {
+  border: 1px solid var(--brand);
+  background: var(--brand-soft);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-top: 12px;
+}
+.manual-confirm p {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.manual-confirm small {
+  display: block;
+  color: #52525b;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.manual-confirm .admin-action-row {
+  flex-wrap: wrap;
+}
+.manual-order-summary .button.full {
+  width: 100%;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+/* ---------- Back office: marker + detail card ---------- */
+.manual-order-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--brand-soft, #eef1ff);
+  color: var(--brand, #1534ff);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.manual-order-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.manual-order-card-head h2 {
+  margin: 0 !important;
+}
+.manual-order-facts {
+  margin: 0 0 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+.manual-order-facts dt {
+  font-size: 12px;
+  color: #71717a;
+}
+.manual-order-facts dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.manual-order-facts small {
+  color: #71717a;
+}
+.manual-order-reason {
+  display: block;
+}
+.manual-order-slip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.manual-order-slip p {
+  margin: 0;
+}
+.manual-order-slip-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.manual-order-slip-link img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #e4e4e7;
+  background: #fff;
+}
+
+@media (max-width: 900px) {
+  .manual-order-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .manual-order-summary {
+    position: static;
+  }
+}
+@media (max-width: 560px) {
+  .manual-order-row,
+  .manual-order-row:has(> :nth-child(2):last-child),
+  .manual-order-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

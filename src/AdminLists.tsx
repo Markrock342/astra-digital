@@ -48,6 +48,7 @@ import { WarrantyStatus } from "./Warranty";
 import { ReceiptLink } from "./OrderExtras";
 import { AdminReviews } from "./AdminReviews";
 import { BULK_CAP, OrderBulkBar, useOrderSelection, type BulkExportRow } from "./OrderBulk";
+import { ManualOrderBadge, ManualOrderCard, type ManualOrderInfo } from "./AdminManualOrder";
 
 type Filters = Record<string, string>;
 
@@ -241,6 +242,8 @@ type OrderRow = {
   variant_label: string;
   preorder: boolean;
   queue_number: number | null;
+  createdByAdmin?: boolean;
+  paymentMethodLabel?: string;
 };
 
 const emptyOrderFilters = { q: "", type: "", from: "", to: "" };
@@ -341,10 +344,18 @@ export function AdminOrders() {
           <h1>ออเดอร์</h1>
           <p>ออเดอร์พร้อมส่งและคิวพรีออเดอร์ทั้งหมด กรองจากเซิร์ฟเวอร์ เวลาเป็นเวลาไทย</p>
         </div>
-        <button className="button secondary" onClick={exportCsv} disabled={exporting}>
-          <Download size={15} />
-          {exporting ? "กำลังเตรียมไฟล์…" : "ดาวน์โหลด CSV"}
-        </button>
+        <span className="reference-heading-actions">
+          <button className="button secondary" onClick={exportCsv} disabled={exporting}>
+            <Download size={15} />
+            {exporting ? "กำลังเตรียมไฟล์…" : "ดาวน์โหลด CSV"}
+          </button>
+          {!staff && (
+            <Link to="/admin/orders/new" className="button primary">
+              <Plus size={15} />
+              สร้างออเดอร์
+            </Link>
+          )}
+        </span>
       </div>
       <FilterBar
         search={filters.q}
@@ -462,6 +473,7 @@ export function AdminOrders() {
                   <small>
                     {o.product} · {o.variant_label} · {o.quantity} ชิ้น
                     {o.preorder && <span className="admin-chip">คิว {o.queue_number ?? "–"}</span>}
+                    {o.createdByAdmin && <ManualOrderBadge method={o.paymentMethodLabel} />}
                   </small>
                 </td>
                 <td>
@@ -514,6 +526,8 @@ type OrderDetail = {
   /** ADMIN only (money). */
   paymentSummary?: PaymentSummary;
   warranty_until?: string | null;
+  /** Created in the back office (customer paid outside the site). */
+  manual?: ManualOrderInfo;
 };
 
 type PaymentSummary = {
@@ -913,6 +927,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
               <p>
                 {dateTime(order.created_at)} · {order.preorder ? "พรีออเดอร์" : "พร้อมส่ง"}
                 {order.queue_number != null && " · คิวที่ " + order.queue_number}
+                {order.manual && <ManualOrderBadge method={order.manual.paymentMethodLabel} />}
               </p>
             </div>
             <span className="reference-heading-actions">
@@ -947,6 +962,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
               )}
             </section>
           )}
+          {order.manual && <ManualOrderCard id={order.id} manual={order.manual} onChanged={() => void reload()} />}
           {order.paymentSummary && (
             <OrderMoney
               id={order.id}
@@ -1087,7 +1103,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
               {order.payments.map((p) => (
                 <div className="settings-row" key={p.id}>
                   <span>
-                    {p.provider}
+                    {order.manual && p.provider !== "sandbox" ? order.manual.paymentMethodLabel : p.provider}
                     <small>{p.provider_ref ?? shortId(p.id)} · {dateTime(p.finalized_at ?? p.created_at)}</small>
                   </span>
                   <strong>
@@ -2938,6 +2954,8 @@ const actionText: Record<string, string> = {
   CUSTOMER_PASSWORD_RESET: "ตั้งรหัสผ่านชั่วคราวให้ลูกค้า",
   UPDATE_PROFILE: "แก้บัญชีตัวเอง",
   CREATE_ORDER: "สร้างออเดอร์",
+  MANUAL_ORDER_CREATE: "สร้างออเดอร์ให้ลูกค้า (โอนนอกเว็บ)",
+  MANUAL_ORDER_SLIP: "แนบสลิปออเดอร์จากหลังบ้าน",
   CREATE_PREORDER: "สร้างพรีออเดอร์",
   PAYMENT_AND_DELIVERY: "ชำระและส่งของ",
   PREORDER_PAID: "ชำระพรีออเดอร์",

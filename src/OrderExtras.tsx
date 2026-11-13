@@ -23,7 +23,7 @@ import {
 import { ErrorMessage, Link, useStore } from "./App";
 import { api, dateTime, money } from "./api";
 import { EN_STRINGS } from "./i18n-en";
-import { t } from "./i18n";
+import { getLang, t } from "./i18n";
 import { shopName } from "./Theme";
 import type { Order } from "./types";
 import "./order-extras.css";
@@ -43,6 +43,7 @@ const EN_EXTRAS: Record<string, string> = {
   "โดนเปลี่ยนรหัส": "Password was changed",
   "อื่นๆ": "Other",
   "ใบเสร็จ": "Receipt",
+  "ช่องทางชำระ": "Payment method",
   "ใบยืนยันการสั่งซื้อ / ใบเสร็จรับเงิน (อย่างย่อ)": "Order confirmation / Receipt (short form)",
   "ดาวน์โหลด PDF / พิมพ์": "Download PDF / Print",
   "กลับไปที่ออเดอร์": "Back to order",
@@ -390,6 +391,9 @@ type Receipt = {
   paymentStatus: "PAID" | "PENDING" | "CANCELLED" | "UNPAID";
   refundStatus: "REFUNDED" | "PARTIALLY_REFUNDED" | null;
   refundedTotal: number;
+  /** Set when the shop created the order for a customer who paid outside the site. */
+  createdByAdmin?: boolean;
+  paymentMethodLabel?: string;
 };
 
 const PAYMENT_TEXT: Record<Receipt["paymentStatus"], string> = {
@@ -514,6 +518,15 @@ export function ReceiptPage({ id, admin }: { id: string; admin: boolean }) {
                     </span>
                   </dd>
                 </div>
+                {receipt.paymentMethodLabel && (
+                  <div>
+                    <dt>{tr("ช่องทางชำระ")}</dt>
+                    <dd className="receipt-method">
+                      {admin || getLang() !== "en" ? receipt.paymentMethodLabel : "Bank transfer (outside the website)"}
+                      {admin && receipt.createdByAdmin && " · สร้างโดยแอดมิน"}
+                    </dd>
+                  </div>
+                )}
                 {receipt.refundStatus && (
                   <div>
                     <dt>{tr("สถานะการคืนเงิน")}</dt>
