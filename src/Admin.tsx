@@ -1310,7 +1310,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
       </div>
       <form
         className="reference-settings-form"
-        key={shop?.shopName + "|" + shop?.line + "|" + shop?.email + "|" + shop?.pendingExpiryMinutes}
+        key={[shop?.shopName, shop?.line, shop?.email, shop?.phone, shop?.address, shop?.contactMessage, shop?.pendingExpiryMinutes].join("|")}
         onSubmit={save}
       >
         <ErrorMessage message={error} />
@@ -1348,19 +1348,44 @@ function ReferenceSettings({ sub }: { sub: string }) {
         </section>
         <section className="reference-admin-card editor-panel">
           <h2>ช่องทางติดต่อ</h2>
-          <p>แสดงที่ส่วนท้ายของหน้าร้าน ไม่บังคับ</p>
+          <p>
+            แสดงในหน้า “ติดต่อเรา” และส่วนท้ายของหน้าร้าน ไม่บังคับ
+            · เว้นว่างช่องไหนไว้ ช่องนั้นจะไม่แสดง
+          </p>
+          <label className="field">
+            ข้อความในหน้าติดต่อเรา
+            <textarea
+              name="contactMessage"
+              defaultValue={shop?.contactMessage ?? ""}
+              maxLength={1000}
+              rows={4}
+              placeholder="เช่น ร้านตอบแชททุกวัน 09:00–22:00 น. แจ้งเลขคำสั่งซื้อทุกครั้งเพื่อความรวดเร็ว"
+            />
+          </label>
+          <label className="field">
+            ที่อยู่
+            <textarea
+              name="address"
+              defaultValue={shop?.address ?? ""}
+              maxLength={500}
+              rows={3}
+              placeholder="บ้านเลขที่ ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด รหัสไปรษณีย์"
+            />
+          </label>
           {[
-            ["facebook", "Facebook", ""],
-            ["line", "LINE", "@832wjrpn"],
-            ["discord", "Discord", ""],
-            ["phone", "โทรศัพท์", ""],
-            ["email", "อีเมล", "ceo.natthanan@shipx.sbs"],
-          ].map(([key, label, value]) => (
+            ["line", "LINE", "@lineid หรือลิงก์ https://line.me/…"],
+            ["phone", "โทรศัพท์", "เช่น 081-234-5678"],
+            ["email", "อีเมล", "เช่น support@example.com"],
+            ["facebook", "Facebook", "https://facebook.com/…"],
+            ["discord", "Discord", "https://discord.gg/…"],
+          ].map(([key, label, hint]) => (
             <label className="field" key={key}>
               {label}
               <input
                 name={key}
-                defaultValue={String(shop?.[key as keyof typeof shop] ?? value)}
+                inputMode={key === "email" ? "email" : key === "phone" ? "tel" : undefined}
+                defaultValue={String(shop?.[key as keyof typeof shop] ?? "")}
+                placeholder={hint}
                 maxLength={200}
               />
             </label>

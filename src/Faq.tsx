@@ -214,7 +214,7 @@ export function FaqPage() {
           <strong>{t("ไม่พบคำตอบที่ต้องการ?")}</strong>
           <p>{t("กดปุ่มแชทมุมขวาล่างเพื่อสอบถามร้าน หรืออ่านเงื่อนไขทั้งหมดในข้อกำหนดการใช้บริการ")}</p>
           <div className="faq-contact-links">
-            <Link to="/support">{t("ติดต่อร้าน")}</Link>
+            <Link to="/support">{t("ติดต่อเรา")}</Link>
             <Link to="/terms">{t("ข้อกำหนดการใช้บริการ")}</Link>
           </div>
         </div>

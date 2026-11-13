@@ -106,7 +106,7 @@ export type Ledger = {
   type?: "TOPUP" | "PURCHASE" | "REFUND" | "ADJUSTMENT";
   balanceAfter?: number;
 };
-export type ShopSettings={shopName:string;description:string;announcement:string;line:string;email:string;phone:string;facebook:string;discord:string;policy:string;stockOrder:string;shopOpen:boolean;requireTerms:boolean;pendingExpiryMinutes?:number};
+export type ShopSettings={shopName:string;description:string;announcement:string;line:string;email:string;phone:string;facebook:string;discord:string;address?:string;contactMessage?:string;policy:string;stockOrder:string;shopOpen:boolean;requireTerms:boolean;pendingExpiryMinutes?:number};
 export type Overview = {
   shop?:ShopSettings;
   customers: number;
