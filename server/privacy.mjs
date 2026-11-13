@@ -196,6 +196,7 @@ export function createPrivacyApis({
       run("DELETE FROM sessions WHERE user_id=?", subject.id);
       run("DELETE FROM password_resets WHERE user_id=?", subject.id);
       run("DELETE FROM stock_watch WHERE user_id=?", subject.id);
+      run("DELETE FROM customer_tags WHERE user_id=?", subject.id);
       run(
         `UPDATE chat_messages SET body='[ข้อความถูกลบตามคำขอ PDPA]'
          WHERE thread_id IN (SELECT id FROM chat_threads WHERE user_id=?)`,

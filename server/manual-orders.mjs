@@ -112,7 +112,8 @@ export function createManualOrderApis({
     { variantId, quantity, unitPrice, priceReason, couponCode },
     { softCoupon = false, softReason = false } = {},
   ) {
-    const variant = buyableVariant(variantId);
+    // Default price = what this customer would pay in the shop (sale / tag price included).
+    const variant = buyableVariant(variantId, customer);
     const normalUnitPrice = variant.unitPrice;
     const unit = unitPrice ?? normalUnitPrice;
     if (!Number.isSafeInteger(unit) || unit <= 0)

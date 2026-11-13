@@ -53,6 +53,7 @@ import {
   ensureManualOrders,
   ensureFraudSignals,
   ensureEmailTemplates,
+  ensurePricing,
 } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
 import { ensureCannedReplies } from "../server/ensure-admin-fr.mjs";
@@ -159,6 +160,7 @@ export class Commerce extends DurableObject {
       ensureManualOrders(db);
       ensureFraudSignals(db);
       ensureEmailTemplates(db);
+      ensurePricing(db);
     });
     this.db = db;
     const adminPassword =
