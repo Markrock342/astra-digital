@@ -69,6 +69,7 @@ export function createAdminFinanceApis({
   bangkokDayRange,
   moneyScope,
   outstandingCredit,
+  depositsHeld = null,
 }) {
   function adminTransactions(user, query = {}) {
     requireAdmin(user);
@@ -256,6 +257,9 @@ export function createAdminFinanceApis({
       csvMaxRows: CSV_MAX_ROWS,
       // Customer credit still owed (liability): all time, never mixed into revenue.
       customerCredit: outstandingCredit ? outstandingCredit() : null,
+      // มัดจำค้าง: preorder deposits paid for reservations not delivered yet (liability).
+      depositsHeld: depositsHeld ? depositsHeld().amount : null,
+      depositsHeldCount: depositsHeld ? depositsHeld().reservations : null,
       mode: moneyScope?.mode ?? "sandbox",
       daily: daily.map((d) => ({
         day: d.day,

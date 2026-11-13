@@ -1,0 +1,420 @@
+/* Preorder modes (Preorder.tsx, AdminPreorder.tsx). Storefront parts use the storefront
+   tokens (brand.css: --accent, --surface, --border…) so light + dark both work; back-office
+   parts use the merchant tokens (--brand, white cards on the cool-grey background). */
+
+/* ---------- Storefront: rules under the buy row ---------- */
+.preorder-rules {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent, #1534ff) 30%, var(--border));
+  border-radius: var(--radius-sm, 10px);
+  background: color-mix(in srgb, var(--accent, #1534ff) 7%, var(--surface));
+  color: var(--text);
+  font-size: 13px;
+}
+.preorder-rules > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent-text, var(--accent, #1534ff));
+}
+.preorder-rules ul {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 2px;
+}
+.preorder-rules small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ---------- Checkout summary rows ---------- */
+.preorder-summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+.preorder-summary-row.muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---------- Order page: queue progress ---------- */
+.preorder-progress {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.preorder-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+.preorder-steps li {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 18px;
+  min-width: 0;
+}
+.preorder-steps li:last-child {
+  padding-bottom: 0;
+}
+/* Connector line between the dots. */
+.preorder-steps li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 28px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.preorder-steps li.is-done:not(:last-child)::before {
+  background: color-mix(in srgb, var(--accent, #1534ff) 55%, var(--border));
+}
+.preorder-step-dot {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.preorder-steps li.is-done .preorder-step-dot {
+  background: var(--accent, #1534ff);
+  border-color: var(--accent, #1534ff);
+  color: var(--accent-ink, #fff);
+}
+.preorder-steps li.is-current .preorder-step-dot {
+  border-color: var(--accent, #1534ff);
+  color: var(--accent-text, var(--accent, #1534ff));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #1534ff) 18%, transparent);
+}
+.preorder-steps li > div {
+  min-width: 0;
+  flex: 1;
+}
+.preorder-steps strong {
+  display: block;
+  font-size: 14px;
+  line-height: 28px;
+}
+.preorder-steps small {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+.preorder-pay-box {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--raised);
+  display: grid;
+  gap: 8px;
+}
+.preorder-pay-box p {
+  margin: 0;
+  font-size: 13px;
+}
+.preorder-pay-box .pay-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.preorder-pay-box .pay-actions .button {
+  min-height: 44px;
+}
+.preorder-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-text, var(--accent, #1534ff));
+  background: color-mix(in srgb, var(--accent, #1534ff) 12%, transparent);
+}
+.preorder-countdown.is-soon,
+.preorder-countdown.is-late {
+  color: #b91c1c;
+  background: color-mix(in srgb, #dc2626 12%, transparent);
+}
+:root[data-theme="dark"] .preorder-countdown.is-soon,
+:root[data-theme="dark"] .preorder-countdown.is-late {
+  color: #fca5a5;
+}
+.preorder-paused {
+  color: var(--muted);
+}
+.preorder-ended {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--raised);
+}
+.preorder-ended > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--muted);
+}
+.preorder-ended strong {
+  display: block;
+  font-size: 14px;
+}
+.preorder-ended p {
+  margin: 2px 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.preorder-progress.is-ended .preorder-steps {
+  opacity: 0.7;
+}
+.preorder-cancel {
+  margin-top: 12px;
+}
+.preorder-cancel p {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.preorder-cancel .pay-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.preorder-cancel .text-button {
+  min-height: 44px;
+  color: var(--muted);
+  text-decoration: underline;
+}
+.preorder-delivered-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.status-called {
+  color: #1534ff;
+  background: #eef1ff;
+  border-color: #c7cffd;
+}
+:root[data-theme="dark"] .storefront-shell .status-called {
+  color: #8c9dff;
+  background: #1534ff26;
+  border-color: #3552ff66;
+}
+.status-lapsed {
+  color: #b45309;
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+:root[data-theme="dark"] .storefront-shell .status-lapsed {
+  color: #fbbf24;
+  background: #f59e0b1f;
+  border-color: #b4530966;
+}
+
+/* ---------- Back office: วิธีจอง card ---------- */
+.preorder-mode-card .product-type-group {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.preorder-mode-card .product-type-option {
+  align-items: flex-start;
+  min-width: 0;
+}
+.preorder-mode-card .product-type-option > div {
+  min-width: 0;
+}
+.preorder-mode-card .product-type-option strong {
+  display: block;
+}
+.preorder-mode-card .product-type-option small {
+  display: block;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.preorder-mode-fields {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+}
+.preorder-mode-fields .field {
+  min-width: 0;
+}
+.preorder-mode-fields .span-2 {
+  grid-column: 1 / -1;
+}
+.preorder-inline {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.preorder-inline select {
+  flex: none;
+  width: auto;
+}
+.preorder-inline input {
+  flex: 1;
+  min-width: 0;
+}
+.preorder-radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.preorder-radio-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.preorder-mode-summary {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--brand-soft, #eef1ff);
+  color: var(--text);
+  font-size: 13px;
+}
+.preorder-mode-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+@media (max-width: 700px) {
+  .preorder-mode-card .product-type-group,
+  .preorder-mode-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- Back office: queue stage badges + cancel form ---------- */
+.queue-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--muted);
+  background: var(--surface);
+}
+.queue-stage.is-queued {
+  color: #475569;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+.queue-stage.is-called {
+  color: var(--brand, #1534ff);
+  background: var(--brand-soft, #eef1ff);
+  border-color: #c7cffd;
+}
+.queue-stage.is-lapsed {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.queue-stage.is-delivered {
+  color: var(--green, #15834a);
+  background: var(--green-bg, #edf9f1);
+  border-color: #bbe5c9;
+}
+.queue-stage.is-cancelled {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.queue-mode {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.queue-cancel-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.queue-cancel-form input {
+  min-width: 0;
+  width: 180px;
+  max-width: 100%;
+}
+.preorder-mode-card .preorder-inline select {
+  flex: none;
+  width: auto;
+  min-width: 0;
+}
+.preorder-mode-card .preorder-inline input {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+.preorder-mode-card fieldset.field {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.preorder-mode-card fieldset.field legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+.preorder-mode-card .preorder-radio-row input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  accent-color: var(--brand, #1534ff);
+}
+@media (max-width: 700px) {
+  /* Deposit / free rows have no delivery checkbox: no empty block on the phone card. */
+  .preorder-queue-table td:empty {
+    display: none;
+  }
+}
+
+/* การเงิน › "มัดจำค้าง" card: same liability look as เครดิตลูกค้าคงค้าง. */
+.finance-stats .deposits-held-card {
+  border-color: #c7d2fe;
+  background: #f5f7ff;
+}
+.finance-stats .deposits-held-card strong {
+  color: var(--brand, #1534ff);
+}

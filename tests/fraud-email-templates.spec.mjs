@@ -157,7 +157,8 @@ for (const [name, viewport] of [
     await page.goto(base + "/admin/settings/email-templates");
     await expect(page.getByRole("heading", { name: "ข้อความอีเมล", exact: true })).toBeVisible();
     await expect(page.locator(".reference-subnav").getByRole("link", { name: "ข้อความอีเมล" })).toHaveClass(/active/);
-    await expect(page.locator(".email-template-list button")).toHaveCount(6);
+    // 6 + the two preorder templates (ถึงคิว / เตือนก่อนหมดเวลา, server/preorder.mjs).
+    await expect(page.locator(".email-template-list button")).toHaveCount(8);
     const editor = page.locator(".email-template-editor");
     await expect(editor).toHaveAttribute("data-template", "order_confirmed");
 

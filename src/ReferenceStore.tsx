@@ -40,6 +40,7 @@ import { AskInChat } from "./ChatAttachments";
 import { ShopClosedNote } from "./ShopClosed";
 import { ReviewReply } from "./ReviewReply";
 import { PriceDisplay, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
+import { buyLabel, PreorderRules } from "./Preorder";
 /**
  * Product list with search + sort. On /products (`routed`) it also shows the category chips
  * and filters by ?category=<id>; the URL loads filtered and works with search and sort.
@@ -560,7 +561,7 @@ export function ReferenceProduct({ id }: { id: string }) {
             </div>
           )}
           <PriceDisplay variant={variant} className="reference-price" />
-          {!!product.preorder && (
+          {!!product.preorder && (product.preorderTerms?.mode ?? "full") === "full" && (
             <p className="preorder-how">
               {t("สินค้าพรีออเดอร์: ชำระแล้วได้เลขคิวทันที ร้านส่ง ID และรหัสผ่านตามลำดับคิว และแจ้งเตือนในเว็บเมื่อส่งแล้ว")}
             </p>
@@ -620,14 +621,17 @@ export function ReferenceProduct({ id }: { id: string }) {
               disabled={!available || quantityCap(variant) === 0}
               onClick={() => buy(true)}
             >
-              {product.preorder ? t("จองเลย") : t("ซื้อเลย")}
+              {buyLabel(product, variant, quantity)}
             </button>
           </div>
           )}
+          <PreorderRules product={product} total={variant.price * quantity} quantity={quantity} />
           <PurchaseLimitNote variant={variant} />
           <p className="reference-delivery-note">
             <KeyRound size={15} />
-            {product.preorder
+            {product.preorder && product.preorderTerms?.mode === "free"
+              ? t("จองฟรี ไม่ต้องจ่ายตอนนี้ ได้เลขคิวทันที")
+              : product.preorder
               ? t("ชำระตอนจอง ได้เลขคิว รับของในประวัติการซื้อ")
               : t("สินค้าดิจิทัล ได้รับทันทีหลังชำระเงินในหน้าประวัติการซื้อ")}
           </p>

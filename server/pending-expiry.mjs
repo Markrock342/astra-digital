@@ -17,6 +17,9 @@
  * bump the catalog topic; only `orders` changes.
  *
  * Paid orders are never touched: every write is `... WHERE status='PENDING_PAYMENT'`.
+ *
+ * `afterSweep` rides on the same once-a-minute gate: preorder.mjs uses it for deposit / free
+ * reservations (reminder before pay_by, lapse past pay_by, call the next in queue).
  */
 export const PENDING_EXPIRY_DEFAULT = 30;
 export const PENDING_EXPIRY_MIN = 5;
@@ -38,7 +41,18 @@ export function pendingExpiryMinutes(value) {
 /** ms → SQLite CURRENT_TIMESTAMP text (UTC "YYYY-MM-DD HH:MM:SS"). */
 const sqlTime = (ms) => new Date(ms).toISOString().slice(0, 19).replace("T", " ");
 
-export function createPendingExpiry({ one, all, run, tx, clock, settings, cancelUnpaidOrder, bump }) {
+export function createPendingExpiry({
+  one,
+  all,
+  run,
+  tx,
+  clock,
+  settings,
+  cancelUnpaidOrder,
+  bump,
+  // Extra work on the same gate (preorder.mjs: reminders, lapses past pay_by, queue calls).
+  afterSweep = null,
+}) {
   const minutes = () => pendingExpiryMinutes(settings().pendingExpiryMinutes);
   const cutoff = () => sqlTime(clock() - minutes() * 60000);
 
@@ -86,7 +100,15 @@ export function createPendingExpiry({ one, all, run, tx, clock, settings, cancel
         SWEEP_FLAG,
         String(t),
       );
-      return sweep();
+      const count = sweep();
+      if (afterSweep) {
+        try {
+          afterSweep();
+        } catch (error) {
+          console.error("Preorder sweep failed:", error.message);
+        }
+      }
+      return count;
     } catch (error) {
       console.error("Pending order sweep failed:", error.message);
       return 0;

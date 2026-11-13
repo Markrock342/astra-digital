@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { Art, ErrorMessage, Link, useStore } from "./App";
+import { preorderNoticeBody } from "./Preorder";
 import { NAVIGATE_EVENT } from "./navigation";
 import { api, dateTime, money, relativeTime } from "./api";
 import { t } from "./i18n";
@@ -256,13 +257,15 @@ const time = (value: string) => dateTime(value).split(" ").slice(-1)[0] ?? "";
 function noticeText(n: Notice) {
   const queue = n.body.match(/^คิวของคุณคือ #(\d+)$/);
   const code = n.body.match(/^คำสั่งซื้อ (\S+) ได้รับโค้ดแล้ว$/);
+  // Deposit / free preorder: called, reminder, lapsed, cancelled (Preorder.tsx).
+  const preorder = preorderNoticeBody(n.body);
   return {
     title: t(n.title),
     body: queue
       ? t("คิวของคุณคือ #{n}", { n: queue[1] })
       : code
         ? t("คำสั่งซื้อ {id} ได้รับโค้ดแล้ว", { id: code[1].toUpperCase() })
-        : t(n.body),
+        : (preorder ?? t(n.body)),
   };
 }
 

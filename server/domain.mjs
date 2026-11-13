@@ -74,6 +74,7 @@ import { createBroadcastApis } from "./broadcast.mjs";
 import { createBannerApis } from "./banners.mjs";
 import { createManualOrderApis } from "./manual-orders.mjs";
 import { createTaxInvoices } from "./tax-invoices.mjs";
+import { createPreorders } from "./preorder.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -555,6 +556,30 @@ export function createCommerceCore({
     moneyScope,
   });
   const { releaseCouponForOrder } = coupons;
+  // Preorder modes: full / deposit / free, queue calling and lapses (preorder.mjs).
+  // `live`, alerts and the email sender are created further down: bound lazily.
+  let liveRef = null;
+  const preorders = createPreorders({
+    one,
+    all,
+    run,
+    tx: (fn) => tx(fn),
+    fail,
+    clock,
+    shopSettings: () => settings(),
+    notify,
+    notifyStaffRoles,
+    insertLedgerEntry,
+    requireAdmin,
+    requireStaff,
+    requireUser,
+    inventoryOrderSql,
+    nextQueueNumber,
+    releaseCouponForOrder,
+    emitAlert: (event, data) => alerts.emit(event, data),
+    bump: (topics) => liveRef?.bumpLive(topics),
+    sendEmail: (kind, r) => sendPreorderEmail(kind, r),
+  });
   // Sale / compare-at / tag prices / purchase limits (pricing.mjs).
   const pricing = createPricing({ one, all, run, tx, fail, clean, requireAdmin, requireStaff, clock });
   const categoryApis = createCategoryApis({ requireAdmin, one, all, run, tx, fail, fileStore });
@@ -1192,6 +1217,8 @@ export function createCommerceCore({
         "SELECT COALESCE(SUM(o.quantity),0) AS count FROM orders o JOIN variants v ON v.id=o.variant_id WHERE v.product_id=? AND o.status='DELIVERED'",
         p.id,
       ).count,
+      // Preorder terms the customer sees before reserving (preorder.mjs); null = ready stock.
+      preorderTerms: preorders.publicTerms(p),
     };
   }
   /** Public price fields of one option for one viewer (null = signed out). */
@@ -1343,6 +1370,8 @@ export function createCommerceCore({
     // Client cannot set logo via this form — logoKey stays; logoUrl is never stored.
     delete current.logoUrl;
     persistShopSettings(current);
+    // Called preorders: no lapse while closed; reopening extends pay_by (preorder.mjs).
+    preorders.onShopOpenChange(before.shopOpen !== false, current.shopOpen !== false);
     // S10: keep what changed (short values only) so the audit log answers "who changed what".
     const changed = {};
     for (const [field, value] of Object.entries(current)) {
@@ -1499,6 +1528,10 @@ export function createCommerceCore({
         ? coupons.evaluate(user, couponCode, { productId: variant.product_id, subtotal })
         : null;
       const discount = applied?.discount ?? 0;
+      // Preorder mode (full / deposit / free) and its per-customer / queue limits.
+      const terms = variant.preorder
+        ? preorders.reservationTerms(user, variant, subtotal - discount, quantity)
+        : null;
       const token = randomBytes(32).toString("hex"),
         id = randomUUID();
       run(
@@ -1526,6 +1559,22 @@ export function createCommerceCore({
           amount: discount,
         });
       audit(user, variant.preorder ? "CREATE_PREORDER" : "CREATE_ORDER", id);
+      if (terms && terms.mode !== "full") {
+        // Price, deposit, pay window and lapse policy are locked now (what the customer saw).
+        run(
+          "UPDATE reservations SET preorder_mode=?, deposit=?, pay_window_hours=?, lapse_policy=? WHERE id=?",
+          terms.mode,
+          terms.deposit,
+          terms.payWindowHours,
+          terms.lapsePolicy,
+          id,
+        );
+        // Free reservation (or a deposit that rounds to 0): queue number now, nothing to pay.
+        if (terms.mode === "free" || terms.deposit <= 0) {
+          preorders.enterQueue(id);
+          return { ...orderDetail(user, id), paymentToken: null };
+        }
+      }
       return { ...orderDetail(user, id), paymentToken: token };
     });
   }
@@ -1574,6 +1623,8 @@ export function createCommerceCore({
         discount: reservation.discount ?? 0,
         subtotal: reservation.total + (reservation.discount ?? 0),
         queueNumber: reservation.queue_number ?? null,
+        // Mode, stage, deposit / balance, pay deadline (preorder.mjs).
+        ...preorders.reservationView(reservation),
       };
     }
     // admin_note is internal (FR-O7): never sent to the customer.
@@ -1848,15 +1899,41 @@ export function createCommerceCore({
     if (!settings().shopOpen) fail(409, SHOP_CLOSED_PAY);
     if (
       one("SELECT id FROM reservations WHERE id=? AND user_id=?", id, user.id)
-    )
+    ) {
+      // A called reservation past its pay window lapses first (preorder.mjs).
+      preorders.lapseIfDue(user, id);
       return tx(() => {
         const o = one(
           "SELECT * FROM reservations WHERE id=? AND user_id=?",
           id,
           user.id,
         );
+        const mode = o.preorder_mode ?? "full";
+        // Deposit / free mode, called: pay the balance (or the full price) → delivered.
+        if (mode !== "full" && o.status === "PREORDER" && o.stage === "called") {
+          if (
+            typeof input.paymentToken !== "string" ||
+            !timingSafeEqual(
+              Buffer.from(hash(input.paymentToken)),
+              Buffer.from(o.payment_hash),
+            )
+          )
+            fail(403, "ข้อมูลยืนยันการชำระเงินไม่ถูกต้อง");
+          if (!["success", "failure"].includes(input.outcome))
+            fail(400, "ผลการทดลองไม่ถูกต้อง");
+          if (input.outcome === "failure") {
+            // The held unit stays held until the deadline; the customer may try again.
+            audit(user, "PREORDER_BALANCE_FAILED", id);
+            return orderDetail(user, id);
+          }
+          preorders.payBalance(user, o, { balance: publicUser(user).balance });
+          return orderDetail(user, id);
+        }
+        if (mode !== "full" && o.status === "DELIVERED") return orderDetail(user, id);
         if (o.status === "PREORDER") return orderDetail(user, id);
         if (o.status === "CANCELLED" && o.expired_at) fail(409, EXPIRED_MESSAGE);
+        if (o.status === "CANCELLED" && o.stage === "lapsed")
+          fail(409, "หมดเวลาชำระส่วนที่เหลือแล้ว");
         if (o.status !== "PENDING_PAYMENT")
           fail(409, "คำสั่งซื้อนี้ไม่สามารถชำระเงินได้");
         if (
@@ -1872,6 +1949,31 @@ export function createCommerceCore({
         if (input.outcome === "failure") {
           run("UPDATE reservations SET status='FAILED' WHERE id=?", id);
           releaseCouponForOrder(id, "PAYMENT_FAILED");
+          return orderDetail(user, id);
+        }
+        if (mode === "deposit") {
+          // Deposit now (its own payment record); the balance is paid when the queue is called.
+          if (publicUser(user).balance < o.deposit)
+            fail(409, "เครดิตทดลองไม่เพียงพอ กรุณาเติมเครดิตก่อน");
+          insertLedgerEntry({
+            userId: user.id,
+            amount: -o.deposit,
+            reference: "preorder:" + id,
+            label: "ชำระมัดจำสินค้าสั่งจอง " + id.slice(0, 8),
+            kind: "DEMO_CREDIT",
+            direction: "out",
+            orderId: id,
+          });
+          const { paymentId } = settlePaidReservation(
+            { ...o, total: o.deposit },
+            {
+              idempotencyKey: "pay:reservation-deposit:" + id,
+              providerRef: "sandbox:preorder-deposit:" + id,
+              label: "รับมัดจำพรีออเดอร์ " + id.slice(0, 8),
+            },
+          );
+          preorders.afterDepositPaid(o, paymentId);
+          audit(user, "PREORDER_DEPOSIT_PAID", id);
           return orderDetail(user, id);
         }
         if (publicUser(user).balance < o.total)
@@ -1890,6 +1992,7 @@ export function createCommerceCore({
         audit(user, "PREORDER_PAID", id);
         return orderDetail(user, id);
       });
+    }
     return tx(() => {
       const order = one(
         "SELECT * FROM orders WHERE id=? AND user_id=?",
@@ -1944,13 +2047,18 @@ export function createCommerceCore({
   function retry(user, id) {
     requireUser(user);
     const reservation = one(
-      "SELECT status,expired_at FROM reservations WHERE id=? AND user_id=?",
+      "SELECT status,expired_at,stage FROM reservations WHERE id=? AND user_id=?",
       id,
       user.id,
     );
     if (reservation) {
       if (reservation.status === "CANCELLED" && reservation.expired_at) fail(409, EXPIRED_MESSAGE);
-      if (reservation.status !== "PENDING_PAYMENT")
+      // Called preorder (deposit / free): a token for paying the balance (preorder.mjs).
+      const called =
+        reservation.status === "PREORDER" &&
+        reservation.stage === "called" &&
+        !preorders.lapseIfDue(user, id);
+      if (reservation.status !== "PENDING_PAYMENT" && !called)
         fail(409, "คำสั่งซื้อไม่อยู่ระหว่างรอชำระเงิน");
       const token = randomBytes(32).toString("hex");
       run("UPDATE reservations SET payment_hash=? WHERE id=?", hash(token), id);
@@ -2086,6 +2194,8 @@ export function createCommerceCore({
       paidCreated,
       newCustomers,
       customerCredit: outstandingCredit(),
+      // Deposits held for undelivered preorders (liability; already inside gross, never twice).
+      depositsHeld: preorders.depositsHeld(moneyScope).amount,
       daily: [...daily.values()]
         .map((d) => ({ ...d, revenue: d.gross - d.refunds }))
         .sort((a, b) => a.day.localeCompare(b.day)),
@@ -2268,7 +2378,9 @@ export function createCommerceCore({
         }),
       );
       maybeNotifyStockExpiry(variantId);
-      return { ...result, lines: publicLines(lines), counts };
+      // Deposit / free preorders waiting for this option: call as many as the new stock covers.
+      const called = ok.length ? preorders.callForVariant(variantId) : [];
+      return { ...result, lines: publicLines(lines), counts, preorderCalled: called.length };
     });
   }
 
@@ -2330,6 +2442,9 @@ export function createCommerceCore({
       }
       if (reservation.status !== "PREORDER")
         fail(409, "พรีออเดอร์นี้ส่งของไม่ได้");
+      // Deposit / free: delivered automatically when the customer pays the rest (preorder.mjs).
+      if ((reservation.preorder_mode ?? "full") !== "full")
+        fail(409, "คิวแบบมัดจำ/จองฟรีส่งของอัตโนมัติเมื่อลูกค้าชำระส่วนที่เหลือ ใช้ปุ่มเรียกคิวแทน");
       const warrantyDays = reservation.warranty_days ?? 0;
       const available = all(
         `SELECT id FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL
@@ -2526,15 +2641,25 @@ export function createCommerceCore({
   }
   function queueBoard(user) {
     requireStaff(user);
+    // Waiting rows (PREORDER) plus deposit / free rows that ended in the last 30 days
+    // (delivered, lapsed, cancelled) so the queue page can show what happened.
     return all(
       `SELECT r.id,r.queue_number,r.status,r.total,r.quantity,r.created_at,
-              u.id AS customer_id,u.name AS customer,p.name AS product,v.label
+              u.id AS customer_id,u.name AS customer,p.id AS product_id,p.name AS product,v.id AS variant_id,v.label,
+              COALESCE(r.preorder_mode,'full') AS mode,r.stage,r.deposit,r.deposit_paid,r.pay_by,r.called_at,r.ended_at,
+              r.delivered_at,
+              (SELECT COALESCE(SUM(l.amount),0) FROM ledger l WHERE l.order_id=r.id AND l.kind='REFUND') AS refunded
        FROM reservations r
        JOIN users u ON u.id=r.user_id
        JOIN variants v ON v.id=r.variant_id
        JOIN products p ON p.id=v.product_id
-       WHERE r.queue_number IS NOT NULL AND r.status='PREORDER'
-       ORDER BY r.queue_number ASC`,
+       WHERE r.queue_number IS NOT NULL AND (
+         r.status='PREORDER'
+         OR (r.stage IN ('delivered','lapsed','cancelled','shop_cancelled')
+             AND COALESCE(r.ended_at, r.delivered_at, r.created_at) >= datetime('now','-30 days'))
+       )
+       ORDER BY r.queue_number ASC
+       LIMIT 1000`,
     );
   }
   function myQueue(user) {
@@ -3016,6 +3141,7 @@ export function createCommerceCore({
     bangkokDayRange,
     moneyScope,
     outstandingCredit,
+    depositsHeld: () => preorders.depositsHeld(moneyScope),
   });
   // การเงิน › ปิดยอดรายวัน, ถอนเงิน (finance-close.mjs) and กระทบยอด (finance-recon.mjs).
   const financeClose = createFinanceCloseApis({
@@ -3307,6 +3433,40 @@ export function createCommerceCore({
     waitUntil,
     renderEmail,
   });
+  /** Preorder "ของพร้อมแล้ว" / reminder emails (preorder.mjs flushes them after the commit). */
+  function sendPreorderEmail(kind, r) {
+    if (!accountEmail.enabled) return false;
+    const info = one(
+      `SELECT u.email,u.name AS customer_name,p.name AS product,v.label FROM reservations r
+       JOIN users u ON u.id=r.user_id JOIN variants v ON v.id=r.variant_id JOIN products p ON p.id=v.product_id
+       WHERE r.id=?`,
+      r.id,
+    );
+    if (!info || !isRealEmail(info.email)) return false;
+    const shop = String(settings()?.shopName ?? "").trim();
+    let base = "";
+    try {
+      base = publicBaseUrl ? new URL(publicBaseUrl).origin : "";
+    } catch {
+      base = "";
+    }
+    return accountEmail.queue({
+      kind,
+      to: info.email,
+      ref: kind + ":" + r.id + (kind === "preorder_reminder" ? ":" + r.pay_by : ""),
+      message: renderEmail(kind, {
+        shopName: shop && shop !== "ร้านค้า" ? shop : "ASIA EXTRA",
+        customerName: info.customer_name,
+        orderNumber: String(r.id).slice(0, 8).toUpperCase(),
+        product: info.label ? info.product + " · " + info.label : info.product,
+        quantity: r.quantity,
+        total: r.due,
+        queueNumber: r.queue_number,
+        payBy: r.pay_by,
+        link: base + "/orders/" + encodeURIComponent(r.id),
+      }),
+    });
+  }
   // สัญญาณผิดปกติ + temporary email / domain blocklist (fraud.mjs). Flags only, never bans.
   const fraud = createFraud({ one, all, run, tx, fail, clock, requireAdmin, notify, alerts, maskEmail });
   const broadcasts = createBroadcastApis({
@@ -3538,6 +3698,12 @@ export function createCommerceCore({
     publicUser,
     queueBoard,
     myQueue,
+    // Preorder modes (preorder.mjs): product settings, calling, cancelling, the tick.
+    adminPreorderSettings: preorders.adminPreorderSettings,
+    adminSavePreorderSettings: preorders.adminSavePreorderSettings,
+    adminCallPreorders: preorders.adminCallQueue,
+    adminCancelPreorder: preorders.adminCancelReservation,
+    cancelMyPreorder: preorders.cancelMyReservation,
     orderReceipt: orderExtras.orderReceipt,
     adminOrderReceipt: orderExtras.adminOrderReceipt,
     // Receipt settings + full tax invoices (tax-invoices.mjs; routes: routeTaxInvoices).
@@ -3686,7 +3852,22 @@ export function createCommerceCore({
   stockWatch.hook(service);
   // "สร้างโดยแอดมิน" marker + payment method on the existing order views.
   manualOrders.hook(service);
+  // Preorder emails queued inside a committed call go out now; a failed call drops them.
+  for (const name of ["pay", "createOrder", "importCodes", "adminCallPreorders", "adminCancelPreorder", "cancelMyPreorder"]) {
+    const call = service[name];
+    service[name] = (...args) => {
+      try {
+        const result = call(...args);
+        preorders.flushEmails();
+        return result;
+      } catch (error) {
+        preorders.dropEmails();
+        throw error;
+      }
+    };
+  }
   const live = withLive(service, { run, all });
+  liveRef = live;
   // Unpaid-order expiry runs lazily on these calls (pending-expiry.mjs). The bump goes
   // through live.mjs so listeners hear "orders changed" only when something expired.
   const expiry = createPendingExpiry({
@@ -3698,6 +3879,8 @@ export function createCommerceCore({
     settings,
     cancelUnpaidOrder,
     bump: (topics) => live.bumpLive(topics),
+    // Same lazy tick: preorder reminders, lapses past pay_by and queue calls (preorder.mjs).
+    afterSweep: () => preorders.tick(),
   });
   for (const name of [
     "orders",
@@ -3709,6 +3892,9 @@ export function createCommerceCore({
     "createOrder",
     "pay",
     "retry",
+    "queueBoard",
+    "myQueue",
+    "cancelMyPreorder",
     // Audience "unpaid order" must not count orders whose payment window already ran out.
     "broadcastPreview",
     "sendBroadcast",
@@ -3723,6 +3909,8 @@ export function createCommerceCore({
     };
   }
   live.sweepPendingOrders = expiry.sweep;
+  // Tests / scripts: run the preorder tick now (reminders, lapses, calls) without the gate.
+  live.sweepPreorders = preorders.tick;
   // Alerts wrap outermost: queued alerts go out only after the whole call succeeded.
   const publicService = alerts.wrap(live);
   return publicService;

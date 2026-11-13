@@ -3,6 +3,7 @@
 // these rules lived in styles.css), so later files still override it.
 import "./admin-shell.css";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { PreorderModeCard } from "./AdminPreorder";
 import {
   ArrowLeft,
   ArrowRight,
@@ -862,6 +863,9 @@ export default function Admin() {
                 images={editingProduct.images ?? []}
                 onChange={setLiveImages}
               />
+            )}
+            {editingProduct && !newProduct && !!editingProduct.preorder && (
+              <PreorderModeCard productId={editingProduct.id} />
             )}
             {editingProduct && !newProduct && (
               <VariantManager productId={editingProduct.id} preorder={!!editingProduct.preorder} />

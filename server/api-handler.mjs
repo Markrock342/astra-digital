@@ -695,6 +695,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         // Pricing rules + customer tags (pricing.mjs).
         if (/^\/api\/admin\/products\/[^/]+\/pricing$/.test(path))
           return send(200, service.adminProductPricing(user, path.split("/")[4]));
+        // Preorder mode of one product: full / deposit / free (preorder.mjs).
+        if (/^\/api\/admin\/products\/[^/]+\/preorder$/.test(path))
+          return send(200, service.adminPreorderSettings(user, path.split("/")[4]));
         if (path === "/api/admin/customer-tags")
           return send(200, service.adminCustomerTags(user));
         if (/^\/api\/admin\/variants\/[^/]+\/inventory$/.test(path))
@@ -738,6 +741,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminSetVariantPricing(user, path.split("/")[4], input));
         if (/^\/api\/admin\/products\/[^/]+\/limit$/.test(path))
           return send(200, service.adminSetProductLimit(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/products\/[^/]+\/preorder$/.test(path))
+          return send(200, service.adminSavePreorderSettings(user, path.split("/")[4], input));
         if (/^\/api\/admin\/customers\/[^/]+\/tags$/.test(path))
           return send(200, service.adminSetCustomerTags(user, path.split("/")[4], input));
         return send(404, { error: "ไม่พบหน้าที่ร้องขอ" });
@@ -857,6 +862,13 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           );
         if (/^\/api\/orders\/[^/]+\/retry$/.test(path))
           return send(200, service.retry(user, path.split("/")[3]));
+        // Preorder queue (preorder.mjs): customer leaves the queue; staff call; admin cancel.
+        if (/^\/api\/orders\/[^/]+\/cancel$/.test(path))
+          return send(200, service.cancelMyPreorder(user, path.split("/")[3], input));
+        if (path === "/api/admin/preorders/call")
+          return send(200, service.adminCallPreorders(user, input));
+        if (/^\/api\/admin\/preorders\/[^/]+\/cancel$/.test(path))
+          return send(200, service.adminCancelPreorder(user, path.split("/")[4], input));
         if (path === "/api/topup")
           return send(200, { user: service.topup(user, input) });
         if (path === "/api/profile")
