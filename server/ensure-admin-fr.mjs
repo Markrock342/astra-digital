@@ -679,3 +679,69 @@ export function ensureEmailVerification(db) {
   )`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications(user_id, created_at)");
 }
+
+/**
+ * Delivery types per product + option groups (server/delivery.mjs, server/option-groups.mjs).
+ * Idempotent: columns and tables only, no rebuild of tables with CHECK constraints.
+ * - products.delivery_type: NULL = current behaviour (ID+password or code, decided per unit),
+ *   'account' | 'shared' | 'code' | 'invite' | 'manual'. products.delivery_fields: JSON list of
+ *   checkout fields for 'manual' ([{id,label,type,required}]).
+ * - inventory.unit_kind: NULL (plain unit) | 'seat' (one seat of a shared account) | 'invite'
+ *   (one use of an invite link). Seats / uses of one account or link share inventory.group_id
+ *   and are numbered by seat_no, so one row is still one sellable unit (stock counts, preorder
+ *   holds, FEFO, replacement and launch cleanup keep working unchanged). seat_label is the
+ *   profile / screen name, seat_pin_enc the PIN (encrypted like the password).
+ * - order_fulfilment: one row per order of a 'manual' product. inputs_enc = what the customer
+ *   typed at checkout (encrypted JSON), state 'waiting' (paid, in the queue) → 'done';
+ *   message_enc = what the shop sent (encrypted).
+ * - product_option_groups / product_option_values / variant_options: optional named option
+ *   groups. A variant is still the unit of price / stock / orders; variant_options names it.
+ */
+export function ensureDeliveryOptions(db) {
+  const has = (table, column) =>
+    db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  const add = (table, column, ddl) => {
+    if (!has(table, column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  };
+  add("products", "delivery_type", "TEXT");
+  add("products", "delivery_fields", "TEXT");
+  add("inventory", "unit_kind", "TEXT");
+  add("inventory", "group_id", "TEXT");
+  add("inventory", "seat_no", "INTEGER");
+  add("inventory", "seat_label", "TEXT");
+  add("inventory", "seat_pin_enc", "TEXT");
+  db.exec("CREATE INDEX IF NOT EXISTS inventory_group ON inventory(group_id) WHERE group_id IS NOT NULL");
+  db.exec(`CREATE TABLE IF NOT EXISTS order_fulfilment (
+    order_id TEXT PRIMARY KEY,
+    product_id TEXT NOT NULL,
+    inputs_enc TEXT,
+    state TEXT NOT NULL DEFAULT 'input',
+    message_enc TEXT,
+    delivered_at TEXT,
+    delivered_by TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS order_fulfilment_state ON order_fulfilment(state, created_at)");
+  db.exec(`CREATE TABLE IF NOT EXISTS product_option_groups (
+    id TEXT PRIMARY KEY,
+    product_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS product_option_groups_product ON product_option_groups(product_id, sort_order)");
+  db.exec(`CREATE TABLE IF NOT EXISTS product_option_values (
+    id TEXT PRIMARY KEY,
+    group_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS product_option_values_group ON product_option_values(group_id, sort_order)");
+  db.exec(`CREATE TABLE IF NOT EXISTS variant_options (
+    variant_id TEXT NOT NULL,
+    group_id TEXT NOT NULL,
+    value_id TEXT NOT NULL,
+    PRIMARY KEY (variant_id, group_id)
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS variant_options_value ON variant_options(value_id)");
+}

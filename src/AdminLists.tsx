@@ -55,6 +55,8 @@ import {
   type ReplacementItem,
 } from "./OrderHistory";
 import { StockImport } from "./StockImport";
+import { AdminFulfilment, FulfilmentQueue, SeatGroupPanel } from "./Delivery";
+import { EnableOptionGroups, OptionGrid, OptionGroupsEditor, useOptionGroups } from "./AdminOptions";
 import { CopyValue, ResendCredentials } from "./OrderCredentials";
 import { WarrantyStatus } from "./Warranty";
 import { ReceiptLink } from "./OrderExtras";
@@ -269,6 +271,8 @@ type OrderRow = {
   queue_number: number | null;
   createdByAdmin?: boolean;
   paymentMethodLabel?: string;
+  /** Shop-fulfilled product (Delivery.tsx): "waiting" = paid, still to send. */
+  fulfil?: string | null;
 };
 
 const emptyOrderFilters = { q: "", type: "", from: "", to: "" };
@@ -506,7 +510,7 @@ export function AdminOrders() {
                   <small>{o.customer_email}</small>
                 </td>
                 <td>
-                  <Status status={o.status} />
+                  <Status status={o.fulfil === "waiting" ? "WAITING" : o.status} />
                 </td>
                 <td className="num">{money(o.total)}</td>
                 <td className="nowrap">{dateTime(o.created_at)}</td>
@@ -543,8 +547,15 @@ type OrderDetail = {
   payments: { id: string; amount: number; status: string; provider: string; provider_ref: string | null; created_at: string; finalized_at: string | null }[];
   timeline: ActivityEvent[];
   codes: string[];
-  credentials: { loginId: string; password: string }[];
-  units?: { id: string; kind: "pair" | "code" }[];
+  credentials: { loginId: string; password: string; seat?: number | null; profile?: string | null; pin?: string | null }[];
+  /** Invite links (server/delivery.mjs); masked until revealed. */
+  links?: string[];
+  /** Revealed only: the message sent for a shop-fulfilled order. */
+  message?: string;
+  units?: { id: string; kind: "pair" | "code" | "seat" | "invite"; groupId?: string; seatNo?: number | null }[];
+  /** Shop-fulfilled product (Delivery.tsx). */
+  fulfilment?: { state: string; inputs: { id: string; label: string; value: string }[]; hasMessage: boolean; deliveredAt: string | null } | null;
+  deliveryType?: string | null;
   notes?: OrderNoteItem[];
   replacements?: ReplacementItem[];
   note?: string | null;
@@ -878,7 +889,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
     }
   }
   const [order, setOrder] = useState<OrderDetail | null>(null);
-  const [revealed, setRevealed] = useState<Pick<OrderDetail, "codes" | "credentials"> | null>(null);
+  const [revealed, setRevealed] = useState<Pick<OrderDetail, "codes" | "credentials" | "links" | "message"> | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     setOrder(null);
@@ -900,8 +911,10 @@ export function AdminOrderDetail({ id }: { id: string }) {
   }
   const [replacing, setReplacing] = useState<string | null>(null);
   const [replaceReason, setReplaceReason] = useState("");
-  const pairUnits = (order?.units ?? []).filter((u) => u.kind === "pair");
+  // Same order as the server lists them: ID+password and seats share `credentials`.
+  const pairUnits = (order?.units ?? []).filter((u) => u.kind === "pair" || u.kind === "seat");
   const codeUnits = (order?.units ?? []).filter((u) => u.kind === "code");
+  const linkUnits = (order?.units ?? []).filter((u) => u.kind === "invite");
   async function replace(e: FormEvent) {
     e.preventDefault();
     if (!replacing) return;
@@ -937,6 +950,38 @@ export function AdminOrderDetail({ id }: { id: string }) {
     }
   }
   const shown = revealed ?? order;
+  const revealForm = (
+    <form className="admin-reveal-form" onSubmit={reveal}>
+      <label className="field">
+        เหตุผลที่เปิดดูรหัส
+        <select name="reason" required value={revealReason ?? ""} onChange={(e) => setRevealReason(e.target.value)}>
+          <option value="" disabled>
+            เลือกเหตุผล
+          </option>
+          <option>ลูกค้าแจ้งว่าเข้าใช้งานไม่ได้</option>
+          <option>ลูกค้าขอให้ส่งรหัสอีกครั้ง</option>
+          <option>ตรวจสอบก่อนเปลี่ยนบัญชีให้ลูกค้า</option>
+          <option>อื่นๆ</option>
+        </select>
+      </label>
+      {revealReason === "อื่นๆ" && (
+        <label className="field">
+          ระบุเหตุผล
+          <input name="other" required minLength={3} maxLength={200} />
+        </label>
+      )}
+      <p className="field-help">ทุกครั้งที่เปิดดูจะบันทึกชื่อคนเปิดและเหตุผลไว้ในประวัติการทำงาน</p>
+      <div className="admin-action-row">
+        <button type="button" className="button ghost" onClick={() => setRevealReason(null)}>
+          ยกเลิก
+        </button>
+        <button className="button primary" disabled={!revealReason}>
+          <Eye size={15} />
+          แสดงรหัส
+        </button>
+      </div>
+    </form>
+  );
   return (
     <>
       <Link to={ordersListHref()} className="back-link">
@@ -1021,8 +1066,26 @@ export function AdminOrderDetail({ id }: { id: string }) {
                 <strong className="num">{money(order.total)}</strong>
               </div>
               <WarrantyStatus until={order.warranty_until} />
-              <h2>บัญชีที่ส่งให้ลูกค้า</h2>
-              {order.status !== "DELIVERED" ? (
+              <h2>{order.fulfilment ? "ร้านทำให้หลังสั่ง" : "บัญชีที่ส่งให้ลูกค้า"}</h2>
+              {order.fulfilment && (
+                <AdminFulfilment
+                  orderId={order.id}
+                  fulfilment={order.fulfilment}
+                  revealedMessage={revealed?.message}
+                  onChanged={() => void reload()}
+                />
+              )}
+              {order.fulfilment && !revealed && revealReason !== null && revealForm}
+              {order.fulfilment ? (
+                order.fulfilment.hasMessage &&
+                !revealed && (
+                  <button className="button secondary" onClick={() => setRevealReason("")} hidden={revealReason !== null}>
+                    <Eye size={15} />
+                    ดูข้อความที่ส่ง (บันทึกว่าใครเปิดดู)
+                  </button>
+                )
+              ) : null}
+              {order.fulfilment ? null : order.status !== "DELIVERED" ? (
                 <p className="muted">ยังไม่ได้ส่งของ</p>
               ) : (
                 <>
@@ -1030,11 +1093,33 @@ export function AdminOrderDetail({ id }: { id: string }) {
                     {/* Copy buttons only once revealed; masked values are never copied. */}
                     {shown!.credentials.map((c, i) => (
                       <li key={"c" + i}>
+                        {c.seat != null && (
+                          <>
+                            <span>ที่นั่ง</span>
+                            <strong>
+                              {c.seat}
+                              {c.profile ? " · " + c.profile : ""}
+                            </strong>
+                          </>
+                        )}
                         <span>ID</span>
                         <CopyValue value={c.loginId} label="ID" copyable={!!revealed} />
                         <span>รหัสผ่าน</span>
                         <CopyValue value={c.password} label="รหัสผ่าน" copyable={!!revealed} />
+                        {c.pin && (
+                          <>
+                            <span>PIN</span>
+                            <CopyValue value={c.pin} label="PIN" copyable={!!revealed} />
+                          </>
+                        )}
                         {replaceButton(pairUnits[i]?.id)}
+                      </li>
+                    ))}
+                    {(shown!.links ?? []).map((c, i) => (
+                      <li key={"l" + i}>
+                        <span>ลิงก์เชิญ</span>
+                        <CopyValue value={c} label="ลิงก์" copyable={!!revealed} />
+                        {replaceButton(linkUnits[i]?.id)}
                       </li>
                     ))}
                     {shown!.codes.map((c, i) => (
@@ -1077,38 +1162,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
                       แสดงรหัส (บันทึกว่าใครเปิดดู)
                     </button>
                   )}
-                  {!revealed && revealReason !== null && (
-                    <form className="admin-reveal-form" onSubmit={reveal}>
-                      <label className="field">
-                        เหตุผลที่เปิดดูรหัส
-                        <select name="reason" required value={revealReason} onChange={(e) => setRevealReason(e.target.value)}>
-                          <option value="" disabled>
-                            เลือกเหตุผล
-                          </option>
-                          <option>ลูกค้าแจ้งว่าเข้าใช้งานไม่ได้</option>
-                          <option>ลูกค้าขอให้ส่งรหัสอีกครั้ง</option>
-                          <option>ตรวจสอบก่อนเปลี่ยนบัญชีให้ลูกค้า</option>
-                          <option>อื่นๆ</option>
-                        </select>
-                      </label>
-                      {revealReason === "อื่นๆ" && (
-                        <label className="field">
-                          ระบุเหตุผล
-                          <input name="other" required minLength={3} maxLength={200} />
-                        </label>
-                      )}
-                      <p className="field-help">ทุกครั้งที่เปิดดูจะบันทึกชื่อคนเปิดและเหตุผลไว้ในประวัติการทำงาน</p>
-                      <div className="admin-action-row">
-                        <button type="button" className="button ghost" onClick={() => setRevealReason(null)}>
-                          ยกเลิก
-                        </button>
-                        <button className="button primary" disabled={!revealReason}>
-                          <Eye size={15} />
-                          แสดงรหัส
-                        </button>
-                      </div>
-                    </form>
-                  )}
+                  {!revealed && revealReason !== null && revealForm}
                 </>
               )}
             </section>
@@ -3947,6 +4001,7 @@ export function StaffBackOffice({ tab, sub, detailId }: { tab: string; sub: stri
   if (tab === "chat" || tab === "") return <AdminChatLazy />;
   if (tab === "orders") return detailId ? <AdminOrderDetail id={detailId} /> : <AdminOrders />;
   if (tab === "preorders") return <PreorderQueue />;
+  if (tab === "fulfilment") return <FulfilmentQueue />;
   if (tab === "customers") return detailId ? <AdminCustomerDetail id={detailId} /> : <AdminCustomers />;
   // Team members reply to reviews; hiding stays with the admin (server enforces it too).
   if (tab === "reviews") return <AdminReviews />;
@@ -3954,7 +4009,7 @@ export function StaffBackOffice({ tab, sub, detailId }: { tab: string; sub: stri
   return (
     <section className="reference-admin-card editor-panel">
       <h1>ไม่มีสิทธิ์เข้าหน้านี้</h1>
-      <p>บัญชีทีมงานใช้ได้เฉพาะแชท ออเดอร์ คิวพรีออเดอร์ ลูกค้า และรีวิว</p>
+      <p>บัญชีทีมงานใช้ได้เฉพาะแชท ออเดอร์ คิว ลูกค้า และรีวิว</p>
       <Link to="/admin/chat" className="button primary">
         ไปที่แชท
       </Link>
@@ -3987,6 +4042,12 @@ type StockUnit = {
   defective_reason?: string | null;
   expires_at?: string | null;
   cost?: number | null;
+  /** Shared account seat / invite link use (server/delivery.mjs). */
+  unitKind?: "seat" | "invite";
+  groupId?: string;
+  seatNo?: number | null;
+  seatLabel?: string | null;
+  hasPin?: boolean;
 };
 
 export type StockCounts = {
@@ -4005,6 +4066,7 @@ export type StockVariantInfo = {
   productId: string;
   product: string;
   preorder: boolean;
+  deliveryType?: string | null;
   sellable: number;
 };
 
@@ -4023,15 +4085,18 @@ function StockUnitRow({
   onDefect,
   onRemove,
   onSaved,
+  onGroup,
 }: {
   unit: StockUnit;
   tab: string;
   onDefect: () => void;
   onRemove: () => void;
   onSaved: () => void;
+  /** Open the seats of this unit's shared account / invite link. */
+  onGroup?: (groupId: string) => void;
 }) {
   const { toast } = useStore();
-  const [shown, setShown] = useState<{ loginId?: string; password?: string; code?: string } | null>(null);
+  const [shown, setShown] = useState<{ loginId?: string; password?: string; code?: string; profile?: string | null; pin?: string | null } | null>(null);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -4088,11 +4153,18 @@ function StockUnitRow({
                 <>
                   <CopyValue value={shown.loginId ?? ""} label="ID" copyable />
                   <CopyValue value={shown.password ?? ""} label="รหัสผ่าน" copyable />
+                  {shown.pin && <CopyValue value={shown.pin} label="PIN" copyable />}
                 </>
               )}
             </span>
           ) : (
             <code>{unit.loginIdMasked ?? unit.codeMasked ?? "•••"}</code>
+          )}
+          {unit.groupId && (
+            <button type="button" className="stock-seat-chip text-button" onClick={() => onGroup?.(unit.groupId!)}>
+              {unit.unitKind === "invite" ? "ครั้งที่ " + unit.seatNo : "ที่นั่ง " + unit.seatNo + (unit.seatLabel ? " · " + unit.seatLabel : "")}
+              {unit.hasPin ? " · PIN" : ""}
+            </button>
           )}
           <small>
             เติมเมื่อ {dateTime(unit.created_at)}
@@ -4118,6 +4190,7 @@ function StockUnitRow({
               <button
                 type="button"
                 className="button ghost stock-act-edit"
+                hidden={unit.unitKind === "invite"}
                 aria-expanded={editing}
                 onClick={() => setEditing(!editing)}
               >
@@ -4144,7 +4217,7 @@ function StockUnitRow({
       </div>
       {editing && (
         <form className="stock-unit-edit" onSubmit={save} aria-label="แก้ไขรายการสต็อก">
-          {legacy ? (
+          {unit.groupId ? null : legacy ? (
             <label className="field">
               โค้ดใหม่
               <input name="code" maxLength={500} placeholder="เว้นว่าง = ใช้โค้ดเดิม" autoComplete="off" />
@@ -4189,14 +4262,18 @@ export function VariantStock({
   variant,
   onChanged,
   onMeta,
+  deliveryType,
 }: {
   variant: { id: string; label: string };
   onChanged: () => void;
   /** Stock page: option info + counts from the first page. */
   onMeta?: (meta: { variant?: StockVariantInfo; counts?: StockCounts }) => void;
+  /** Product delivery type (Delivery.tsx): picks the import format. */
+  deliveryType?: string | null;
 }) {
   const { toast } = useStore();
   const [status, setStatus] = useState("available");
+  const [group, setGroup] = useState<string | null>(null);
   const [error, setError] = useState("");
   const list = useCursorList<StockUnit>(
     "/admin/variants/" + variant.id + "/inventory",
@@ -4237,7 +4314,18 @@ export function VariantStock({
     <div className="variant-stock">
       <TestModeStockWarning />
       <div className="variant-stock-add">
-        <StockImport variantId={variant.id} kind="pair" label={"เติมสต็อก " + variant.label} onDone={changed} />
+        {(() => {
+          const type = deliveryType ?? (list.meta?.variant as StockVariantInfo | undefined)?.deliveryType ?? null;
+          return (
+            <StockImport
+              key={type ?? "pair"}
+              variantId={variant.id}
+              kind={type === "shared" ? "seat" : type === "invite" ? "link" : type === "code" ? "code" : "pair"}
+              label={"เติมสต็อก " + variant.label}
+              onDone={changed}
+            />
+          );
+        })()}
         <ErrorMessage message={error || list.error} />
       </div>
       <div className="variant-stock-list">
@@ -4263,6 +4351,7 @@ export function VariantStock({
             </button>
           ))}
         </div>
+        {group && <SeatGroupPanel groupId={group} onChanged={changed} onClose={() => setGroup(null)} />}
         {list.rows?.length === 0 && <p className="muted">ไม่มีรายการ</p>}
         {list.rows?.map((u) => (
           <StockUnitRow
@@ -4272,6 +4361,7 @@ export function VariantStock({
             onDefect={() => void defect(u)}
             onRemove={() => void remove(u)}
             onSaved={changed}
+            onGroup={setGroup}
           />
         ))}
         {list.next && (
@@ -4304,7 +4394,20 @@ function WarrantyInput({ defaultValue = 0, label = "วันรับประ�
   );
 }
 
-export function VariantManager({ productId, preorder }: { productId: string; preorder: boolean }) {
+export function VariantManager({
+  productId,
+  preorder,
+  deliveryType = null,
+}: {
+  productId: string;
+  preorder: boolean;
+  deliveryType?: string | null;
+}) {
+  // Shop-fulfilled product (Delivery.tsx): no stock to keep.
+  const manual = deliveryType === "manual";
+  // Option groups (AdminOptions.tsx): the grid replaces the simple list while groups are on.
+  const og = useOptionGroups(productId);
+  const grouped = !!og.data?.groups.length;
   const { toast } = useStore();
   const [variants, setVariants] = useState<Variant[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -4367,12 +4470,50 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
       <p className="field-help">
         {preorder
           ? "สินค้าพรีออเดอร์: ลูกค้าจ่ายแล้วได้คิว เติมสต็อกเมื่อของพร้อม แล้วกดส่งในคิวพรีออเดอร์"
-          : "ลูกค้าจ่ายแล้วได้ ID และรหัสผ่านจากสต็อกของตัวเลือกนั้นทันที สต็อกหมดหน้าร้านขึ้นว่าหมดเอง"}
-        {" · ประกัน 0 วัน = ไม่มีประกัน แก้ภายหลังไม่กระทบออเดอร์ที่ขายไปแล้ว"}
+          : manual
+            ? "ร้านทำให้หลังสั่ง: ไม่ใช้สต็อก ออเดอร์ที่จ่ายแล้วเข้า ออเดอร์ › รอส่งมอบ"
+            : "ลูกค้าจ่ายแล้วได้ของจากสต็อกของตัวเลือกนั้นทันที สต็อกหมดหน้าร้านขึ้นว่าหมดเอง"}
+        {" · ประกัน 0 วัน = ไม่มีประกัน"}
       </p>
       <ErrorMessage message={error || pricing.error} />
       <ProductLimitForm productId={productId} pricing={pricing.data} onSaved={() => void pricing.load()} />
-      {variants?.map((v) => (
+      {grouped && og.data && (
+        <>
+          <OptionGroupsEditor
+            productId={productId}
+            groups={og.data.groups}
+            onSaved={() => {
+              void og.load();
+              void load();
+              void pricing.load();
+            }}
+          />
+          <OptionGrid
+            productId={productId}
+            groups={og.data.groups}
+            options={og.data.options}
+            variants={variants ?? []}
+            manual={manual}
+            pricingChips={(v) => <PricingChips row={pricing.data?.variants[v.id]} />}
+            waitingBadge={(v) => (v.waiting ? <WaitingBadge count={v.waiting} /> : null)}
+            renderStock={(v) => <VariantStock variant={v} deliveryType={deliveryType} onChanged={() => void load()} />}
+            renderPricing={(v, close) =>
+              pricing.data?.variants[v.id] ? (
+                <VariantPricingPanel
+                  variantId={v.id}
+                  regularPrice={v.price}
+                  row={pricing.data.variants[v.id]}
+                  tags={pricing.data.tags}
+                  onSaved={() => void pricing.load()}
+                  onClose={close}
+                />
+              ) : null
+            }
+            onChanged={() => void load()}
+          />
+        </>
+      )}
+      {!grouped && variants?.map((v) => (
         <div className={"variant-row" + (v.active ? "" : " inactive")} key={v.id}>
           {editing === v.id ? (
             <form
@@ -4405,14 +4546,18 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
                 </small>
                 <PricingChips row={pricing.data?.variants[v.id]} />
               </span>
-              <button
-                type="button"
-                className={"stock-link stock-" + v.stockStatus}
-                aria-expanded={open === v.id}
-                onClick={() => setOpen(open === v.id ? null : v.id)}
-              >
-                สต็อก {v.stock} {open === v.id ? "▲" : "▼"}
-              </button>
+              {manual ? (
+                <span className="stock-link stock-in">ร้านทำให้</span>
+              ) : (
+                <button
+                  type="button"
+                  className={"stock-link stock-" + v.stockStatus}
+                  aria-expanded={open === v.id}
+                  onClick={() => setOpen(open === v.id ? null : v.id)}
+                >
+                  สต็อก {v.stock} {open === v.id ? "▲" : "▼"}
+                </button>
+              )}
               {!!v.waiting && <WaitingBadge count={v.waiting} />}
               <span className="admin-action-row">
                 <button type="button" className="button ghost" onClick={() => setEditing(v.id)}>
@@ -4436,7 +4581,7 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
               </span>
             </div>
           )}
-          {open === v.id && <VariantStock variant={v} onChanged={() => void load()} />}
+          {open === v.id && !manual && <VariantStock variant={v} deliveryType={deliveryType} onChanged={() => void load()} />}
           {pricingOpen === v.id && pricing.data?.variants[v.id] && (
             <VariantPricingPanel
               variantId={v.id}
@@ -4449,15 +4594,26 @@ export function VariantManager({ productId, preorder }: { productId: string; pre
           )}
         </div>
       ))}
-      <form className="variant-edit variant-new" onSubmit={create}>
-        <input name="label" aria-label="ชื่อตัวเลือกใหม่" placeholder="ชื่อตัวเลือก เช่น 30 วัน จอส่วนตัว" required maxLength={80} />
-        <input name="price" aria-label="ราคาตัวเลือกใหม่ (บาท)" type="number" min="1" step="0.01" placeholder="ราคา (บาท)" required />
-        <WarrantyInput label="วันรับประกันตัวเลือกใหม่" />
-        <button className="button secondary">
-          <Plus size={15} />
-          เพิ่มตัวเลือก
-        </button>
-      </form>
+      {!grouped && (
+        <form className="variant-edit variant-new" onSubmit={create}>
+          <input name="label" aria-label="ชื่อตัวเลือกใหม่" placeholder="ชื่อตัวเลือก เช่น 30 วัน จอส่วนตัว" required maxLength={80} />
+          <input name="price" aria-label="ราคาตัวเลือกใหม่ (บาท)" type="number" min="1" step="0.01" placeholder="ราคา (บาท)" required />
+          <WarrantyInput label="วันรับประกันตัวเลือกใหม่" />
+          <button className="button secondary">
+            <Plus size={15} />
+            เพิ่มตัวเลือก
+          </button>
+        </form>
+      )}
+      {!grouped && og.data && (
+        <EnableOptionGroups
+          productId={productId}
+          onDone={() => {
+            void og.load();
+            void load();
+          }}
+        />
+      )}
     </section>
   );
 }

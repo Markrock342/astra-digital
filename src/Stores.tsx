@@ -165,7 +165,7 @@ export function MerchantHeader() {
                       ...(staff ? [] : ["reviews"]),
                     ].includes(tab)
                   : key === "orders"
-                    ? ["orders", "preorders"].includes(tab)
+                    ? ["orders", "preorders", "fulfilment"].includes(tab)
                     : key === "payments"
                       ? ["payments", "ledger", "top-ups", "daily-close", "reconcile", "withdrawals"].includes(tab)
                       : key === "customers"

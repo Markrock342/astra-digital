@@ -1,0 +1,549 @@
+/* Delivery types (Delivery.tsx). Storefront parts use the storefront tokens (brand.css:
+   --accent, --surface, --raised, --border, --radius-sm) so every theme / accent works;
+   back-office parts use the merchant tokens (--brand, white cards on the cool-grey page). */
+
+/* ---------- Storefront: checkout fields ---------- */
+.checkout-fields {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--surface);
+  padding: 14px;
+  margin: 14px 0 0;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.checkout-fields legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+.checkout-fields legend svg {
+  color: var(--accent-text, var(--accent));
+}
+.checkout-fields .field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+.checkout-fields .field small {
+  color: var(--muted);
+}
+.checkout-fields input {
+  min-height: 44px;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--bg);
+  color: var(--text);
+  padding: 0 12px;
+  font: inherit;
+  font-size: 15px;
+}
+.checkout-fields input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.checkout-fields-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- Storefront: delivered seat / link / shop-fulfilled ---------- */
+.credential-pair .seat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-text, var(--accent));
+}
+.delivered-link {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--raised);
+  min-width: 0;
+}
+.delivered-link small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.delivered-link code {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  color: var(--text);
+}
+.delivered-link-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.delivered-link-actions .button {
+  min-height: 44px;
+  flex: 1;
+  justify-content: center;
+}
+.delivered-link-actions .icon-button {
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+.fulfilment-card {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: var(--radius-sm, 10px);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  display: grid;
+  gap: 14px;
+}
+.fulfilment-card.is-done {
+  border-color: var(--border);
+  background: var(--surface);
+}
+.fulfilment-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.fulfilment-head > svg {
+  flex: none;
+  color: var(--accent-text, var(--accent));
+  margin-top: 2px;
+}
+.fulfilment-head strong {
+  font-size: 15px;
+  color: var(--text);
+}
+.fulfilment-head p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.fulfilment-wait {
+  animation: fulfilment-spin 2.4s linear infinite;
+}
+@keyframes fulfilment-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fulfilment-wait {
+    animation: none;
+  }
+}
+.fulfilment-message {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-sm, 10px);
+  background: var(--raised);
+}
+.fulfilment-message small,
+.fulfilment-inputs dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.fulfilment-message p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 14px;
+}
+.fulfilment-message .button {
+  min-height: 44px;
+  justify-self: start;
+}
+.fulfilment-inputs {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.fulfilment-inputs dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ---------- Back office: delivery type card ---------- */
+.delivery-type-card {
+  padding: 20px;
+}
+.delivery-type-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.delivery-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.delivery-type-option {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 64px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.delivery-type-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.delivery-type-option > svg:first-of-type {
+  flex: none;
+  color: var(--muted);
+}
+.delivery-type-option span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.delivery-type-option strong {
+  font-size: 13px;
+}
+.delivery-type-option small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.delivery-type-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+  color: var(--brand, #1534ff);
+}
+.delivery-type-option:has(input:checked) {
+  border-color: var(--brand, #1534ff);
+  box-shadow: 0 0 0 1px var(--brand, #1534ff);
+  background: var(--brand-soft, #eef1ff);
+}
+.delivery-type-option:has(input:checked) > svg:first-of-type,
+.delivery-type-option:has(input:checked) .delivery-type-check {
+  color: var(--brand, #1534ff);
+  opacity: 1;
+}
+.delivery-type-option:has(input:focus-visible) {
+  outline: 2px solid var(--brand, #1534ff);
+  outline-offset: 2px;
+}
+.delivery-type-option.is-blocked {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.delivery-fields {
+  margin-top: 16px;
+  display: grid;
+  gap: 8px;
+}
+.delivery-fields h3 {
+  font-size: 13px;
+  margin: 0;
+}
+.delivery-field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.delivery-field-row > input {
+  flex: 1 1 200px;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  font: inherit;
+}
+.delivery-field-type button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.delivery-field-required {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.delivery-type-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+/* ---------- Back office: seats of one shared account ---------- */
+.seat-panel {
+  margin: 8px 0 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 6px 16px -10px rgb(15 23 42 / 0.18);
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.seat-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.seat-panel-head > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.seat-panel-head small {
+  color: var(--muted);
+}
+.seat-count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.seat-count input {
+  width: 64px;
+  min-height: 40px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+.seat-login-form,
+.seat-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.seat-login-form input,
+.seat-edit input {
+  flex: 1 1 140px;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  font: inherit;
+}
+.seat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.seat-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.seat-table td {
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.seat-table tr:last-child td {
+  border-bottom: 0;
+}
+.seat-no {
+  width: 28px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.seat-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #f1f5f9;
+  color: #475569;
+  white-space: nowrap;
+}
+.seat-badge-available {
+  background: #ecfdf3;
+  color: #067647;
+}
+.seat-badge-sold {
+  background: var(--brand-soft, #eef1ff);
+  color: var(--brand, #1534ff);
+}
+.seat-badge-defective {
+  background: #fef3f2;
+  color: #b42318;
+}
+.seat-order-link {
+  margin-left: 6px;
+  font-size: 12px;
+}
+.stock-seat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--brand, #1534ff);
+}
+
+/* ---------- Back office: fulfilment queue + order detail ---------- */
+.fulfilment-queue {
+  padding: 20px;
+}
+.fulfilment-queue .reference-admin-heading {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fulfil-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.fulfil-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  background: #fff;
+}
+.fulfil-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.fulfil-item-head > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.fulfil-item-head small {
+  color: var(--muted);
+}
+.fulfil-inputs {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.fulfil-inputs > div {
+  display: grid;
+  grid-template-columns: minmax(90px, 160px) 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+.fulfil-inputs dt {
+  color: var(--muted);
+}
+.fulfil-inputs dd {
+  margin: 0;
+  min-width: 0;
+}
+.fulfil-input-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  background: #f8fafc;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+.fulfil-input-copy span {
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.fulfil-form {
+  display: grid;
+  gap: 8px;
+}
+.fulfil-form textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font: inherit;
+  resize: vertical;
+}
+.fulfil-form .button {
+  justify-self: end;
+}
+.admin-fulfilment {
+  display: grid;
+  gap: 10px;
+}
+.admin-fulfilment > .seat-badge {
+  justify-self: start;
+}
+.fulfil-message-shown {
+  margin: 0;
+  padding: 10px;
+  border-radius: 6px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 13px;
+}
+@media (max-width: 560px) {
+  .delivery-type-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .fulfil-inputs > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+/* Order status "รอร้านส่งมอบ" (paid, waiting for the shop): same tone as pending. */
+.storefront-shell .status-waiting {
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+.merchant-shell .status-waiting {
+  color: var(--brand, #1534ff);
+  background: var(--brand-soft, #eef1ff);
+  border-color: color-mix(in srgb, var(--brand, #1534ff) 30%, transparent);
+}

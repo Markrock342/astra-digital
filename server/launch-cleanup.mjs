@@ -74,19 +74,35 @@ export function createLaunchCleanupApis({
       ? all(`SELECT id FROM reservations WHERE user_id ${customerSet}`, ...cparams).map((r) => r.id)
       : [];
 
+    // A seat of a shared account (delivery.mjs) is a slot, not a used-up secret: a test sale
+    // gives the seat back to stock instead of deleting it (the account keeps all its seats).
+    const notSeat = "AND COALESCE(unit_kind,'')<>'seat'";
     let soldInventory = 0;
-    if (orderIds.length)
+    let seatsReleased = 0;
+    if (orderIds.length) {
       soldInventory += n(
-        `SELECT COUNT(*) AS n FROM inventory WHERE order_id IN (${orderIds.map(() => "?").join(",")})`,
+        `SELECT COUNT(*) AS n FROM inventory WHERE order_id IN (${orderIds.map(() => "?").join(",")}) ${notSeat}`,
         ...orderIds,
       );
-    if (reservationIds.length)
+      seatsReleased += n(
+        `SELECT COUNT(*) AS n FROM inventory WHERE order_id IN (${orderIds.map(() => "?").join(",")})
+           AND unit_kind='seat' AND COALESCE(defective,0)=0`,
+        ...orderIds,
+      );
+    }
+    if (reservationIds.length) {
       soldInventory += n(
         // Held (not yet sold) preorder units go back to stock, not counted as removed.
         `SELECT COUNT(*) AS n FROM inventory WHERE reservation_id IN (${reservationIds.map(() => "?").join(",")})
-           AND NOT (sold_at IS NULL AND order_id IS NULL)`,
+           AND NOT (sold_at IS NULL AND order_id IS NULL) ${notSeat}`,
         ...reservationIds,
       );
+      seatsReleased += n(
+        `SELECT COUNT(*) AS n FROM inventory WHERE reservation_id IN (${reservationIds.map(() => "?").join(",")})
+           AND sold_at IS NOT NULL AND unit_kind='seat' AND COALESCE(defective,0)=0`,
+        ...reservationIds,
+      );
+    }
 
     const chatUploadKeys = customers.length
       ? all(`SELECT key FROM chat_uploads WHERE user_id ${customerSet}`, ...cparams).map((r) => r.key)
@@ -176,6 +192,14 @@ export function createLaunchCleanupApis({
           )
         : 0,
       soldInventory,
+      // Not deleted: returned to stock as free seats.
+      seatsReleased,
+      fulfilment: tableExists(one, "order_fulfilment") && orderIds.length
+        ? n(
+            `SELECT COUNT(*) AS n FROM order_fulfilment WHERE order_id IN (${orderIds.map(() => "?").join(",")})`,
+            ...orderIds,
+          )
+        : 0,
       financeSandbox: tableExists(one, "finance_day_closes")
         ? n(`SELECT COUNT(*) AS n FROM finance_day_closes WHERE scope='sandbox'`) +
           n(`SELECT COUNT(*) AS n FROM finance_withdrawals WHERE scope='sandbox'`) +
@@ -274,7 +298,18 @@ export function createLaunchCleanupApis({
               run(`DELETE FROM order_notes WHERE order_id IN (${om})`, ...orderIds);
             if (tableExists(one, "order_replacements"))
               run(`DELETE FROM order_replacements WHERE order_id IN (${om})`, ...orderIds);
+            if (tableExists(one, "order_fulfilment"))
+              run(`DELETE FROM order_fulfilment WHERE order_id IN (${om})`, ...orderIds);
           }
+          // Seats sold to test customers go back to stock (see planCounts).
+          run(
+            `UPDATE inventory SET order_id=NULL, reservation_id=NULL, sold_at=NULL
+             WHERE unit_kind='seat' AND COALESCE(defective,0)=0 AND (
+               (order_id IS NOT NULL AND order_id IN (SELECT id FROM orders WHERE user_id IN (${marks})))
+               OR (reservation_id IS NOT NULL AND reservation_id IN (SELECT id FROM reservations WHERE user_id IN (${marks}))))`,
+            ...customerIds,
+            ...customerIds,
+          );
 
           run(
             // Units only held for a called deposit / free preorder were never sold: back to stock.

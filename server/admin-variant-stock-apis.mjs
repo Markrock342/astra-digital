@@ -1,4 +1,5 @@
 /** Admin FR Work 4 — variant CRUD (FR-P2) + per-variant stock (FR-P7). */
+import { maskLink } from "./delivery.mjs";
 
 function parseLimit(limit, fail, { fallback = 25, max = 100 } = {}) {
   if (limit == null || String(limit).trim() === "") return fallback;
@@ -346,6 +347,9 @@ export function createAdminVariantStockApis({
     return tx(() => {
       if (one("SELECT id FROM variants WHERE id=?", id))
         fail(409, "รหัสตัวเลือกซ้ำ");
+      // A product with option groups gets its variants from the combination grid.
+      if (one("SELECT 1 AS y FROM product_option_groups WHERE product_id=? LIMIT 1", productId))
+        fail(409, "สินค้านี้ใช้กลุ่มตัวเลือก เพิ่มค่าในกลุ่มแทน");
       run(
         "INSERT INTO variants(id,product_id,label,price,active,sort_order,warranty_days) VALUES(?,?,?,?,1,?,?)",
         id,
@@ -449,6 +453,8 @@ export function createAdminVariantStockApis({
           409,
           "มีออเดอร์หรือสต็อกผูกกับตัวเลือกนี้แล้ว ให้ปิดการใช้งานแทนการลบ",
         );
+      // Option groups (option-groups.mjs): the variant no longer names a combination.
+      run("DELETE FROM variant_options WHERE variant_id=?", variantId);
       run("DELETE FROM variants WHERE id=?", variantId);
       audit(user, "DELETE_VARIANT", variantId);
       return { id: variantId, deleted: true };
@@ -500,6 +506,7 @@ export function createAdminVariantStockApis({
     const sql = `SELECT i.id,i.created_at,i.order_id,i.reservation_id,i.sold_at,
                         i.defective,i.defective_at,i.defective_reason,i.legacy_single_secret,
                         i.login_id_enc,i.password_enc,i.expires_at,i.cost,
+                        i.unit_kind,i.group_id,i.seat_no,i.seat_label,i.seat_pin_enc,
                         ${inventoryStatusSql("i")} AS status
                  FROM inventory i
                  WHERE ${where.join(" AND ")}
@@ -520,7 +527,18 @@ export function createAdminVariantStockApis({
         expires_at: row.expires_at ?? null,
         cost: row.cost ?? null,
         credentialsMasked: true,
+        // Shared account seat / invite link use (delivery.mjs): which group and which seat.
+        ...(row.group_id
+          ? {
+              unitKind: row.unit_kind,
+              groupId: row.group_id,
+              seatNo: row.seat_no ?? null,
+              seatLabel: row.seat_label ?? null,
+              hasPin: !!row.seat_pin_enc,
+            }
+          : {}),
       };
+      if (row.unit_kind === "invite") return { ...base, codeMasked: maskLink(loginId) };
       if (row.legacy_single_secret)
         return { ...base, codeMasked: maskSecret(loginId) };
       return {
@@ -540,7 +558,7 @@ export function createAdminVariantStockApis({
 
   function variantSummary(variantId) {
     const v = one(
-      `SELECT v.id,v.label,v.price,v.active,p.id AS product_id,p.name AS product,p.preorder
+      `SELECT v.id,v.label,v.price,v.active,p.id AS product_id,p.name AS product,p.preorder,p.delivery_type
        FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=?`,
       variantId,
     );
@@ -552,6 +570,8 @@ export function createAdminVariantStockApis({
       productId: v.product_id,
       product: v.product,
       preorder: !!v.preorder,
+      // Import format follows the delivery type (delivery.mjs).
+      deliveryType: v.delivery_type ?? null,
       sellable: stockCount(variantId),
     };
   }
@@ -585,17 +605,25 @@ export function createAdminVariantStockApis({
   function revealInventoryUnit(user, inventoryIdRaw) {
     requireAdmin(user);
     const inventoryId = clean(inventoryIdRaw, 1, 80, "รายการสต็อก");
-    const row = one("SELECT id,login_id_enc,password_enc,legacy_single_secret FROM inventory WHERE id=?", inventoryId);
+    const row = one(
+      "SELECT id,login_id_enc,password_enc,legacy_single_secret,unit_kind,seat_label,seat_pin_enc FROM inventory WHERE id=?",
+      inventoryId,
+    );
     if (!row) fail(404, "ไม่พบรายการสต็อก");
     let loginId;
     let password;
+    let pin = null;
     try {
       loginId = decrypt(row.login_id_enc);
       password = row.legacy_single_secret ? "" : decrypt(row.password_enc);
+      if (row.seat_pin_enc) pin = decrypt(row.seat_pin_enc);
     } catch {
       fail(500, "ถอดรหัสรายการนี้ไม่ได้");
     }
     audit(user, "INVENTORY_REVEAL", inventoryId);
+    if (row.unit_kind === "invite") return { id: inventoryId, code: loginId, link: true };
+    if (row.unit_kind === "seat")
+      return { id: inventoryId, loginId, password, profile: row.seat_label ?? null, pin };
     return row.legacy_single_secret ? { id: inventoryId, code: loginId } : { id: inventoryId, loginId, password };
   }
 
@@ -617,6 +645,9 @@ export function createAdminVariantStockApis({
       const sets = [];
       const params = [];
       const credentialEdit = input.loginId !== undefined || input.password !== undefined || input.code !== undefined;
+      // A seat / link use shares its secret with the rest of its group (delivery.mjs).
+      if (credentialEdit && row.group_id)
+        fail(409, row.unit_kind === "seat" ? "แก้ ID / รหัสที่ตัวบัญชีแชร์ (ทุกที่นั่งพร้อมกัน)" : "ลิงก์เชิญแก้ไม่ได้ ให้ลบแล้วเพิ่มใหม่");
       if (credentialEdit) {
         const oldLogin = decrypt(row.login_id_enc);
         const oldPassword = legacy ? "" : decrypt(row.password_enc);

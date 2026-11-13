@@ -52,9 +52,14 @@ export function createAdminOrderReplaceApis({
       if (oldUnit.defective)
         fail(409, "รายการนี้ถูกทำเครื่องหมายเสียแล้ว");
 
+      // Shared account seat (delivery.mjs): move the customer to a seat on another account
+      // first (the old account is the likely problem), then any free seat.
       const replacement = one(
-        `SELECT id FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql} ORDER BY rowid LIMIT 1`,
+        `SELECT id FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql}
+         ORDER BY CASE WHEN ? IS NOT NULL AND group_id=? THEN 1 ELSE 0 END, rowid LIMIT 1`,
         row.variant_id,
+        oldUnit.group_id ?? null,
+        oldUnit.group_id ?? null,
       );
       if (!replacement) fail(409, "สต็อกไม่พอสำหรับเปลี่ยนบัญชี");
 
