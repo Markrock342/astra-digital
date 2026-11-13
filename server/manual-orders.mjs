@@ -21,6 +21,7 @@ export const MANUAL_ORDER_METHODS = { OFFSITE_TRANSFER: "โอนนอกเ�
 /** 100,000 THB per unit, in satang (sanity cap for a typed price). */
 export const MANUAL_ORDER_MAX_UNIT_PRICE = 10_000_000;
 export const MANUAL_ORDER_AUDIT = "MANUAL_ORDER_CREATE";
+export const MANUAL_ORDER_OVER_LIMIT_AUDIT = "MANUAL_ORDER_OVER_LIMIT";
 
 /** Idempotent schema (no numbered migration). Called from commerce.mjs and cloud/worker.mjs. */
 export function ensureManualOrders(db) {
@@ -72,6 +73,7 @@ export function createManualOrderApis({
   allowSandbox,
   fileStore,
   sendOrderConfirmation,
+  assertPurchaseLimit,
 }) {
   const auditDetail = (user, action, entity, detail) =>
     run(
@@ -230,6 +232,10 @@ export function createManualOrderApis({
     if (!MANUAL_ORDER_METHODS[method]) fail(400, "ช่องทางชำระไม่ถูกต้อง");
     const reference = clean(input.reference, 3, 120, "เลขอ้างอิงการโอน");
     const note = optionalText(input.note, 300, "หมายเหตุ");
+    const confirmOverLimit = input.confirmOverLimit === true;
+    const overLimitReason = optionalText(input.overLimitReason, 300, "เหตุผลที่ยืนยันเกินลิมิต");
+    if (confirmOverLimit && (!overLimitReason || overLimitReason.length < 3))
+      fail(400, "กรุณาใส่เหตุผลที่ยืนยันเกินลิมิตอย่างน้อย 3 ตัวอักษร");
     // Outside the transaction: a wrong password must still count toward the lockout.
     confirmPassword(user, input.currentPassword);
     const result = tx(() => {
@@ -255,6 +261,16 @@ export function createManualOrderApis({
       const customer = loadCustomer(fields.customerId);
       const line = priceLine(customer, fields);
       if (!line.enoughStock) fail(409, "สินค้าคงเหลือไม่เพียงพอ กรุณาเลือกจำนวนใหม่");
+      // Same per-customer limit as the storefront; admin may override with a reason (audited).
+      if (typeof assertPurchaseLimit === "function") {
+        if (!confirmOverLimit) {
+          assertPurchaseLimit(
+            { id: customer.id, role: customer.role },
+            line.variant,
+            fields.quantity,
+          );
+        }
+      }
       const id = randomUUID();
       const table = line.preorder ? "reservations" : "orders";
       run(
@@ -340,7 +356,16 @@ export function createManualOrderApis({
         preorder: line.preorder,
         queueNumber,
         test: !!test,
+        confirmOverLimit: confirmOverLimit || undefined,
+        overLimitReason: confirmOverLimit ? overLimitReason : undefined,
       });
+      if (confirmOverLimit)
+        auditDetail(user, MANUAL_ORDER_OVER_LIMIT_AUDIT, id, {
+          customerId: customer.id,
+          variantId: fields.variantId,
+          quantity: fields.quantity,
+          reason: overLimitReason,
+        });
       return resultFor(one("SELECT * FROM manual_orders WHERE id=?", id), false);
     });
     // Same "order confirmed" email as a storefront payment (queued after commit).

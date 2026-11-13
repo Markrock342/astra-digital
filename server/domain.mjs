@@ -3530,6 +3530,7 @@ export function createCommerceCore({
     allowSandbox,
     fileStore,
     sendOrderConfirmation: accountEmail.sendOrderConfirmation,
+    assertPurchaseLimit: pricing.assertPurchaseLimit,
   });
   const reviewModeration = createReviewModeration({
     one,
