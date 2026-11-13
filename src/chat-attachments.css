@@ -17,9 +17,9 @@
 }
 .chat-attach-trigger:hover,
 .chat-attach-trigger.is-open {
-  border-color: var(--brand, #1534ff);
-  color: var(--brand, #1534ff);
-  background: var(--brand-soft, #eef1ff);
+  border-color: var(--brand, var(--accent));
+  color: var(--brand, var(--accent-text));
+  background: color-mix(in srgb, var(--brand, var(--accent)) 14%, var(--surface));
 }
 .chat-attach-menu,
 .chat-attach-picker {
@@ -384,4 +384,55 @@
 .admin-chat-thread .avatar-photo {
   object-fit: cover;
   padding: 0;
+}
+/* Cards sit inside a coloured bubble. Keep their own surface so the title stays readable. */
+.storefront-shell .chat-bubble .chat-card,
+.admin-chat .chat-bubble .chat-card {
+  background: var(--surface);
+  color: var(--text);
+}
+.storefront-shell .chat-bubble .chat-card strong,
+.admin-chat .chat-bubble .chat-card strong,
+.storefront-shell .chat-bubble .chat-card .chat-card-action,
+.admin-chat .chat-bubble .chat-card .chat-card-action {
+  color: var(--text);
+  opacity: 1;
+}
+.storefront-shell .chat-bubble .chat-card small,
+.admin-chat .chat-bubble .chat-card small {
+  color: var(--muted);
+  opacity: 1;
+}
+@media (max-width: 600px) {
+  .storefront-shell .chat-attach-trigger,
+  .storefront-shell .ask-in-chat,
+  .storefront-shell .chat-attach-menu button,
+  .storefront-shell .chat-attach-picker li button,
+  .storefront-shell .chat-attach-search .icon-button,
+  .storefront-shell .chat-image-actions .button,
+  .storefront-shell .chat-image-actions a.button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .storefront-shell .chat-attach-trigger {
+    width: 44px;
+    height: 44px;
+  }
+  .storefront-shell .ask-in-chat {
+    min-width: 0;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .storefront-shell .chat-attach-menu,
+  .storefront-shell .chat-attach-picker {
+    max-width: calc(100vw - 32px);
+    max-height: min(320px, 46dvh);
+    overflow: auto;
+  }
+  .storefront-shell .chat-attach-chip {
+    max-width: 100%;
+  }
+  .storefront-shell .chat-attach-chip > span {
+    max-width: min(220px, 58vw);
+  }
 }

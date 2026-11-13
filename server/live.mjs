@@ -52,6 +52,7 @@ const LIVE_METHODS = {
   postChatMessage: ["chat", "notify"],
   closeChatThread: ["chat"],
   assignChatThread: ["chat", "notify"],
+  pinChatThread: ["chat"],
   markNotificationRead: ["notify"],
   sendBroadcast: ["notify"],
   addReview: ["catalog"],

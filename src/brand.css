@@ -2419,3 +2419,32 @@ html.lang-swap .storefront-shell .main-nav {
 :root[data-theme="dark"] .storefront-shell .positive {
   color: #4ade80;
 }
+
+@media screen and (max-width: 600px) {
+  .receipt-shell {
+    max-width: 100%;
+    overflow-x: clip;
+    box-sizing: border-box;
+  }
+  .receipt-toolbar {
+    flex-wrap: wrap;
+  }
+  .receipt-toolbar a,
+  .receipt-print {
+    min-height: 44px;
+  }
+  .receipt-paper {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+  }
+  .receipt-table {
+    width: 100%;
+    table-layout: fixed;
+  }
+  .receipt-table th,
+  .receipt-table td {
+    overflow-wrap: anywhere;
+  }
+}

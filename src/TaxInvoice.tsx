@@ -90,6 +90,17 @@ const EN_TAX: Record<string, string> = {
   "ใบเสร็จรับเงิน": "Receipt",
   "ขอใบกำกับภาษีเต็มรูปได้ที่หน้าคำสั่งซื้อ": "You can request a full tax invoice on the order page.",
   "ออกใบกำกับภาษีเลขที่ {n} แล้ว": "Tax invoice {n} has been issued.",
+  "ใบเสร็จรับเงิน/ใบกำกับภาษี": "Receipt / Tax invoice",
+  "กลับไปที่ออเดอร์": "Back to order",
+  "ดาวน์โหลด PDF / พิมพ์": "Download PDF / print",
+  "เลขที่": "No.",
+  "วันที่สั่งซื้อ": "Order date",
+  "วันที่ชำระเงิน": "Paid on",
+  "รายละเอียดคำสั่งซื้อ": "Order details",
+  "ราคาต่อหน่วย": "Unit price",
+  "จำนวนเงิน": "Amount",
+  "โทร": "Phone",
+  "ชำระเงินแล้ว": "Paid",
 };
 for (const [th, en] of Object.entries(EN_TAX)) if (!(th in EN_STRINGS)) EN_STRINGS[th] = en;
 
@@ -615,8 +626,9 @@ export function TaxInvoicePage({ id, admin }: { id: string; admin: boolean }) {
             </div>
             <div className="receipt-title">
               <h1>
+                {/* Thai title always printed: the Revenue Code requires the words ใบกำกับภาษี on the document. */}
                 {doc.title}
-                {english && <small className="tax-title-en">Receipt / Tax Invoice</small>}
+                {english && <small className="tax-title-en">{t(doc.title)}</small>}
               </h1>
               <span className="tax-original">{t("ต้นฉบับ")}</span>
               <dl>

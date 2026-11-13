@@ -63,6 +63,13 @@ export function ensureChatThreadReads(db) {
   )`);
 }
 
+/** Shared team pins on a chat thread. Idempotent; safe to call on every boot. */
+export function ensureChatPins(db) {
+  const names = new Set(db.prepare("PRAGMA table_info(chat_threads)").all().map((c) => c.name));
+  if (!names.has("pinned_at")) db.exec("ALTER TABLE chat_threads ADD COLUMN pinned_at TEXT");
+  if (!names.has("pinned_by")) db.exec("ALTER TABLE chat_threads ADD COLUMN pinned_by TEXT");
+}
+
 /**
  * ข้อความสำเร็จรูปในแชท (canned-replies.mjs). Idempotent; the formal Thai defaults are
  * seeded only when the table is first created, so a default the admin deleted stays gone.
