@@ -1,0 +1,345 @@
+/* Live chat attachments. shadcn/ui Popover + Command + Card anatomy (MIT,
+   https://ui.shadcn.com/docs/components): paperclip trigger like the canned-reply button, a small
+   searchable list above the composer, white cards with thumbnail + title + muted meta inside
+   bubbles. Only existing tokens, so storefront light/dark and the admin theme follow. */
+.chat-attach {
+  position: relative;
+  flex: none;
+  align-self: flex-end;
+}
+.chat-attach-trigger {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.chat-attach-trigger:hover,
+.chat-attach-trigger.is-open {
+  border-color: var(--brand, #1534ff);
+  color: var(--brand, #1534ff);
+  background: var(--brand-soft, #eef1ff);
+}
+.chat-attach-menu,
+.chat-attach-picker {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+}
+.chat-attach-menu {
+  display: grid;
+  min-width: 230px;
+  padding: 6px;
+}
+.chat-attach-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-attach-menu button:hover,
+.chat-attach-menu button:focus-visible {
+  background: var(--hover);
+}
+.chat-attach-menu svg {
+  flex: none;
+  color: var(--brand, #1534ff);
+}
+.chat-attach-menu small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.chat-attach-picker {
+  width: min(320px, calc(100vw - 48px));
+  overflow: hidden;
+}
+.chat-attach-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+}
+.chat-attach-search input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+.chat-attach-picker ul {
+  max-height: 280px;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+.chat-attach-picker li button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-attach-picker li button:hover,
+.chat-attach-picker li button:focus-visible {
+  background: var(--hover);
+}
+.chat-attach-picker li button > span:not(.chat-attach-thumb):not(.status) {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.chat-attach-picker small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.chat-attach-picker img,
+.chat-attach-thumb {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.chat-attach-thumb {
+  display: grid;
+  place-items: center;
+  background: var(--raised);
+  color: var(--muted);
+}
+.chat-attach-empty {
+  padding: 14px 8px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+/* Pending attachments above the composer. */
+.chat-attach-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px 0;
+  border-top: 1px solid var(--border);
+}
+.chat-attach-chips + .chat-composer {
+  border-top: 0;
+}
+.chat-attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 4px 4px 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--text);
+  font-size: 13px;
+}
+.chat-attach-chip.has-thumb {
+  padding-left: 4px;
+}
+.chat-attach-chip img {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+.chat-attach-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-attach-chip button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.chat-attach-chip button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+/* In a bubble: image + cards. */
+.chat-image {
+  display: block;
+  margin: 4px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--raised);
+  cursor: zoom-in;
+}
+.chat-image img {
+  display: block;
+  max-width: min(240px, 100%);
+  max-height: 260px;
+  object-fit: contain;
+}
+.chat-image-backdrop {
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.72);
+}
+.chat-image-viewer {
+  display: grid;
+  gap: 12px;
+  max-width: min(960px, 100%);
+}
+.chat-image-viewer img {
+  max-width: 100%;
+  max-height: calc(100dvh - 120px);
+  border-radius: 12px;
+  object-fit: contain;
+  background: #fff;
+}
+.chat-image-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.chat-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(300px, 100%);
+  margin: 4px 0;
+  padding: 8px 10px 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.chat-card:hover {
+  border-color: var(--brand, #1534ff);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+}
+.chat-card img,
+.chat-card-icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.chat-card-icon {
+  display: grid;
+  place-items: center;
+  background: var(--brand-soft, var(--raised));
+  color: var(--brand, var(--text));
+}
+.chat-card-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.chat-card-text strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-card-text small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.chat-card-text .status {
+  justify-self: start;
+}
+.chat-card-action {
+  flex: none;
+  color: var(--brand, var(--text));
+  font-size: 12px;
+  font-weight: 600;
+}
+.admin-chat-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 2px;
+  font-size: 12px;
+}
+.admin-chat-links a {
+  color: var(--brand, #1534ff);
+}
+@media (max-width: 420px) {
+  .chat-card-action {
+    display: none;
+  }
+}
+/* "สอบถามสินค้านี้ในแชท" / "สอบถามเรื่องคำสั่งซื้อนี้": quiet text button in the brand colour. */
+.ask-in-chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--brand, var(--text));
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ask-in-chat:hover {
+  text-decoration: underline;
+}
+.chat-attach-search:focus-within {
+  box-shadow: inset 0 -2px 0 var(--brand, #1534ff);
+}
+.merchant-shell .chat-attach-search input,
+.chat-attach-search input:focus,
+.chat-attach-search input:focus-visible {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+.chat-image-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}

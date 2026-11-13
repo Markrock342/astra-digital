@@ -660,6 +660,48 @@ test("merchant settings persist and closed shop rejects new purchases; draft pub
   });
   assert.ok(s.products().some((p) => p.id === product.id));
 });
+test("contact page settings: address + contact message are saved, public and length-limited", (t) => {
+  const s = createCommerce({ allowDemoAdmin: true });
+  t.after(() => s.db.close());
+  const admin = s.session(s.demoMerchant().token);
+  const customer = s.session(s.demo().token);
+  // Defaults: empty strings so the storefront hides them.
+  assert.equal(s.overview().shop.address, "");
+  assert.equal(s.overview().shop.contactMessage, "");
+  assert.throws(
+    () => s.saveSettings(customer, { address: "x" }),
+    (e) => e.status === 403,
+  );
+  s.saveSettings(admin, {
+    address: "  99/1 ถนนสุขุมวิท\r\nกรุงเทพฯ 10110  ",
+    contactMessage: "ตอบแชท 09:00–22:00\nทุกวัน",
+    phone: "081-234-5678",
+    line: "@asiaextra",
+  });
+  const shop = s.overview().shop;
+  assert.equal(shop.address, "99/1 ถนนสุขุมวิท\nกรุงเทพฯ 10110");
+  assert.equal(shop.contactMessage, "ตอบแชท 09:00–22:00\nทุกวัน");
+  assert.equal(shop.phone, "081-234-5678");
+  assert.equal(shop.line, "@asiaextra");
+  // Saving other fields leaves them alone; blank clears them.
+  s.saveSettings(admin, { shopName: "QA CONTACT" });
+  assert.equal(s.overview().shop.address, "99/1 ถนนสุขุมวิท\nกรุงเทพฯ 10110");
+  // Limits: address 500, message 1000; wrong types rejected.
+  s.saveSettings(admin, { address: "ก".repeat(500), contactMessage: "ข".repeat(1000) });
+  assert.equal(s.overview().shop.address.length, 500);
+  for (const bad of [
+    { address: "ก".repeat(501) },
+    { contactMessage: "ข".repeat(1001) },
+    { address: 123 },
+    { contactMessage: { html: "<b>x</b>" } },
+  ])
+    assert.throws(() => s.saveSettings(admin, bad), (e) => e.status === 400, JSON.stringify(bad).slice(0, 40));
+  s.saveSettings(admin, { address: "", contactMessage: "" });
+  assert.equal(s.overview().shop.address, "");
+  assert.equal(s.overview().shop.contactMessage, "");
+  // The public overview still never carries internal keys.
+  assert.ok(!("logoKey" in s.overview().shop));
+});
 
 test("review eligibility expires after seven days even for a delivered-order owner", (t) => {
   const { s, user } = fixture(t);

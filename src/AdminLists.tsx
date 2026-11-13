@@ -4624,3 +4624,133 @@ export function ProductImages({
     </section>
   );
 }
+
+// ---------------------------------------------------------------- New product images (before the product exists)
+
+export type PendingImage = { key: string; blob: Blob; url: string; name: string };
+export const PRODUCT_IMAGE_MAX = 8;
+
+/** "เพิ่มสินค้า": pick images up front. They are resized now and uploaded right after the draft is
+ *  created (same API and limits as ProductImages); the first one becomes the cover. */
+export function PendingProductImages({
+  images,
+  onChange,
+}: {
+  images: PendingImage[];
+  onChange: (images: PendingImage[]) => void;
+}) {
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [over, setOver] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const latest = useRef(images);
+  latest.current = images;
+  async function add(files: FileList | File[]) {
+    setError("");
+    const room = PRODUCT_IMAGE_MAX - latest.current.length;
+    const picked = Array.from(files).slice(0, room);
+    if (!picked.length) return setError("สินค้าหนึ่งชิ้นมีรูปได้สูงสุด " + PRODUCT_IMAGE_MAX + " รูป");
+    const problems: string[] = [];
+    for (const [i, file] of picked.entries()) {
+      const problem = checkSource(file);
+      if (problem) {
+        problems.push(file.name + ": " + problem);
+        continue;
+      }
+      try {
+        setBusy(`กำลังเตรียมรูป ${i + 1}/${picked.length}`);
+        const blob = await toWebp(file, 1200);
+        const next = [
+          ...latest.current,
+          { key: crypto.randomUUID(), blob, url: URL.createObjectURL(blob), name: file.name },
+        ];
+        latest.current = next;
+        onChange(next);
+      } catch (e) {
+        problems.push(file.name + ": " + (e as Error).message);
+      }
+    }
+    setBusy("");
+    setError(problems.join(" · "));
+  }
+  function move(index: number, by: number) {
+    const next = images.slice();
+    const [item] = next.splice(index, 1);
+    next.splice(index + by, 0, item);
+    onChange(next);
+  }
+  function remove(image: PendingImage) {
+    URL.revokeObjectURL(image.url);
+    onChange(images.filter((x) => x.key !== image.key));
+  }
+  return (
+    <section className="reference-admin-card editor-panel product-images" aria-label="รูปสินค้า">
+      <div className="product-images-head">
+        <h2>รูปสินค้า</h2>
+      </div>
+      <p className="field-help">
+        รูปแรกเป็นรูปปกในหน้ารายการสินค้า · สูงสุด {PRODUCT_IMAGE_MAX} รูป · JPG, PNG, WebP ·
+        ระบบย่อรูปให้อัตโนมัติ และอัปโหลดตอนกดสร้างฉบับร่าง
+      </p>
+      <div className="product-image-grid">
+        {images.map((image, i) => (
+          <figure key={image.key} className={i === 0 ? "cover" : ""}>
+            <img src={image.url} alt={"รูปที่ " + (i + 1)} />
+            {i === 0 && <span className="product-image-badge">ปก</span>}
+            <figcaption>
+              <button type="button" className="icon-button" aria-label="เลื่อนไปทางซ้าย" disabled={i === 0} onClick={() => move(i, -1)}>
+                ‹
+              </button>
+              <button type="button" className="icon-button" aria-label="ลบรูป" onClick={() => remove(image)}>
+                ×
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="เลื่อนไปทางขวา"
+                disabled={i === images.length - 1}
+                onClick={() => move(i, 1)}
+              >
+                ›
+              </button>
+            </figcaption>
+          </figure>
+        ))}
+        {images.length < PRODUCT_IMAGE_MAX && (
+          <button
+            type="button"
+            className={"product-image-drop" + (over ? " over" : "")}
+            onClick={() => input.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setOver(true);
+            }}
+            onDragLeave={() => setOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setOver(false);
+              void add(e.dataTransfer.files);
+            }}
+            disabled={!!busy}
+          >
+            <Plus size={18} />
+            {busy || "เพิ่มรูป หรือลากไฟล์มาวาง"}
+          </button>
+        )}
+      </div>
+      <input
+        ref={input}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        hidden
+        aria-label="เลือกรูปสินค้า"
+        onChange={(e) => {
+          if (e.target.files) void add(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <ErrorMessage message={error} />
+    </section>
+  );
+}

@@ -151,3 +151,33 @@ test("new product: no match → pick a cover from the library by hand", async ({
   await expect(suggest).toContainText("Canva");
   await expect(page.locator(".product-preview-img")).toHaveAttribute("src", "/library/canva.webp");
 });
+
+test("new product: own images picked up front become the cover and upload right after create", async ({ page }) => {
+  await asAdmin(page);
+  await page.goto(base + "/admin/products/new");
+  const section = page.getByRole("region", { name: "รูปสินค้า" });
+  await expect(section).toBeVisible();
+  const spotifyWebp = readFileSync(new URL("../public/library/spotify.webp", import.meta.url));
+  await section.getByLabel("เลือกรูปสินค้า").setInputFiles([
+    { name: "a.webp", mimeType: "image/webp", buffer: netflixWebp },
+    { name: "b.webp", mimeType: "image/webp", buffer: spotifyWebp },
+  ]);
+  await expect(section.locator(".product-image-grid figure")).toHaveCount(2);
+  await expect(section.locator(".product-image-badge")).toHaveText("ปก");
+  // Own images win over the name suggestion, and the preview shows the first one.
+  await page.getByLabel("ชื่อสินค้า", { exact: true }).fill("Netflix รูปของร้านเอง");
+  await expect(page.locator(".library-suggest")).toHaveCount(0);
+  await expect(page.locator(".product-preview-img")).toHaveAttribute("src", /^blob:/);
+  // Remove one, keep one.
+  await section.getByRole("button", { name: "ลบรูป" }).nth(1).click();
+  await expect(section.locator(".product-image-grid figure")).toHaveCount(1);
+  await page.getByLabel("รายละเอียด").fill("บัญชีทดสอบรูปของร้าน");
+  await page.getByLabel("ชื่อตัวเลือกแรก").fill("1 เดือน");
+  await page.getByLabel("ราคาตัวเลือกแรก (บาท)").fill("99");
+  await page.getByRole("button", { name: "สร้างฉบับร่าง" }).click();
+  await expect(page.getByText(/สร้างฉบับร่างแล้ว · อัปโหลดรูป 1 รูปแล้ว/)).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/products\/(?!new$)[^/]+$/);
+  const id = page.url().split("/").pop();
+  await expect(page.locator(".product-image-grid figure")).toHaveCount(1);
+  expect(imagesOf(id)).toHaveLength(1);
+});

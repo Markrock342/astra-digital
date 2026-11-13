@@ -36,6 +36,7 @@ import type { Order, Product, Review } from "./types";
 import { CategoryChips, categoryName, useCategoryParam } from "./Categories";
 import { ForgotPassword, TURNSTILE_WAIT, TurnstileBox, useAuthConfig } from "./AccountRecovery";
 import { StockWatchButton } from "./StockWatch";
+import { AskInChat } from "./ChatAttachments";
 import { ReviewReply } from "./ReviewReply";
 import { PriceDisplay, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
 /**
@@ -628,6 +629,7 @@ export function ReferenceProduct({ id }: { id: string }) {
               ? t("ชำระตอนจอง ได้เลขคิว รับของในประวัติการซื้อ")
               : t("สินค้าดิจิทัล ได้รับทันทีหลังชำระเงินในหน้าประวัติการซื้อ")}
           </p>
+          <AskInChat product={{ id: product.id, name: product.name, imageUrl: product.imageUrl }} />
           <section className="reference-product-description">
             <h2>{t("รายละเอียด")}</h2>
             <p>{product.description}</p>

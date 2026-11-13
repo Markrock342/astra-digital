@@ -18,6 +18,14 @@ import { api, dateTime, money, relativeTime } from "./api";
 import { t } from "./i18n";
 import { ChatOrderTag, useReportDraft } from "./OrderExtras";
 import {
+  AttachMenu,
+  AttachmentChips,
+  MessageAttachments,
+  useChatAttachments,
+  type ChatOrderCard,
+  type ChatProductCard,
+} from "./ChatAttachments";
+import {
   CannedReplyManager,
   CannedReplyPicker,
   matchCanned,
@@ -38,8 +46,10 @@ export type ChatThread = {
   created_at: string;
   assigned_to?: string | null;
   assignee?: string | null;
-  /** Latest order reported in this thread ("แจ้งปัญหาบัญชีนี้"). */
+  /** Latest order reported or attached in this thread. */
   order_id?: string | null;
+  /** The customer (team view links to their back-office page). */
+  user_id?: string;
 };
 type TeamMember = { id: string; name: string; role: string; active: boolean };
 export type ChatMessage = {
@@ -50,6 +60,9 @@ export type ChatMessage = {
   created_at: string;
   order_id?: string | null;
   report_reason?: string | null;
+  imageUrl?: string | null;
+  product?: ChatProductCard | null;
+  order?: ChatOrderCard | null;
 };
 
 /** A reply is the same text message, with the quoted line marked so both sides can show it. */
@@ -320,13 +333,23 @@ function MessageList({
         return (
           <div key={m.id} className={mine(m) ? "chat-bubble mine" : "chat-bubble"}>
             <small>{customerName(m)}</small>
-            {m.order_id && <ChatOrderTag orderId={m.order_id} reason={m.report_reason} admin={admin} />}
+            {m.order_id && m.report_reason && (
+              <ChatOrderTag orderId={m.order_id} reason={m.report_reason} admin={admin} />
+            )}
             {shown.quote && (
               <blockquote className="chat-quote">
                 <small>{shown.quote.author}</small>
                 <span>{shown.quote.text}</span>
               </blockquote>
             )}
+            <MessageAttachments
+              imageUrl={m.imageUrl}
+              product={m.product}
+              order={m.order}
+              report={!!m.report_reason}
+              admin={admin}
+            />
+            {shown.text && (
             <p>
               {shown.text.split(ORDER_PATH).map((part, i) =>
                 i % 2 ? (
@@ -338,6 +361,7 @@ function MessageList({
                 ),
               )}
             </p>
+            )}
             <time>{time(m.created_at)}</time>
             {onReply && (
               <button
@@ -418,6 +442,19 @@ export function CustomerChat() {
   }
   // "แจ้งปัญหาบัญชีนี้" from the order page: prefilled message + reason picker.
   const report = useReportDraft({ setText, open: reveal });
+  // Image / product / order attached to the next message.
+  const attach = useChatAttachments(false);
+  // "สอบถามสินค้านี้" / "สอบถามเรื่องคำสั่งซื้อนี้" elsewhere in the shop open the chat with a card attached.
+  useEffect(() => {
+    const onAttach = (e: Event) => {
+      const detail = (e as CustomEvent<{ product?: { id: string; name: string; imageUrl: string | null }; order?: { id: string; label: string } }>).detail;
+      if (detail?.product) attach.setProduct(detail.product);
+      if (detail?.order) attach.setOrder(detail.order);
+      reveal();
+    };
+    addEventListener("chat-attach", onAttach);
+    return () => removeEventListener("chat-attach", onAttach);
+  });
   useEffect(() => {
     addEventListener("open-chat", reveal);
     return () => removeEventListener("open-chat", reveal);
@@ -450,28 +487,31 @@ export function CustomerChat() {
   async function send(e: FormEvent) {
     e.preventDefault();
     const body = text.trim();
-    if (!body || busy) return;
-    const payload = withReply(body, replyTo);
+    if ((!body && !attach.has) || busy || attach.preparing) return;
+    const payload = body ? withReply(body, replyTo) : "";
     if (payload.length > 1000) {
-      setError("ข้อความยาวเกิน 1,000 ตัวอักษร");
+      setError(t("ข้อความยาวเกิน 1,000 ตัวอักษร"));
       return;
     }
     setBusy(true);
     setError("");
     try {
+      const extra = await attach.fields();
       if (thread?.status === "OPEN") {
         setMessages(
           (
             await api<{ messages: ChatMessage[] }>("/chat/threads/" + thread.id + "/messages", {
               body: payload,
               ...report.payload,
+              ...extra,
             })
           ).messages,
         );
       } else {
         const opened = await api<{ thread: ChatThread; messages: ChatMessage[] }>("/chat/threads", {
-          body: payload,
+          ...(payload ? { body: payload } : {}),
           ...report.payload,
+          ...extra,
         });
         setThread(opened.thread);
         setMessages(opened.messages);
@@ -479,6 +519,7 @@ export function CustomerChat() {
       setText("");
       setReplyTo(null);
       report.clear();
+      attach.clear();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -554,9 +595,15 @@ export function CustomerChat() {
               {thread?.status === "CLOSED" && (
                 <p className="chat-closed-note">{t("แชทก่อนหน้าปิดแล้ว ส่งข้อความเพื่อเริ่มแชทใหม่")}</p>
               )}
-              <ErrorMessage message={error} />
+              <ErrorMessage message={error || attach.error} />
               {report.bar}
-              <form className="chat-composer" onSubmit={send}>
+              <AttachmentChips state={attach} admin={false} />
+              <form
+                className="chat-composer"
+                onSubmit={send}
+                onDragOver={(e) => e.dataTransfer.types.includes("Files") && e.preventDefault()}
+                onDrop={attach.onDrop}
+              >
                 {replyTo && (
                   <ReplyBar
                     reply={replyTo}
@@ -564,7 +611,9 @@ export function CustomerChat() {
                     onClear={() => setReplyTo(null)}
                   />
                 )}
+                <AttachMenu state={attach} admin={false} />
                 <textarea
+                  onPaste={attach.onPaste}
                   aria-label={t("ข้อความ")}
                   placeholder={t("พิมพ์ข้อความ…")}
                   value={text}
@@ -578,7 +627,11 @@ export function CustomerChat() {
                     }
                   }}
                 />
-                <button className="button primary" disabled={busy || !text.trim()} aria-label={t("ส่ง")}>
+                <button
+                  className="button primary"
+                  disabled={busy || attach.preparing || (!text.trim() && !attach.has)}
+                  aria-label={t("ส่ง")}
+                >
                   {busy ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}
                 </button>
               </form>
@@ -616,6 +669,7 @@ export function AdminChat() {
   const [managing, setManaging] = useState(false);
   const [missing, setMissing] = useState<string[]>([]);
   const canned = useCannedReplies(current, picker !== null);
+  const attach = useChatAttachments(true);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
   const closePicker = () => {
@@ -658,7 +712,8 @@ export function AdminChat() {
     setReplyTo(null);
     setPicker(null);
     setMissing([]);
-  }, [current]);
+    attach.clear();
+  }, [current]); // eslint-disable-line react-hooks/exhaustive-deps
   // Deep link from a notification: /admin/chat?thread=<id> opens that thread,
   // also when the bell is used while this page is already open.
   useEffect(() => {
@@ -710,8 +765,8 @@ export function AdminChat() {
   async function reply(e: FormEvent) {
     e.preventDefault();
     const body = text.trim();
-    if (!current || !body || busy) return;
-    const payload = withReply(body, replyTo);
+    if (!current || (!body && !attach.has) || busy || attach.preparing) return;
+    const payload = body ? withReply(body, replyTo) : "";
     if (payload.length > 1000) {
       setError("ข้อความยาวเกิน 1,000 ตัวอักษร");
       return;
@@ -719,12 +774,19 @@ export function AdminChat() {
     setBusy(true);
     setError("");
     try {
+      const extra = await attach.fields();
       setMessages(
-        (await api<{ messages: ChatMessage[] }>("/chat/threads/" + current + "/messages", { body: payload })).messages,
+        (
+          await api<{ messages: ChatMessage[] }>("/chat/threads/" + current + "/messages", {
+            body: payload,
+            ...extra,
+          })
+        ).messages,
       );
       setText("");
       setReplyTo(null);
       setMissing([]);
+      attach.clear();
       void loadThreads();
     } catch (e) {
       setError((e as Error).message);
@@ -812,7 +874,7 @@ export function AdminChat() {
                     {x.assignee ? " · ดูแลโดย " + x.assignee : ""}
                   </small>
                   {x.order_id && (
-                    <small className="chat-thread-order">แจ้งปัญหาออเดอร์ #{x.order_id.slice(0, 8).toUpperCase()}</small>
+                    <small className="chat-thread-order">ออเดอร์ #{x.order_id.slice(0, 8).toUpperCase()}</small>
                   )}
                 </span>
                 {x.unreadCount > 0 && <b className="admin-chat-unread">{x.unreadCount}</b>}
@@ -836,6 +898,16 @@ export function AdminChat() {
                     {" · เปิดเมื่อ "}
                     {dateTime(thread.created_at)}
                   </small>
+                  {thread.user_id && (
+                    <span className="admin-chat-links">
+                      <Link to={"/admin/customers/" + thread.user_id}>ข้อมูลลูกค้า</Link>
+                      {thread.order_id && (
+                        <Link to={"/admin/orders/" + thread.order_id}>
+                          ออเดอร์ล่าสุด #{thread.order_id.slice(0, 8).toUpperCase()}
+                        </Link>
+                      )}
+                    </span>
+                  )}
                 </div>
                 {thread.status === "OPEN" && (
                   <label className="admin-chat-assign">
@@ -886,7 +958,16 @@ export function AdminChat() {
                 }
               />
               {thread.status === "OPEN" ? (
-                <form className="chat-composer canned-host" onSubmit={reply} ref={composerRef}>
+                <>
+                <ErrorMessage message={attach.error} />
+                <AttachmentChips state={attach} admin />
+                <form
+                  className="chat-composer canned-host"
+                  onSubmit={reply}
+                  ref={composerRef}
+                  onDragOver={(e) => e.dataTransfer.types.includes("Files") && e.preventDefault()}
+                  onDrop={attach.onDrop}
+                >
                   {replyTo && (
                     <ReplyBar reply={replyTo} clearLabel="ยกเลิกการตอบกลับ" onClear={() => setReplyTo(null)} />
                   )}
@@ -937,8 +1018,10 @@ export function AdminChat() {
                   >
                     <MessageSquareText size={18} />
                   </button>
+                  <AttachMenu state={attach} admin customerId={thread.user_id} />
                   <textarea
                     ref={textRef}
+                    onPaste={attach.onPaste}
                     aria-label="ข้อความตอบกลับ"
                     placeholder="พิมพ์ข้อความตอบลูกค้า… (พิมพ์ / เพื่อใช้ข้อความสำเร็จรูป)"
                     value={text}
@@ -978,11 +1061,15 @@ export function AdminChat() {
                       }
                     }}
                   />
-                  <button className="button primary" disabled={busy || !text.trim()}>
+                  <button
+                    className="button primary"
+                    disabled={busy || attach.preparing || (!text.trim() && !attach.has)}
+                  >
                     {busy ? <LoaderCircle className="spin" size={16} /> : <Send size={16} />}
                     ส่ง
                   </button>
                 </form>
+                </>
               ) : (
                 <p className="chat-closed-note">แชทนี้ปิดแล้ว ลูกค้าส่งข้อความใหม่จะเปิดเป็นแชทใหม่</p>
               )}

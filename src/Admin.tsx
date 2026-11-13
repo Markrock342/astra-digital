@@ -51,8 +51,10 @@ import {
 import { AdminChat, BuyerRanking, BuyerRankingCard, PaymentChannelSettings } from "./Ops";
 import {
   PreorderQueue,
+  PendingProductImages,
   ProductImages,
   ProductPreview,
+  type PendingImage,
   AdminAccount,
   AdminAudit,
   AdminReports,
@@ -202,7 +204,20 @@ export default function Admin() {
   const captureSavedForm = useCallback((form: HTMLFormElement | null) => {
     if (form) savedForm.current = formSnapshot(form);
   }, []);
-  const formDirty = formOpen && formValues !== null && JSON.stringify(formValues) !== savedForm.current;
+  // New product: images picked before the draft exists; uploaded right after it is created.
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  const pendingRef = useRef(pendingImages);
+  pendingRef.current = pendingImages;
+  useEffect(
+    () => () => {
+      pendingRef.current.forEach((image) => URL.revokeObjectURL(image.url));
+      setPendingImages([]);
+    },
+    [newProduct],
+  );
+  const formDirty =
+    formOpen &&
+    ((formValues !== null && JSON.stringify(formValues) !== savedForm.current) || (newProduct && pendingImages.length > 0));
   const markFormClean = useUnsavedChangesGuard(formDirty);
   // Images as ProductImages holds them right now, so the preview cover follows uploads at once.
   const [liveImages, setLiveImages] = useState<{ id: string; url: string }[] | null>(null);
@@ -265,7 +280,8 @@ export default function Admin() {
     setError("");
     const { type, ...values } = Object.fromEntries(new FormData(form));
     try {
-      const cover = newProduct && useCover ? suggestedCover : null;
+      const ownImages = newProduct ? pendingImages : [];
+      const cover = newProduct && useCover && !ownImages.length ? suggestedCover : null;
       const result = await api<{ id: string }>("/admin/products", {
         ...values,
         preorder: type === "preorder",
@@ -278,7 +294,25 @@ export default function Admin() {
         ...(editingProduct ? { id: editingProduct.id } : {}),
       });
       let coverNote = "";
-      if (cover) {
+      if (ownImages.length) {
+        // Product exists now: upload the picked images in order (first = cover).
+        let failed = 0;
+        let lastError = "";
+        for (const image of ownImages) {
+          try {
+            await uploadImage("/admin/products/" + result.id + "/images", image.blob);
+          } catch (e) {
+            failed++;
+            lastError = (e as Error).message;
+          }
+        }
+        coverNote =
+          failed === 0
+            ? " · อัปโหลดรูป " + ownImages.length + " รูปแล้ว"
+            : " · อัปโหลดรูปไม่สำเร็จ " + failed + " รูป (" + lastError + ") เพิ่มเองได้ในส่วนรูปสินค้า";
+        ownImages.forEach((image) => URL.revokeObjectURL(image.url));
+        setPendingImages([]);
+      } else if (cover) {
         // Product exists now: upload the suggested cover through the normal image API.
         try {
           await uploadImage("/admin/products/" + result.id + "/images", await libraryBlob(cover));
@@ -573,7 +607,9 @@ export default function Admin() {
                   featured: formValues ? formValues.featured === "on" : !!editingProduct?.featured,
                   art: editingProduct?.art ?? "gift",
                   imageUrl: newProduct
-                    ? useCover && suggestedCover
+                    ? pendingImages.length
+                      ? pendingImages[0].url
+                      : useCover && suggestedCover
                       ? suggestedCover.file
                       : null
                     : liveImages
@@ -659,7 +695,7 @@ export default function Admin() {
                     defaultValue={editingProduct?.name}
                   />
                 </label>
-                {coverSuggest && (
+                {coverSuggest && !pendingImages.length && (
                   <div className={"library-suggest" + (suggestedCover ? "" : " empty")} aria-live="polite">
                     {suggestedCover ? (
                       <>
@@ -694,6 +730,9 @@ export default function Admin() {
                       </>
                     )}
                   </div>
+                )}
+                {coverSuggest && pendingImages.length > 0 && (
+                  <p className="field-help">ใช้รูปที่คุณเพิ่มเองเป็นรูปปก (ลบรูปของคุณออกหมดเพื่อกลับไปใช้รูปแนะนำ)</p>
                 )}
                 {!newProduct && editingProduct && (
                   <div className="field">
@@ -761,6 +800,9 @@ export default function Admin() {
                   แสดงในส่วน “สินค้าแนะนำ” บนหน้าแรกของร้าน
                 </p>
               </section>
+              {newProduct && features.uploads && (
+                <PendingProductImages images={pendingImages} onChange={setPendingImages} />
+              )}
               <UsageInstructionsField defaultValue={editingProductUsage} />
               {!newProduct && (
                 <>
@@ -1310,7 +1352,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
       </div>
       <form
         className="reference-settings-form"
-        key={shop?.shopName + "|" + shop?.line + "|" + shop?.email + "|" + shop?.pendingExpiryMinutes}
+        key={[shop?.shopName, shop?.line, shop?.email, shop?.phone, shop?.address, shop?.contactMessage, shop?.pendingExpiryMinutes].join("|")}
         onSubmit={save}
       >
         <ErrorMessage message={error} />
@@ -1348,19 +1390,44 @@ function ReferenceSettings({ sub }: { sub: string }) {
         </section>
         <section className="reference-admin-card editor-panel">
           <h2>ช่องทางติดต่อ</h2>
-          <p>แสดงที่ส่วนท้ายของหน้าร้าน ไม่บังคับ</p>
+          <p>
+            แสดงในหน้า “ติดต่อเรา” และส่วนท้ายของหน้าร้าน ไม่บังคับ
+            · เว้นว่างช่องไหนไว้ ช่องนั้นจะไม่แสดง
+          </p>
+          <label className="field">
+            ข้อความในหน้าติดต่อเรา
+            <textarea
+              name="contactMessage"
+              defaultValue={shop?.contactMessage ?? ""}
+              maxLength={1000}
+              rows={4}
+              placeholder="เช่น ร้านตอบแชททุกวัน 09:00–22:00 น. แจ้งเลขคำสั่งซื้อทุกครั้งเพื่อความรวดเร็ว"
+            />
+          </label>
+          <label className="field">
+            ที่อยู่
+            <textarea
+              name="address"
+              defaultValue={shop?.address ?? ""}
+              maxLength={500}
+              rows={3}
+              placeholder="บ้านเลขที่ ถนน แขวง/ตำบล เขต/อำเภอ จังหวัด รหัสไปรษณีย์"
+            />
+          </label>
           {[
-            ["facebook", "Facebook", ""],
-            ["line", "LINE", "@832wjrpn"],
-            ["discord", "Discord", ""],
-            ["phone", "โทรศัพท์", ""],
-            ["email", "อีเมล", "ceo.natthanan@shipx.sbs"],
-          ].map(([key, label, value]) => (
+            ["line", "LINE", "@lineid หรือลิงก์ https://line.me/…"],
+            ["phone", "โทรศัพท์", "เช่น 081-234-5678"],
+            ["email", "อีเมล", "เช่น support@example.com"],
+            ["facebook", "Facebook", "https://facebook.com/…"],
+            ["discord", "Discord", "https://discord.gg/…"],
+          ].map(([key, label, hint]) => (
             <label className="field" key={key}>
               {label}
               <input
                 name={key}
-                defaultValue={String(shop?.[key as keyof typeof shop] ?? value)}
+                inputMode={key === "email" ? "email" : key === "phone" ? "tel" : undefined}
+                defaultValue={String(shop?.[key as keyof typeof shop] ?? "")}
+                placeholder={hint}
                 maxLength={200}
               />
             </label>
