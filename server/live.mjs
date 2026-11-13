@@ -72,6 +72,12 @@ const LIVE_METHODS = {
   saveStaff: ["team"],
   setMemberRole: ["team", "customers", "notify"],
   setStaffActive: ["team"],
+  // Tax invoices (tax-invoices.mjs): order pages + the bell refresh.
+  requestTaxInvoice: ["orders", "notify"],
+  adminSaveTaxInvoiceBuyer: ["orders"],
+  adminIssueTaxInvoice: ["orders", "notify"],
+  adminRejectTaxInvoice: ["orders", "notify"],
+  adminVoidTaxInvoice: ["orders", "notify"],
 };
 
 export function ensureLiveVersions(db) {

@@ -8,6 +8,7 @@ export const COUPON_RATE_LIMIT = { perUser: 15, perIp: 40, windowMs: 600000 };
 import { TURNSTILE_ORIGIN, TURNSTILE_REJECTED, turnstileTokenFrom } from "./turnstile.mjs";
 import { STOCK_WATCH_RATE_LIMIT } from "./stock-watch.mjs";
 import { routeFraudAndTemplates } from "./fraud-template-routes.mjs";
+import { routeTaxInvoices } from "./tax-invoices.mjs";
 export const securityHeaders = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -358,6 +359,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
       // Admin › สัญญาณผิดปกติ and › ข้อความอีเมล (server/fraud-template-routes.mjs).
       const fraudOrTemplate = routeFraudAndTemplates(service, { method: request.method, path, user, input, url });
       if (fraudOrTemplate) return send(...fraudOrTemplate);
+      // Receipt settings + full tax invoices (server/tax-invoices.mjs).
+      const taxInvoice = routeTaxInvoices(service, { method: request.method, path, user, input, url });
+      if (taxInvoice) return send(...taxInvoice);
       if (request.method === "GET") {
         if (/^\/api\/files\/[^/]+$/.test(path)) {
           const file = await service.getFile(path.split("/")[3]);

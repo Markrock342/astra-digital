@@ -83,6 +83,19 @@ export function createPrivacyApis({
       `SELECT created_at, last_seen, device, ip_masked, expires_at FROM sessions WHERE user_id=?`,
       user.id,
     );
+    // Buyer details entered for receipts / tax invoices (tax-invoices.mjs) and the issued invoices.
+    const taxInvoiceRequests = all(
+      `SELECT order_id, buyer_type, buyer_name, buyer_tax_id, buyer_branch, buyer_address, status, reason,
+              requested_at, updated_at
+       FROM tax_invoice_requests WHERE user_id=? ORDER BY updated_at DESC`,
+      user.id,
+    );
+    const taxInvoices = all(
+      `SELECT number, order_id, issued_at, buyer_type, buyer_name, buyer_tax_id, buyer_branch, buyer_address,
+              total, vat, net
+       FROM tax_invoices WHERE user_id=? ORDER BY issued_at DESC`,
+      user.id,
+    );
     return {
       exportedAt: new Date().toISOString(),
       subject: {
@@ -105,6 +118,8 @@ export function createPrivacyApis({
       reviews,
       chat: { threads, messages },
       sessions,
+      taxInvoiceRequests,
+      taxInvoices,
     };
   }
 
@@ -204,6 +219,19 @@ export function createPrivacyApis({
       );
       run(
         `UPDATE reviews SET comment='' WHERE user_id=?`,
+        subject.id,
+      );
+      // Buyer details typed for receipts / tax-invoice requests are cleared; an open request is
+      // closed. Issued tax invoices (tax_invoices, tax_invoice_voids) are NOT touched: they are
+      // legal tax records the shop must keep (Revenue Code record keeping) and are append-only.
+      run(
+        `UPDATE tax_invoice_requests SET
+           buyer_type=NULL, buyer_name=NULL, buyer_tax_id=NULL, buyer_branch=NULL, buyer_address=NULL,
+           status=CASE WHEN status IN ('PENDING','SAVED') THEN 'REJECTED' ELSE status END,
+           reason=CASE WHEN status IN ('PENDING','SAVED') THEN 'บัญชีถูกลบตามคำขอ PDPA' ELSE reason END,
+           updated_at=?
+         WHERE user_id=?`,
+        now,
         subject.id,
       );
       if (previousAvatar && typeof deleteFile === "function") {

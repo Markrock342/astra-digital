@@ -547,3 +547,93 @@ export function ensureEmailTemplates(db) {
     updated_by TEXT
   )`);
 }
+
+/**
+ * Receipts in the shop's own name + full tax invoices (ใบกำกับภาษีเต็มรูป, server/tax-invoices.mjs).
+ * Idempotent, no numbered migration. Settings live in runtime_flags 'receipt-settings'.
+ * - tax_invoice_requests: one row per order (PK order_id) with the buyer details the customer
+ *   (or the admin) entered and the workflow state. SAVED = buyer details for a ใบเสร็จรับเงิน
+ *   only (shop not VAT-registered); PENDING → ISSUED | REJECTED; VOIDED once the issued
+ *   invoice was cancelled (a new request / issue is then allowed). Mutable on purpose.
+ * - tax_invoices: the issued documents, a full snapshot (seller, buyer, items, VAT split) so a
+ *   later settings change never alters an issued invoice. Number = prefix + Bangkok year +
+ *   running number per (scope, year); UNIQUE, allocated inside the issuing transaction and
+ *   never reused (rows are never deleted). Test-mode invoices carry scope 'sandbox' and a TEST-
+ *   prefix, so the live sequence starts clean at launch.
+ * - tax_invoice_voids: cancellation of an issued invoice (one per invoice, with a reason).
+ * Both document tables are append-only (triggers): an issued invoice is a legal record and is
+ * never updated or deleted, also not by the PDPA account deletion (Revenue Code record keeping).
+ */
+export const TAX_INVOICE_APPEND_ONLY_TABLES = ["tax_invoices", "tax_invoice_voids"];
+/** Trigger names the admin health page expects (admin-health.mjs). */
+export const TAX_INVOICE_APPEND_ONLY_TRIGGERS = TAX_INVOICE_APPEND_ONLY_TABLES.flatMap((t) => [
+  t + "_append_only_update",
+  t + "_append_only_delete",
+]);
+export function ensureTaxInvoices(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS tax_invoice_requests (
+    order_id TEXT PRIMARY KEY,
+    preorder INTEGER NOT NULL DEFAULT 0 CHECK (preorder IN (0,1)),
+    user_id TEXT NOT NULL,
+    buyer_type TEXT CHECK (buyer_type IS NULL OR buyer_type IN ('PERSON','COMPANY')),
+    buyer_name TEXT,
+    buyer_tax_id TEXT,
+    buyer_branch TEXT,
+    buyer_address TEXT,
+    status TEXT NOT NULL CHECK (status IN ('SAVED','PENDING','ISSUED','REJECTED','VOIDED')),
+    reason TEXT,
+    invoice_id TEXT,
+    requested_at TEXT,
+    updated_at TEXT NOT NULL,
+    updated_by TEXT,
+    resolved_at TEXT,
+    resolved_by TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tax_invoice_requests_status ON tax_invoice_requests(status, requested_at)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tax_invoice_requests_user ON tax_invoice_requests(user_id)");
+  db.exec(`CREATE TABLE IF NOT EXISTS tax_invoices (
+    id TEXT PRIMARY KEY,
+    number TEXT NOT NULL UNIQUE,
+    scope TEXT NOT NULL CHECK (scope IN ('sandbox','live')),
+    year INTEGER NOT NULL,
+    seq INTEGER NOT NULL CHECK (seq > 0),
+    order_id TEXT NOT NULL,
+    preorder INTEGER NOT NULL DEFAULT 0,
+    user_id TEXT NOT NULL,
+    seller TEXT NOT NULL,
+    buyer_type TEXT NOT NULL CHECK (buyer_type IN ('PERSON','COMPANY')),
+    buyer_name TEXT NOT NULL,
+    buyer_tax_id TEXT NOT NULL,
+    buyer_branch TEXT,
+    buyer_address TEXT NOT NULL,
+    items TEXT NOT NULL,
+    subtotal INTEGER NOT NULL,
+    discount INTEGER NOT NULL DEFAULT 0,
+    total INTEGER NOT NULL CHECK (total >= 0),
+    vat_rate INTEGER NOT NULL,
+    vat INTEGER NOT NULL CHECK (vat >= 0),
+    net INTEGER NOT NULL CHECK (net >= 0),
+    paid_at TEXT,
+    issued_at TEXT NOT NULL,
+    issued_by TEXT,
+    UNIQUE (scope, year, seq),
+    CHECK (net + vat = total)
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tax_invoices_order ON tax_invoices(order_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tax_invoices_issued ON tax_invoices(scope, issued_at)");
+  db.exec(`CREATE TABLE IF NOT EXISTS tax_invoice_voids (
+    id TEXT PRIMARY KEY,
+    invoice_id TEXT NOT NULL UNIQUE,
+    reason TEXT NOT NULL,
+    voided_by TEXT,
+    created_at TEXT NOT NULL
+  )`);
+  for (const table of TAX_INVOICE_APPEND_ONLY_TABLES) {
+    db.exec(
+      `CREATE TRIGGER IF NOT EXISTS ${table}_append_only_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT, '${table} rows are append-only'); END`,
+    );
+    db.exec(
+      `CREATE TRIGGER IF NOT EXISTS ${table}_append_only_delete BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT, '${table} rows are append-only'); END`,
+    );
+  }
+}

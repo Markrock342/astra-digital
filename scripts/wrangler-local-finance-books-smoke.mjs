@@ -61,7 +61,7 @@ const admin = session();
 ok("admin login", (await admin("POST", "/api/login", { email: "admin@astra.local", password: adminPassword })).status === 200);
 const system = await admin("GET", "/api/admin/health");
 const appendOnly = system.data.checks.find((c) => c.id === "append_only");
-ok("health: all append-only triggers present on workerd", appendOnly.ok && /ครบ 14/.test(appendOnly.detail), appendOnly);
+ok("health: all append-only triggers present on workerd", appendOnly.ok && /ครบ 18/.test(appendOnly.detail), appendOnly);
 
 // A paid order today (sandbox payment) for reconciliation.
 const product = await admin("POST", "/api/admin/products", {

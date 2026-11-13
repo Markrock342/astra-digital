@@ -86,6 +86,7 @@ import { AdminManualOrder, ManualOrderBadge } from "./AdminManualOrder";
 import { AdminFraud } from "./AdminFraud";
 import { AdminEmailTemplates } from "./AdminEmailTemplates";
 import { AdminDailyClose, AdminReconcile, AdminWithdrawals } from "./AdminFinanceBooks";
+import { AdminReceiptSettings, AdminTaxInvoices } from "./AdminTaxInvoices";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -99,6 +100,8 @@ const productTabs = [
 const orderTabs = [
   ["orders", "ออเดอร์ทั้งหมด"],
   ["preorders", "คิวพรีออเดอร์"],
+  // Full tax invoice requests (AdminTaxInvoices.tsx); ADMIN only, hidden for staff below.
+  ["tax-invoices", "ใบกำกับภาษี"],
 ];
 // การเงิน: transactions + daily close / reconciliation / withdrawals (AdminFinanceBooks.tsx).
 const financeTabs = [
@@ -117,6 +120,7 @@ const settingTabs = [
   ["settings/payment", "รับเงิน"],
   ["settings/banners", "แบนเนอร์หน้าแรก"],
   ["settings/legal", "ข้อกำหนดและนโยบาย"],
+  ["settings/receipts", "ใบเสร็จและใบกำกับภาษี"],
   ["settings/faq", "คำถามที่พบบ่อย"],
   ["settings/account", "บัญชีแอดมิน"],
   ["settings/alerts", "แจ้งเตือนนอกเว็บ"],
@@ -311,7 +315,7 @@ export default function Admin() {
   if (user?.role === "STAFF")
     return (
       <>
-        {orderGroup && <Subnav items={orderTabs} current={tab} />}
+        {orderGroup && <Subnav items={orderTabs.filter(([key]) => key !== "tax-invoices")} current={tab} />}
         <main className="reference-admin-main">
           <StaffBackOffice tab={tab} sub={sub} detailId={detailId} />
         </main>
@@ -895,6 +899,7 @@ export default function Admin() {
             <AdminOrders />
           ))}
         {tab === "preorders" && <PreorderQueue />}
+        {tab === "tax-invoices" && <AdminTaxInvoices />}
         {tab === "coupons" && <AdminCoupons id={productId} />}
         {tab === "reviews" && <AdminReviews />}
         {tab === "customers" &&
@@ -930,6 +935,8 @@ export default function Admin() {
             <FaqSettingsPanel products={data.products} />
           ) : sub === "settings/banners" ? (
             <AdminBanners />
+          ) : sub === "settings/receipts" ? (
+            <AdminReceiptSettings />
           ) : sub === "settings/health" ? (
             <AdminSystemHealth />
           ) : (
@@ -969,6 +976,7 @@ export default function Admin() {
           "inventory",
           "orders",
           "preorders",
+          "tax-invoices",
           "coupons",
           "categories",
           "reviews",

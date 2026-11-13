@@ -49,6 +49,7 @@ import {
 import { ensureAuthHardening } from "./auth-hardening.mjs";
 import { ensureCannedReplies } from "./ensure-admin-fr.mjs";
 import { ensureBanners } from "./ensure-admin-fr.mjs";
+import { ensureTaxInvoices } from "./ensure-admin-fr.mjs";
 import { createEmailSender } from "./email.mjs";
 import { createTurnstile } from "./turnstile.mjs";
 export { ApiError } from "./domain.mjs";
@@ -127,6 +128,7 @@ export function createCommerce(options = {}) {
   ensureEmailTemplates(db);
   ensurePricing(db);
   ensureFinanceBooks(db);
+  ensureTaxInvoices(db);
   return createCommerceCore({ ...options, db, key });
 }
 export function openLocalCommerce({

@@ -46,6 +46,7 @@ import { StockImport } from "./StockImport";
 import { CopyValue, ResendCredentials } from "./OrderCredentials";
 import { WarrantyStatus } from "./Warranty";
 import { ReceiptLink } from "./OrderExtras";
+import { AdminTaxInvoiceCard } from "./AdminTaxInvoices";
 import { AdminReviews } from "./AdminReviews";
 import { BULK_CAP, OrderBulkBar, useOrderSelection, type BulkExportRow } from "./OrderBulk";
 import { ManualOrderBadge, ManualOrderCard, type ManualOrderInfo } from "./AdminManualOrder";
@@ -973,6 +974,7 @@ export function AdminOrderDetail({ id }: { id: string }) {
             </section>
           )}
           {order.manual && <ManualOrderCard id={order.id} manual={order.manual} onChanged={() => void reload()} />}
+          <AdminTaxInvoiceCard orderId={order.id} />
           {order.paymentSummary && (
             <OrderMoney
               id={order.id}
@@ -3038,6 +3040,14 @@ const actionText: Record<string, string> = {
   SESSION_REVOKE: "ออกจากระบบอุปกรณ์หนึ่งเครื่อง",
   SESSION_REVOKE_OTHERS: "ออกจากระบบอุปกรณ์อื่นทั้งหมด",
   ORDER_EXPIRED: "ยกเลิกออเดอร์ (หมดเวลาชำระเงิน)",
+  RECEIPT_SETTINGS: "ตั้งค่าใบเสร็จและใบกำกับภาษี",
+  RECEIPT_BUYER_SAVE: "ใส่ชื่อผู้ซื้อในใบเสร็จ",
+  TAX_INVOICE_REQUEST: "ขอใบกำกับภาษี",
+  TAX_INVOICE_REQUEST_UPDATE: "แก้คำขอใบกำกับภาษี",
+  TAX_INVOICE_BUYER_SAVE: "บันทึกข้อมูลผู้ซื้อใบกำกับภาษี",
+  TAX_INVOICE_ISSUE: "ออกใบกำกับภาษี",
+  TAX_INVOICE_REJECT: "ไม่อนุมัติคำขอใบกำกับภาษี",
+  TAX_INVOICE_VOID: "ยกเลิกใบกำกับภาษี",
 };
 const roleText: Record<string, string> = { ADMIN: "แอดมิน", STAFF: "ทีมงาน", CUSTOMER: "ลูกค้า" };
 /** Readable one-liner for the audit detail JSON instead of raw braces. */
@@ -3061,6 +3071,8 @@ const detailLabel: Record<string, string> = {
   couponReleased: "คืนสิทธิ์คูปอง",
   bulk: "ทำหลายรายการพร้อมกัน:",
   title: "ชื่อ",
+  number: "เลขที่",
+  fields: "ช่องที่แก้:",
 };
 function auditDetailText(detail: Record<string, unknown>) {
   const parts: string[] = [];
@@ -3091,6 +3103,7 @@ export function AdminAudit() {
     if (["REVEAL_ORDER_CREDENTIALS", "REVEAL_LIMIT", "ORDER_NOTE", "CANCEL_ORDER", "ORDER_EXPIRED", "DELIVER_RESERVATION", "CREATE_ORDER", "CREATE_PREORDER", "PAYMENT_AND_DELIVERY", "PREORDER_PAID"].includes(e.action))
       return "/admin/orders/" + e.entity_id;
     if (e.action.startsWith("PRODUCT_") || e.action === "SAVE_PRODUCT") return "/admin/products/" + e.entity_id;
+    if (e.action.startsWith("TAX_INVOICE_") || e.action === "RECEIPT_BUYER_SAVE") return "/admin/orders/" + e.entity_id;
     if (e.action.startsWith("COUPON_")) return "/admin/coupons/" + e.entity_id;
     return null;
   };

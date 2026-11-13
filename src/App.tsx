@@ -2947,7 +2947,7 @@ export default function App() {
       }}
     >
       {receipt ? (
-        <ReceiptPage key={path} id={receipt.id} admin={receipt.admin} />
+        <ReceiptPage key={path} id={receipt.id} admin={receipt.admin} kind={receipt.kind} />
       ) : (
       <>
       <a className="skip-link" href="#content">

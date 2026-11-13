@@ -72,6 +72,7 @@ import { normalizeFaq } from "./faq.mjs";
 import { createBroadcastApis } from "./broadcast.mjs";
 import { createBannerApis } from "./banners.mjs";
 import { createManualOrderApis } from "./manual-orders.mjs";
+import { createTaxInvoices } from "./tax-invoices.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -364,6 +365,23 @@ export function createCommerceCore({
     ))
       notify(staff.id, kind, title, body, link);
   };
+  // Receipt settings + full tax invoices (tax-invoices.mjs). Later helpers are bound lazily.
+  const taxInvoices = createTaxInvoices({
+    one,
+    all,
+    run,
+    tx: (fn) => tx(fn),
+    fail,
+    clock,
+    requireUser: (u) => requireUser(u),
+    requireStaff: (u) => requireStaff(u),
+    requireAdmin: (u) => requireAdmin(u),
+    isAdmin,
+    notify,
+    shopSettings: () => settings(),
+    orderRefundState: (...a) => orderRefundState(...a),
+    moneyScope: () => moneyScope,
+  });
   const orderExtras = createOrderExtras({
     one,
     all,
@@ -377,6 +395,7 @@ export function createCommerceCore({
     isAdmin,
     settings: () => settings(),
     orderRefundState: (...a) => orderRefundState(...a),
+    taxInvoices,
   });
   const stockLowCooldown = new Map();
   const maybeNotifyStockLow = (variantId) => {
@@ -3293,6 +3312,19 @@ export function createCommerceCore({
     myQueue,
     orderReceipt: orderExtras.orderReceipt,
     adminOrderReceipt: orderExtras.adminOrderReceipt,
+    // Receipt settings + full tax invoices (tax-invoices.mjs; routes: routeTaxInvoices).
+    adminReceiptSettings: taxInvoices.adminReceiptSettings,
+    adminSaveReceiptSettings: taxInvoices.adminSaveReceiptSettings,
+    myTaxInvoice: taxInvoices.myTaxInvoice,
+    requestTaxInvoice: taxInvoices.requestTaxInvoice,
+    taxInvoiceDocument: taxInvoices.taxInvoiceDocument,
+    adminTaxInvoice: taxInvoices.adminTaxInvoice,
+    adminSaveTaxInvoiceBuyer: taxInvoices.adminSaveTaxInvoiceBuyer,
+    adminIssueTaxInvoice: taxInvoices.adminIssueTaxInvoice,
+    adminRejectTaxInvoice: taxInvoices.adminRejectTaxInvoice,
+    adminVoidTaxInvoice: taxInvoices.adminVoidTaxInvoice,
+    adminTaxInvoices: taxInvoices.adminTaxInvoices,
+    adminTaxInvoiceDocument: taxInvoices.adminTaxInvoiceDocument,
     chatThreads,
     openChatThread,
     chatMessages,
@@ -3369,6 +3401,8 @@ export function createCommerceCore({
       emailTemplates: true,
       pricingRules: true,
       financeClose: true,
+      // Receipts in the shop's company name + full tax invoices (tax-invoices.mjs).
+      taxInvoices: true,
       // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
       email: accountEmail.enabled,
       passwordReset: accountEmail.enabled,

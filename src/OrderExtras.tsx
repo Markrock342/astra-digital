@@ -26,6 +26,7 @@ import { EN_STRINGS } from "./i18n-en";
 import { getLang, t } from "./i18n";
 import { shopName } from "./Theme";
 import type { Order } from "./types";
+import { branchText, TaxInvoiceCard, TaxInvoicePage, taxInvoiceHref, type Buyer } from "./TaxInvoice";
 import "./order-extras.css";
 
 // English storefront strings for this file, added to the shared table on load
@@ -218,6 +219,8 @@ export function DeliveredExtras({ order }: { order: Order }) {
           {t("แจ้งปัญหาบัญชีนี้")}
         </button>
       </div>
+      {/* Tax invoice request / buyer on the receipt (TaxInvoice.tsx); owner only, else nothing. */}
+      <TaxInvoiceCard orderId={order.id} />
     </>
   );
 }
@@ -325,11 +328,13 @@ export function ChatOrderTag({
 
 // --------------------------------------------------------------- receipt
 
-export function receiptRoute(path: string): { id: string; admin: boolean } | null {
-  const m = /^\/(admin\/)?orders\/([^/]+)\/receipt\/?$/.exec(path);
+export type DocumentKind = "receipt" | "tax-invoice";
+/** /orders/<id>/receipt, /orders/<id>/tax-invoice and their /admin twins. */
+export function receiptRoute(path: string): { id: string; admin: boolean; kind: DocumentKind } | null {
+  const m = /^\/(admin\/)?orders\/([^/]+)\/(receipt|tax-invoice)\/?$/.exec(path);
   if (!m) return null;
   try {
-    return { id: decodeURIComponent(m[2]), admin: !!m[1] };
+    return { id: decodeURIComponent(m[2]), admin: !!m[1], kind: m[3] as DocumentKind };
   } catch {
     return null;
   }
@@ -376,7 +381,16 @@ type Receipt = {
     phone: string;
     line: string;
     vatRegistered: boolean;
+    // ตั้งค่า › ใบเสร็จและใบกำกับภาษี (server/tax-invoices.mjs sellerBlock).
+    branch?: string;
+    branchLabel?: string;
+    logoUrl?: string | null;
+    footerNote?: string;
   };
+  /** Buyer on a ใบเสร็จรับเงิน (shop not VAT-registered, customer filled it in). */
+  buyer?: Buyer | null;
+  taxInvoiceMode?: "TAX_INVOICE" | "RECEIPT" | "OFF";
+  taxInvoice?: { id: string; number: string } | null;
   customer: { name: string; email: string };
   item: {
     product: string;
@@ -407,13 +421,18 @@ const REFUND_TEXT = {
   PARTIALLY_REFUNDED: "คืนเงินบางส่วนแล้ว",
 } as const;
 
-/** /orders/<id>/receipt (customer) and /admin/orders/<id>/receipt (staff). */
-export function ReceiptPage({ id, admin }: { id: string; admin: boolean }) {
+/** /orders/<id>/receipt (customer) and /admin/orders/<id>/receipt (staff); tax invoices too. */
+export function ReceiptPage({ id, admin, kind = "receipt" }: { id: string; admin: boolean; kind?: DocumentKind }) {
+  return kind === "tax-invoice" ? <TaxInvoicePage id={id} admin={admin} /> : <ShortReceipt id={id} admin={admin} />;
+}
+
+function ShortReceipt({ id, admin }: { id: string; admin: boolean }) {
   const { user, loading } = useStore();
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [error, setError] = useState("");
   const tr = (text: string) => (admin ? text : t(text));
-  const title = tr("ใบยืนยันการสั่งซื้อ / ใบเสร็จรับเงิน (อย่างย่อ)");
+  // With buyer details (not VAT-registered shop) it is a ใบเสร็จรับเงิน — never ใบกำกับภาษี.
+  const title = receipt?.buyer ? tr("ใบเสร็จรับเงิน") : tr("ใบยืนยันการสั่งซื้อ / ใบเสร็จรับเงิน (อย่างย่อ)");
   useEffect(() => {
     if (!user) return;
     api<{ receipt: Receipt }>((admin ? "/admin" : "") + "/orders/" + encodeURIComponent(id) + "/receipt")
@@ -461,12 +480,14 @@ export function ReceiptPage({ id, admin }: { id: string; admin: boolean }) {
         <article className="receipt-paper" aria-label={title}>
           <header className="receipt-head">
             <div className="receipt-shop">
+              {shop.logoUrl && <img className="tax-logo" src={shop.logoUrl} alt="" />}
               <strong className="receipt-shop-name">{shopName(shop.name)}</strong>
               {shop.legalName && <span>{shop.legalName}</span>}
               {shop.address && <span className="receipt-address">{shop.address}</span>}
               {shop.taxId && (
                 <span>
                   {tr("เลขประจำตัวผู้เสียภาษี")} {shop.taxId}
+                  {shop.branchLabel ? " · " + branchText(shop.branchLabel, shop.branch) : ""}
                 </span>
               )}
               {contact && <span>{contact}</span>}
@@ -486,11 +507,25 @@ export function ReceiptPage({ id, admin }: { id: string; admin: boolean }) {
             </div>
           </header>
           <section className="receipt-parties">
-            <div>
-              <h2>{tr("ลูกค้า")}</h2>
-              <p>{receipt.customer.name}</p>
-              {receipt.customer.email && <p className="receipt-muted">{receipt.customer.email}</p>}
-            </div>
+            {receipt.buyer ? (
+              <div>
+                <h2>{tr("ผู้ซื้อในใบเสร็จ")}</h2>
+                <p>
+                  <strong>{receipt.buyer.name}</strong>
+                </p>
+                <p className="receipt-muted tax-address">{receipt.buyer.address}</p>
+                <p className="receipt-muted">
+                  {tr("เลขประจำตัวผู้เสียภาษี")} {receipt.buyer.taxId}
+                  {receipt.buyer.type === "COMPANY" && " · " + branchText(receipt.buyer.branchLabel ?? "-", receipt.buyer.branch)}
+                </p>
+              </div>
+            ) : (
+              <div>
+                <h2>{tr("ลูกค้า")}</h2>
+                <p>{receipt.customer.name}</p>
+                {receipt.customer.email && <p className="receipt-muted">{receipt.customer.email}</p>}
+              </div>
+            )}
             <div>
               <h2>{tr("รายละเอียดคำสั่งซื้อ")}</h2>
               <dl className="receipt-facts">
@@ -598,11 +633,22 @@ export function ReceiptPage({ id, admin }: { id: string; admin: boolean }) {
           </dl>
           <footer className="receipt-foot">
             <p>
-              {shop.vatRegistered
-                ? tr("ต้องการใบกำกับภาษีเต็มรูปแบบ กรุณาติดต่อร้าน")
-                : tr("เอกสารนี้ไม่ใช่ใบกำกับภาษีเต็มรูปแบบ")}
+              {receipt.taxInvoice ? (
+                <>
+                  {tr("ออกใบกำกับภาษีเลขที่ {n} แล้ว").replace("{n}", receipt.taxInvoice.number)}{" "}
+                  <Link to={taxInvoiceHref(receipt.id, admin)} className="tax-receipt-link">
+                    {tr("ดู / พิมพ์ใบกำกับภาษี")}
+                  </Link>
+                </>
+              ) : receipt.taxInvoiceMode === "TAX_INVOICE" ? (
+                tr("ขอใบกำกับภาษีเต็มรูปได้ที่หน้าคำสั่งซื้อ")
+              ) : shop.vatRegistered ? (
+                tr("ต้องการใบกำกับภาษีเต็มรูปแบบ กรุณาติดต่อร้าน")
+              ) : (
+                tr("เอกสารนี้ไม่ใช่ใบกำกับภาษีเต็มรูปแบบ")
+              )}
             </p>
-            <p>{tr("ขอบคุณที่ใช้บริการ")}</p>
+            {shop.footerNote ? <p className="tax-address">{shop.footerNote}</p> : <p>{tr("ขอบคุณที่ใช้บริการ")}</p>}
           </footer>
         </article>
       )}
