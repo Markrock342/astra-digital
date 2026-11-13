@@ -207,6 +207,33 @@ test("in-web chat and notifications stay scoped", (t) => {
   );
 });
 
+test("A4: notifications stay scoped to owner", (t) => {
+  const { s, user, merchant } = fixture(t);
+  s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
+  const order = s.createOrder(user, {
+    variantId: "stream-plus-30",
+    quantity: 1,
+    requestKey: "a4-notify-owner",
+  });
+  s.pay(user, order.id, {
+    paymentToken: order.paymentToken,
+    outcome: "success",
+  });
+  const aliceNotes = s.notifications(user);
+  assert.ok(aliceNotes.some((n) => n.kind === "code_delivery"));
+  const otherAuth = s.register({
+    name: "A4 Other",
+    email: "a4-other@example.invalid",
+    password: "Other-only-Password-123",
+  });
+  const other = s.session(otherAuth.token);
+  assert.equal(s.notifications(other).length, 0);
+  assert.throws(
+    () => s.markNotificationRead(other, aliceNotes[0].id),
+    (e) => e.status === 404,
+  );
+});
+
 test("buyer ranking is admin-only, filters by Bangkok period and validates limit", (t) => {
   const { s, user, staff, merchant } = fixture(t);
   s.setPaymentChannel(merchant, { provider: "sandbox", active: true });
@@ -228,6 +255,11 @@ test("buyer ranking is admin-only, filters by Bangkok period and validates limit
   assert.equal(mine.name, "QA Buyer");
   assert.equal(mine.spentSatang, order.total);
   assert.ok(all.every((b) => !("id" in b)), "user ids are not exposed");
+  assert.deepEqual(
+    s.buyerRanking(merchant, {}),
+    s.buyerRanking(merchant, { limit: 10 }),
+    "A5/R3b: omitted limit defaults to 10",
+  );
   assert.ok(s.buyerRanking(merchant, { period: "day" }).some((b) => b.email === mine.email));
   s.db
     .prepare("UPDATE orders SET created_at='2020-01-01 00:00:00' WHERE id=?")
@@ -313,6 +345,8 @@ test("HTTP routes expose product detail, channel, queue, chat, rankings", async 
   assert.equal(rankings.status, 401);
   const customerRankings = await get("/api/rankings/buyers", token);
   assert.equal(customerRankings.status, 403);
+  const staffRankings = await get("/api/rankings/buyers", staffToken);
+  assert.equal(staffRankings.status, 403, "A5: STAFF cannot read rankings");
   const adminRankings = await get("/api/rankings/buyers", merchantToken);
   assert.equal(adminRankings.status, 200);
   assert.equal(
