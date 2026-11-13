@@ -26,6 +26,7 @@ import { Art, ErrorMessage, Link, Status, ledgerTypeText, useStore } from "./App
 import { SessionsCard } from "./Sessions";
 import { Change, TestMoneyBanner } from "./AdminDashboard";
 import { api, dateTime, money } from "./api";
+import "./alerts.css";
 import { checkSource, toWebp, uploadImage } from "./image-upload";
 import { libraryBlob, type LibraryItem } from "./image-library";
 import { ImageLibraryDialog } from "./ImageLibrary";
@@ -4094,34 +4095,34 @@ export function AdminSystemHealth() {
             </div>
             <div className="reference-admin-card">
               <small>ตรวจเมื่อ</small>
-              <strong>{dateTime(report.checkedAt)}</strong>
+              <strong>{dateTime(report.checkedAt.slice(0, 19).replace("T", " "))}</strong>
             </div>
             <div className="reference-admin-card">
               <small>migrations ที่ apply แล้ว</small>
               <strong>{report.migrations.applied.length}</strong>
             </div>
           </div>
-          <section className="reference-admin-card">
+          <section className="reference-admin-card health-card">
             {report.checks.map((c) => (
-              <div className="settings-row" key={c.id}>
+              <div className="settings-row health-row" key={c.id}>
                 <span>
                   <strong>{c.label}</strong>
                   <small>{c.detail}</small>
                 </span>
-                <strong className={c.ok ? "" : "danger-text"}>{c.ok ? "ผ่าน" : "ไม่ผ่าน"}</strong>
+                <span className={"alert-badge " + (c.ok ? "on" : "fail")}>{c.ok ? "ผ่าน" : "ไม่ผ่าน"}</span>
               </div>
             ))}
           </section>
         </>
       )}
-      <section className="reference-admin-card" style={{ marginTop: "1rem" }}>
+      <section className="reference-admin-card health-card health-privacy">
         <h2>คำขอลบบัญชี (PDPA) ที่รออนุมัติ</h2>
         <p className="muted">
           อนุมัติแล้วชื่อ อีเมล เบอร์ แชท และรีวิวของลูกค้าจะถูกลบถาวร ส่วนออเดอร์และประวัติเงินยังเก็บไว้ตามกฎหมายบัญชี
         </p>
         {privacy.length === 0 && <p className="muted">ไม่มีคำขอค้าง</p>}
         {privacy.map((r) => (
-          <div className="settings-row" key={r.id}>
+          <div className="settings-row health-row" key={r.id}>
             <span>
               <strong>{r.name}</strong>
               <small>

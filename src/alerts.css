@@ -329,3 +329,34 @@
     justify-content: center;
   }
 }
+
+/* ตั้งค่า › ตรวจระบบ */
+.merchant-shell .health-card {
+  padding: 4px 20px;
+}
+.merchant-shell .health-privacy {
+  margin-top: 16px;
+  padding-top: 16px;
+}
+.merchant-shell .health-privacy h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+.merchant-shell .health-row {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.merchant-shell .health-row > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.merchant-shell .health-row > span:first-child strong {
+  color: var(--text);
+  font-size: 14px;
+}
+.merchant-shell .health-row > span:first-child small {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
