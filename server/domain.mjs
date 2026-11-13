@@ -38,6 +38,8 @@ import { createAdminOrderResendApis } from "./admin-order-resend.mjs";
 import { createOrderHistoryApis } from "./admin-order-history.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createProfileUploadApis } from "./profile-uploads.mjs";
+import { createPrivacyApis } from "./privacy.mjs";
+import { createAdminHealthApis } from "./admin-health.mjs";
 import { createFileStore } from "./file-store.mjs";
 import { createAuthHardening } from "./auth-hardening.mjs";
 import { createAdminMoneyApis } from "./admin-money.mjs";
@@ -175,12 +177,12 @@ export function createCommerceCore({
     variantId,
     loginId,
     password,
-    { legacy = 0 } = {},
+    { legacy = 0, cost = null, expiresAt = null } = {},
   ) => {
     run(
       `INSERT INTO inventory(
-        id, variant_id, fingerprint, login_id_enc, password_enc, legacy_single_secret, login_key
-      ) VALUES(?,?,?,?,?,?,?)`,
+        id, variant_id, fingerprint, login_id_enc, password_enc, legacy_single_secret, login_key, cost, expires_at
+      ) VALUES(?,?,?,?,?,?,?,?,?)`,
       randomUUID(),
       variantId,
       inventoryFingerprint(loginId, password),
@@ -188,6 +190,8 @@ export function createCommerceCore({
       encrypt(password),
       legacy ? 1 : 0,
       inventoryLoginKey(legacy, loginId),
+      cost == null ? null : cost,
+      expiresAt == null ? null : expiresAt,
     );
   };
   /** Rows from before login_key existed (or written by migrations) get their key on first use. */
@@ -204,10 +208,22 @@ export function createCommerceCore({
       run("UPDATE inventory SET login_key=? WHERE id=?", value, row.id);
     }
   };
+  // Sellable = free + expires_at covers the variant warranty window from now
+  // (do not sell a unit that would expire before the customer's warranty ends).
+  const inventoryCoversWarrantySql = (alias = "") =>
+    `(${alias}expires_at IS NULL OR datetime(${alias}expires_at) > datetime('now', '+' || COALESCE((SELECT warranty_days FROM variants WHERE id=${alias}variant_id),0) || ' days'))`;
   const inventoryAvailableSql =
-    "order_id IS NULL AND reservation_id IS NULL AND COALESCE(defective,0)=0";
+    "order_id IS NULL AND reservation_id IS NULL AND COALESCE(defective,0)=0 AND " +
+    inventoryCoversWarrantySql("");
   const inventoryAvailableAliased =
-    "i.order_id IS NULL AND i.reservation_id IS NULL AND COALESCE(i.defective,0)=0";
+    "i.order_id IS NULL AND i.reservation_id IS NULL AND COALESCE(i.defective,0)=0 AND " +
+    inventoryCoversWarrantySql("i.");
+  const inventoryOrderSql = () => {
+    const fefo = "(expires_at IS NULL), expires_at ASC, ";
+    if (settings().stockOrder === "newest") return fefo + "rowid DESC";
+    if (settings().stockOrder === "random") return fefo + "RANDOM()";
+    return fefo + "rowid ASC";
+  };
   // Legacy single-secret rows stay in `codes`; real ID + password pairs go to
   // `credentials`, so the customer never sees one item listed twice.
   const readDeliveredItems = (column, bindId) => {
@@ -371,6 +387,39 @@ export function createCommerceCore({
       "stock_low",
       "สต็อกใกล้หมด",
       row.name + " / " + row.label + " เหลือ " + row.stock,
+    );
+  };
+  const expiryNotifyCooldown = new Map();
+  /** Alert admins when available units are expired or expire within 7 days. */
+  const maybeNotifyStockExpiry = (variantId) => {
+    const row = one(
+      `SELECT v.id,v.label,p.name,
+              (SELECT COUNT(*) FROM inventory i
+                WHERE i.variant_id=v.id
+                  AND i.order_id IS NULL AND i.reservation_id IS NULL AND COALESCE(i.defective,0)=0
+                  AND i.expires_at IS NOT NULL AND datetime(i.expires_at) <= datetime('now')) AS expired,
+              (SELECT COUNT(*) FROM inventory i
+                WHERE i.variant_id=v.id
+                  AND i.order_id IS NULL AND i.reservation_id IS NULL AND COALESCE(i.defective,0)=0
+                  AND i.expires_at IS NOT NULL
+                  AND datetime(i.expires_at) > datetime('now')
+                  AND datetime(i.expires_at) <= datetime('now', '+7 days')) AS expiring
+       FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=?`,
+      variantId,
+    );
+    if (!row || (row.expired <= 0 && row.expiring <= 0)) return;
+    const now = Date.now();
+    const last = expiryNotifyCooldown.get(variantId) ?? 0;
+    if (now - last < 300000) return;
+    expiryNotifyCooldown.set(variantId, now);
+    const parts = [];
+    if (row.expired > 0) parts.push("หมดอายุแล้ว " + row.expired + " รายการ");
+    if (row.expiring > 0) parts.push("ใกล้หมดอายุ " + row.expiring + " รายการ");
+    notifyStaffRoles(
+      "stock_expiry",
+      "สต็อกหมดอายุ / ใกล้หมดอายุ",
+      row.name + " / " + row.label + " · " + parts.join(" · "),
+      "/admin/products",
     );
   };
   // S2: test money (sandbox payments, DEMO_CREDIT) counts only while the shop is in test mode.
@@ -1025,6 +1074,33 @@ export function createCommerceCore({
     },
     writeShopSettings: (obj) => persistShopSettings(obj),
   });
+  const {
+    exportMyData,
+    requestAccountDeletion,
+    adminPrivacyRequests,
+    approvePrivacyDeletion,
+    rejectPrivacyRequest,
+  } = createPrivacyApis({
+    requireUser,
+    requireAdmin,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    audit,
+    randomUUID,
+    passwordHash,
+    deleteFile: (key) => fileStore.delete(key),
+    confirmPassword: (...a) => auth.confirmPassword(...a),
+  });
+  const { adminSystemHealth } = createAdminHealthApis({
+    requireAdmin,
+    one,
+    all,
+    db,
+  });
   function mapProduct(row) {
     // Usage instructions are for buyers of a delivered order only (order-extras.mjs).
     const { usage_instructions: _usage, ...p } = row;
@@ -1636,15 +1712,15 @@ export function createCommerceCore({
         audit(user, "PAYMENT_FAILED", id);
         return orderDetail(user, id);
       }
+      // Also enforce order snapshot warranty_days (may differ from current variant).
+      const warrantyDays = order.warranty_days ?? 0;
       const available = all(
-        `SELECT id FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql} ORDER BY ` +
-          (settings().stockOrder === "newest"
-            ? "rowid DESC"
-            : settings().stockOrder === "random"
-              ? "RANDOM()"
-              : "rowid ASC") +
-          " LIMIT ?",
+        `SELECT id FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL
+           AND COALESCE(defective,0)=0
+           AND (expires_at IS NULL OR datetime(expires_at) > datetime('now', '+' || ? || ' days'))
+         ORDER BY ${inventoryOrderSql()} LIMIT ?`,
         order.variant_id,
+        warrantyDays,
         order.quantity,
       );
       if (available.length !== order.quantity) {
@@ -2020,8 +2096,20 @@ export function createCommerceCore({
       }
       const ok = lines.filter((l) => l.status === "ok");
       for (const { entry } of ok) {
-        if (entry.kind === "code") insertInventoryCredential(variantId, entry.code, "", { legacy: 1 });
-        else insertInventoryCredential(variantId, entry.loginId, entry.password, { legacy: 0 });
+        const cost = entry.cost == null ? null : entry.cost;
+        const expiresAt = entry.expiresAt == null ? null : entry.expiresAt;
+        if (entry.kind === "code")
+          insertInventoryCredential(variantId, entry.code, "", {
+            legacy: 1,
+            cost,
+            expiresAt,
+          });
+        else
+          insertInventoryCredential(variantId, entry.loginId, entry.password, {
+            legacy: 0,
+            cost,
+            expiresAt,
+          });
       }
       const result = {
         imported: ok.length,
@@ -2042,8 +2130,45 @@ export function createCommerceCore({
           skipDuplicates,
         }),
       );
+      maybeNotifyStockExpiry(variantId);
       return { ...result, lines: publicLines(lines), counts };
     });
+  }
+
+  function adminExpiringInventory(user, query = {}) {
+    requireStaff(user);
+    const lim = Math.min(
+      100,
+      Math.max(1, Number(query.limit) || 50),
+    );
+    const rows = all(
+      `SELECT i.id, i.variant_id, i.expires_at, i.cost, v.label AS variant, p.id AS product_id, p.name AS product,
+              CASE
+                WHEN datetime(i.expires_at) <= datetime('now') THEN 'expired'
+                ELSE 'expiring'
+              END AS expiry_status
+       FROM inventory i
+       JOIN variants v ON v.id = i.variant_id
+       JOIN products p ON p.id = v.product_id
+       WHERE i.order_id IS NULL AND i.reservation_id IS NULL AND COALESCE(i.defective,0)=0
+         AND i.expires_at IS NOT NULL
+         AND datetime(i.expires_at) <= datetime('now', '+7 days')
+       ORDER BY i.expires_at ASC, i.id ASC
+       LIMIT ?`,
+      lim,
+    );
+    return {
+      inventory: rows.map((r) => ({
+        id: r.id,
+        variant_id: r.variant_id,
+        product_id: r.product_id,
+        product: r.product,
+        variant: r.variant,
+        expires_at: r.expires_at,
+        cost: r.cost,
+        expiry_status: r.expiry_status,
+      })),
+    };
   }
   function previewImportCodes(user, input = {}) {
     return importCodes(user, { ...input, dryRun: true });
@@ -2068,9 +2193,14 @@ export function createCommerceCore({
       }
       if (reservation.status !== "PREORDER")
         fail(409, "พรีออเดอร์นี้ส่งของไม่ได้");
+      const warrantyDays = reservation.warranty_days ?? 0;
       const available = all(
-        `SELECT id FROM inventory WHERE variant_id=? AND ${inventoryAvailableSql} ORDER BY rowid LIMIT ?`,
+        `SELECT id FROM inventory WHERE variant_id=? AND order_id IS NULL AND reservation_id IS NULL
+           AND COALESCE(defective,0)=0
+           AND (expires_at IS NULL OR datetime(expires_at) > datetime('now', '+' || ? || ' days'))
+         ORDER BY ${inventoryOrderSql()} LIMIT ?`,
         reservation.variant_id,
+        warrantyDays,
         reservation.quantity,
       );
       if (available.length < reservation.quantity)
@@ -2692,7 +2822,7 @@ export function createCommerceCore({
     randomUUID,
     categoryExists: categoryApis.exists,
   });
-  const { salesReport } = createReportApis({
+  const { salesReport, profitReport } = createReportApis({
     requireAdmin,
     all,
     one,
@@ -2906,6 +3036,8 @@ export function createCommerceCore({
     setStaffActive,
     assignChatThread,
     salesReport,
+    profitReport,
+    adminExpiringInventory,
     adminProductVariants,
     createVariant,
     updateVariant,
@@ -2934,6 +3066,12 @@ export function createCommerceCore({
     removeAvatar,
     setLogo,
     removeLogo,
+    exportMyData,
+    requestAccountDeletion,
+    adminPrivacyRequests,
+    approvePrivacyDeletion,
+    rejectPrivacyRequest,
+    adminSystemHealth,
     profile,
     publicUser,
     queueBoard,

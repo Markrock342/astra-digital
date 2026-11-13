@@ -179,14 +179,26 @@ test("total limit and per-customer limit hold across back-to-back orders", (t) =
 
 test("two connections on one database file cannot both take the last use", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "astra-coupon-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const path = join(dir, "shop.sqlite");
   const k = randomBytes(32);
   const a = createCommerce({ path, key: k, allowDemoAdmin: true });
   const b = createCommerce({ path, key: k, allowDemoAdmin: true, seed: false });
   t.after(() => {
-    a.db.close();
-    b.db.close();
+    try {
+      a.db.close();
+    } catch {
+      /* already closed */
+    }
+    try {
+      b.db.close();
+    } catch {
+      /* already closed */
+    }
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* Windows may keep a WAL lock briefly */
+    }
   });
   const admin = a.session(a.demoMerchant().token);
   a.adminCreateCoupon(admin, { code: "LAST-ONE", type: "FIXED", value: 500, usageLimit: 1 });

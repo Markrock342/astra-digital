@@ -3597,6 +3597,8 @@ type StockUnit = {
   order_id?: string | null;
   reservation_id?: string | null;
   defective_reason?: string | null;
+  expires_at?: string | null;
+  cost?: number | null;
 };
 
 function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () => void }) {
@@ -3646,6 +3648,8 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
         <div className="reference-status-tabs" role="group" aria-label="สถานะสต็อก">
           {[
             ["available", "พร้อมขาย"],
+            ["expiring", "ใกล้หมดอายุ"],
+            ["expired", "หมดอายุแล้ว"],
             ["sold", "ขายแล้ว"],
             ["defective", "เสีย"],
           ].map(([key, label]) => (
@@ -3661,6 +3665,8 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
               <code>{u.loginIdMasked ?? u.codeMasked ?? "•••"}</code>
               <small>
                 เติมเมื่อ {dateTime(u.created_at)}
+                {u.expires_at && " · หมดอายุ " + dateTime(u.expires_at)}
+                {u.cost != null && " · ต้นทุน " + money(u.cost)}
                 {u.sold_at && " · ขาย " + dateTime(u.sold_at)}
                 {(u.order_id || u.reservation_id) && (
                   <>
@@ -3671,7 +3677,7 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
                 {u.defective_reason && " · " + u.defective_reason}
               </small>
             </span>
-            {u.status === "available" && (
+            {(u.status === "available" || status === "expiring" || status === "expired") && (
               <span className="admin-action-row">
                 <button type="button" className="button ghost" onClick={() => void defect(u)}>
                   เสีย
@@ -3872,17 +3878,41 @@ type SalesReport = {
   byProduct: SalesRow[];
   byDay: DayRow[];
 };
+type ProfitReport = {
+  totals: {
+    orders: number;
+    units: number;
+    revenue: number;
+    refunds: number;
+    cost: number;
+    profit: number;
+  };
+  byProduct: {
+    product_id: string;
+    product: string;
+    variant_id: string;
+    variant: string;
+    units: number;
+    revenue: number;
+    cost: number;
+  }[];
+};
 
 export function AdminReports() {
   const [range, setRange] = useState<{ from: string; to: string }>({ from: bangkokDay(29), to: bangkokDay(0) });
   const [report, setReport] = useState<SalesReport | null>(null);
+  const [profit, setProfit] = useState<ProfitReport | null>(null);
   const [error, setError] = useState("");
   const [tick, setTick] = useState(0);
   useLive(["orders"], () => setTick((n) => n + 1));
   useEffect(() => {
-    api<SalesReport>("/admin/reports/sales" + query(range))
-      .then((r) => {
-        setReport(r);
+    Promise.all([
+      api<SalesReport>("/admin/reports/sales" + query(range)),
+      api<ProfitReport>("/admin/reports/profit" + query(range)),
+    ])
+      .then(([sales, profitReport]) => {
+        setReport(sales);
+        setProfit(profitReport);
         setError("");
       })
       .catch((e) => setError((e as Error).message));
@@ -3900,12 +3930,18 @@ export function AdminReports() {
       <div className="reference-admin-heading">
         <div>
           <h1>รายงานยอดขาย</h1>
-          <p>นับเฉพาะออเดอร์ที่ชำระสำเร็จ · เวลาไทย · ยอดขายคือยอดที่ลูกค้าจ่ายจริงหลังหักส่วนลด · ยอดสุทธิหักคืนเงินแล้ว</p>
+          <p>นับเฉพาะออเดอร์ที่ชำระสำเร็จ · เวลาไทย · ยอดขายคือยอดที่ลูกค้าจ่ายจริงหลังหักส่วนลด · ยอดสุทธิหักคืนเงินแล้ว · กำไร = ยอดขาย − คืนเงิน − ต้นทุนสต็อก</p>
         </div>
-        <a className="button secondary" href={"/api/admin/reports/sales" + query({ ...range, format: "csv" })}>
-          <Download size={15} />
-          ดาวน์โหลด CSV
-        </a>
+        <div className="form-actions">
+          <a className="button secondary" href={"/api/admin/reports/sales" + query({ ...range, format: "csv" })}>
+            <Download size={15} />
+            CSV ยอดขาย
+          </a>
+          <a className="button secondary" href={"/api/admin/reports/profit" + query({ ...range, format: "csv" })}>
+            <Download size={15} />
+            CSV กำไร
+          </a>
+        </div>
       </div>
       <TestMoneyBanner />
       <div className="admin-filters">
@@ -3924,6 +3960,8 @@ export function AdminReports() {
           ["ยอดขาย", report ? money(report.totals.revenue) : "–"],
           ["คืนเงิน", report ? money(report.totals.refunds) : "–"],
           ["ยอดสุทธิ (หักคืนเงิน)", report ? money(report.totals.net) : "–"],
+          ["ต้นทุนสต็อก", profit ? money(profit.totals.cost) : "–"],
+          ["กำไร", profit ? money(profit.totals.profit) : "–"],
           ["ส่วนลดคูปองที่ให้ไป", report ? money(report.totals.discounts ?? 0) : "–"],
           ["ออเดอร์ที่ชำระ", report ? String(report.totals.orders) : "–"],
           ["ผู้ซื้อ", report ? String(report.totals.buyers) : "–"],
@@ -3972,6 +4010,168 @@ export function AdminReports() {
         </section>
       </div>
       <BuyerRankingInline />
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- System health
+
+type HealthCheck = {
+  id: string;
+  ok: boolean;
+  label: string;
+  detail: string;
+};
+type HealthReport = {
+  ok: boolean;
+  checkedAt: string;
+  migrations: { missing: string[]; applied: string[] };
+  checks: HealthCheck[];
+};
+
+type PrivacyRequestRow = {
+  id: string;
+  user_id: string;
+  status: string;
+  reason: string | null;
+  created_at: string;
+  email: string;
+  name: string;
+};
+
+export function AdminSystemHealth() {
+  const { toast } = useStore();
+  const [report, setReport] = useState<HealthReport | null>(null);
+  const [privacy, setPrivacy] = useState<PrivacyRequestRow[]>([]);
+  const [error, setError] = useState("");
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    Promise.all([
+      api<HealthReport>("/admin/health"),
+      api<{ requests: PrivacyRequestRow[] }>("/admin/privacy/requests?status=PENDING"),
+    ])
+      .then(([health, reqs]) => {
+        setReport(health);
+        setPrivacy(reqs.requests);
+        setError("");
+      })
+      .catch((e) => setError((e as Error).message));
+  }, [tick]);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function resolve(id: string, action: "approve" | "reject", currentPassword?: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/admin/privacy/requests/" + id + "/" + action, currentPassword ? { currentPassword } : {});
+      toast(action === "approve" ? "ปิดบังข้อมูลลูกค้าแล้ว ออเดอร์และประวัติเงินยังเก็บไว้" : "ปฏิเสธคำขอแล้ว");
+      setConfirming(null);
+      setTick((n) => n + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>ตรวจระบบ</h1>
+          <p>ตรวจ migration · append-only · เครดิต/ledger · สต็อกค้าง และคำขอ PDPA</p>
+        </div>
+        <button type="button" className="button secondary" onClick={() => setTick((n) => n + 1)}>
+          ตรวจอีกครั้ง
+        </button>
+      </div>
+      <ErrorMessage message={error} />
+      {report && (
+        <>
+          <div className="admin-stat-row">
+            <div className="reference-admin-card">
+              <small>สถานะรวม</small>
+              <strong>{report.ok ? "ผ่าน" : "พบปัญหา"}</strong>
+            </div>
+            <div className="reference-admin-card">
+              <small>ตรวจเมื่อ</small>
+              <strong>{dateTime(report.checkedAt)}</strong>
+            </div>
+            <div className="reference-admin-card">
+              <small>migrations ที่ apply แล้ว</small>
+              <strong>{report.migrations.applied.length}</strong>
+            </div>
+          </div>
+          <section className="reference-admin-card">
+            {report.checks.map((c) => (
+              <div className="settings-row" key={c.id}>
+                <span>
+                  <strong>{c.label}</strong>
+                  <small>{c.detail}</small>
+                </span>
+                <strong className={c.ok ? "" : "danger-text"}>{c.ok ? "ผ่าน" : "ไม่ผ่าน"}</strong>
+              </div>
+            ))}
+          </section>
+        </>
+      )}
+      <section className="reference-admin-card" style={{ marginTop: "1rem" }}>
+        <h2>คำขอลบบัญชี (PDPA) ที่รออนุมัติ</h2>
+        <p className="muted">
+          อนุมัติแล้วชื่อ อีเมล เบอร์ แชท และรีวิวของลูกค้าจะถูกลบถาวร ส่วนออเดอร์และประวัติเงินยังเก็บไว้ตามกฎหมายบัญชี
+        </p>
+        {privacy.length === 0 && <p className="muted">ไม่มีคำขอค้าง</p>}
+        {privacy.map((r) => (
+          <div className="settings-row" key={r.id}>
+            <span>
+              <strong>{r.name}</strong>
+              <small>
+                {r.email} · {dateTime(r.created_at)}
+                {r.reason ? " · " + r.reason : ""}
+              </small>
+            </span>
+            {confirming === r.id ? (
+              <form
+                className="admin-inline-confirm"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void resolve(r.id, "approve", String(new FormData(e.currentTarget).get("currentPassword") ?? ""));
+                }}
+              >
+                <input
+                  name="currentPassword"
+                  type="password"
+                  autoComplete="current-password"
+                  aria-label="รหัสผ่านของคุณเพื่อยืนยันการลบข้อมูล"
+                  placeholder="รหัสผ่านของคุณ"
+                  required
+                  maxLength={128}
+                  autoFocus
+                />
+                <button className="button danger" disabled={busy}>
+                  ยืนยันลบข้อมูลถาวร
+                </button>
+                <button type="button" className="button ghost" onClick={() => setConfirming(null)}>
+                  ยกเลิก
+                </button>
+              </form>
+            ) : (
+              <span className="admin-row-actions">
+                <button type="button" className="button primary" onClick={() => setConfirming(r.id)}>
+                  อนุมัติปิดบังข้อมูล
+                </button>
+                <button
+                  type="button"
+                  className="button ghost"
+                  disabled={busy}
+                  onClick={() => void resolve(r.id, "reject")}
+                >
+                  ปฏิเสธ
+                </button>
+              </span>
+            )}
+          </div>
+        ))}
+      </section>
     </>
   );
 }

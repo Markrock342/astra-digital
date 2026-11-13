@@ -364,9 +364,20 @@ test("daily summary goes out once after 21:00 Bangkok, lazily or from the alarm"
 
 test("backup export needs the password, writes BACKUP_EXPORT and round-trips through the restore script", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "astra-backup-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const key = randomBytes(32);
   const f = fixture(t, { path: join(dir, "shop.sqlite"), key });
+  t.after(() => {
+    try {
+      f.s.db.close();
+    } catch {
+      /* already closed by fixture */
+    }
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* Windows WAL lock */
+    }
+  });
   await onlyDiscord(f);
   const { variantId } = f.product("Backup Item", ["b-login-1", "b-login-2", "b-login-3"]);
   const order = f.buy(variantId);
@@ -389,7 +400,7 @@ test("backup export needs the password, writes BACKUP_EXPORT and round-trips thr
   const json = JSON.parse(gunzipSync(res.data).toString("utf8"));
   assert.equal(json.format, "astra-backup");
   assert.equal(json.version, 1);
-  assert.match(json.schema.latestMigration, /^008_/);
+  assert.match(json.schema.latestMigration, /^011_/);
   const plain = JSON.stringify(json);
   for (const secret of [DISCORD, "b-login-1", "pw-b-login-1"]) assert.ok(!plain.includes(secret), "backup has plain " + secret);
   assert.deepEqual(json.tables.find((tb) => tb.name === "sessions").rows, [], "sessions are not exported");

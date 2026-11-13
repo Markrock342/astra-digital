@@ -2,10 +2,13 @@
 
 อัปเดตล่าสุด: 2026-11-13
 
-## Admin FR W5 UP-2 — รูปโปรไฟล์ + โลโก้ร้าน (กำลังทำ)
-- สาขา `feat/admin-fr-w5-up2-avatar-logo` จาก main ล่าสุด (หลัง #40 + money/auth)
-- ตามสเปก [ADMIN-FR-WORK5-uploads](../prompts/ADMIN-FR-WORK5-uploads.md) · roadmap [NOTT-ADMIN-FR-W5-UPLOADS](../roadmaps/NOTT-ADMIN-FR-W5-UPLOADS.md)
-- ห้าม UP-3 · ห้าม deploy · มาร์ค merge + deploy
+## คิวหลัง UP-2 (กำลังเปิด PR แยก · ห้าม deploy / ห้ามยิงร้านจริง)
+- Brief: `docs/briefs/BRIEF-20261113-post-up2-queue.md`
+- PR #21 race rebase · #53 cost/profit · #54 expires · #56 PDPA · #57 10k perf · health/invariants (สาขา `feat/admin-health-invariants`)
+- ห้าม UP-3 · ห้ามงานมาร์คซ้ำ
+
+## Admin FR W5 UP-2 — รูปโปรไฟล์ + โลโก้ร้าน (merge แล้ว)
+- PR #50 / #52 เข้า main · file-store avatar/logo
 
 ## Admin FR W5 UP-1 — อัปโหลดรูปสินค้า (merge แล้ว)
 - PR #40 merge + deploy แล้ว · file-store + MIG-008 + product images + `uploads`

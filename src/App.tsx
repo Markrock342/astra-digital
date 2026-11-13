@@ -47,6 +47,7 @@ import {
   AlertCircle,
   SlidersHorizontal,
   Clock,
+  Download,
   Upload,
   RotateCcw,
   TicketPercent,
@@ -2368,11 +2369,81 @@ function Account() {
             </button>
           </form>
           <SessionsCard variant="store" />
+          <PrivacyDataPanel />
         </>
       )}
     </main>
   );
 }
+
+/** PDPA: download own JSON + request account deletion (CUSTOMER). */
+function PrivacyDataPanel() {
+  const { toast } = useStore();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [requestId, setRequestId] = useState("");
+  async function downloadExport() {
+    setBusy(true);
+    setError("");
+    try {
+      const data = await api<Record<string, unknown>>("/account/privacy/export");
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "astra-my-data.json";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast(t("ดาวน์โหลดสำเนาข้อมูลแล้ว"));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function requestDelete() {
+    if (!confirm(t("ยืนยันขอลบบัญชี? แอดมินจะตรวจสอบก่อนปิดบังข้อมูลส่วนตัว และเก็บประวัติออเดอร์ไว้")))
+      return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ id: string; status: string }>("/account/privacy/delete", {
+        reason: "ขอลบจากหน้าบัญชี",
+      });
+      setRequestId(result.id);
+      toast(t("ส่งคำขอลบบัญชีแล้ว รอแอดมินอนุมัติ"));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="panel">
+      <h2>{t("ข้อมูลส่วนบุคคล (PDPA)")}</h2>
+      <p className="muted">
+        {t("ดาวน์โหลดสำเนาข้อมูลของคุณ หรือขอลบบัญชีตามสิทธิ์เจ้าของข้อมูล — ร้านจะปิดบังชื่อ/อีเมล/เบอร์ แต่เก็บออเดอร์และการเงินไว้")}
+      </p>
+      <ErrorMessage message={error} />
+      {requestId && (
+        <p className="field-help">
+          {t("รหัสคำขอ")}: <code>{requestId.slice(0, 8)}</code> · {t("สถานะรออนุมัติ")}
+        </p>
+      )}
+      <div className="form-actions">
+        <button type="button" className="button secondary" disabled={busy} onClick={() => void downloadExport()}>
+          {busy ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />}
+          {t("ดาวน์โหลดข้อมูลของฉัน")}
+        </button>
+        <button type="button" className="button ghost" disabled={busy} onClick={() => void requestDelete()}>
+          <Trash2 size={15} />
+          {t("ขอลบบัญชี")}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function InfoPage({ kind }: { kind: string }) {
   const { overview } = useStore();
   const name = shopName(overview?.shop?.shopName);
