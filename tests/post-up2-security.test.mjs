@@ -118,14 +118,14 @@ test("STAFF cannot import cost stock; ADMIN can", (t) => {
     () =>
       s.importCodes(staff, {
         variantId,
-        items: [{ loginId: "staff-denied@ex.invalid", password: "pw", cost: 100 }],
+        items: [{ loginId: "staff-denied@ex.invalid", password: "pw", cost: 1 }],
       }),
     (e) => e.status === 403,
   );
   assert.equal(
     s.importCodes(admin, {
       variantId,
-      items: [{ loginId: "admin-ok@ex.invalid", password: "pw", cost: 100 }],
+      items: [{ loginId: "admin-ok@ex.invalid", password: "pw", cost: 1 }],
     }).imported,
     1,
   );

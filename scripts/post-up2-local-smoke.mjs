@@ -74,7 +74,7 @@ try {
       {
         loginId: "smoke-cost@ex.invalid",
         password: "pw-smoke",
-        cost: 4500,
+        cost: 45,
         expiresAt: "2099-01-01",
       },
     ],

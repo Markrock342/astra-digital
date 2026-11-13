@@ -49,18 +49,40 @@ function textLines(text) {
     .filter((entry) => entry.raw);
 }
 
-/** Optional trailing cost in satang (integer ≥ 0). Empty → null. */
+/** Baht input pattern: integer or up to 2 decimal places (e.g. 25, 25.5, 25.50). */
+const COST_BAHT_RE = /^\d+(\.\d{1,2})?$/;
+/** Max cost in satang after conversion (same ceiling as before). */
+const COST_SATANG_MAX = 100000000;
+const COST_ERR = "ต้นทุนต้องเป็นจำนวนบาท (≥0 ทศนิยมได้ 2 ตำแหน่ง)";
+
+/** Convert a validated baht string ("25", "25.5", "25.50") to integer satang. */
+function bahtTextToSatang(text) {
+  const [whole, frac = ""] = text.split(".");
+  return Number(whole) * 100 + Number((frac + "00").slice(0, 2));
+}
+
+/**
+ * Optional purchase cost from the admin: baht with ≤2 decimals.
+ * Stored as integer satang. Empty → null.
+ */
 export function parseOptionalCost(raw) {
   if (raw === undefined || raw === null) return { cost: null };
-  const text = typeof raw === "number" ? String(raw) : String(raw).trim();
+  if (typeof raw === "number") {
+    if (!Number.isFinite(raw) || raw < 0) return { error: COST_ERR };
+    const scaled = raw * 100;
+    const satang = Math.round(scaled);
+    // Reject values that are not exactly ≤2 decimal places (e.g. 25.555).
+    if (Math.abs(scaled - satang) > 1e-6) return { error: COST_ERR };
+    if (satang > COST_SATANG_MAX) return { error: COST_ERR };
+    return { cost: satang };
+  }
+  const text = String(raw).trim();
   if (text === "") return { cost: null };
-  if (typeof raw === "number" && (!Number.isInteger(raw) || raw < 0 || raw > 100000000))
-    return { error: "ต้นทุนต้องเป็นจำนวนเต็มสตางค์ (≥0)" };
-  if (!/^\d+$/.test(text)) return { error: "ต้นทุนต้องเป็นจำนวนเต็มสตางค์ (≥0)" };
-  const cost = Number(text);
-  if (!Number.isInteger(cost) || cost < 0 || cost > 100000000)
-    return { error: "ต้นทุนต้องเป็นจำนวนเต็มสตางค์ (≥0)" };
-  return { cost };
+  if (!COST_BAHT_RE.test(text)) return { error: COST_ERR };
+  const satang = bahtTextToSatang(text);
+  if (!Number.isInteger(satang) || satang < 0 || satang > COST_SATANG_MAX)
+    return { error: COST_ERR };
+  return { cost: satang };
 }
 
 /** Optional expiry as YYYY-MM-DD or YYYY-MM-DD HH:MM:SS (UTC-ish text for SQLite). */
@@ -89,7 +111,7 @@ function withCostAndExpires(entry, costRaw, expiresRaw) {
   return next;
 }
 
-/** Pull trailing YYYY-MM-DD… then optional cost digits from CSV/text parts.
+/** Pull trailing YYYY-MM-DD… then optional cost (baht, ≤2 decimals) from CSV/text parts.
  * `keep` columns always stay (code = 1, ID+password = 2), so a numeric or date-like
  * password such as "user@x.com,123456" is never read as a cost or an expiry. */
 function takeExpiresAndCost(parts, keep = 1) {
@@ -103,7 +125,7 @@ function takeExpiresAndCost(parts, keep = 1) {
     expiresRaw = String(head[head.length - 1]).trim();
     head = head.slice(0, -1);
   }
-  if (head.length > keep && /^\d+$/.test(String(head[head.length - 1]).trim())) {
+  if (head.length > keep && COST_BAHT_RE.test(String(head[head.length - 1]).trim())) {
     costRaw = String(head[head.length - 1]).trim();
     head = head.slice(0, -1);
   }
