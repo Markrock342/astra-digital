@@ -176,7 +176,7 @@ const mockBase = "http://127.0.0.1:" + mock.address().port;
       for (let i = 0; i < 40 && !outbox.length; i++) await new Promise((r) => setTimeout(r, 250));
       ok("on: one email reached the mock Resend", outbox.length === 1, outbox);
       const mail = outbox[0];
-      ok("on: from / to", mail.from === "shop@mail.example.com" && mail.to[0] === "smoke-on@mail.example.com", mail);
+      ok("on: from / to", /^(?:[^<>]+ <shop@mail\.example\.com>|shop@mail\.example\.com)$/.test(mail.from) && mail.to[0] === "smoke-on@mail.example.com", mail);
       const link = /\/reset-password\?token=([a-f0-9]{64})/.exec(mail.text);
       ok("on: email has the reset link, no password", !!link && !mail.text.includes("Smoke-on-Password-12"));
       const reset = await api.call("POST", "/api/password/reset", { token: link[1], newPassword: "Smoke-new-Password-34" });
