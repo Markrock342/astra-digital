@@ -454,12 +454,52 @@
   font-weight: 600;
   text-decoration: underline;
 }
-@media (max-width: 600px) {
+@media screen and (max-width: 600px) {
   .tax-original {
     justify-self: start;
   }
   .receipt-table .tax-col-no {
     width: 28px;
+  }
+  .storefront-shell .tax-radio-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .storefront-shell .tax-radio,
+  .storefront-shell .tax-branch-input,
+  .storefront-shell .tax-card .button,
+  .storefront-shell .tax-actions .button,
+  .receipt-print,
+  .receipt-toolbar a {
+    box-sizing: border-box;
+    min-height: 44px;
+  }
+  .storefront-shell .tax-radio,
+  .storefront-shell .tax-branch-input,
+  .storefront-shell .tax-card .button,
+  .storefront-shell .tax-actions .button {
+    width: 100%;
+  }
+  .receipt-shell {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  .receipt-toolbar {
+    flex-wrap: wrap;
+  }
+  .receipt-paper {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+  }
+  .receipt-table {
+    width: 100%;
+    table-layout: fixed;
+  }
+  .receipt-table th,
+  .receipt-table td {
+    overflow-wrap: anywhere;
   }
 }
 @media print {
