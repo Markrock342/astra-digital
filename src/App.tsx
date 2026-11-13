@@ -90,6 +90,7 @@ import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
 import { RebuyActions } from "./Rebuy";
 import { HomeCategoryRow } from "./Categories";
+import { HomeBanners } from "./HomeBanners";
 import {
   ReferenceCatalog,
   ReferenceCatalogPage,
@@ -575,6 +576,7 @@ function Home() {
   return (
     <>
       <main className="container home-main">
+        <HomeBanners />
         <section className="home-hero">
           <div className="hero-grid" aria-hidden="true">
             <i className="grid-streak streak-y streak-y-one" />

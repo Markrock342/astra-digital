@@ -572,6 +572,16 @@ export const EN_STRINGS: Record<string, string> = {
   "รอแจ้งเตือนได้สูงสุด 50 รายการ ยกเลิกรายการเก่าในหน้าบัญชีก่อน":
     "You can wait for up to 50 items. Cancel an older one on your account page first",
   "กดแจ้งเตือนบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่": "Too many requests. Please wait a moment and try again",
+  // Home promo banners (HomeBanners.tsx)
+  "โปรโมชั่น": "Promotions",
+  "{n} จาก {total}": "{n} of {total}",
+  "แบนเนอร์ก่อนหน้า": "Previous banner",
+  "แบนเนอร์ถัดไป": "Next banner",
+  "ไปที่แบนเนอร์ {n}": "Go to banner {n}",
+  "แบนเนอร์ {n} จาก {total}": "Banner {n} of {total}",
+  "เล่นแบนเนอร์อัตโนมัติ": "Play banners automatically",
+  "หยุดเลื่อนแบนเนอร์อัตโนมัติ": "Pause automatic banner rotation",
+  "(เปิดในแท็บใหม่)": "(opens in a new tab)",
   // Review replies (ReviewReply.tsx, server/review-moderation.mjs)
   "ตอบกลับจากร้าน": "Reply from the store",
   "ร้านตอบกลับรีวิวของคุณ": "The store replied to your review",
