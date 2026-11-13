@@ -53,6 +53,13 @@ const LIVE_METHODS = {
   adminUpdateCustomer: ["customers"],
   adminSetCustomerStatus: ["customers"],
   saveSettings: ["catalog"],
+  // Home banners ride on /api/overview, which the storefront refetches on "catalog".
+  adminCreateBanner: ["catalog"],
+  adminUpdateBanner: ["catalog"],
+  adminReorderBanners: ["catalog"],
+  adminSetBannerImage: ["catalog"],
+  adminRemoveBannerMobileImage: ["catalog"],
+  adminDeleteBanner: ["catalog"],
   saveStaff: ["team"],
   setMemberRole: ["team", "customers", "notify"],
   setStaffActive: ["team"],
@@ -86,6 +93,13 @@ export function withLive(service, { run, all }) {
     if (typeof original !== "function") continue;
     wrapped[name] = (...args) => {
       const result = original(...args);
+      // Async calls (uploads) change rows after awaiting the file store: tell listeners
+      // once the change is saved, so their refetch never sees the old state.
+      if (result && typeof result.then === "function")
+        return result.then((value) => {
+          bump(topics);
+          return value;
+        });
       bump(topics);
       return result;
     };

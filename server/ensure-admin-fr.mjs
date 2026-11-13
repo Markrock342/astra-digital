@@ -420,3 +420,27 @@ export function ensureReviewModeration(db) {
     if (!has(column)) db.exec(`ALTER TABLE reviews ADD COLUMN ${column} TEXT`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_reviews_created ON reviews(created_at)");
 }
+
+/**
+ * Promo banners on the storefront home (server/banners.mjs). Idempotent, no numbered migration.
+ * - image_key / mobile_image_key: file-store keys (public /api/files/<key>); a row without
+ *   image_key is a draft and never shown. starts_at / ends_at: UTC "YYYY-MM-DD HH:MM:SS"
+ *   (the admin enters Bangkok time); NULL = no limit. At most MAX_BANNERS rows (app rule).
+ */
+export function ensureBanners(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS banners (
+    id TEXT PRIMARY KEY,
+    image_key TEXT,
+    mobile_image_key TEXT,
+    alt TEXT NOT NULL,
+    link TEXT,
+    starts_at TEXT,
+    ends_at TEXT,
+    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_banners_order ON banners(sort_order)");
+}

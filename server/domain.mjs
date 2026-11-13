@@ -63,6 +63,7 @@ import { createReviewModeration, maskReviewer } from "./review-moderation.mjs";
 import { normalizeLegal } from "./legal.mjs";
 import { normalizeFaq } from "./faq.mjs";
 import { createBroadcastApis } from "./broadcast.mjs";
+import { createBannerApis } from "./banners.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -1074,6 +1075,8 @@ export function createCommerceCore({
     },
     writeShopSettings: (obj) => persistShopSettings(obj),
   });
+  // Promo banners on the storefront home (server/banners.mjs).
+  const bannerApis = createBannerApis({ requireAdmin, one, all, run, tx, fail, randomUUID, fileStore, clock });
   const {
     exportMyData,
     requestAccountDeletion,
@@ -1299,6 +1302,8 @@ export function createCommerceCore({
         .n,
       // Visible categories with at least one product on sale: {id,name,name_en,icon,count}.
       categories: categoryApis.publicCategories(),
+      // Home carousel: active banners inside their Bangkok start/end window (banners.mjs).
+      banners: bannerApis.publicBanners(),
       activity: all(
         "SELECT 'purchase' AS kind,u.name,p.name AS product,p.art,v.label,o.created_at AS time FROM orders o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.status='DELIVERED' UNION ALL SELECT 'register' AS kind,u.name,NULL AS product,NULL AS art,NULL AS label,u.created_at AS time FROM users u WHERE role='CUSTOMER' ORDER BY time DESC LIMIT 4",
       ).map((a) => ({
@@ -2999,6 +3004,15 @@ export function createCommerceCore({
     adminUpdateCategory: categoryApis.adminUpdateCategory,
     adminReorderCategories: categoryApis.adminReorderCategories,
     adminDeleteCategory: categoryApis.adminDeleteCategory,
+    // Promo banners (server/banners.mjs).
+    publicBanners: bannerApis.publicBanners,
+    adminBanners: bannerApis.adminBanners,
+    adminCreateBanner: bannerApis.adminCreateBanner,
+    adminUpdateBanner: bannerApis.adminUpdateBanner,
+    adminReorderBanners: bannerApis.adminReorderBanners,
+    adminSetBannerImage: bannerApis.adminSetBannerImage,
+    adminRemoveBannerMobileImage: bannerApis.adminRemoveBannerMobileImage,
+    adminDeleteBanner: bannerApis.adminDeleteBanner,
     // For code that ends an unpaid order (e.g. auto-expiry); see server/coupons.mjs.
     releaseCouponForOrder,
     orderDetail,
@@ -3146,6 +3160,7 @@ export function createCommerceCore({
       faq: true,
       broadcasts: true,
       categories: true,
+      homeBanners: true,
       stockWatch: true,
       reviewModeration: true,
       // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).

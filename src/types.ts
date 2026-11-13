@@ -96,6 +96,8 @@ export type Overview = {
   orders: number;
   /** Visible categories with at least one product on sale (count = products on sale). */
   categories: PublicCategory[];
+  /** Home carousel: active banners inside their schedule window, in admin order. */
+  banners?: HomeBanner[];
   activity: {
     kind: string;
     name: string;
@@ -112,6 +114,28 @@ export type PublicCategory = {
   /** Image library slug (/library/<slug>.webp) or null. */
   icon: string | null;
   count: number;
+};
+export type HomeBanner = {
+  id: string;
+  alt: string;
+  /** In-shop path ("/products?category=ai") or an https URL; null = not clickable. */
+  link: string | null;
+  imageUrl: string;
+  mobileImageUrl: string | null;
+};
+export type AdminBanner = Omit<HomeBanner, "imageUrl"> & {
+  /** null until the main image is uploaded (draft: never shown). */
+  imageUrl: string | null;
+  active: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  /** Bangkok wall time for the form ("YYYY-MM-DDTHH:MM"). */
+  startsAtLocal: string | null;
+  endsAtLocal: string | null;
+  sortOrder: number;
+  status: "live" | "scheduled" | "ended" | "off" | "draft";
+  createdAt: string;
+  updatedAt: string | null;
 };
 export type AdminCategory = PublicCategory & {
   name_th: string;

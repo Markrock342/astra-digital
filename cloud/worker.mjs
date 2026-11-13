@@ -52,6 +52,7 @@ import {
   ensurePrivacyRequests,
 } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
+import { ensureBanners } from "../server/ensure-admin-fr.mjs";
 import {
   createAPIHandler,
   securityHeaders,
@@ -141,6 +142,7 @@ export class Commerce extends DurableObject {
       ensureOrderExtras(db);
       ensureCoupons(db);
       ensureCategories(db);
+      ensureBanners(db);
       ensureEmailAndReset(db);
       ensureBroadcasts(db);
       ensureStockWatch(db);

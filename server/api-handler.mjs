@@ -54,7 +54,8 @@ function isImageUploadPath(method, path) {
   return (
     /^\/api\/admin\/products\/[^/]+\/images$/.test(path) ||
     path === "/api/profile/avatar" ||
-    path === "/api/admin/settings/logo"
+    path === "/api/admin/settings/logo" ||
+    /^\/api\/admin\/banners\/[^/]+\/(?:image|mobile-image)$/.test(path)
   );
 }
 export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
@@ -516,6 +517,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, { categories: service.publicCategories() });
         if (path === "/api/admin/categories")
           return send(200, service.adminCategories(user));
+        if (path === "/api/admin/banners") return send(200, service.adminBanners(user));
         if (path === "/api/admin/reports/profit") {
           const report = service.profitReport(user, {
             from: url.searchParams.get("from") ?? undefined,
@@ -621,6 +623,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
       } else if (request.method === "PATCH") {
         if (/^\/api\/admin\/categories\/[^/]+$/.test(path))
           return send(200, service.adminUpdateCategory(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/banners\/[^/]+$/.test(path))
+          return send(200, service.adminUpdateBanner(user, path.split("/")[4], input));
         if (/^\/api\/admin\/coupons\/[^/]+$/.test(path))
           return send(200, service.adminUpdateCoupon(user, path.split("/")[4], input));
         if (/^\/api\/admin\/products\/[^/]+\/images$/.test(path))
@@ -661,6 +665,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             200,
             await service.deleteProductImage(user, path.split("/")[4]),
           );
+        if (/^\/api\/admin\/banners\/[^/]+\/mobile-image$/.test(path))
+          return send(200, await service.adminRemoveBannerMobileImage(user, path.split("/")[4]));
+        if (/^\/api\/admin\/banners\/[^/]+$/.test(path))
+          return send(200, await service.adminDeleteBanner(user, path.split("/")[4]));
         if (path === "/api/profile/avatar")
           return send(200, await service.removeAvatar(user));
         if (path === "/api/admin/settings/logo")
@@ -711,6 +719,17 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(201, service.adminCreateCategory(user, input));
         if (path === "/api/admin/categories/reorder")
           return send(200, service.adminReorderCategories(user, input));
+        if (path === "/api/admin/banners")
+          return send(201, service.adminCreateBanner(user, input));
+        if (path === "/api/admin/banners/reorder")
+          return send(200, service.adminReorderBanners(user, input));
+        if (/^\/api\/admin\/banners\/[^/]+\/(?:image|mobile-image)$/.test(path)) {
+          const [, , , , bannerId, slot] = path.split("/");
+          return send(
+            200,
+            await service.adminSetBannerImage(user, bannerId, input, slot === "mobile-image" ? "mobile" : "main"),
+          );
+        }
         if (path === "/api/admin/coupons")
           return send(201, service.adminCreateCoupon(user, input));
         if (/^\/api\/admin\/coupons\/[^/]+\/disable$/.test(path))
