@@ -491,3 +491,53 @@ test("schema helper is idempotent", (t) => {
       assert.ok(cols.includes(c), c);
   });
 });
+
+test("purchase limit: manual order without confirm is 409; confirm+reason passes and audits", (t) => {
+  const { s, admin, buyer, create } = fixture(t);
+  s.setPaymentChannel(admin, { provider: "sandbox", active: true });
+  s.adminSetVariantPricing(admin, "stream-plus-30", { maxPerCustomer: 1 });
+  keepStock(s, "stream-plus-30", 3);
+  const paid = s.createOrder(buyer, { variantId: "stream-plus-30", quantity: 1, requestKey: key() });
+  s.pay(buyer, paid.id, { paymentToken: paid.paymentToken, outcome: "success" });
+  assert.equal(
+    status(() => create()),
+    409,
+    "admin create without confirm must hit the same limit",
+  );
+  assert.throws(
+    () => create(),
+    (e) => e.status === 409 && /จำกัด 1 ชิ้นต่อบัญชี/.test(e.message),
+  );
+  assert.equal(
+    status(() => create({ confirmOverLimit: true })),
+    400,
+    "confirm without a reason is refused",
+  );
+  const made = create({
+    confirmOverLimit: true,
+    overLimitReason: "ลูกค้าโอนเพิ่มนอกเว็บตามตกลง",
+  });
+  assert.equal(made.order.status, "DELIVERED");
+  const createAudit = s.db
+    .prepare("SELECT detail FROM audit WHERE action='MANUAL_ORDER_CREATE' AND entity_id=?")
+    .get(made.order.id);
+  assert.equal(JSON.parse(createAudit.detail).confirmOverLimit, true);
+  assert.equal(JSON.parse(createAudit.detail).overLimitReason, "ลูกค้าโอนเพิ่มนอกเว็บตามตกลง");
+  const overAudit = s.db
+    .prepare("SELECT detail FROM audit WHERE action='MANUAL_ORDER_OVER_LIMIT' AND entity_id=?")
+    .get(made.order.id);
+  assert.equal(JSON.parse(overAudit.detail).reason, "ลูกค้าโอนเพิ่มนอกเว็บตามตกลง");
+});
+
+test("fraud paid_orders counts admin-created manual orders for the customer", (t) => {
+  const { s, admin, buyer, create } = fixture(t);
+  s.setPaymentChannel(admin, { provider: "sandbox", active: true });
+  s.adminSaveFraudSettings(admin, { rules: { paid_orders: { enabled: true, threshold: 1, windowHours: 1 } } });
+  keepStock(s, "stream-plus-30", 2);
+  create();
+  const signals = s.db
+    .prepare("SELECT * FROM fraud_signals WHERE rule='paid_orders' AND user_id=? ORDER BY at_ms")
+    .all(buyer.id);
+  assert.equal(signals.length, 1, "manual paid order must raise paid_orders for the customer");
+  assert.ok(signals[0].value >= 1);
+});

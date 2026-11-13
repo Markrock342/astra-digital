@@ -112,9 +112,11 @@ export function createAdminProductBulkApis({
   }
 
   /**
-   * Draft copy: name + " (สำเนา)", details, variants (price, warranty, order) and image rows.
-   * Image files are shared by key (delete keeps a file another row still uses).
+   * Draft copy: name + " (สำเนา)", details, variants (price, warranty, order, pricing rules)
+   * and image rows. Image files are shared by key (delete keeps a file another row still uses).
    * Stock, orders and reviews are never copied; the copy starts hidden and not featured.
+   * Pricing (compare_at / sale_* / max_per_customer / variant_tag_prices) follows the source
+   * via an old→new variant id map inside the same transaction.
    */
   function duplicateProduct(user, productIdRaw) {
     requireAdmin(user);
@@ -135,20 +137,59 @@ export function createAdminProductBulkApis({
       );
       if (source.usage_instructions)
         run("UPDATE products SET usage_instructions=? WHERE id=?", source.usage_instructions, id);
+      if (source.max_per_customer != null)
+        run("UPDATE products SET max_per_customer=? WHERE id=?", source.max_per_customer, id);
       const variants = all(
         "SELECT * FROM variants WHERE product_id=? ORDER BY sort_order ASC, id ASC",
         sourceId,
       );
-      for (const v of variants)
+      const variantMap = new Map();
+      for (const v of variants) {
+        const newVariantId = id + "-" + randomUUID().slice(0, 8);
+        variantMap.set(v.id, newVariantId);
         run(
-          "INSERT INTO variants(id,product_id,label,price,active,sort_order,warranty_days) VALUES(?,?,?,?,?,?,?)",
-          id + "-" + randomUUID().slice(0, 8),
+          `INSERT INTO variants(
+             id,product_id,label,price,active,sort_order,warranty_days,
+             compare_at,sale_price,sale_starts_at,sale_ends_at,max_per_customer
+           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+          newVariantId,
           id,
           v.label,
           v.price,
           v.active == null ? 1 : v.active ? 1 : 0,
           v.sort_order ?? 0,
           v.warranty_days ?? 0,
+          v.compare_at ?? null,
+          v.sale_price ?? null,
+          v.sale_starts_at ?? null,
+          v.sale_ends_at ?? null,
+          v.max_per_customer ?? null,
+        );
+      }
+      let tagPrices = 0;
+      for (const [oldId, newId] of variantMap) {
+        const rows = all(
+          "SELECT tag,price FROM variant_tag_prices WHERE variant_id=? ORDER BY tag",
+          oldId,
+        );
+        for (const row of rows) {
+          run(
+            "INSERT INTO variant_tag_prices(variant_id,tag,price,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP)",
+            newId,
+            row.tag,
+            row.price,
+          );
+          tagPrices += 1;
+        }
+      }
+      // Preorder "วิธีจอง" (deposit / free, preorder.mjs) follows the copy too.
+      if (one("SELECT name FROM sqlite_master WHERE type='table' AND name='preorder_settings'"))
+        run(
+          `INSERT INTO preorder_settings(product_id,mode,deposit_type,deposit_value,pay_window_hours,lapse_policy,max_per_customer,queue_limit,updated_by)
+           SELECT ?,mode,deposit_type,deposit_value,pay_window_hours,lapse_policy,max_per_customer,queue_limit,? FROM preorder_settings WHERE product_id=?`,
+          id,
+          user.id,
+          sourceId,
         );
       const images = all(
         "SELECT file_key,sort_order FROM product_images WHERE product_id=? ORDER BY sort_order ASC, id ASC",
@@ -166,6 +207,8 @@ export function createAdminProductBulkApis({
         from: sourceId,
         variants: variants.length,
         images: images.length,
+        tagPrices,
+        productMaxPerCustomer: source.max_per_customer ?? null,
       });
       return { id, name, active: false, variants: variants.length, images: images.length };
     });

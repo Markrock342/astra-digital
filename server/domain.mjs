@@ -74,6 +74,7 @@ import { normalizeFaq } from "./faq.mjs";
 import { createBroadcastApis } from "./broadcast.mjs";
 import { createBannerApis } from "./banners.mjs";
 import { createManualOrderApis } from "./manual-orders.mjs";
+import { createLaunchCleanupApis } from "./launch-cleanup.mjs";
 import { createTaxInvoices } from "./tax-invoices.mjs";
 import { createPreorders } from "./preorder.mjs";
 import {
@@ -1206,6 +1207,19 @@ export function createCommerceCore({
     one,
     all,
     db,
+  });
+  const { adminLaunchCleanup } = createLaunchCleanupApis({
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    requireAdmin,
+    confirmPassword: (...a) => auth.confirmPassword(...a),
+    allowSandbox,
+    db,
+    fileStore,
+    eraseUserChatImages: (userId) => chatAttach.eraseUserChatImages(userId),
   });
   function mapProduct(row, user = null) {
     // Usage instructions are for buyers of a delivered order only (order-extras.mjs).
@@ -3567,6 +3581,7 @@ export function createCommerceCore({
     allowSandbox,
     fileStore,
     sendOrderConfirmation: accountEmail.sendOrderConfirmation,
+    assertPurchaseLimit: pricing.assertPurchaseLimit,
   });
   const reviewModeration = createReviewModeration({
     one,
@@ -3730,6 +3745,7 @@ export function createCommerceCore({
     adminPrivacyRequests,
     approvePrivacyDeletion,
     rejectPrivacyRequest,
+    adminLaunchCleanup,
     adminSystemHealth,
     profile,
     publicUser,
