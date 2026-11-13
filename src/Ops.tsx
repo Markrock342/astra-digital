@@ -1,12 +1,6 @@
 // In-web chat, notifications and buyer ranking (SOW items). API: docs/architecture/api-contract-shop.md
 import { useLive, type LiveTopic } from "./live";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactElement } from "react";
 import {
   ArrowLeft,
   Bell,
@@ -14,6 +8,9 @@ import {
   CornerUpLeft,
   LoaderCircle,
   MessageCircle,
+  Pin,
+  PinOff,
+  Search,
   Send,
   Trophy,
   X,
@@ -40,6 +37,7 @@ import {
   type CannedReply,
 } from "./CannedReplies";
 import { MessageSquareText } from "lucide-react";
+import "./chat-inbox.css";
 
 export type ChatThread = {
   id: string;
@@ -58,6 +56,10 @@ export type ChatThread = {
   user_id?: string;
   /** Team view: the customer's profile photo URL, if any. */
   customer_avatar?: string | null;
+  /** Shared team pin. Absent on the customer payload. */
+  pinned_at?: string | null;
+  /** Short snippet when a search hit came from a message. */
+  matchText?: string | null;
 };
 /** Picture next to a chat message: a photo/logo, else the first letter of the name. */
 type ChatFace = { url?: string | null; name: string };
@@ -820,7 +822,29 @@ export function CustomerChat() {
   );
 }
 
-/** /admin/chat — every customer thread, newest message first. */
+/** Wrap each case-insensitive hit in a real <mark>. Never inject HTML. */
+function highlightQuery(text: string, query: string) {
+  const needle = query.trim();
+  if (!needle) return text;
+  const lower = text.toLowerCase();
+  const want = needle.toLowerCase();
+  const out: Array<string | ReactElement> = [];
+  let from = 0;
+  let n = 0;
+  while (from < text.length) {
+    const at = lower.indexOf(want, from);
+    if (at < 0) {
+      out.push(text.slice(from));
+      break;
+    }
+    if (at > from) out.push(text.slice(from, at));
+    out.push(<mark key={n++} className="chat-hit">{text.slice(at, at + want.length)}</mark>);
+    from = at + want.length;
+  }
+  return out;
+}
+
+/** /admin/chat — every customer thread, pinned first, then newest message. */
 export function AdminChat() {
   const { toast, user, overview } = useStore();
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -837,6 +861,8 @@ export function AdminChat() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"OPEN" | "MINE" | "ALL">("OPEN");
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
   // ข้อความสำเร็จรูป: picker opened by the button or by "/" at the start of the composer.
   const isAdmin = user?.role === "ADMIN";
   const [picker, setPicker] = useState<null | "slash" | "button">(null);
@@ -910,13 +936,15 @@ export function AdminChat() {
   }, []);
   const loadThreads = useCallback(async () => {
     try {
-      setThreads(
-        (await api<{ threads: ChatThread[] }>("/chat/threads")).threads,
-      );
+      const path = debounced ? "/chat/threads?q=" + encodeURIComponent(debounced) : "/chat/threads";
+      setThreads((await api<{ threads: ChatThread[] }>(path)).threads);
     } catch (e) {
       setError((e as Error).message);
     }
-  }, []);
+  }, [debounced]);
+  useEffect(() => {
+    void loadThreads();
+  }, [loadThreads]);
   const loadMessages = useCallback(async () => {
     if (!current) return;
     try {
@@ -939,6 +967,10 @@ export function AdminChat() {
     }
   }, [current]);
   usePoll(loadThreads, 60000, true, ["chat"]);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(query.trim()), 300);
+    return () => clearTimeout(id);
+  }, [query]);
   usePoll(loadMessages, 60000, !!current, ["chat"]);
   const thread = threads?.find((x) => x.id === current);
   const shown = (threads ?? []).filter((x) =>
@@ -1008,6 +1040,19 @@ export function AdminChat() {
       setBusy(false);
     }
   }
+  async function togglePin() {
+    if (!current || !thread) return;
+    setBusy(true);
+    try {
+      await api("/chat/threads/" + current + "/pin", { pinned: !thread.pinned_at });
+      toast(thread.pinned_at ? "เลิกปักหมุดแล้ว" : "ปักหมุดแล้ว");
+      await loadThreads();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   const unreadTotal = (threads ?? []).reduce((n, x) => n + x.unreadCount, 0);
   return (
     <>
@@ -1041,6 +1086,23 @@ export function AdminChat() {
       <ErrorMessage message={error} />
       <div className={current ? "admin-chat has-thread" : "admin-chat"}>
         <aside className="admin-chat-list" aria-label="รายการแชท">
+          <form className="chat-inbox-search" role="search" onSubmit={(e) => e.preventDefault()}>
+            <Search size={16} aria-hidden="true" />
+            <input
+              aria-label="ค้นหาแชท"
+              placeholder="ค้นหาชื่อ อีเมล ข้อความ หรือเลขออเดอร์"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setQuery("");
+              }}
+            />
+            {query && (
+              <button type="button" className="icon-button" aria-label="ล้างการค้นหา" onClick={() => setQuery("")}>
+                <X size={16} />
+              </button>
+            )}
+          </form>
           <div className="reference-status-tabs">
             {(
               [
@@ -1062,11 +1124,13 @@ export function AdminChat() {
             <p className="reference-empty-text">กำลังโหลดแชท…</p>
           ) : !shown.length ? (
             <p className="reference-empty-text">
-              {filter === "OPEN"
-                ? "ไม่มีแชทที่เปิดอยู่"
-                : filter === "MINE"
-                  ? "ไม่มีแชทที่มอบหมายให้คุณ"
-                  : "ยังไม่มีลูกค้าทักแชท"}
+              {debounced
+                ? `ไม่พบแชทที่ตรงกับ “${debounced}”`
+                : filter === "OPEN"
+                  ? "ไม่มีแชทที่เปิดอยู่"
+                  : filter === "MINE"
+                    ? "ไม่มีแชทที่มอบหมายให้คุณ"
+                    : "ยังไม่มีลูกค้าทักแชท"}
             </p>
           ) : (
             shown.map((x) => (
@@ -1094,15 +1158,19 @@ export function AdminChat() {
                   </span>
                 )}
                 <span className="admin-chat-thread-text">
-                  <strong>{x.customer ?? "ลูกค้า"}</strong>
+                  <strong>
+                    {x.pinned_at && <Pin className="chat-pin-mark" size={14} aria-label="ปักหมุด" />}
+                    {highlightQuery(x.customer ?? "ลูกค้า", debounced)}
+                  </strong>
                   <small>
                     {x.status === "CLOSED" ? "ปิดแล้ว · " : ""}
                     {relativeTime(x.lastMessageAt)}
                     {x.assignee ? " · ดูแลโดย " + x.assignee : ""}
                   </small>
+                  {x.matchText && <small className="chat-match-snippet">{highlightQuery(x.matchText, debounced)}</small>}
                   {x.order_id && (
                     <small className="chat-thread-order">
-                      ออเดอร์ #{x.order_id.slice(0, 8).toUpperCase()}
+                      ออเดอร์ #{highlightQuery(x.order_id.slice(0, 8).toUpperCase(), debounced.replace(/#/g, ""))}
                     </small>
                   )}
                 </span>
@@ -1168,6 +1236,15 @@ export function AdminChat() {
                     </select>
                   </label>
                 )}
+                <button
+                  type="button"
+                  className="button secondary chat-pin-button"
+                  disabled={busy}
+                  onClick={() => void togglePin()}
+                >
+                  {thread.pinned_at ? <PinOff size={15} /> : <Pin size={15} />}
+                  {thread.pinned_at ? "เลิกปักหมุด" : "ปักหมุด"}
+                </button>
                 {thread.status === "OPEN" ? (
                   <button
                     className="button secondary"

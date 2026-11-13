@@ -26,6 +26,7 @@ import { applyMigration010, MIGRATION_010_NAME } from "./migrate-010.mjs";
 import { applyMigration011, MIGRATION_011_NAME } from "./migrate-011.mjs";
 import {
   ensureAppendOnlyMoney,
+  ensureChatPins,
   ensureChatThreadReads,
   ensureCoupons,
   ensureCategories,
@@ -105,6 +106,7 @@ export function createCommerce(options = {}) {
   }
   ensureInventoryAvailableIndex(db);
   ensureChatThreadReads(db);
+  ensureChatPins(db);
   ensureCannedReplies(db);
   ensureCustomerAdmin(db);
   ensureAuthHardening(db);
