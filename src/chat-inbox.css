@@ -1,0 +1,68 @@
+/* Team inbox: search and shared pins. Colors come from the theme tokens. */
+.chat-inbox-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 0 8px 0 12px;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.chat-inbox-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+.chat-inbox-search input:focus {
+  outline: none;
+}
+.chat-inbox-search:focus-within {
+  border-color: var(--brand, var(--accent));
+}
+.chat-inbox-search .icon-button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.chat-pin-mark {
+  margin-right: 4px;
+  color: var(--brand, var(--accent));
+  vertical-align: -2px;
+}
+.chat-match-snippet {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.chat-hit {
+  background: color-mix(in srgb, var(--brand, var(--accent)) 32%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.chat-pin-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+}
+@media (max-width: 600px) {
+  .merchant-shell .chat-inbox-search,
+  .merchant-shell .admin-chat-room-head .chat-pin-button,
+  .merchant-shell .admin-chat-room-head .button {
+    min-height: 44px;
+  }
+  .admin-chat-room-head {
+    flex-wrap: wrap;
+  }
+}
