@@ -75,13 +75,13 @@ test("import stores optional cost for pairs and codes; omit stays null", (t) => 
   s.importCodes(admin, {
     variantId,
     items: [
-      { loginId: "with-cost@ex.invalid", password: "pw1", cost: 2500 },
+      { loginId: "with-cost@ex.invalid", password: "pw1", cost: 25 },
       { loginId: "no-cost@ex.invalid", password: "pw2" },
     ],
   });
   s.importCodes(admin, {
     variantId,
-    codes: "GIFTCOST0001,900\nGIFTCOST0002",
+    codes: "GIFTCOST0001,9\nGIFTCOST0002",
   });
   const rows = s.db
     .prepare(
@@ -99,6 +99,18 @@ test("import stores optional cost for pairs and codes; omit stays null", (t) => 
   });
   assert.equal(bad.lines[0].status, "invalid");
   assert.match(bad.lines[0].reason, /ต้นทุน/);
+  const tooManyDecimals = s.importCodes(admin, {
+    variantId,
+    dryRun: true,
+    items: [{ loginId: "bad3@ex.invalid", password: "pw", cost: "25.555" }],
+  });
+  assert.equal(tooManyDecimals.lines[0].status, "invalid");
+  const withDecimals = s.importCodes(admin, {
+    variantId,
+    dryRun: true,
+    items: [{ loginId: "dec@ex.invalid", password: "pw", cost: "25.50" }],
+  });
+  assert.equal(withDecimals.lines[0].status, "ok");
 });
 
 test("profit report = revenue - refunds - cost; STAFF 403; live excludes sandbox", async (t) => {
@@ -106,8 +118,8 @@ test("profit report = revenue - refunds - cost; STAFF 403; live excludes sandbox
   s.importCodes(admin, {
     variantId,
     items: [
-      { loginId: "sold-a@ex.invalid", password: "pw", cost: 3000 },
-      { loginId: "sold-b@ex.invalid", password: "pw", cost: 2000 },
+      { loginId: "sold-a@ex.invalid", password: "pw", cost: 30 },
+      { loginId: "sold-b@ex.invalid", password: "pw", cost: 20 },
     ],
   });
   const order = s.createOrder(user, {
@@ -150,7 +162,7 @@ test("CSV pairs: a numeric or date-like password is never read as cost or expiry
   const preview = s.importCodes(admin, {
     variantId,
     dryRun: true,
-    csv: "num-pw@ex.invalid,123456\ndate-pw@ex.invalid,2026-12-31\nwith-cost@ex.invalid,pw9,2500\nboth@ex.invalid,778899,1500,2027-01-31",
+    csv: "num-pw@ex.invalid,123456\ndate-pw@ex.invalid,2026-12-31\nwith-cost@ex.invalid,pw9,25\nboth@ex.invalid,778899,15.00,2027-01-31",
   });
   assert.deepEqual(
     preview.lines.map((l) => l.status),
@@ -159,7 +171,7 @@ test("CSV pairs: a numeric or date-like password is never read as cost or expiry
   );
   s.importCodes(admin, {
     variantId,
-    csv: "num-pw@ex.invalid,123456\ndate-pw@ex.invalid,2026-12-31\nwith-cost@ex.invalid,pw9,2500\nboth@ex.invalid,778899,1500,2027-01-31",
+    csv: "num-pw@ex.invalid,123456\ndate-pw@ex.invalid,2026-12-31\nwith-cost@ex.invalid,pw9,25\nboth@ex.invalid,778899,15.00,2027-01-31",
   });
   const rows = s.db
     .prepare("SELECT cost, expires_at FROM inventory WHERE variant_id=? ORDER BY rowid")
