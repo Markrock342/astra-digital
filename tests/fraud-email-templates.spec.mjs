@@ -4,6 +4,7 @@ import { test, expect } from "@playwright/test";
 import { randomBytes } from "node:crypto";
 import { createCommerce } from "../server/commerce.mjs";
 import { createApp } from "../server/http.mjs";
+import { emailVerificationOff } from "./fixtures/email-verification-off.mjs";
 
 let server, service, base, adminToken, buyer, buyerEmail;
 const sent = [];
@@ -24,6 +25,8 @@ test.beforeAll(async () => {
       },
     },
   });
+  // Verification gate is not what this file tests (tests/email-verification.spec.mjs).
+  emailVerificationOff(service);
   server = createApp(service, { production: true });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   base = "http://127.0.0.1:" + server.address().port;
@@ -157,7 +160,7 @@ for (const [name, viewport] of [
     await page.goto(base + "/admin/settings/email-templates");
     await expect(page.getByRole("heading", { name: "ข้อความอีเมล", exact: true })).toBeVisible();
     await expect(page.locator(".reference-subnav").getByRole("link", { name: "ข้อความอีเมล" })).toHaveClass(/active/);
-    await expect(page.locator(".email-template-list button")).toHaveCount(6);
+    await expect(page.locator(".email-template-list button")).toHaveCount(7);
     const editor = page.locator(".email-template-editor");
     await expect(editor).toHaveAttribute("data-template", "order_confirmed");
 

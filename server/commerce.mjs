@@ -38,6 +38,7 @@ import {
   ensureSmallUxB,
   ensureAlertsBackup,
   ensureEmailAndReset,
+  ensureEmailVerification,
   ensureBroadcasts,
   ensureStockWatch,
   ensureReviewModeration,
@@ -120,6 +121,7 @@ export function createCommerce(options = {}) {
   ensureCategories(db);
   ensureBanners(db);
   ensureEmailAndReset(db);
+  ensureEmailVerification(db);
   ensureBroadcasts(db);
   ensureStockWatch(db);
   ensureReviewModeration(db);

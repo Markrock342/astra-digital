@@ -644,3 +644,36 @@ export function ensureTaxInvoices(db) {
     );
   }
 }
+
+/**
+ * Email verification at sign-up (server/email-verification.mjs). Idempotent.
+ * - users.email_verified_at: NULL = not verified yet. The first run marks every account that
+ *   already exists as verified (its created_at), so nobody who registered before this feature
+ *   is locked out of buying. The email_verifications table doubles as the "backfill done"
+ *   marker: it is created after the backfill, so a later run never marks new sign-ups verified.
+ * - email_verifications: one row per link sent. Only a keyed hash of the token is stored;
+ *   `email` is the address the link went to (a link for an old address never verifies a new
+ *   one). used_at is set when the link is used or replaced by a newer one. kind is
+ *   'signup' | 'resend' | 'change' (the resend limit counts the last two).
+ */
+export function ensureEmailVerification(db) {
+  const has = db.prepare("PRAGMA table_info(users)").all().some((c) => c.name === "email_verified_at");
+  if (!has) db.exec("ALTER TABLE users ADD COLUMN email_verified_at TEXT");
+  const ready = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='email_verifications'")
+    .get();
+  if (!ready)
+    db.exec(
+      "UPDATE users SET email_verified_at=COALESCE(created_at, CURRENT_TIMESTAMP) WHERE email_verified_at IS NULL",
+    );
+  db.exec(`CREATE TABLE IF NOT EXISTS email_verifications (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    email TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'signup',
+    expires_at INTEGER NOT NULL,
+    used_at INTEGER,
+    created_at INTEGER NOT NULL
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications(user_id, created_at)");
+}

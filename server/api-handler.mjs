@@ -27,8 +27,9 @@ export function pageSecurityHeaders(pathname, turnstileOn) {
   const admin = pathname === "/admin" || String(pathname).startsWith("/admin/");
   return turnstileOn && !admin ? turnstileSecurityHeaders : securityHeaders;
 }
-/** Public, no-session POSTs (Origin check + global per-IP limit on the Worker). */
-export const accountRecoveryPaths = ["/api/password/forgot", "/api/password/reset"];
+/** Public, no-session POSTs (Origin check + global per-IP limit on the Worker). The
+ *  email-verification link (/api/verify-email) is opened without a session too. */
+export const accountRecoveryPaths = ["/api/password/forgot", "/api/password/reset", "/api/verify-email"];
 export const authenticationPaths = [
   "/api/login",
   "/api/login/totp",
@@ -314,6 +315,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         const ctx = {
           ip: clientIp(request, env),
           userAgent: request.headers.get("User-Agent") ?? "",
+          // Verification link base when PUBLIC_BASE_URL is not set.
+          origin: url.origin,
         };
         // Turnstile: register and every password login (not the 2FA step, not demo).
         if (path === "/api/login" || path === "/api/register")
@@ -346,6 +349,11 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           .update(String(request.headers.get("CF-Connecting-IP") ?? env?.ip ?? "local"))
           .digest("hex")
           .slice(0, 32);
+        if (path === "/api/verify-email") {
+          if (!limit("verify-email:" + bucket, 20, 900000))
+            throw new ApiError(429, "มีคำขอมากเกินไป กรุณาลองอีกครั้งในอีก 15 นาที");
+          return send(200, service.verifyEmail(input, ctx));
+        }
         if (path === "/api/password/forgot") {
           if (!limit("pw-forgot:" + bucket, 5, 900000))
             throw new ApiError(429, "ขอลิงก์บ่อยเกินไป กรุณาลองอีกครั้งในอีก 15 นาที");
@@ -861,6 +869,11 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, { user: service.topup(user, input) });
         if (path === "/api/profile")
           return send(200, { user: service.profile(user, input) });
+        // Email verification: new link / change the address (email-verification.mjs).
+        if (path === "/api/verify-email/resend")
+          return send(200, service.resendEmailVerification(user, { origin: url.origin }));
+        if (path === "/api/verify-email/change")
+          return send(200, service.changeEmail(user, input, { origin: url.origin }));
         if (path === "/api/account/privacy/delete")
           return send(201, service.requestAccountDeletion(user, input));
         if (/^\/api\/admin\/privacy\/requests\/[^/]+\/approve$/.test(path))
@@ -955,6 +968,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminResetCustomerPassword(user, path.split("/")[4]));
         if (/^\/api\/admin\/customers\/[^/]+\/sign-out$/.test(path))
           return send(200, service.adminSignOutCustomer(user, path.split("/")[4]));
+        if (/^\/api\/admin\/customers\/[^/]+\/verify-email$/.test(path))
+          return send(200, service.adminVerifyCustomerEmail(user, path.split("/")[4]));
         if (path === "/api/admin/customer-tags")
           return send(200, service.adminSaveCustomerTag(user, input));
         if (path === "/api/admin/payment-channel") {

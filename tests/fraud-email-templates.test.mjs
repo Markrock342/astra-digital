@@ -13,6 +13,7 @@ import {
   renderTemplate,
   validateTemplate,
 } from "../server/email-templates.mjs";
+import { emailVerificationOff } from "./fixtures/email-verification-off.mjs";
 
 const BASE = "https://shop.example.com";
 const PASSWORD = "Buyer-only-Password-123";
@@ -35,7 +36,7 @@ function fakeMailer() {
 
 function shop(t, options = {}) {
   let now = Date.UTC(2026, 10, 13, 3, 0, 0);
-  const s = createCommerce({ adminPassword: ADMIN_PASSWORD, clock: () => now, ...options });
+  const s = emailVerificationOff(createCommerce({ adminPassword: ADMIN_PASSWORD, clock: () => now, ...options }));
   t.after(async () => {
     await s.emailIdle();
     await s.alertsIdle();

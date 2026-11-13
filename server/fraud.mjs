@@ -615,6 +615,8 @@ export function createFraud({
 
   return {
     hook,
+    // Email verification › change email: the same blocklist as sign-up.
+    assertCanRegister,
     activeBlock,
     adminFraud,
     reviewSignal,

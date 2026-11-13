@@ -86,6 +86,7 @@ import { AdminCategories } from "./AdminCategories";
 import { AdminBanners } from "./AdminBanners";
 import { AdminReviews } from "./AdminReviews";
 import { AdminIntegrations } from "./AdminIntegrations";
+import { authConfig } from "./turnstile";
 import { LegalSettings } from "./Legal";
 import { FaqSettingsPanel } from "./FaqAdmin";
 import { AdminBroadcasts } from "./AdminBroadcasts";
@@ -1360,6 +1361,15 @@ function ReferenceSettings({ sub }: { sub: string }) {
   const shop = overview?.shop;
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  // Email verification only blocks sales while email sending is configured (/api/health).
+  const [emailReady, setEmailReady] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    void authConfig().then((c) => live && setEmailReady(c.email));
+    return () => {
+      live = false;
+    };
+  }, []);
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -1368,6 +1378,8 @@ function ReferenceSettings({ sub }: { sub: string }) {
         ...Object.fromEntries(new FormData(e.currentTarget)),
         requireTerms:
           new FormData(e.currentTarget).get("requireTerms") === "on",
+        requireEmailVerification:
+          new FormData(e.currentTarget).get("requireEmailVerification") === "on",
       });
       setSaved(true);
       toast("บันทึกการตั้งค่าแล้ว");
@@ -1394,7 +1406,7 @@ function ReferenceSettings({ sub }: { sub: string }) {
       </div>
       <form
         className="reference-settings-form"
-        key={[shop?.shopName, shop?.line, shop?.email, shop?.phone, shop?.address, shop?.contactMessage, shop?.pendingExpiryMinutes].join("|")}
+        key={[shop?.shopName, shop?.line, shop?.email, shop?.phone, shop?.address, shop?.contactMessage, shop?.pendingExpiryMinutes, shop?.requireEmailVerification].join("|")}
         onSubmit={save}
       >
         <ErrorMessage message={error} />
@@ -1495,6 +1507,32 @@ function ReferenceSettings({ sub }: { sub: string }) {
             />
             ให้ลูกค้ากดยอมรับก่อนสั่งซื้อ
           </label>
+        </section>
+        <section className="reference-admin-card editor-panel email-verify-setting">
+          <h2>ยืนยันอีเมล</h2>
+          <p>
+            ลูกค้าที่สมัครใหม่ได้รับลิงก์ยืนยันทางอีเมล (ใช้ได้ 24 ชั่วโมง) และต้องกดยืนยันก่อน
+            จึงสั่งซื้อและชำระเงินได้ ระหว่างนี้ยังเข้าสู่ระบบ ดูสินค้า และทักแชทได้ตามปกติ
+          </p>
+          <label className="checkbox-label">
+            <input
+              name="requireEmailVerification"
+              type="checkbox"
+              defaultChecked={shop?.requireEmailVerification !== false}
+            />
+            ให้ลูกค้ายืนยันอีเมลก่อนสั่งซื้อ
+          </label>
+          {emailReady === false ? (
+            <p className="admin-callout warning" role="status">
+              ตอนนี้ยังไม่ได้ตั้งค่าระบบส่งอีเมล ระบบจึงยังไม่บังคับยืนยันอีเมล ลูกค้าสั่งซื้อได้ตามปกติ
+              (ไม่ปิดการขายเพราะส่งอีเมลไม่ได้) จะเริ่มใช้เมื่อตั้งค่าที่ “อีเมลและกันบอท” ด้านล่าง
+            </p>
+          ) : (
+            <p className="field-help">
+              ลูกค้าที่สมัครก่อนเปิดระบบนี้ ทีมงาน และแอดมิน นับว่ายืนยันแล้ว · ลูกค้าที่รับอีเมลไม่ได้
+              กด “ยืนยันให้” ได้ที่หน้าข้อมูลลูกค้า
+            </p>
+          )}
         </section>
         <section className="reference-admin-card editor-panel">
           <h2>ลำดับการส่งสต็อก</h2>

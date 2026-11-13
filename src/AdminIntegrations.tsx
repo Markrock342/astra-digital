@@ -24,6 +24,7 @@ type Integrations = {
 };
 const kindText: Record<string, string> = {
   password_reset: "ลิงก์ตั้งรหัสผ่านใหม่",
+  verify_email: "ลิงก์ยืนยันอีเมล",
   order_confirmed: "ยืนยันคำสั่งซื้อ",
   preorder_ready: "พรีออเดอร์พร้อมแล้ว",
   template_test: "ทดสอบข้อความอีเมล",

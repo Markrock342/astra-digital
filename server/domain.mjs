@@ -62,6 +62,7 @@ import {
 } from "./order-extras.mjs";
 import { createCouponApis, normalizeCouponCode } from "./coupons.mjs";
 import { createAccountEmail } from "./account-email.mjs";
+import { createEmailVerification } from "./email-verification.mjs";
 import { isRealEmail, maskEmail } from "./email.mjs";
 import { createEmailTemplateApis } from "./email-templates.mjs";
 import { createFraud } from "./fraud.mjs";
@@ -256,6 +257,25 @@ export function createCommerceCore({
     }
     return { codes, credentials };
   };
+  // Email verification at sign-up (email-verification.mjs). Mail + templates + fraud are built
+  // further down, so they are passed as closures.
+  const emailVerification = createEmailVerification({
+    one,
+    run,
+    tx,
+    fail,
+    key,
+    clock,
+    settings: () => settings(),
+    mailerEnabled: !!mailer?.enabled,
+    queue: (...args) => accountEmail.queue(...args),
+    render: (...args) => renderEmail(...args),
+    requireUser: (user) => requireUser(user),
+    requireAdmin: (user) => requireAdmin(user),
+    confirmPassword: (...args) => auth.confirmPassword(...args),
+    assertEmailAllowed: (email) => fraud.assertCanRegister({ email }),
+    publicBaseUrl,
+  });
   const publicUser = (user) =>
     user
       ? {
@@ -266,6 +286,8 @@ export function createCommerceCore({
           // S4: one balance formula (signed net over wallet rows), see money.mjs.
           balance: one(walletBalanceSql, user.id).value,
           avatarUrl: user.avatar_key ? "/api/files/" + user.avatar_key : null,
+          // emailVerified (+ emailVerification while not verified) for the storefront notice.
+          ...emailVerification.view(user),
         }
       : null;
   const audit = (user, action, entity) =>
@@ -979,7 +1001,8 @@ export function createCommerceCore({
     if (!one("SELECT id FROM users WHERE username='admin' AND id<>?", adminId))
       run("UPDATE users SET username='admin' WHERE id=?", adminId);
   }
-  function register(rawInput, ctx = {}) {
+  // `internal`: demo visitor / demo owner accounts made by the server (placeholder emails).
+  function register(rawInput, ctx = {}, { internal = false } = {}) {
     const input = withoutClientPrivileges(rawInput);
     const name = clean(input.name ?? input.username, 2, 60, "ชื่อผู้ใช้");
     const username = input.username
@@ -1014,6 +1037,8 @@ export function createCommerceCore({
     );
     if (one("SELECT id FROM users WHERE email=?", email))
       fail(409, "อีเมลนี้ถูกใช้งานแล้ว");
+    // Verification gate on: the sign-up needs an address that can receive the link.
+    if (!internal) emailVerification.assertRegisterEmail(email);
     const id = randomUUID();
     tx(() => {
       run(
@@ -1035,6 +1060,8 @@ export function createCommerceCore({
         });
       audit({ id }, "REGISTER", id);
     });
+    // Unverified until the link from this email is opened (never fails the sign-up).
+    if (!internal) emailVerification.afterRegister(id, ctx);
     return issueSession(one("SELECT * FROM users WHERE id=?", id), ctx);
   }
   // Lockout, failed-login audit and the TOTP second step live in auth-hardening.mjs.
@@ -1046,7 +1073,7 @@ export function createCommerceCore({
       name: "ผู้เยี่ยมชม " + suffix.slice(0, 4),
       email: suffix + "@demo.astra.local",
       password: randomBytes(24).toString("hex"),
-    }, ctx);
+    }, ctx, { internal: true });
     run("UPDATE users SET is_demo=1 WHERE id=?", visitor.user.id);
     return visitor;
   }
@@ -1058,7 +1085,7 @@ export function createCommerceCore({
       name: "เจ้าของร้านทดลอง",
       email: suffix + "@merchant.astra.local",
       password: randomBytes(24).toString("hex"),
-    });
+    }, {}, { internal: true });
     run("UPDATE users SET role=?,is_demo=1 WHERE id=?", ROLES.ADMIN, registered.user.id);
     run("DELETE FROM sessions WHERE token_hash=?", hash(registered.token));
     audit({ id: registered.user.id }, "DEMO_MERCHANT", registered.user.id);
@@ -1245,6 +1272,8 @@ export function createCommerceCore({
       stockOrder: "oldest",
       shopOpen: true,
       lowStockAt: 3,
+      // Unverified customers cannot order or pay (email-verification.mjs); off without email.
+      requireEmailVerification: true,
       // Unpaid orders/preorders older than this are cancelled (pending-expiry.mjs).
       pendingExpiryMinutes: PENDING_EXPIRY_DEFAULT,
       ...(raw ? JSON.parse(raw.value) : {}),
@@ -1316,6 +1345,10 @@ export function createCommerceCore({
     if (input.shopOpen !== undefined) {
       if (typeof input.shopOpen !== "boolean") fail(400, "สถานะร้านไม่ถูกต้อง");
       current.shopOpen = input.shopOpen;
+    }
+    if (input.requireEmailVerification !== undefined) {
+      if (typeof input.requireEmailVerification !== "boolean") fail(400, "ค่าการยืนยันอีเมลไม่ถูกต้อง");
+      current.requireEmailVerification = input.requireEmailVerification;
     }
     if (input.stockOrder !== undefined) {
       if (!["oldest", "newest", "random"].includes(input.stockOrder))
@@ -1446,6 +1479,7 @@ export function createCommerceCore({
   function createOrder(user, input) {
     requireUser(user);
     if (!settings().shopOpen) fail(409, SHOP_CLOSED_ORDER);
+    emailVerification.assertCanBuy(user);
     const variantId = clean(input.variantId, 1, 80, "สินค้า");
     const quantity = integer(input.quantity, 1, 10, "จำนวน");
     const requestKey = clean(input.requestKey, 8, 128, "รหัสคำขอ");
@@ -1846,6 +1880,7 @@ export function createCommerceCore({
     // Closed shop: unpaid orders wait (they still expire on the normal timer). A future
     // gateway callback for money already taken must not go through this check.
     if (!settings().shopOpen) fail(409, SHOP_CLOSED_PAY);
+    emailVerification.assertCanBuy(user, true);
     if (
       one("SELECT id FROM reservations WHERE id=? AND user_id=?", id, user.id)
     )
@@ -3055,6 +3090,8 @@ export function createCommerceCore({
     clean,
     moneyScope,
     releaseCouponForOrder,
+    // A new address set by the admin starts unverified (email-verification.mjs).
+    onEmailChanged: (userId) => emailVerification.afterAdminEmailChange(userId),
   });
   function assignChatThread(user, threadId, input = {}) {
     const thread = assignChatThreadCore(user, threadId, input);
@@ -3634,11 +3671,18 @@ export function createCommerceCore({
       // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
       email: accountEmail.enabled,
       passwordReset: accountEmail.enabled,
+      // /api/verify-email + resend / change; the gate itself also needs features.email.
+      emailVerification: true,
       turnstile: !!turnstile?.enabled,
     }),
     turnstile: turnstile?.enabled ? turnstile : null,
     requestPasswordReset: accountEmail.requestPasswordReset,
     resetPassword: accountEmail.resetPassword,
+    // Email verification (email-verification.mjs).
+    verifyEmail: emailVerification.verify,
+    resendEmailVerification: emailVerification.resend,
+    changeEmail: emailVerification.changeEmail,
+    adminVerifyCustomerEmail: emailVerification.adminVerify,
     sendOrderConfirmation: accountEmail.sendOrderConfirmation,
     adminIntegrations: accountEmail.integrationsStatus,
     emailIdle: accountEmail.idle,

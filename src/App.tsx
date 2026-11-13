@@ -89,6 +89,7 @@ import { StockWatchList } from "./StockWatch";
 import { DeliveredExtras, hasReceipt, ReceiptLink, ReceiptPage, receiptRoute } from "./OrderExtras";
 import { AskInChat } from "./ChatAttachments";
 import { ShopClosedNote, useShopOpen } from "./ShopClosed";
+import { EmailVerifyNotice, useEmailVerifyNeeded, VerifyEmailPage } from "./EmailVerify";
 import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
 import { ContactPage } from "./Contact";
@@ -1225,6 +1226,7 @@ function RequireLogin() {
 function Cart({ checkout = false }: { checkout?: boolean }) {
   const { basket, products, setBasket, user, go, loading } = useStore();
   const shopOpen = useShopOpen();
+  const verifyEmail = useEmailVerifyNeeded();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const p = products.find((p) =>
@@ -1436,9 +1438,10 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
             </div>
             <ErrorMessage message={error} />
             <ShopClosedNote />
+            <EmailVerifyNotice compact />
             <button
               className="button primary full"
-              disabled={busy || !variant.available || !shopOpen}
+              disabled={busy || !variant.available || !shopOpen || (checkout && verifyEmail)}
               onClick={checkout ? order : () => go("/checkout")}
             >
               {busy ? (
@@ -1530,6 +1533,7 @@ function PayShell({ total }: { total: number }) {
 function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
   const { user, refresh, toast, go, setBasket } = useStore();
   const shopOpen = useShopOpen();
+  const verifyEmail = useEmailVerifyNeeded();
   usePageTitle(
     payment ? t("ชำระเงิน") : t("คำสั่งซื้อ"),
     t("รายละเอียดคำสั่งซื้อ การชำระเงิน และสินค้าที่ได้รับ"),
@@ -1797,10 +1801,11 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                           </p>
                           <ErrorMessage message={error} />
                           <ShopClosedNote pay />
+                          <EmailVerifyNotice compact />
                           <div className="pay-actions">
                             <button
                               className="button primary"
-                              disabled={busy || user.balance < order.total || !shopOpen}
+                              disabled={busy || user.balance < order.total || !shopOpen || verifyEmail}
                               onClick={() => pay("success")}
                             >
                               {busy ? <LoaderCircle className="spin" size={17} /> : <CreditCard size={17} />}
@@ -2396,6 +2401,7 @@ function Account() {
         <RequireLogin />
       ) : (
         <>
+          <EmailVerifyNotice />
           <div className="account-summary panel">
             <UserAvatar user={user} large />
             <div>
@@ -2671,6 +2677,7 @@ function Router() {
     "/login": t("เข้าสู่ระบบ"),
     "/register": t("สมัครสมาชิก"),
     "/reset-password": t("ตั้งรหัสผ่านใหม่"),
+    "/verify-email": t("ยืนยันอีเมล"),
     "/orders": t("ประวัติการซื้อ"),
     "/cart": t("ตะกร้าสินค้า"),
     "/checkout": t("ตรวจสอบคำสั่งซื้อ"),
@@ -2691,6 +2698,7 @@ function Router() {
     "/products": t("สินค้าดิจิทัลทั้งหมดของร้าน"),
     "/cart": t("สินค้าที่คุณเลือกไว้ พร้อมเมื่อคุณพร้อม"),
     "/reset-password": t("ตั้งรหัสผ่านใหม่สำหรับบัญชีของคุณ"),
+    "/verify-email": t("ยืนยันอีเมลของบัญชีของคุณ"),
     "/checkout": t("ตรวจสอบข้อมูลให้ครบ ระบบจะบันทึกคำสั่งซื้อไว้ก่อน"),
     "/orders": t("ติดตามคำสั่งซื้อและเปิดดูโค้ดสินค้าของคุณ"),
     "/account": t("ข้อมูลและการตั้งค่าบัญชีของคุณ"),
@@ -2734,6 +2742,7 @@ function Router() {
   if (path === "/login" || path === "/register")
     return <ReferenceAuth key={path} register={path === "/register"} />;
   if (path === "/reset-password") return <ResetPasswordPage />;
+  if (path === "/verify-email") return <VerifyEmailPage />;
   if (path === "/cart" || path === "/checkout")
     return <Cart checkout={path === "/checkout"} />;
   if (path.startsWith("/orders/") || path.startsWith("/checkout/"))

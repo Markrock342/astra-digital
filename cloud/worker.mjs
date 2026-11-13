@@ -48,6 +48,7 @@ import {
   ensureSmallUxB,
   ensureAlertsBackup,
   ensureEmailAndReset,
+  ensureEmailVerification,
   ensureBroadcasts,
   ensureStockWatch,
   ensureReviewModeration,
@@ -156,6 +157,7 @@ export class Commerce extends DurableObject {
       ensureCategories(db);
       ensureBanners(db);
       ensureEmailAndReset(db);
+      ensureEmailVerification(db);
       ensureBroadcasts(db);
       ensureStockWatch(db);
       ensureReviewModeration(db);
