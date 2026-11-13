@@ -30,7 +30,8 @@
   "dependencies": {
     "lucide-react": "0.468.0",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "sweetalert2": "11.26.25"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",

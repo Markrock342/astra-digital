@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { ImageUp, LoaderCircle, Trash2 } from "lucide-react";
 import { ErrorMessage, useStore } from "./App";
 import { api } from "./api";
+import { confirmDialog } from "./dialogs";
 import { checkSource, toWebp, uploadImage } from "./image-upload";
 import "./logo.css";
 
@@ -35,7 +36,7 @@ export function AdminLogoSetting() {
     }
   }
   async function remove() {
-    if (!confirm("ลบโลโก้ที่อัปโหลด? หลังบ้านและแชทจะกลับไปใช้โลโก้เดิมของร้าน (รูป X)")) return;
+    if (!(await confirmDialog({ title: "ลบโลโก้ที่อัปโหลด? หลังบ้านและแชทจะกลับไปใช้โลโก้เดิมของร้าน (รูป X)", danger: true }))) return;
     setBusy(true);
     setError("");
     try {

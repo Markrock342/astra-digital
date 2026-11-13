@@ -513,6 +513,9 @@ export const EN_STRINGS: Record<string, string> = {
   "ออกจากระบบอีก {n} เครื่อง เครื่องนี้ยังเข้าสู่ระบบอยู่": "{n} other device(s) will be signed out. This device stays signed in.",
   "ยืนยันออกจากระบบ {n} เครื่อง": "Sign out {n} device(s)",
   "ยกเลิก": "Cancel",
+  "ยืนยัน": "Confirm",
+  "ขอลบบัญชี": "Delete account",
+  "ยืนยันขอลบบัญชี? แอดมินจะตรวจสอบก่อนปิดบังข้อมูลส่วนตัว และเก็บประวัติออเดอร์ไว้": "Request account deletion? An admin reviews it before personal details are hidden. Order history is kept.",
   "ออกจากระบบทุกเครื่องยกเว้นเครื่องนี้": "Sign out all devices except this one",
   "อุปกรณ์ที่ไม่รู้จัก": "Unknown device",
   // Coupons
