@@ -2,6 +2,7 @@
 import { TRACK_A_MIGRATION_FILES } from "./migrate-005.mjs";
 import { walletRowSql } from "./money.mjs";
 import { FINANCE_APPEND_ONLY_TRIGGERS } from "./finance-close.mjs";
+import { TAX_INVOICE_APPEND_ONLY_TRIGGERS } from "./ensure-admin-fr.mjs";
 
 export function createAdminHealthApis({ requireAdmin, one, all, db }) {
   function adminSystemHealth(user) {
@@ -24,6 +25,8 @@ export function createAdminHealthApis({ requireAdmin, one, all, db }) {
       "audit_append_only_delete",
       // ปิดยอดรายวัน / ถอนเงิน / กระทบยอด (finance-close.mjs)
       ...FINANCE_APPEND_ONLY_TRIGGERS,
+      // Issued tax invoices + their voids (ensureTaxInvoices).
+      ...TAX_INVOICE_APPEND_ONLY_TRIGGERS,
     ];
     const triggers = all(
       `SELECT name FROM sqlite_master WHERE type='trigger' AND name IN (${expectedTriggers.map(() => "?").join(",")})`,
@@ -84,7 +87,7 @@ export function createAdminHealthApis({ requireAdmin, one, all, db }) {
       {
         id: "append_only",
         ok: missingTriggers.length === 0,
-        label: "Append-only triggers (ledger/audit/ปิดยอด/ถอนเงิน/กระทบยอด)",
+        label: "Append-only triggers (ledger/audit/ปิดยอด/ถอนเงิน/กระทบยอด/ใบกำกับภาษี)",
         detail:
           missingTriggers.length === 0
             ? "ครบ " + expectedTriggers.length + " triggers"

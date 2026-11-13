@@ -1,0 +1,469 @@
+/* Receipts in the buyer's name + full tax invoices (TaxInvoice.tsx, AdminTaxInvoices.tsx).
+   Reference: shadcn/ui (MIT) Card, RadioGroup, Input, Badge. Storefront parts use the theme
+   tokens from brand.css (light + dark); admin parts sit on the admin white-card pass; the
+   printable invoice reuses the receipt paper (always a white A4 document). */
+
+/* ---------- Buyer form (storefront + admin) ---------- */
+.buyer-fields {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.buyer-fields .field {
+  margin-bottom: 14px;
+}
+.buyer-fields .field input,
+.buyer-fields .field textarea {
+  font-size: 14px;
+}
+.tax-radio-group {
+  min-width: 0;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+.tax-radio-group legend {
+  margin-bottom: 7px;
+  padding: 0;
+  font-size: 12px;
+  color: var(--text);
+}
+.tax-radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.tax-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.tax-radio input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent, var(--brand, #1534ff));
+}
+.tax-radio.selected {
+  border-color: var(--accent, var(--brand, #1534ff));
+  box-shadow: 0 0 0 1px var(--accent, var(--brand, #1534ff));
+}
+.tax-radio:focus-within {
+  outline: 2px solid var(--accent, var(--brand, #1534ff));
+  outline-offset: 2px;
+}
+.tax-branch-input {
+  width: 96px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg, #fff);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.buyer-fields .field-hint,
+.tax-settings-page .field-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+.buyer-fields .field-error,
+.tax-settings-page .field-error {
+  color: #dc2626;
+  font-size: 12px;
+}
+:root[data-theme="dark"] .storefront-shell .buyer-fields .field-error {
+  color: #f87171;
+}
+.buyer-fields input[aria-invalid="true"],
+.tax-settings-page input[aria-invalid="true"] {
+  border-color: #dc2626;
+}
+
+/* ---------- Order page card (storefront) ---------- */
+.storefront-shell .tax-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.05);
+  min-width: 0;
+}
+.storefront-shell .tax-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.storefront-shell .tax-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.storefront-shell .tax-card h3 svg {
+  flex: none;
+  color: var(--accent-text);
+}
+.tax-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tax-pill.is-issued {
+  background: #e7f6ec;
+  color: #146c34;
+}
+.tax-pill.is-pending {
+  background: #fff4d6;
+  color: #7a5200;
+}
+.tax-pill.is-rejected {
+  background: #fdecec;
+  color: #a1251b;
+}
+:root[data-theme="dark"] .storefront-shell .tax-pill.is-issued {
+  background: rgb(34 197 94 / 0.16);
+  color: #86efac;
+}
+:root[data-theme="dark"] .storefront-shell .tax-pill.is-pending {
+  background: rgb(234 179 8 / 0.16);
+  color: #fde68a;
+}
+:root[data-theme="dark"] .storefront-shell .tax-pill.is-rejected {
+  background: rgb(239 68 68 / 0.16);
+  color: #fca5a5;
+}
+.storefront-shell .tax-lead,
+.storefront-shell .tax-help {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.storefront-shell .tax-help {
+  color: var(--muted);
+}
+.tax-alert {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fdecec;
+  color: #a1251b;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+:root[data-theme="dark"] .storefront-shell .tax-alert {
+  background: rgb(239 68 68 / 0.14);
+  color: #fca5a5;
+}
+.tax-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.storefront-shell .tax-actions .button {
+  min-height: 44px;
+  gap: 8px;
+}
+.tax-form {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.tax-buyer-summary {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+}
+.tax-buyer-summary > div {
+  display: grid;
+  grid-template-columns: minmax(110px, 34%) minmax(0, 1fr);
+  gap: 12px;
+}
+.tax-buyer-summary dt {
+  color: var(--muted);
+}
+.tax-buyer-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.tax-address {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.tax-voided summary {
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.tax-voided ul {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.tax-voided li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tax-voided a {
+  color: var(--accent-text, var(--brand));
+  font-variant-numeric: tabular-nums;
+}
+.tax-voided small {
+  color: var(--muted);
+}
+@media (max-width: 520px) {
+  .tax-buyer-summary > div {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .storefront-shell .tax-actions .button {
+    flex: 1 1 100%;
+  }
+}
+
+/* ---------- Admin ---------- */
+.merchant-shell .tax-status-card {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.merchant-shell .tax-status-card .field-help {
+  margin: 0;
+}
+.merchant-shell .tax-settings-card h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.merchant-shell .tax-settings-card > .field-help {
+  margin: 4px 0 16px;
+  line-height: 1.6;
+}
+.merchant-shell .tax-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+.merchant-shell .tax-span-2 {
+  grid-column: 1 / -1;
+}
+.merchant-shell .tax-grid .tax-radio-group {
+  align-self: end;
+  margin-bottom: 17px;
+}
+.merchant-shell .tax-switch-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.merchant-shell .tax-switch-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.merchant-shell .tax-switch-row .field-help {
+  margin: 4px 0 0;
+  line-height: 1.6;
+}
+.merchant-shell .tax-logo-preview {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+.merchant-shell .tax-prefix-field input {
+  max-width: 220px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.04em;
+}
+.merchant-shell .tax-save-row {
+  justify-content: flex-end;
+  align-items: center;
+}
+.merchant-shell .tax-admin-card {
+  display: grid;
+  gap: 12px;
+}
+.merchant-shell .tax-admin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.merchant-shell .tax-admin-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.merchant-shell .tax-admin-head h2 svg {
+  color: var(--brand);
+}
+.merchant-shell .tax-admin-card .field-help {
+  margin: 0;
+}
+.merchant-shell .tax-issued-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--raised);
+}
+.merchant-shell .tax-issued-row > div {
+  display: grid;
+  gap: 2px;
+}
+.merchant-shell .tax-issued-row strong {
+  font-size: 15px;
+}
+.merchant-shell .tax-issued-row small,
+.merchant-shell .tax-sub {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.merchant-shell .tax-history {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+  font-size: 13px;
+}
+.merchant-shell .tax-history li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.merchant-shell .tax-history small {
+  color: var(--muted);
+}
+.merchant-shell .tax-row-void td {
+  color: var(--muted);
+}
+.merchant-shell .tax-inline-badge {
+  margin-left: 6px;
+}
+.merchant-shell .tax-list-page .reference-admin-heading {
+  align-items: flex-start;
+}
+@media (max-width: 760px) {
+  .merchant-shell .tax-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Printable invoice + receipt additions (white paper) ---------- */
+.receipt-paper .tax-logo {
+  display: block;
+  max-width: 140px;
+  max-height: 56px;
+  margin-bottom: 8px;
+  object-fit: contain;
+}
+.tax-paper .receipt-title h1 {
+  display: grid;
+  gap: 2px;
+  font-size: 19px;
+}
+.tax-title-en {
+  color: var(--r-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.tax-original {
+  justify-self: end;
+  padding: 1px 10px;
+  border: 1px solid var(--r-ink);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.tax-banner {
+  margin: -8px 0 18px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fff4d6;
+  color: #7a5200;
+  font-size: 13px;
+  font-weight: 600;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.tax-banner.is-void {
+  background: #fdecec;
+  color: #a1251b;
+}
+.receipt-table .tax-col-no {
+  width: 48px;
+  text-align: center;
+}
+.tax-totals .tax-vat-row dt,
+.tax-totals .tax-vat-row dd {
+  font-weight: 600;
+  color: var(--r-ink);
+}
+.receipt-paper .num,
+.tax-paper .num {
+  font-variant-numeric: tabular-nums;
+}
+.receipt-foot .tax-receipt-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+@media (max-width: 600px) {
+  .tax-original {
+    justify-self: start;
+  }
+  .receipt-table .tax-col-no {
+    width: 28px;
+  }
+}
+@media print {
+  .tax-banner {
+    margin-top: 0;
+  }
+}
