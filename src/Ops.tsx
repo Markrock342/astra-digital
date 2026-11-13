@@ -1,6 +1,12 @@
 // In-web chat, notifications and buyer ranking (SOW items). API: docs/architecture/api-contract-shop.md
 import { useLive, type LiveTopic } from "./live";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   ArrowLeft,
   Bell,
@@ -50,7 +56,21 @@ export type ChatThread = {
   order_id?: string | null;
   /** The customer (team view links to their back-office page). */
   user_id?: string;
+  /** Team view: the customer's profile photo URL, if any. */
+  customer_avatar?: string | null;
 };
+/** Picture next to a chat message: a photo/logo, else the first letter of the name. */
+type ChatFace = { url?: string | null; name: string };
+
+function ChatAvatar({ face }: { face: ChatFace }) {
+  return face.url ? (
+    <img className="chat-avatar" src={face.url} alt="" />
+  ) : (
+    <span className="chat-avatar chat-avatar-letter" aria-hidden="true">
+      {(face.name.trim()[0] ?? "?").toUpperCase()}
+    </span>
+  );
+}
 type TeamMember = { id: string; name: string; role: string; active: boolean };
 export type ChatMessage = {
   id: string;
@@ -72,7 +92,10 @@ const NOTICES_REFRESH = "notices-refresh";
 const REPLY_MARK = "\u200b↩ ";
 type ChatReply = { author: string; text: string };
 
-export function splitReply(body: string): { quote: ChatReply | null; text: string } {
+export function splitReply(body: string): {
+  quote: ChatReply | null;
+  text: string;
+} {
   if (!body.startsWith(REPLY_MARK)) return { quote: null, text: body };
   const breakAt = body.indexOf("\n");
   const head = body.slice(REPLY_MARK.length, breakAt < 0 ? undefined : breakAt);
@@ -84,7 +107,8 @@ export function splitReply(body: string): { quote: ChatReply | null; text: strin
   };
 }
 
-const replySnippet = (body: string) => splitReply(body).text.replace(/\s+/g, " ").trim().slice(0, 80);
+const replySnippet = (body: string) =>
+  splitReply(body).text.replace(/\s+/g, " ").trim().slice(0, 80);
 
 /** The quote travels inside the message text, so anyone could type a fake one ("ทีมงาน: คืนเงินแล้ว").
  * Only show the quote box when the quoted text is an earlier message in this thread, and take the
@@ -99,14 +123,20 @@ function verifiedReply(
   if (!parsed.quote) return parsed;
   for (let j = index - 1; j >= 0; j--) {
     if (replySnippet(messages[j].body) === parsed.quote.text)
-      return { quote: { author: authorOf(messages[j]), text: parsed.quote.text }, text: parsed.text };
+      return {
+        quote: { author: authorOf(messages[j]), text: parsed.quote.text },
+        text: parsed.text,
+      };
   }
   return { quote: null, text: body.slice(REPLY_MARK.length) };
 }
 
 function replyTarget(message: ChatMessage, author: string): ChatReply {
   const text = replySnippet(message.body);
-  return { author: author.replace(/[:\n]/g, "").trim().slice(0, 40) || "?", text };
+  return {
+    author: author.replace(/[:\n]/g, "").trim().slice(0, 40) || "?",
+    text,
+  };
 }
 
 function withReply(body: string, reply: ChatReply | null) {
@@ -133,7 +163,12 @@ export type Buyer = {
 
 /** Runs `fn` now and every `ms` while the tab is visible. */
 /** Load now, again on every live signal for `topics`, and on a slow safety interval. */
-function usePoll(fn: () => void, ms: number, enabled = true, topics: LiveTopic[] = []) {
+function usePoll(
+  fn: () => void,
+  ms: number,
+  enabled = true,
+  topics: LiveTopic[] = [],
+) {
   const saved = useRef(fn);
   saved.current = fn;
   useLive(topics, () => {
@@ -145,7 +180,8 @@ function usePoll(fn: () => void, ms: number, enabled = true, topics: LiveTopic[]
     const id = setInterval(() => {
       if (document.visibilityState === "visible") saved.current();
     }, ms);
-    const wake = () => document.visibilityState === "visible" && saved.current();
+    const wake = () =>
+      document.visibilityState === "visible" && saved.current();
     document.addEventListener("visibilitychange", wake);
     return () => {
       clearInterval(id);
@@ -157,8 +193,7 @@ function usePoll(fn: () => void, ms: number, enabled = true, topics: LiveTopic[]
 // Order page paths in a chat message (e.g. the shop's "resend" message) become links.
 const ORDER_PATH = /(\/orders\/[A-Za-z0-9-]{8,80})/;
 
-const time = (value: string) =>
-  dateTime(value).split(" ").slice(-1)[0] ?? "";
+const time = (value: string) => dateTime(value).split(" ").slice(-1)[0] ?? "";
 
 function noticeText(n: Notice) {
   const queue = n.body.match(/^คิวของคุณคือ #(\d+)$/);
@@ -177,7 +212,8 @@ function noticeTarget(n: Notice, admin: boolean): string | null {
   // Only same-site paths; anything else falls back to the kind-based page.
   if (n.link && /^\/(?!\/)/.test(n.link)) return n.link;
   // Shop announcements (ลูกค้า › ประกาศถึงลูกค้า) may link to an https page, or nowhere.
-  if (n.kind === "broadcast") return n.link && /^https:\/\//.test(n.link) ? n.link : null;
+  if (n.kind === "broadcast")
+    return n.link && /^https:\/\//.test(n.link) ? n.link : null;
   if (admin)
     return (
       {
@@ -200,7 +236,8 @@ export function NotificationBell({ admin = false }: { admin?: boolean }) {
   const load = useCallback(async () => {
     try {
       setItems(
-        (await api<{ notifications: Notice[] }>("/notifications")).notifications,
+        (await api<{ notifications: Notice[] }>("/notifications"))
+          .notifications,
       );
     } catch {
       /* keep the last list; the bell is not critical */
@@ -216,7 +253,11 @@ export function NotificationBell({ admin = false }: { admin?: boolean }) {
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === "Escape" : !wrap.current?.contains(e.target as Node))
+      if (
+        e instanceof KeyboardEvent
+          ? e.key === "Escape"
+          : !wrap.current?.contains(e.target as Node)
+      )
         setOpen(false);
     };
     addEventListener("mousedown", close);
@@ -230,15 +271,22 @@ export function NotificationBell({ admin = false }: { admin?: boolean }) {
   const unread = items.filter((n) => !n.read_at);
   async function read(n: Notice) {
     setItems((list) =>
-      list.map((x) => (x.id === n.id ? { ...x, read_at: x.read_at ?? "now" } : x)),
+      list.map((x) =>
+        x.id === n.id ? { ...x, read_at: x.read_at ?? "now" } : x,
+      ),
     );
-    if (!n.read_at) void api("/notifications/" + n.id + "/read", {}).catch(() => {});
+    if (!n.read_at)
+      void api("/notifications/" + n.id + "/read", {}).catch(() => {});
   }
   async function readAll() {
     const ids = unread.map((n) => n.id);
-    setItems((list) => list.map((x) => ({ ...x, read_at: x.read_at ?? "now" })));
+    setItems((list) =>
+      list.map((x) => ({ ...x, read_at: x.read_at ?? "now" })),
+    );
     await Promise.all(
-      ids.map((id) => api("/notifications/" + id + "/read", {}).catch(() => {})),
+      ids.map((id) =>
+        api("/notifications/" + id + "/read", {}).catch(() => {}),
+      ),
     );
   }
   const label = admin ? "แจ้งเตือน" : t("แจ้งเตือน");
@@ -248,7 +296,11 @@ export function NotificationBell({ admin = false }: { admin?: boolean }) {
         className="icon-button notice-button"
         aria-label={
           unread.length
-            ? label + " " + (admin ? `ยังไม่อ่าน ${unread.length}` : t("ยังไม่อ่าน {n}", { n: unread.length }))
+            ? label +
+              " " +
+              (admin
+                ? `ยังไม่อ่าน ${unread.length}`
+                : t("ยังไม่อ่าน {n}", { n: unread.length }))
             : label
         }
         aria-expanded={open}
@@ -256,7 +308,9 @@ export function NotificationBell({ admin = false }: { admin?: boolean }) {
       >
         <Bell size={admin ? 18 : 20} />
         {unread.length > 0 && (
-          <span className="notice-count">{unread.length > 99 ? "99+" : unread.length}</span>
+          <span className="notice-count">
+            {unread.length > 99 ? "99+" : unread.length}
+          </span>
         )}
       </button>
       {open && (
@@ -264,7 +318,10 @@ export function NotificationBell({ admin = false }: { admin?: boolean }) {
           <div className="notice-head">
             <strong>{label}</strong>
             {unread.length > 0 && (
-              <button className="notice-read-all" onClick={() => void readAll()}>
+              <button
+                className="notice-read-all"
+                onClick={() => void readAll()}
+              >
                 <CheckCheck size={15} />
                 {admin ? "อ่านทั้งหมด" : t("อ่านทั้งหมด")}
               </button>
@@ -274,7 +331,9 @@ export function NotificationBell({ admin = false }: { admin?: boolean }) {
             <ul className="notice-list">
               {items.slice(0, 30).map((n) => {
                 const text =
-                  admin || n.kind === "broadcast" ? { title: n.title, body: n.body } : noticeText(n);
+                  admin || n.kind === "broadcast"
+                    ? { title: n.title, body: n.body }
+                    : noticeText(n);
                 return (
                   <li key={n.id}>
                     <button
@@ -288,8 +347,10 @@ export function NotificationBell({ admin = false }: { admin?: boolean }) {
                         // An announcement without a link just gets marked as read.
                         if (!to) return;
                         setOpen(false);
-                        if (to === "#chat") dispatchEvent(new Event("open-chat"));
-                        else if (/^https:\/\//.test(to)) window.open(to, "_blank", "noopener,noreferrer");
+                        if (to === "#chat")
+                          dispatchEvent(new Event("open-chat"));
+                        else if (/^https:\/\//.test(to))
+                          window.open(to, "_blank", "noopener,noreferrer");
                         else go(to);
                       }}
                     >
@@ -322,7 +383,10 @@ function MessageList({
   admin = false,
   onReply,
   replyLabel = "ตอบกลับ",
+  faceOf,
 }: {
+  /** Picture per message (shown once at the end of each run from the same side). */
+  faceOf?: (m: ChatMessage) => ChatFace;
   messages: ChatMessage[];
   mine: (m: ChatMessage) => boolean;
   customerName: (m: ChatMessage) => string;
@@ -339,49 +403,77 @@ function MessageList({
     <div className="chat-messages" aria-live="polite">
       {messages.map((m, index) => {
         const shown = verifiedReply(messages, index, customerName);
+        const next = messages[index + 1];
+        const lastOfRun = !next || next.sender_type !== m.sender_type;
         return (
-          <div key={m.id} className={mine(m) ? "chat-bubble mine" : "chat-bubble"}>
-            <small>{customerName(m)}</small>
-            {m.order_id && m.report_reason && (
-              <ChatOrderTag orderId={m.order_id} reason={m.report_reason} admin={admin} />
-            )}
-            {shown.quote && (
-              <blockquote className="chat-quote">
-                <small>{shown.quote.author}</small>
-                <span>{shown.quote.text}</span>
-              </blockquote>
-            )}
-            <MessageAttachments
-              imageUrl={m.imageUrl}
-              product={m.product}
-              order={m.order}
-              report={!!m.report_reason}
-              admin={admin}
-            />
-            {shown.text && (
-            <p>
-              {shown.text.split(ORDER_PATH).map((part, i) =>
-                i % 2 ? (
-                  <Link key={i} to={admin ? "/admin" + part : part} className="chat-order-link">
-                    {part}
-                  </Link>
-                ) : (
-                  part
-                ),
+          <div
+            key={m.id}
+            className={
+              "chat-row" +
+              (mine(m) ? " mine" : "") +
+              (faceOf ? " has-face" : "")
+            }
+          >
+            {faceOf &&
+              (lastOfRun ? (
+                <ChatAvatar face={faceOf(m)} />
+              ) : (
+                <span
+                  className="chat-avatar chat-avatar-gap"
+                  aria-hidden="true"
+                />
+              ))}
+            <div className={mine(m) ? "chat-bubble mine" : "chat-bubble"}>
+              <small>{customerName(m)}</small>
+              {m.order_id && m.report_reason && (
+                <ChatOrderTag
+                  orderId={m.order_id}
+                  reason={m.report_reason}
+                  admin={admin}
+                />
               )}
-            </p>
-            )}
-            <time>{time(m.created_at)}</time>
-            {onReply && (
-              <button
-                type="button"
-                className="chat-reply-button"
-                onClick={() => onReply(m)}
-              >
-                <CornerUpLeft size={14} />
-                {replyLabel}
-              </button>
-            )}
+              {shown.quote && (
+                <blockquote className="chat-quote">
+                  <small>{shown.quote.author}</small>
+                  <span>{shown.quote.text}</span>
+                </blockquote>
+              )}
+              <MessageAttachments
+                imageUrl={m.imageUrl}
+                product={m.product}
+                order={m.order}
+                report={!!m.report_reason}
+                admin={admin}
+              />
+              {shown.text && (
+                <p>
+                  {shown.text.split(ORDER_PATH).map((part, i) =>
+                    i % 2 ? (
+                      <Link
+                        key={i}
+                        to={admin ? "/admin" + part : part}
+                        className="chat-order-link"
+                      >
+                        {part}
+                      </Link>
+                    ) : (
+                      part
+                    ),
+                  )}
+                </p>
+              )}
+              <time>{time(m.created_at)}</time>
+              {onReply && (
+                <button
+                  type="button"
+                  className="chat-reply-button"
+                  onClick={() => onReply(m)}
+                >
+                  <CornerUpLeft size={14} />
+                  {replyLabel}
+                </button>
+              )}
+            </div>
           </div>
         );
       })}
@@ -390,14 +482,27 @@ function MessageList({
   );
 }
 
-function ReplyBar({ reply, clearLabel, onClear }: { reply: ChatReply; clearLabel: string; onClear: () => void }) {
+function ReplyBar({
+  reply,
+  clearLabel,
+  onClear,
+}: {
+  reply: ChatReply;
+  clearLabel: string;
+  onClear: () => void;
+}) {
   return (
     <div className="chat-reply-bar">
       <span>
         <small>{reply.author}</small>
         {reply.text}
       </span>
-      <button type="button" className="icon-button" aria-label={clearLabel} onClick={onClear}>
+      <button
+        type="button"
+        className="icon-button"
+        aria-label={clearLabel}
+        onClick={onClear}
+      >
         <X size={16} />
       </button>
     </div>
@@ -406,7 +511,7 @@ function ReplyBar({ reply, clearLabel, onClear }: { reply: ChatReply; clearLabel
 
 /** Floating chat for customers on the storefront. */
 export function CustomerChat() {
-  const { user, path } = useStore();
+  const { user, path, overview } = useStore();
   const [open, setOpen] = useState(false);
   const [thread, setThread] = useState<ChatThread | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -424,14 +529,19 @@ export function CustomerChat() {
       return;
     }
     try {
-      const { notifications } = await api<{ notifications: Notice[] }>("/notifications");
+      const { notifications } = await api<{ notifications: Notice[] }>(
+        "/notifications",
+      );
       const pending = notifications.filter(
-        (n) => n.kind === "chat" && !n.read_at && n.title === "มีข้อความใหม่จากทีมงาน",
+        (n) =>
+          n.kind === "chat" && !n.read_at && n.title === "มีข้อความใหม่จากทีมงาน",
       );
       if (openRef.current && pending.length) {
         setUnread(0);
         await Promise.all(
-          pending.map((n) => api("/notifications/" + n.id + "/read", {}).catch(() => {})),
+          pending.map((n) =>
+            api("/notifications/" + n.id + "/read", {}).catch(() => {}),
+          ),
         );
       } else setUnread(pending.length);
     } catch {
@@ -456,7 +566,12 @@ export function CustomerChat() {
   // "สอบถามสินค้านี้" / "สอบถามเรื่องคำสั่งซื้อนี้" elsewhere in the shop open the chat with a card attached.
   useEffect(() => {
     const onAttach = (e: Event) => {
-      const detail = (e as CustomEvent<{ product?: { id: string; name: string; imageUrl: string | null }; order?: { id: string; label: string } }>).detail;
+      const detail = (
+        e as CustomEvent<{
+          product?: { id: string; name: string; imageUrl: string | null };
+          order?: { id: string; label: string };
+        }>
+      ).detail;
       if (detail?.product) attach.setProduct(detail.product);
       if (detail?.order) attach.setOrder(detail.order);
       reveal();
@@ -478,11 +593,16 @@ export function CustomerChat() {
   const load = useCallback(async () => {
     try {
       const { threads } = await api<{ threads: ChatThread[] }>("/chat/threads");
-      const latest = threads.find((x) => x.status === "OPEN") ?? threads[0] ?? null;
+      const latest =
+        threads.find((x) => x.status === "OPEN") ?? threads[0] ?? null;
       setThread(latest);
       setMessages(
         latest
-          ? (await api<{ messages: ChatMessage[] }>("/chat/threads/" + latest.id + "/messages")).messages
+          ? (
+              await api<{ messages: ChatMessage[] }>(
+                "/chat/threads/" + latest.id + "/messages",
+              )
+            ).messages
           : [],
       );
       setError("");
@@ -509,15 +629,21 @@ export function CustomerChat() {
       if (thread?.status === "OPEN") {
         setMessages(
           (
-            await api<{ messages: ChatMessage[] }>("/chat/threads/" + thread.id + "/messages", {
-              body: payload,
-              ...report.payload,
-              ...extra,
-            })
+            await api<{ messages: ChatMessage[] }>(
+              "/chat/threads/" + thread.id + "/messages",
+              {
+                body: payload,
+                ...report.payload,
+                ...extra,
+              },
+            )
           ).messages,
         );
       } else {
-        const opened = await api<{ thread: ChatThread; messages: ChatMessage[] }>("/chat/threads", {
+        const opened = await api<{
+          thread: ChatThread;
+          messages: ChatMessage[];
+        }>("/chat/threads", {
           ...(payload ? { body: payload } : {}),
           ...report.payload,
           ...extra,
@@ -561,14 +687,22 @@ export function CustomerChat() {
         )}
       </button>
       {open && (
-        <section className="chat-panel" role="dialog" aria-label={t("แชทกับร้าน")}>
+        <section
+          className="chat-panel"
+          role="dialog"
+          aria-label={t("แชทกับร้าน")}
+        >
           <header className="chat-panel-head">
             <span className="chat-status-dot" aria-hidden="true" />
             <div>
               <strong>{t("แชทกับร้าน")}</strong>
               <small>{t("ทีมงานจะตอบกลับในเว็บนี้")}</small>
             </div>
-            <button className="icon-button" aria-label={t("ปิดแชท")} onClick={() => setOpen(false)}>
+            <button
+              className="icon-button"
+              aria-label={t("ปิดแชท")}
+              onClick={() => setOpen(false)}
+            >
               <X size={18} />
             </button>
           </header>
@@ -576,7 +710,10 @@ export function CustomerChat() {
             <div className="chat-login">
               <MessageCircle size={28} />
               <p>{t("เข้าสู่ระบบเพื่อแชทกับร้าน ข้อความจะถูกเก็บไว้ในบัญชีของคุณ")}</p>
-              <Link to={"/login?next=" + encodeURIComponent(path)} className="button primary">
+              <Link
+                to={"/login?next=" + encodeURIComponent(path)}
+                className="button primary"
+              >
                 {t("เข้าสู่ระบบ")}
               </Link>
             </div>
@@ -589,20 +726,39 @@ export function CustomerChat() {
               {messages.length ? (
                 <MessageList
                   messages={messages}
+                  faceOf={(m) =>
+                    m.sender_type === "USER"
+                      ? { url: user.avatarUrl, name: user.name }
+                      : {
+                          url: overview?.shop?.logoUrl,
+                          name: overview?.shop?.shopName || "ASIA EXTRA",
+                        }
+                  }
                   mine={(m) => m.sender_type === "USER"}
-                  customerName={(m) => (m.sender_type === "USER" ? t("คุณ") : t("ทีมงาน"))}
+                  customerName={(m) =>
+                    m.sender_type === "USER" ? t("คุณ") : t("ทีมงาน")
+                  }
                   onReply={(m) =>
-                    setReplyTo(replyTarget(m, m.sender_type === "USER" ? t("คุณ") : t("ทีมงาน")))
+                    setReplyTo(
+                      replyTarget(
+                        m,
+                        m.sender_type === "USER" ? t("คุณ") : t("ทีมงาน"),
+                      ),
+                    )
                   }
                   replyLabel={t("ตอบกลับ")}
                 />
               ) : (
                 <div className="chat-login">
-                  <p>{t("สอบถามเรื่องสินค้าหรือคำสั่งซื้อได้เลย กรุณาอย่าส่งรหัสผ่านในแชท")}</p>
+                  <p>
+                    {t("สอบถามเรื่องสินค้าหรือคำสั่งซื้อได้เลย กรุณาอย่าส่งรหัสผ่านในแชท")}
+                  </p>
                 </div>
               )}
               {thread?.status === "CLOSED" && (
-                <p className="chat-closed-note">{t("แชทก่อนหน้าปิดแล้ว ส่งข้อความเพื่อเริ่มแชทใหม่")}</p>
+                <p className="chat-closed-note">
+                  {t("แชทก่อนหน้าปิดแล้ว ส่งข้อความเพื่อเริ่มแชทใหม่")}
+                </p>
               )}
               <ErrorMessage message={error || attach.error} />
               {report.bar}
@@ -610,7 +766,9 @@ export function CustomerChat() {
               <form
                 className="chat-composer"
                 onSubmit={send}
-                onDragOver={(e) => e.dataTransfer.types.includes("Files") && e.preventDefault()}
+                onDragOver={(e) =>
+                  e.dataTransfer.types.includes("Files") && e.preventDefault()
+                }
                 onDrop={attach.onDrop}
               >
                 {replyTo && (
@@ -630,7 +788,11 @@ export function CustomerChat() {
                   rows={report.report ? 6 : 1}
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    if (
+                      e.key === "Enter" &&
+                      !e.shiftKey &&
+                      !e.nativeEvent.isComposing
+                    ) {
                       e.preventDefault();
                       void send(e);
                     }
@@ -638,10 +800,16 @@ export function CustomerChat() {
                 />
                 <button
                   className="button primary"
-                  disabled={busy || attach.preparing || (!text.trim() && !attach.has)}
+                  disabled={
+                    busy || attach.preparing || (!text.trim() && !attach.has)
+                  }
                   aria-label={t("ส่ง")}
                 >
-                  {busy ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}
+                  {busy ? (
+                    <LoaderCircle className="spin" size={17} />
+                  ) : (
+                    <Send size={17} />
+                  )}
                 </button>
               </form>
             </>
@@ -654,7 +822,7 @@ export function CustomerChat() {
 
 /** /admin/chat — every customer thread, newest message first. */
 export function AdminChat() {
-  const { toast, user } = useStore();
+  const { toast, user, overview } = useStore();
   const [team, setTeam] = useState<TeamMember[]>([]);
   useEffect(() => {
     api<{ team: TeamMember[] }>("/admin/team")
@@ -712,7 +880,11 @@ export function AdminChat() {
   useEffect(() => {
     if (!picker) return;
     const away = (e: MouseEvent) => {
-      if (composerRef.current && !composerRef.current.contains(e.target as Node)) closePicker();
+      if (
+        composerRef.current &&
+        !composerRef.current.contains(e.target as Node)
+      )
+        closePicker();
     };
     addEventListener("mousedown", away);
     return () => removeEventListener("mousedown", away);
@@ -738,7 +910,9 @@ export function AdminChat() {
   }, []);
   const loadThreads = useCallback(async () => {
     try {
-      setThreads((await api<{ threads: ChatThread[] }>("/chat/threads")).threads);
+      setThreads(
+        (await api<{ threads: ChatThread[] }>("/chat/threads")).threads,
+      );
     } catch (e) {
       setError((e as Error).message);
     }
@@ -747,10 +921,18 @@ export function AdminChat() {
     if (!current) return;
     try {
       setMessages(
-        (await api<{ messages: ChatMessage[] }>("/chat/threads/" + current + "/messages")).messages,
+        (
+          await api<{ messages: ChatMessage[] }>(
+            "/chat/threads/" + current + "/messages",
+          )
+        ).messages,
       );
       // Opening a thread marks it read on the server (and clears its bell alerts).
-      setThreads((list) => list?.map((x) => (x.id === current ? { ...x, unreadCount: 0 } : x)) ?? list);
+      setThreads(
+        (list) =>
+          list?.map((x) => (x.id === current ? { ...x, unreadCount: 0 } : x)) ??
+          list,
+      );
       dispatchEvent(new Event(NOTICES_REFRESH));
     } catch (e) {
       setError((e as Error).message);
@@ -760,12 +942,18 @@ export function AdminChat() {
   usePoll(loadMessages, 60000, !!current, ["chat"]);
   const thread = threads?.find((x) => x.id === current);
   const shown = (threads ?? []).filter((x) =>
-    filter === "ALL" ? true : filter === "MINE" ? x.assigned_to === user?.id && x.status === "OPEN" : x.status === "OPEN",
+    filter === "ALL"
+      ? true
+      : filter === "MINE"
+        ? x.assigned_to === user?.id && x.status === "OPEN"
+        : x.status === "OPEN",
   );
   async function assign(assigneeId: string) {
     if (!current) return;
     try {
-      await api("/chat/threads/" + current + "/assign", { assigneeId: assigneeId || null });
+      await api("/chat/threads/" + current + "/assign", {
+        assigneeId: assigneeId || null,
+      });
       toast(assigneeId ? "มอบหมายแชทแล้ว" : "ยกเลิกการมอบหมายแล้ว");
       await loadThreads();
     } catch (e) {
@@ -787,10 +975,13 @@ export function AdminChat() {
       const extra = await attach.fields();
       setMessages(
         (
-          await api<{ messages: ChatMessage[] }>("/chat/threads/" + current + "/messages", {
-            body: payload,
-            ...extra,
-          })
+          await api<{ messages: ChatMessage[] }>(
+            "/chat/threads/" + current + "/messages",
+            {
+              body: payload,
+              ...extra,
+            },
+          )
         ).messages,
       );
       setText("");
@@ -829,7 +1020,11 @@ export function AdminChat() {
           </p>
         </div>
         {isAdmin && (
-          <button type="button" className="button secondary" onClick={() => setManaging(true)}>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => setManaging(true)}
+          >
             <MessageSquareText size={15} />
             ข้อความสำเร็จรูป
           </button>
@@ -854,7 +1049,11 @@ export function AdminChat() {
                 ["ALL", "ทั้งหมด"],
               ] as const
             ).map(([key, label]) => (
-              <button key={key} className={filter === key ? "active" : ""} onClick={() => setFilter(key)}>
+              <button
+                key={key}
+                className={filter === key ? "active" : ""}
+                onClick={() => setFilter(key)}
+              >
                 {label}
               </button>
             ))}
@@ -863,19 +1062,37 @@ export function AdminChat() {
             <p className="reference-empty-text">กำลังโหลดแชท…</p>
           ) : !shown.length ? (
             <p className="reference-empty-text">
-              {filter === "OPEN" ? "ไม่มีแชทที่เปิดอยู่" : filter === "MINE" ? "ไม่มีแชทที่มอบหมายให้คุณ" : "ยังไม่มีลูกค้าทักแชท"}
+              {filter === "OPEN"
+                ? "ไม่มีแชทที่เปิดอยู่"
+                : filter === "MINE"
+                  ? "ไม่มีแชทที่มอบหมายให้คุณ"
+                  : "ยังไม่มีลูกค้าทักแชท"}
             </p>
           ) : (
             shown.map((x) => (
               <button
                 key={x.id}
-                className={x.id === current ? "admin-chat-thread active" : "admin-chat-thread"}
+                className={
+                  x.id === current
+                    ? "admin-chat-thread active"
+                    : "admin-chat-thread"
+                }
                 onClick={() => {
                   setCurrent(x.id);
                   setMessages([]);
                 }}
               >
-                <span className="avatar">{(x.customer ?? "?").slice(0, 2)}</span>
+                {x.customer_avatar ? (
+                  <img
+                    className="avatar avatar-photo"
+                    src={x.customer_avatar}
+                    alt=""
+                  />
+                ) : (
+                  <span className="avatar">
+                    {(x.customer ?? "?").slice(0, 2)}
+                  </span>
+                )}
                 <span className="admin-chat-thread-text">
                   <strong>{x.customer ?? "ลูกค้า"}</strong>
                   <small>
@@ -884,36 +1101,51 @@ export function AdminChat() {
                     {x.assignee ? " · ดูแลโดย " + x.assignee : ""}
                   </small>
                   {x.order_id && (
-                    <small className="chat-thread-order">ออเดอร์ #{x.order_id.slice(0, 8).toUpperCase()}</small>
+                    <small className="chat-thread-order">
+                      ออเดอร์ #{x.order_id.slice(0, 8).toUpperCase()}
+                    </small>
                   )}
                 </span>
-                {x.unreadCount > 0 && <b className="admin-chat-unread">{x.unreadCount}</b>}
+                {x.unreadCount > 0 && (
+                  <b className="admin-chat-unread">{x.unreadCount}</b>
+                )}
               </button>
             ))
           )}
         </aside>
         <section className="admin-chat-room" aria-label="ข้อความ">
           {!thread ? (
-            <p className="reference-empty-text admin-chat-placeholder">เลือกแชททางซ้ายเพื่ออ่านและตอบ</p>
+            <p className="reference-empty-text admin-chat-placeholder">
+              เลือกแชททางซ้ายเพื่ออ่านและตอบ
+            </p>
           ) : (
             <>
               <header className="admin-chat-room-head">
-                <button className="icon-button admin-chat-back" aria-label="กลับไปรายการแชท" onClick={() => setCurrent(null)}>
+                <button
+                  className="icon-button admin-chat-back"
+                  aria-label="กลับไปรายการแชท"
+                  onClick={() => setCurrent(null)}
+                >
                   <ArrowLeft size={17} />
                 </button>
                 <div>
                   <strong>{thread.customer ?? "ลูกค้า"}</strong>
                   <small>
-                    {thread.customer_email?.endsWith(".local") ? "" : thread.customer_email}
+                    {thread.customer_email?.endsWith(".local")
+                      ? ""
+                      : thread.customer_email}
                     {" · เปิดเมื่อ "}
                     {dateTime(thread.created_at)}
                   </small>
                   {thread.user_id && (
                     <span className="admin-chat-links">
-                      <Link to={"/admin/customers/" + thread.user_id}>ข้อมูลลูกค้า</Link>
+                      <Link to={"/admin/customers/" + thread.user_id}>
+                        ข้อมูลลูกค้า
+                      </Link>
                       {thread.order_id && (
                         <Link to={"/admin/orders/" + thread.order_id}>
-                          ออเดอร์ล่าสุด #{thread.order_id.slice(0, 8).toUpperCase()}
+                          ออเดอร์ล่าสุด #
+                          {thread.order_id.slice(0, 8).toUpperCase()}
                         </Link>
                       )}
                     </span>
@@ -937,7 +1169,11 @@ export function AdminChat() {
                   </label>
                 )}
                 {thread.status === "OPEN" ? (
-                  <button className="button secondary" disabled={busy} onClick={() => void close()}>
+                  <button
+                    className="button secondary"
+                    disabled={busy}
+                    onClick={() => void close()}
+                  >
                     ปิดแชท
                   </button>
                 ) : (
@@ -947,9 +1183,24 @@ export function AdminChat() {
               <MessageList
                 admin
                 messages={messages}
+                faceOf={(m) =>
+                  m.sender_type === "USER"
+                    ? {
+                        url: thread.customer_avatar,
+                        name: thread.customer ?? "ลูกค้า",
+                      }
+                    : {
+                        url: overview?.shop?.logoUrl,
+                        name: overview?.shop?.shopName || "แอดมิน",
+                      }
+                }
                 mine={(m) => m.sender_type !== "USER"}
                 customerName={(m) =>
-                  m.sender_type === "USER" ? (thread.customer ?? "ลูกค้า") : m.sender_type === "ADMIN" ? "แอดมิน" : "ทีมงาน"
+                  m.sender_type === "USER"
+                    ? (thread.customer ?? "ลูกค้า")
+                    : m.sender_type === "ADMIN"
+                      ? "แอดมิน"
+                      : "ทีมงาน"
                 }
                 onReply={
                   thread.status === "OPEN"
@@ -969,119 +1220,155 @@ export function AdminChat() {
               />
               {thread.status === "OPEN" ? (
                 <>
-                <ErrorMessage message={attach.error} />
-                <AttachmentChips state={attach} admin />
-                <form
-                  className="chat-composer canned-host"
-                  onSubmit={reply}
-                  ref={composerRef}
-                  onDragOver={(e) => e.dataTransfer.types.includes("Files") && e.preventDefault()}
-                  onDrop={attach.onDrop}
-                >
-                  {replyTo && (
-                    <ReplyBar reply={replyTo} clearLabel="ยกเลิกการตอบกลับ" onClear={() => setReplyTo(null)} />
-                  )}
-                  {picker && (
-                    <CannedReplyPicker
-                      mode={picker}
-                      query={pickQuery}
-                      onQuery={setPickQuery}
-                      replies={canned.replies}
-                      error={canned.error}
-                      active={pickActive}
-                      onActive={setPickActive}
-                      onPick={insertCanned}
-                      onClose={() => {
-                        closePicker();
-                        textRef.current?.focus();
+                  <ErrorMessage message={attach.error} />
+                  <AttachmentChips state={attach} admin />
+                  <form
+                    className="chat-composer canned-host"
+                    onSubmit={reply}
+                    ref={composerRef}
+                    onDragOver={(e) =>
+                      e.dataTransfer.types.includes("Files") &&
+                      e.preventDefault()
+                    }
+                    onDrop={attach.onDrop}
+                  >
+                    {replyTo && (
+                      <ReplyBar
+                        reply={replyTo}
+                        clearLabel="ยกเลิกการตอบกลับ"
+                        onClear={() => setReplyTo(null)}
+                      />
+                    )}
+                    {picker && (
+                      <CannedReplyPicker
+                        mode={picker}
+                        query={pickQuery}
+                        onQuery={setPickQuery}
+                        replies={canned.replies}
+                        error={canned.error}
+                        active={pickActive}
+                        onActive={setPickActive}
+                        onPick={insertCanned}
+                        onClose={() => {
+                          closePicker();
+                          textRef.current?.focus();
+                        }}
+                        onManage={
+                          isAdmin
+                            ? () => {
+                                closePicker();
+                                setManaging(true);
+                              }
+                            : undefined
+                        }
+                      />
+                    )}
+                    {missing.some((token) => text.includes(token)) && (
+                      <p className="canned-missing" role="status">
+                        ยังไม่มีข้อมูล{" "}
+                        {missing
+                          .filter((token) => text.includes(token))
+                          .join(" ")}{" "}
+                        กรุณาแก้ข้อความก่อนส่ง
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      className={
+                        "icon-button canned-trigger" +
+                        (picker === "button" ? " is-open" : "")
+                      }
+                      aria-label="ข้อความสำเร็จรูป"
+                      aria-haspopup="dialog"
+                      aria-expanded={picker === "button"}
+                      title="ข้อความสำเร็จรูป (พิมพ์ / ที่ต้นข้อความ)"
+                      onClick={() => {
+                        if (picker === "button") closePicker();
+                        else {
+                          setPickQuery("");
+                          setPickActive(0);
+                          setPicker("button");
+                        }
                       }}
-                      onManage={
-                        isAdmin
-                          ? () => {
-                              closePicker();
-                              setManaging(true);
-                            }
-                          : undefined
-                      }
+                    >
+                      <MessageSquareText size={18} />
+                    </button>
+                    <AttachMenu
+                      state={attach}
+                      admin
+                      customerId={thread.user_id}
                     />
-                  )}
-                  {missing.some((token) => text.includes(token)) && (
-                    <p className="canned-missing" role="status">
-                      ยังไม่มีข้อมูล {missing.filter((token) => text.includes(token)).join(" ")} กรุณาแก้ข้อความก่อนส่ง
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    className={"icon-button canned-trigger" + (picker === "button" ? " is-open" : "")}
-                    aria-label="ข้อความสำเร็จรูป"
-                    aria-haspopup="dialog"
-                    aria-expanded={picker === "button"}
-                    title="ข้อความสำเร็จรูป (พิมพ์ / ที่ต้นข้อความ)"
-                    onClick={() => {
-                      if (picker === "button") closePicker();
-                      else {
-                        setPickQuery("");
-                        setPickActive(0);
-                        setPicker("button");
+                    <textarea
+                      ref={textRef}
+                      onPaste={attach.onPaste}
+                      aria-label="ข้อความตอบกลับ"
+                      placeholder="พิมพ์ข้อความตอบลูกค้า… (พิมพ์ / เพื่อใช้ข้อความสำเร็จรูป)"
+                      value={text}
+                      maxLength={1000}
+                      rows={2}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setText(value);
+                        const slash = /^\/[^\n]{0,40}$/.test(value);
+                        if (!slash) {
+                          setSlashOff(false);
+                          if (picker === "slash") setPicker(null);
+                        } else if (!slashOff && picker !== "button") {
+                          if (
+                            picker !== "slash" ||
+                            pickQuery !== value.slice(1)
+                          )
+                            setPickActive(0);
+                          setPickQuery(value.slice(1));
+                          setPicker("slash");
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (
+                          picker === "slash" &&
+                          pickerKey(
+                            e,
+                            matchCanned(canned.replies ?? [], pickQuery),
+                            pickActive,
+                            setPickActive,
+                            insertCanned,
+                            closePicker,
+                          )
+                        ) {
+                          e.preventDefault();
+                          return;
+                        }
+                        if (
+                          e.key === "Enter" &&
+                          !e.shiftKey &&
+                          !e.nativeEvent.isComposing
+                        ) {
+                          e.preventDefault();
+                          void reply(e);
+                        }
+                      }}
+                    />
+                    <button
+                      className="button primary"
+                      disabled={
+                        busy ||
+                        attach.preparing ||
+                        (!text.trim() && !attach.has)
                       }
-                    }}
-                  >
-                    <MessageSquareText size={18} />
-                  </button>
-                  <AttachMenu state={attach} admin customerId={thread.user_id} />
-                  <textarea
-                    ref={textRef}
-                    onPaste={attach.onPaste}
-                    aria-label="ข้อความตอบกลับ"
-                    placeholder="พิมพ์ข้อความตอบลูกค้า… (พิมพ์ / เพื่อใช้ข้อความสำเร็จรูป)"
-                    value={text}
-                    maxLength={1000}
-                    rows={2}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setText(value);
-                      const slash = /^\/[^\n]{0,40}$/.test(value);
-                      if (!slash) {
-                        setSlashOff(false);
-                        if (picker === "slash") setPicker(null);
-                      } else if (!slashOff && picker !== "button") {
-                        if (picker !== "slash" || pickQuery !== value.slice(1)) setPickActive(0);
-                        setPickQuery(value.slice(1));
-                        setPicker("slash");
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (
-                        picker === "slash" &&
-                        pickerKey(
-                          e,
-                          matchCanned(canned.replies ?? [], pickQuery),
-                          pickActive,
-                          setPickActive,
-                          insertCanned,
-                          closePicker,
-                        )
-                      ) {
-                        e.preventDefault();
-                        return;
-                      }
-                      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                        e.preventDefault();
-                        void reply(e);
-                      }
-                    }}
-                  />
-                  <button
-                    className="button primary"
-                    disabled={busy || attach.preparing || (!text.trim() && !attach.has)}
-                  >
-                    {busy ? <LoaderCircle className="spin" size={16} /> : <Send size={16} />}
-                    ส่ง
-                  </button>
-                </form>
+                    >
+                      {busy ? (
+                        <LoaderCircle className="spin" size={16} />
+                      ) : (
+                        <Send size={16} />
+                      )}
+                      ส่ง
+                    </button>
+                  </form>
                 </>
               ) : (
-                <p className="chat-closed-note">แชทนี้ปิดแล้ว ลูกค้าส่งข้อความใหม่จะเปิดเป็นแชทใหม่</p>
+                <p className="chat-closed-note">
+                  แชทนี้ปิดแล้ว ลูกค้าส่งข้อความใหม่จะเปิดเป็นแชทใหม่
+                </p>
               )}
             </>
           )}
@@ -1115,11 +1402,23 @@ function useRanking(period: Period, limit: number) {
   return { buyers, error };
 }
 
-function PeriodTabs({ value, onChange }: { value: Period; onChange: (p: Period) => void }) {
+function PeriodTabs({
+  value,
+  onChange,
+}: {
+  value: Period;
+  onChange: (p: Period) => void;
+}) {
   return (
     <div className="reference-status-tabs" role="tablist" aria-label="ช่วงเวลา">
       {PERIODS.map(([key, label]) => (
-        <button key={key} role="tab" aria-selected={value === key} className={value === key ? "active" : ""} onClick={() => onChange(key)}>
+        <button
+          key={key}
+          role="tab"
+          aria-selected={value === key}
+          className={value === key ? "active" : ""}
+          onClick={() => onChange(key)}
+        >
           {label}
         </button>
       ))}
@@ -1136,7 +1435,10 @@ export function BuyerRanking() {
       <div className="reference-admin-heading">
         <div>
           <h1>อันดับผู้ซื้อ</h1>
-          <p>เรียงตามยอดซื้อที่ชำระแล้ว (รวมพรีออเดอร์ที่จ่ายแล้ว) ตัดรอบตามเวลาไทย สัปดาห์เริ่มวันจันทร์</p>
+          <p>
+            เรียงตามยอดซื้อที่ชำระแล้ว (รวมพรีออเดอร์ที่จ่ายแล้ว) ตัดรอบตามเวลาไทย
+            สัปดาห์เริ่มวันจันทร์
+          </p>
         </div>
       </div>
       <PeriodTabs value={period} onChange={setPeriod} />
@@ -1155,7 +1457,9 @@ export function BuyerRanking() {
             {(buyers ?? []).map((b) => (
               <tr key={b.rank + b.email}>
                 <td>
-                  <span className={"rank-badge rank-" + Math.min(b.rank, 4)}>{b.rank}</span>
+                  <span className={"rank-badge rank-" + Math.min(b.rank, 4)}>
+                    {b.rank}
+                  </span>
                 </td>
                 <td>
                   {b.name}
@@ -1169,8 +1473,12 @@ export function BuyerRanking() {
             ))}
           </tbody>
         </table>
-        {!buyers && !error && <p className="reference-empty-text">กำลังโหลดอันดับ…</p>}
-        {buyers && !buyers.length && <p className="reference-empty-text">ยังไม่มียอดซื้อในช่วงนี้</p>}
+        {!buyers && !error && (
+          <p className="reference-empty-text">กำลังโหลดอันดับ…</p>
+        )}
+        {buyers && !buyers.length && (
+          <p className="reference-empty-text">ยังไม่มียอดซื้อในช่วงนี้</p>
+        )}
       </div>
     </>
   );
@@ -1195,7 +1503,9 @@ export function BuyerRankingCard() {
         <ol className="ranking-list">
           {buyers.map((b) => (
             <li key={b.rank + b.email}>
-              <span className={"rank-badge rank-" + Math.min(b.rank, 4)}>{b.rank}</span>
+              <span className={"rank-badge rank-" + Math.min(b.rank, 4)}>
+                {b.rank}
+              </span>
               <span className="ranking-name">
                 {b.name}
                 <small>{b.orders} ออเดอร์</small>
@@ -1211,7 +1521,12 @@ export function BuyerRankingCard() {
   );
 }
 
-type Channel = { provider: string; active: boolean; note: string; sandboxOnly: boolean };
+type Channel = {
+  provider: string;
+  active: boolean;
+  note: string;
+  sandboxOnly: boolean;
+};
 
 /** Settings › รับเงิน — the single payment channel (provider not chosen yet). */
 export function PaymentChannelSettings() {
@@ -1246,9 +1561,12 @@ export function PaymentChannelSettings() {
     }
   }
   const name =
-    { unset: "ยังไม่เลือกผู้ให้บริการ", sandbox: "ทดสอบ (ไม่ใช่เงินจริง)", slipok: "ตรวจสลิปอัตโนมัติ", gateway: "เกตเวย์ชำระเงิน" }[
-      channel?.provider ?? "unset"
-    ] ?? channel?.provider;
+    {
+      unset: "ยังไม่เลือกผู้ให้บริการ",
+      sandbox: "ทดสอบ (ไม่ใช่เงินจริง)",
+      slipok: "ตรวจสลิปอัตโนมัติ",
+      gateway: "เกตเวย์ชำระเงิน",
+    }[channel?.provider ?? "unset"] ?? channel?.provider;
   return (
     <>
       <div className="reference-admin-heading">
@@ -1269,7 +1587,11 @@ export function PaymentChannelSettings() {
             </div>
             <div className="settings-row">
               <span>สถานะ</span>
-              <span className={channel.active ? "status status-delivered" : "status"}>
+              <span
+                className={
+                  channel.active ? "status status-delivered" : "status"
+                }
+              >
                 {channel.active ? "เปิดใช้งาน" : "ปิดอยู่"}
               </span>
             </div>
@@ -1280,7 +1602,12 @@ export function PaymentChannelSettings() {
                   className="admin-inline-confirm"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    void toggle(String(new FormData(e.currentTarget).get("currentPassword") ?? ""));
+                    void toggle(
+                      String(
+                        new FormData(e.currentTarget).get("currentPassword") ??
+                          "",
+                      ),
+                    );
                   }}
                 >
                   <input
@@ -1295,7 +1622,9 @@ export function PaymentChannelSettings() {
                   />
                   <button className="button primary" disabled={busy}>
                     {busy && <LoaderCircle className="spin" size={15} />}
-                    {channel.provider === "sandbox" && channel.active ? "ยืนยันปิดช่องทาง" : "ยืนยันเปิดช่องทาง"}
+                    {channel.provider === "sandbox" && channel.active
+                      ? "ยืนยันปิดช่องทาง"
+                      : "ยืนยันเปิดช่องทาง"}
                   </button>
                   <button
                     type="button"
@@ -1309,8 +1638,14 @@ export function PaymentChannelSettings() {
                   </button>
                 </form>
               ) : (
-                <button className="button secondary" disabled={busy} onClick={() => setConfirming(true)}>
-                  {channel.provider === "sandbox" && channel.active ? "ปิดช่องทางทดสอบ" : "เปิดช่องทางทดสอบ"}
+                <button
+                  className="button secondary"
+                  disabled={busy}
+                  onClick={() => setConfirming(true)}
+                >
+                  {channel.provider === "sandbox" && channel.active
+                    ? "ปิดช่องทางทดสอบ"
+                    : "เปิดช่องทางทดสอบ"}
                 </button>
               ))}
           </>

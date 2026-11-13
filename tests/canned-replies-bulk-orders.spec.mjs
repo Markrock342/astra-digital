@@ -96,7 +96,14 @@ test("admin manages canned replies and inserts one without sending (desktop)", a
     "สวัสดี คุณ{ชื่อลูกค้า} ทดสอบ",
   );
   // Move it to the top.
-  for (let i = 0; i < 5; i++) await manager.getByRole("button", { name: "เลื่อนขึ้น ทดสอบนัดรับ" }).click();
+  // One step at a time: wait for the list to re-render before the next click (each click is a
+  // server reorder; clicking ahead under load raced the update).
+  const position = () =>
+    manager.locator(".canned-manager-list li").evaluateAll((items) => items.findIndex((li) => li.textContent.includes("ทดสอบนัดรับ")));
+  for (let at = await position(); at > 0; at--) {
+    await manager.getByRole("button", { name: "เลื่อนขึ้น ทดสอบนัดรับ" }).click();
+    await expect.poll(position).toBe(at - 1);
+  }
   await expect(manager.locator(".canned-manager-list li").first()).toContainText("ทดสอบนัดรับ");
   await manager.getByRole("button", { name: "ปิด" }).click();
   await expect(manager).toBeHidden();

@@ -343,3 +343,45 @@
   inset: 0;
   z-index: 1000;
 }
+/* Message rows with a picture: team = shop logo, customer = profile photo or first letter.
+   Shown once at the end of each run from the same side (Messenger / LINE pattern). */
+.chat-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 88%;
+  align-self: flex-start;
+}
+.chat-row.mine {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+.chat-row > .chat-bubble {
+  max-width: none;
+  min-width: 0;
+  align-self: auto;
+}
+.chat-avatar {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  object-fit: cover;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.chat-avatar-letter {
+  display: grid;
+  place-items: center;
+  background: var(--brand-soft, var(--raised));
+  color: var(--brand, var(--text));
+  font-size: 12px;
+  font-weight: 700;
+}
+.chat-avatar-gap {
+  visibility: hidden;
+}
+.admin-chat-thread .avatar-photo {
+  object-fit: cover;
+  padding: 0;
+}
