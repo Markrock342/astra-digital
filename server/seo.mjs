@@ -92,6 +92,14 @@ export function robotsTxt(origin) {
 export const shopTitle = (shop) =>
   shop?.shopName && shop.shopName !== "ร้านค้า" ? String(shop.shopName) : BRAND;
 
+/**
+ * Link previews use the Thai texts of ตั้งค่า › หน้าตาร้าน › SEO (appearance.seo, from
+ * /api/overview) when filled in; empty fields keep the automatic values.
+ */
+const siteTitle = (shop, appearance) => summary(appearance?.seo?.title?.th ?? "", 60) || shopTitle(shop);
+const siteImage = (appearance) => appearance?.seo?.ogImageUrl || null;
+const siteIcon = (appearance) => appearance?.seo?.faviconUrl || null;
+
 /** Collapse whitespace and cut at a word boundary for meta descriptions. */
 export function summary(text, max = 160) {
   const flat = String(text ?? "").replace(/\s+/g, " ").trim();
@@ -112,35 +120,45 @@ export function absoluteUrl(origin, value) {
   return trimOrigin(origin) + DEFAULT_IMAGE;
 }
 
-export function homeMeta(origin, shop) {
-  const name = shopTitle(shop);
+export function homeMeta(origin, shop, appearance = null) {
+  const name = siteTitle(shop, appearance);
+  const image = siteImage(appearance);
   return {
     title: name + " — สินค้าดิจิทัล",
     siteName: name,
-    description: summary(shop?.announcement || shop?.description || DEFAULT_DESCRIPTION),
-    image: absoluteUrl(origin, DEFAULT_IMAGE),
-    imageIsDefault: true,
+    description: summary(
+      appearance?.seo?.description?.th || shop?.announcement || shop?.description || DEFAULT_DESCRIPTION,
+    ),
+    image: absoluteUrl(origin, image || DEFAULT_IMAGE),
+    imageIsDefault: !image,
+    icon: siteIcon(appearance) ? absoluteUrl(origin, siteIcon(appearance)) : null,
     url: trimOrigin(origin) + "/",
     type: "website",
   };
 }
 
-export function productMeta(origin, product, shop) {
-  const name = shopTitle(shop);
+export function productMeta(origin, product, shop, appearance = null) {
+  const name = siteTitle(shop, appearance);
+  const fallback = siteImage(appearance);
   return {
     title: summary(product.name, 90) + " — " + name,
     siteName: name,
-    description: summary(product.description || product.name + " — " + DEFAULT_DESCRIPTION),
-    image: absoluteUrl(origin, product.imageUrl),
-    imageIsDefault: !product.imageUrl,
+    description: summary(
+      product.description ||
+        product.name + " — " + (appearance?.seo?.description?.th || DEFAULT_DESCRIPTION),
+    ),
+    image: absoluteUrl(origin, product.imageUrl || fallback),
+    imageIsDefault: !product.imageUrl && !fallback,
+    icon: siteIcon(appearance) ? absoluteUrl(origin, siteIcon(appearance)) : null,
     url: trimOrigin(origin) + productPath(product.id),
     type: "product",
   };
 }
 
 /** "/products?category=x" link preview: "<หมวด> — <ร้าน>". Thai name (the default language). */
-export function categoryMeta(origin, category, shop) {
-  const name = shopTitle(shop);
+export function categoryMeta(origin, category, shop, appearance = null) {
+  const name = siteTitle(shop, appearance);
+  const image = siteImage(appearance);
   const label = summary(category.name, 60);
   const count = Number.isSafeInteger(category.count) && category.count > 0 ? category.count : 0;
   return {
@@ -148,10 +166,11 @@ export function categoryMeta(origin, category, shop) {
     siteName: name,
     description: summary(
       "สินค้าหมวด " + label + (count ? " " + count + " รายการ" : "") + " — " +
-        (shop?.description || DEFAULT_DESCRIPTION),
+        (appearance?.seo?.description?.th || shop?.description || DEFAULT_DESCRIPTION),
     ),
-    image: absoluteUrl(origin, DEFAULT_IMAGE),
-    imageIsDefault: true,
+    image: absoluteUrl(origin, image || DEFAULT_IMAGE),
+    imageIsDefault: !image,
+    icon: siteIcon(appearance) ? absoluteUrl(origin, siteIcon(appearance)) : null,
     url: trimOrigin(origin) + categoryPath(category.id),
     type: "website",
   };
@@ -182,8 +201,18 @@ export function metaTags(meta) {
     named("twitter:title", meta.title),
     named("twitter:description", meta.description),
     named("twitter:image", meta.image),
+    // Uploaded favicon / app icon (ตั้งค่า › หน้าตาร้าน); the built-in icons stay otherwise.
+    ...(meta.icon
+      ? [
+          `<link rel="icon" href="${escapeHtml(meta.icon)}" />`,
+          `<link rel="apple-touch-icon" href="${escapeHtml(meta.icon)}" />`,
+        ]
+      : []),
   ].join("\n    ");
 }
+
+/** Removed as well when the page meta carries an uploaded icon. */
+export const ICON_HEAD_SELECTORS = ['link[rel="icon"]', 'link[rel="apple-touch-icon"]'];
 
 /** Selectors of the head tags that metaTags() replaces. */
 export const REPLACED_HEAD_SELECTORS = [

@@ -75,6 +75,11 @@ const LIVE_METHODS = {
   adminSetBannerImage: ["catalog"],
   adminRemoveBannerMobileImage: ["catalog"],
   adminDeleteBanner: ["catalog"],
+  // Storefront appearance (appearance.mjs) also rides on /api/overview.
+  saveAppearance: ["catalog"],
+  resetAppearance: ["catalog"],
+  setAppearanceImage: ["catalog"],
+  removeAppearanceImage: ["catalog"],
   saveStaff: ["team"],
   setMemberRole: ["team", "customers", "notify"],
   setStaffActive: ["team"],
