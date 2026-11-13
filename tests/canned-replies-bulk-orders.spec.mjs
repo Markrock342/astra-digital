@@ -124,8 +124,11 @@ test("admin manages canned replies and inserts one without sending (desktop)", a
 
   // "/" at the start opens it too; arrows + Enter pick, the order number is filled.
   await composer.fill("");
-  await composer.pressSequentially("/รับประกัน");
+  await expect(composer).toHaveValue("");
+  // Type "/" first and let the picker open before the query (typing ahead raced the state update).
+  await composer.press("/");
   await expect(picker).toBeVisible();
+  await composer.pressSequentially("รับประกัน");
   await expect(picker.getByRole("option")).toHaveCount(1);
   await composer.press("Enter");
   const orderNo = "#" + unpaid[1].id.slice(0, 8).toUpperCase();
