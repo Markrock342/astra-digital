@@ -4095,7 +4095,7 @@ export function AdminSystemHealth() {
             </div>
             <div className="reference-admin-card">
               <small>ตรวจเมื่อ</small>
-              <strong>{dateTime(report.checkedAt.slice(0, 19).replace("T", " "))}</strong>
+              <strong>{dateTime(report.checkedAt)}</strong>
             </div>
             <div className="reference-admin-card">
               <small>migrations ที่ apply แล้ว</small>
