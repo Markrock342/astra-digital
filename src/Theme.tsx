@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Monitor, Moon, Palette, Sun, X } from "lucide-react";
 import { getLang, t, type Lang } from "./i18n";
+import { colorTokens } from "../server/appearance-rules.mjs";
 
 export const BRAND = "ASIA EXTRA";
 /** The server's untouched default name means the owner has not named the shop yet. */
@@ -21,6 +22,10 @@ type Accent = "blue" | "yellow" | "mono" | "duo";
 type Mode = "system" | "light" | "dark";
 const ACCENT_KEY = "asiax-accent";
 const MODE_KEY = "asiax-mode";
+// Last known shop settings (ตั้งค่า › หน้าตาร้าน), so a returning visitor's first paint already
+// uses them: the default accent and the generated brand-colour CSS.
+const SHOP_ACCENT_KEY = "asiax-shop-accent";
+const SHOP_COLORS_KEY = "asiax-shop-colors";
 const ACCENT_VALUES: Accent[] = ["blue", "yellow", "duo", "mono"];
 const MODE_VALUES: Mode[] = ["system", "light", "dark"];
 
@@ -40,7 +45,11 @@ const darkQuery =
     ? matchMedia("(prefers-color-scheme: dark)")
     : null;
 
-let accent = read(ACCENT_KEY, ACCENT_VALUES, "blue");
+/** The visitor's own pick (theme panel) always wins over the shop's default accent. */
+let picked = read<Accent | "">(ACCENT_KEY, ACCENT_VALUES, "");
+let accent: Accent = picked || read(SHOP_ACCENT_KEY, ACCENT_VALUES, "blue");
+/** True while the shop's own brand colours are applied (theme panel names change). */
+let custom = false;
 let mode = read(MODE_KEY, MODE_VALUES, "system");
 
 function apply() {
@@ -64,6 +73,11 @@ function fade() {
 
 const listeners = new Set<() => void>();
 if (typeof document !== "undefined") {
+  try {
+    writeColorStyle(localStorage.getItem(SHOP_COLORS_KEY) ?? "");
+  } catch {
+    /* storage blocked: colours arrive with the overview */
+  }
   apply();
   darkQuery?.addEventListener("change", () => mode === "system" && fade());
 }
@@ -77,6 +91,7 @@ function save(key: string, value: string) {
 }
 function setAccent(value: Accent) {
   accent = value;
+  picked = value;
   save(ACCENT_KEY, value);
   fade();
   listeners.forEach((fn) => fn());
@@ -85,6 +100,73 @@ function setMode(value: Mode) {
   mode = value;
   save(MODE_KEY, value);
   fade();
+  listeners.forEach((fn) => fn());
+}
+
+type ShopColors = { primary: string | null; secondary: string | null };
+
+/**
+ * CSS for the shop's own brand colours. Only the storefront's accent tokens change (fills,
+ * accent text, the ink on fills, the brand swatches); text, muted, border and background tokens
+ * never do, so footer text such as the theme credit keeps its contrast. `:root:root` outranks
+ * the matching brand.css rule; each brand.css accent rule has a counterpart here.
+ */
+export function shopColorCss({ primary, secondary }: ShopColors) {
+  const rules: string[] = [];
+  const root = [primary && "--brand-blue:" + primary, secondary && "--brand-yellow:" + secondary].filter(Boolean);
+  if (root.length) rules.push(":root:root{" + root.join(";") + "}");
+  const shell = (selectors: string[]) => selectors.map((x) => ":root:root" + x + " .storefront-shell").join(",");
+  if (primary) {
+    const p = colorTokens(primary);
+    rules.push(
+      shell(['[data-accent="blue"]', '[data-accent="duo"]']) +
+        `{--accent:${p.light.fill};--accent-ink:${p.light.ink};--accent-text:${p.light.text}}`,
+      shell(['[data-accent="blue"]']) + `{--accent-2:${p.light.fill2}}`,
+      shell(['[data-theme="dark"][data-accent="blue"]', '[data-theme="dark"][data-accent="duo"]']) +
+        `{--accent:${p.dark.fill};--accent-ink:${p.dark.ink};--accent-text:${p.dark.text}}`,
+    );
+  }
+  if (secondary) {
+    const y = colorTokens(secondary);
+    rules.push(
+      shell(['[data-accent="yellow"]']) +
+        `{--accent:${y.light.fill};--accent-2:${y.light.fill2};--accent-ink:${y.light.ink};--accent-text:${y.light.text}}`,
+      shell(['[data-theme="dark"][data-accent="yellow"]']) +
+        `{--accent:${y.dark.fill};--accent-ink:${y.dark.ink};--accent-text:${y.dark.text}}`,
+    );
+  }
+  return rules.join("\n");
+}
+function writeColorStyle(css: string) {
+  let el = document.getElementById("shop-colors") as HTMLStyleElement | null;
+  custom = !!css;
+  if (!css) return el?.remove();
+  if (!el) {
+    el = document.createElement("style");
+    el.id = "shop-colors";
+    document.head.append(el);
+  }
+  if (el.textContent !== css) el.textContent = css;
+}
+
+/**
+ * Shop brand colours + the accent visitors see first (from /api/overview). `preview` = the
+ * admin's live preview frame: show the draft as a first-time visitor would, never remember it.
+ */
+export function applyShopTheme(
+  colors: ShopColors & { defaultAccent: Accent },
+  { preview = false }: { preview?: boolean } = {},
+) {
+  writeColorStyle(shopColorCss(colors));
+  if (!preview) {
+    save(SHOP_ACCENT_KEY, colors.defaultAccent);
+    save(SHOP_COLORS_KEY, shopColorCss(colors));
+  }
+  const next: Accent = preview ? colors.defaultAccent : picked || colors.defaultAccent;
+  if (next !== accent) {
+    accent = next;
+    apply();
+  }
   listeners.forEach((fn) => fn());
 }
 
@@ -130,6 +212,13 @@ const ACCENTS: [Accent, string][] = [
   ["blue", "น้ำเงิน ASIA"],
   ["yellow", "เหลือง EXTRA"],
   ["duo", "น้ำเงิน-เหลือง"],
+  ["mono", "ขาวดำ"],
+];
+/** Names when the shop set its own colours (blue / yellow would be wrong). */
+const CUSTOM_ACCENTS: [Accent, string][] = [
+  ["blue", "สีหลักของร้าน"],
+  ["yellow", "สีรองของร้าน"],
+  ["duo", "สีหลัก-สีรอง"],
   ["mono", "ขาวดำ"],
 ];
 
@@ -204,7 +293,7 @@ export function ThemePanel() {
         <fieldset>
           <legend>{t("สีธีม")}</legend>
           <div className="theme-options swatches">
-            {ACCENTS.map(([value, label]) => (
+            {(custom ? CUSTOM_ACCENTS : ACCENTS).map(([value, label]) => (
               <button
                 key={value}
                 className={current.accent === value ? "selected" : ""}
@@ -278,14 +367,8 @@ export function ScrollProgress() {
   return <div ref={bar} className="scroll-progress" aria-hidden="true" />;
 }
 
-export function Marquee() {
-  const items = [
-    t("สินค้าพร้อมส่ง ได้รับทันทีหลังชำระเงิน"),
-    t("เก็บ ID และรหัสผ่านแบบเข้ารหัส"),
-    t("แชทกับร้านได้ในเว็บ"),
-    t("รีวิวจากผู้ซื้อจริง"),
-    t("สั่งจองล่วงหน้าได้"),
-  ];
+/** Scrolling strip; items = the shop's texts in the visitor's language (ตั้งค่า › หน้าตาร้าน). */
+export function Marquee({ items }: { items: string[] }) {
   const row = [...items, ...items];
   return (
     <div className="marquee" aria-hidden="true" lang={getLang()}>

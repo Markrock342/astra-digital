@@ -1,3 +1,4 @@
+import type { Appearance } from "../server/appearance-rules.mjs";
 export type Variant = {
   id: string;
   product_id: string;
@@ -155,6 +156,8 @@ export type Overview = {
   categories: PublicCategory[];
   /** Home carousel: active banners inside their schedule window, in admin order. */
   banners?: HomeBanner[];
+  /** ตั้งค่า › หน้าตาร้าน (server/appearance-rules.mjs); defaults = the built-in storefront. */
+  appearance?: Appearance;
   activity: {
     kind: string;
     name: string;

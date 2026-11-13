@@ -1,0 +1,741 @@
+/* ตั้งค่า › หน้าตาร้าน (AdminAppearance.tsx). shadcn/ui Card / Input / Switch / Tabs anatomy
+   (MIT, https://ui.shadcn.com): white cards on the cool-grey admin background, the one admin
+   brand colour (--brand), soft elevation, no side stripes. 390 px: one column, 44 px targets. */
+
+.merchant-shell .appearance-admin {
+  min-width: 0;
+}
+.merchant-shell .appearance-admin .reference-admin-heading > .button {
+  flex: none;
+  white-space: nowrap;
+}
+.merchant-shell .appearance-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 24px;
+  align-items: start;
+}
+.merchant-shell .appearance-editor {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+
+/* Tabs */
+.merchant-shell .appearance-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.merchant-shell .appearance-tabs button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: #334155;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.merchant-shell .appearance-tabs button:hover {
+  background: #f1f5f9;
+}
+.merchant-shell .appearance-tabs button.active {
+  background: var(--brand);
+  color: #fff;
+}
+.merchant-shell .appearance-tabs button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.merchant-shell .appearance-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.merchant-shell .appearance-dot.unsaved {
+  background: #f59e0b;
+}
+.merchant-shell .appearance-dot.custom {
+  background: #10b981;
+}
+.merchant-shell .appearance-tabs button.active .appearance-dot {
+  box-shadow: 0 0 0 2px #fff;
+}
+
+/* Panel (Card) */
+.merchant-shell .appearance-panel {
+  padding: 22px;
+  min-width: 0;
+}
+.merchant-shell .appearance-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.merchant-shell .appearance-panel-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.merchant-shell .appearance-panel-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.merchant-shell .appearance-reset {
+  flex: none;
+}
+.merchant-shell .appearance-fields {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.merchant-shell .appearance-subhead {
+  margin: 6px 0 -4px;
+  font-size: 15px;
+}
+
+/* Thai / English text pair */
+.merchant-shell .pair-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.merchant-shell .pair-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.merchant-shell .pair-label b {
+  color: #dc2626;
+  font-weight: 600;
+}
+.merchant-shell .pair-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.merchant-shell .pair-inputs label {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.merchant-shell .pair-inputs .lang-tag {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: #eef2f7;
+  color: #475569;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+  pointer-events: none;
+}
+.merchant-shell .pair-inputs input,
+.merchant-shell .pair-inputs textarea,
+.merchant-shell .appearance-link-field input,
+.merchant-shell .color-hex {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 11px 9px 46px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+.merchant-shell .pair-inputs textarea {
+  resize: vertical;
+  min-height: 64px;
+  line-height: 1.55;
+}
+.merchant-shell .appearance-link-field input,
+.merchant-shell .color-hex {
+  padding-left: 11px;
+  font-weight: 400;
+}
+.merchant-shell .pair-inputs input:focus-visible,
+.merchant-shell .pair-inputs textarea:focus-visible,
+.merchant-shell .appearance-link-field input:focus-visible,
+.merchant-shell .color-hex:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 0;
+  border-color: var(--brand);
+}
+.merchant-shell .appearance-link-field {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.merchant-shell .appearance-fields .field-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Grouped fields (fieldset as an inner card) */
+.merchant-shell .appearance-group {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 14px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fafbfc;
+}
+.merchant-shell .appearance-group legend {
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Sortable lists */
+.merchant-shell .appearance-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.merchant-shell .appearance-row {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.merchant-shell .row-index {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: #eef2f7;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+}
+.merchant-shell .row-tools {
+  display: flex;
+  gap: 4px;
+}
+.merchant-shell .row-tools .icon-button {
+  width: 36px;
+  height: 36px;
+}
+.merchant-shell .row-tools .danger-icon:not(:disabled) {
+  color: #b91c1c;
+}
+.merchant-shell .card-fields {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.merchant-shell .appearance-add {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.merchant-shell .appearance-add span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Home sections */
+.merchant-shell .section-row {
+  grid-template-columns: 26px minmax(0, 1fr) auto auto;
+  align-items: center;
+}
+.merchant-shell .section-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.merchant-shell .section-name strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.merchant-shell .section-name small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.merchant-shell .section-row.is-hidden {
+  background: #f8fafc;
+}
+.merchant-shell .section-row.is-hidden .section-name strong {
+  color: #64748b;
+}
+
+/* Switch (same look as alerts.css .alert-switch) */
+.merchant-shell .appearance-switch {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #cbd5e1;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.merchant-shell .appearance-switch::before {
+  /* 44 px tap area around the small switch */
+  content: "";
+  position: absolute;
+  inset: -11px -2px;
+}
+.merchant-shell .appearance-switch span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.2);
+  transition: transform 0.15s ease;
+}
+.merchant-shell .appearance-switch[aria-checked="true"] {
+  background: var(--brand);
+}
+.merchant-shell .appearance-switch[aria-checked="true"] span {
+  transform: translateX(18px);
+}
+.merchant-shell .appearance-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.merchant-shell .appearance-switch:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.merchant-shell .switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fafbfc;
+}
+.merchant-shell .switch-row span {
+  display: grid;
+  gap: 2px;
+}
+.merchant-shell .switch-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Colours */
+.merchant-shell .color-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+.merchant-shell .color-choice label,
+.merchant-shell .accent-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.merchant-shell .color-chip {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.15);
+  flex: none;
+}
+.merchant-shell .color-inputs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.merchant-shell .color-inputs input[type="color"] {
+  width: 48px;
+  height: 40px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+  cursor: pointer;
+}
+.merchant-shell .color-hex {
+  width: 130px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.merchant-shell .color-bad {
+  color: #b91c1c;
+  font-size: 12px;
+}
+.merchant-shell .color-samples {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.merchant-shell .color-sample {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+}
+.merchant-shell .color-sample.light {
+  background: #ffffff;
+}
+.merchant-shell .color-sample.dark {
+  background: #0a0a0a;
+  border-color: #26262a;
+}
+.merchant-shell .color-sample small {
+  font-weight: 400;
+  font-size: 11px;
+  color: #5f6066;
+}
+.merchant-shell .color-sample.dark small {
+  color: #a1a1aa;
+}
+.merchant-shell .sample-button {
+  padding: 6px 14px;
+  border-radius: 8px;
+}
+.merchant-shell .accent-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.merchant-shell .accent-options label {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+.merchant-shell .accent-options label.selected {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+}
+.merchant-shell .accent-options input,
+.merchant-shell .color-choice input {
+  accent-color: var(--brand);
+  margin: 0;
+}
+
+/* Messages */
+.merchant-shell .appearance-problem,
+.merchant-shell .appearance-warning,
+.merchant-shell .appearance-locked {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.merchant-shell .appearance-problem svg,
+.merchant-shell .appearance-warning svg,
+.merchant-shell .appearance-locked svg {
+  flex: none;
+  margin-top: 2px;
+}
+.merchant-shell .appearance-problem {
+  background: #fef2f2;
+  color: #991b1b;
+}
+.merchant-shell .appearance-panel > .appearance-problem {
+  margin-top: 16px;
+}
+.merchant-shell .appearance-warning {
+  background: #fffbeb;
+  color: #92400e;
+}
+.merchant-shell .appearance-locked {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+/* Trust card icons */
+.merchant-shell .icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.merchant-shell .icon-picker button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+}
+.merchant-shell .icon-picker button[aria-checked="true"] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+}
+.merchant-shell .icon-picker button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* SEO images + share preview */
+.merchant-shell .image-setting-row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.merchant-shell .image-setting-row img {
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+.merchant-shell .image-setting.favicon .image-setting-row {
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+.merchant-shell .image-setting.favicon .image-setting-row img {
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+.merchant-shell .image-setting-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.merchant-shell .share-preview {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  max-width: 420px;
+}
+.merchant-shell .share-preview img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  background: #f1f5f9;
+}
+.merchant-shell .share-preview div {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px 12px;
+  min-width: 0;
+}
+.merchant-shell .share-preview small {
+  color: #64748b;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.merchant-shell .share-preview strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.merchant-shell .share-preview span {
+  color: #475569;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* Live preview */
+.merchant-shell .appearance-preview {
+  top: 72px;
+}
+.merchant-shell .appearance-preview-bar {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.merchant-shell .appearance-preview-bar .segmented {
+  display: flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.merchant-shell .appearance-preview-bar .segmented button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.merchant-shell .appearance-preview-bar .segmented button[aria-pressed="true"] {
+  background: var(--text);
+  color: var(--surface);
+}
+.merchant-shell .appearance-preview-bar > a {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 28px;
+  color: var(--muted);
+}
+
+/* Save bar + reset dialog */
+.merchant-shell .appearance-save-bar .unsaved-dot::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  vertical-align: middle;
+}
+.appearance-reset-dialog {
+  width: min(460px, 100%);
+}
+.appearance-reset-dialog .appearance-reset-body {
+  padding: 0 24px 24px;
+}
+.appearance-reset-dialog .appearance-reset-body p {
+  margin: 0;
+  line-height: 1.6;
+}
+.appearance-reset-dialog .form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+@media (max-width: 1100px) {
+  .merchant-shell .appearance-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .merchant-shell .appearance-preview {
+    position: static;
+  }
+}
+@media (max-width: 640px) {
+  .merchant-shell .appearance-admin .reference-admin-heading {
+    flex-wrap: wrap;
+  }
+  .merchant-shell .appearance-panel {
+    padding: 16px;
+  }
+  .merchant-shell .appearance-panel-head {
+    flex-direction: column;
+  }
+  .merchant-shell .pair-inputs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .merchant-shell .appearance-tabs button,
+  .merchant-shell .appearance-preview-bar .segmented button,
+  .merchant-shell .appearance-preview-bar > a,
+  .merchant-shell .row-tools .icon-button,
+  .merchant-shell .icon-picker button,
+  .merchant-shell .appearance-admin .button {
+    min-height: 44px;
+  }
+  .merchant-shell .row-tools .icon-button,
+  .merchant-shell .icon-picker button,
+  .merchant-shell .appearance-preview-bar > a {
+    min-width: 44px;
+  }
+  .merchant-shell .pair-inputs input,
+  .merchant-shell .appearance-link-field input,
+  .merchant-shell .color-hex {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .merchant-shell .pair-inputs textarea {
+    font-size: 16px;
+  }
+  .merchant-shell .appearance-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .merchant-shell .appearance-row .row-index {
+    display: none;
+  }
+  .merchant-shell .section-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .merchant-shell .section-row .row-tools {
+    grid-column: 1 / -1;
+  }
+  .merchant-shell .row-tools {
+    justify-content: flex-end;
+  }
+  .merchant-shell .color-samples,
+  .merchant-shell .accent-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .merchant-shell .accent-options label,
+  .merchant-shell .color-choice label {
+    min-height: 44px;
+  }
+  .merchant-shell .image-setting-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .merchant-shell .appearance-switch::before {
+    inset: -11px -4px;
+  }
+  .appearance-reset-dialog .appearance-reset-body {
+    padding: 0 16px 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .merchant-shell .appearance-switch,
+  .merchant-shell .appearance-switch span {
+    transition: none;
+  }
+}

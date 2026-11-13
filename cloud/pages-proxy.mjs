@@ -4,6 +4,7 @@
 // product / category (HTMLRewriter).
 // Bundled to dist-pages/_worker.js by scripts/build-pages.mjs.
 import {
+  ICON_HEAD_SELECTORS,
   REPLACED_HEAD_SELECTORS,
   categoryIdFromQuery,
   categoryMeta,
@@ -55,7 +56,7 @@ function textResponse(body, type, request, maxAge) {
 /** Replace the shop-wide head tags with page-specific ones. */
 function rewriteHead(response, meta) {
   let rewriter = new HTMLRewriter();
-  for (const selector of REPLACED_HEAD_SELECTORS)
+  for (const selector of [...REPLACED_HEAD_SELECTORS, ...(meta.icon ? ICON_HEAD_SELECTORS : [])])
     rewriter = rewriter.on(selector, { element: (el) => el.remove() });
   rewriter = rewriter.on("head", {
     element: (el) => el.append(metaTags(meta), { html: true }),
@@ -71,17 +72,19 @@ function rewriteHead(response, meta) {
 async function pageMeta(env, origin, pathname, search) {
   const overview = await publicApi(env, origin, "/api/overview").catch(() => null);
   const shop = overview?.shop ?? null;
-  if (pathname === "/") return homeMeta(origin, shop);
+  // ตั้งค่า › หน้าตาร้าน › SEO: site title, description, share image and favicon.
+  const appearance = overview?.appearance ?? null;
+  if (pathname === "/") return homeMeta(origin, shop, appearance);
   if (pathname === "/products") {
     // "/products?category=x": same cached overview call, nothing extra per request.
     const id = categoryIdFromQuery(new URLSearchParams(search).get("category"));
     const category = id && (overview?.categories ?? []).find((c) => c.id === id);
-    return category && isListedCategory(category) ? categoryMeta(origin, category, shop) : null;
+    return category && isListedCategory(category) ? categoryMeta(origin, category, shop, appearance) : null;
   }
   const id = productIdFromPath(pathname);
   if (!id) return null;
   const data = await publicApi(env, origin, "/api/products/" + encodeURIComponent(id));
-  return data?.product ? productMeta(origin, data.product, shop) : null;
+  return data?.product ? productMeta(origin, data.product, shop, appearance) : null;
 }
 
 export default {

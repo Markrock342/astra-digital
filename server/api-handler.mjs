@@ -51,6 +51,8 @@ function sameLocalOrigin(origin, pageOrigin) {
 const MAX_JSON_BYTES = 32768;
 // Shop settings carry the legal pages text (Thai is 3 bytes per character in UTF-8).
 const MAX_SETTINGS_BYTES = 262144;
+// Storefront appearance: every part at its longest Thai + English text stays well under this.
+const MAX_APPEARANCE_BYTES = 131072;
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 // การเงิน › กระทบยอด: a CSV of up to 2 MB sent as a JSON string (escaping can double it).
 const MAX_RECON_JSON_BYTES = 4.5 * 1024 * 1024;
@@ -75,6 +77,8 @@ function isImageUploadPath(method, path) {
     path === "/api/chat/images" ||
     path === "/api/admin/categories/image" ||
     path === "/api/admin/settings/logo" ||
+    path === "/api/admin/appearance/og-image" ||
+    path === "/api/admin/appearance/favicon" ||
     /^\/api\/admin\/banners\/[^/]+\/(?:image|mobile-image)$/.test(path) ||
     /^\/api\/admin\/orders\/[^/]+\/slip$/.test(path)
   );
@@ -233,6 +237,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
       const jsonLimit =
         path === "/api/admin/settings" && user?.role === "ADMIN"
           ? MAX_SETTINGS_BYTES
+          : path === "/api/admin/appearance" && user?.role === "ADMIN"
+            ? MAX_APPEARANCE_BYTES
           : reconUploadPaths.includes(path) && user?.role === "ADMIN"
             ? MAX_RECON_JSON_BYTES
             : MAX_JSON_BYTES;
@@ -586,6 +592,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (path === "/api/admin/categories")
           return send(200, service.adminCategories(user));
         if (path === "/api/admin/banners") return send(200, service.adminBanners(user));
+        if (path === "/api/admin/appearance") return send(200, service.adminAppearance(user));
         if (path === "/api/admin/reports/profit") {
           const report = service.profitReport(user, {
             from: url.searchParams.get("from") ?? undefined,
@@ -791,6 +798,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, await service.removeAvatar(user));
         if (path === "/api/admin/settings/logo")
           return send(200, await service.removeLogo(user));
+        if (path === "/api/admin/appearance/og-image")
+          return send(200, await service.removeAppearanceImage(user, "og"));
+        if (path === "/api/admin/appearance/favicon")
+          return send(200, await service.removeAppearanceImage(user, "favicon"));
         if (/^\/api\/stock-watch\/[^/]+$/.test(path)) {
           assertStockWatchRate(user);
           let variantId;
@@ -1056,6 +1067,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           );
         if (path === "/api/admin/settings")
           return send(200, service.saveSettings(user, input));
+        if (path === "/api/admin/appearance")
+          return send(200, service.saveAppearance(user, input));
+        if (path === "/api/admin/appearance/reset")
+          return send(200, await service.resetAppearance(user, input));
         if (path === "/api/admin/finance/days/close")
           return send(200, service.closeFinanceDay(user, input));
         if (path === "/api/admin/finance/days/adjust")
@@ -1082,6 +1097,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         }
         if (path === "/api/admin/settings/logo")
           return send(200, await service.setLogo(user, input));
+        if (path === "/api/admin/appearance/og-image")
+          return send(200, await service.setAppearanceImage(user, "og", input));
+        if (path === "/api/admin/appearance/favicon")
+          return send(200, await service.setAppearanceImage(user, "favicon", input));
         if (path === "/api/profile/avatar")
           return send(200, await service.setAvatar(user, input));
         if (path === "/api/chat/images")
