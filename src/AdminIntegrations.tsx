@@ -26,6 +26,7 @@ const kindText: Record<string, string> = {
   password_reset: "ลิงก์ตั้งรหัสผ่านใหม่",
   order_confirmed: "ยืนยันคำสั่งซื้อ",
   preorder_ready: "พรีออเดอร์พร้อมแล้ว",
+  template_test: "ทดสอบข้อความอีเมล",
 };
 const providerText: Record<string, string> = {
   cloudflare: "Cloudflare Email Sending",

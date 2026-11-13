@@ -59,7 +59,9 @@ import {
 } from "./order-extras.mjs";
 import { createCouponApis, normalizeCouponCode } from "./coupons.mjs";
 import { createAccountEmail } from "./account-email.mjs";
-import { templates as emailTemplates } from "./email.mjs";
+import { isRealEmail, maskEmail } from "./email.mjs";
+import { createEmailTemplateApis } from "./email-templates.mjs";
+import { createFraud } from "./fraud.mjs";
 import { createStockWatch } from "./stock-watch.mjs";
 import { createReviewModeration, maskReviewer } from "./review-moderation.mjs";
 import { normalizeLegal } from "./legal.mjs";
@@ -2961,6 +2963,25 @@ export function createCommerceCore({
       spentSatang: row.spent_satang,
     }));
   }
+  // Admin-editable email text (email-templates.mjs); every sender renders through it.
+  const emailTemplateApis = createEmailTemplateApis({
+    one,
+    all,
+    run,
+    fail,
+    clock,
+    requireAdmin,
+    shopName: () => {
+      const name = String(settings()?.shopName ?? "").trim();
+      return name && name !== "ร้านค้า" ? name : "ASIA EXTRA";
+    },
+    queue: (...args) => accountEmail.queue(...args),
+    enabled: !!mailer?.enabled,
+    isRealEmail,
+    maskEmail,
+    publicBaseUrl,
+  });
+  const renderEmail = emailTemplateApis.render;
   const accountEmail = createAccountEmail({
     one,
     all,
@@ -2976,7 +2997,10 @@ export function createCommerceCore({
     turnstile,
     publicBaseUrl,
     waitUntil,
+    renderEmail,
   });
+  // สัญญาณผิดปกติ + temporary email / domain blocklist (fraud.mjs). Flags only, never bans.
+  const fraud = createFraud({ one, all, run, tx, fail, clock, requireAdmin, notify, alerts, maskEmail });
   const broadcasts = createBroadcastApis({
     one,
     all,
@@ -2993,6 +3017,7 @@ export function createCommerceCore({
       return name && name !== "ร้านค้า" ? name : "ASIA EXTRA";
     },
     publicBaseUrl,
+    renderEmail: (args) => renderEmail("broadcast", args),
   });
   // "แจ้งเตือนเมื่อสินค้าเข้า" (stock-watch.mjs) and review replies / moderation.
   const stockWatch = createStockWatch({
@@ -3008,7 +3033,7 @@ export function createCommerceCore({
     clock,
     inventoryAvailableAliased,
     email: accountEmail,
-    emailTemplate: emailTemplates.backInStock,
+    emailTemplate: (args) => renderEmail("back_in_stock", args),
     shopName: () => {
       const name = String(settings()?.shopName ?? "").trim();
       return name && name !== "ร้านค้า" ? name : "ASIA EXTRA";
@@ -3263,6 +3288,8 @@ export function createCommerceCore({
       stockWatch: true,
       reviewModeration: true,
       manualOrders: true,
+      fraudSignals: true,
+      emailTemplates: true,
       // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
       email: accountEmail.enabled,
       passwordReset: accountEmail.enabled,
@@ -3274,6 +3301,18 @@ export function createCommerceCore({
     sendOrderConfirmation: accountEmail.sendOrderConfirmation,
     adminIntegrations: accountEmail.integrationsStatus,
     emailIdle: accountEmail.idle,
+    // Admin › ตั้งค่า › ข้อความอีเมล (email-templates.mjs).
+    adminEmailTemplates: emailTemplateApis.adminEmailTemplates,
+    adminSaveEmailTemplate: emailTemplateApis.adminSaveEmailTemplate,
+    adminResetEmailTemplate: emailTemplateApis.adminResetEmailTemplate,
+    adminPreviewEmailTemplate: emailTemplateApis.adminPreviewEmailTemplate,
+    adminSendTestEmail: emailTemplateApis.adminSendTestEmail,
+    // Admin › ลูกค้า › สัญญาณผิดปกติ (fraud.mjs).
+    adminFraud: fraud.adminFraud,
+    adminReviewFraudSignal: fraud.reviewSignal,
+    adminSaveFraudSettings: fraud.saveFraudSettings,
+    adminBlockEmail: fraud.addBlock,
+    adminLiftEmailBlock: fraud.liftBlock,
     salesRevenueSatang,
     logout: (token) =>
       run("DELETE FROM sessions WHERE token_hash=?", hash(token ?? "")),
@@ -3300,6 +3339,8 @@ export function createCommerceCore({
   };
   // Order emails run after pay / deliverReservation returned; money logic is untouched.
   accountEmail.hookOrderEmails(service);
+  // Blocklist before register / login; fraud rules after pay / report (committed) — fraud.mjs.
+  fraud.hook(service);
   // Import / re-activation that brings a waited-for option back notifies the waiting customers.
   stockWatch.hook(service);
   // "สร้างโดยแอดมิน" marker + payment method on the existing order views.

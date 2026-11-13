@@ -83,6 +83,8 @@ import { LegalSettings } from "./Legal";
 import { FaqSettingsPanel } from "./FaqAdmin";
 import { AdminBroadcasts } from "./AdminBroadcasts";
 import { AdminManualOrder, ManualOrderBadge } from "./AdminManualOrder";
+import { AdminFraud } from "./AdminFraud";
+import { AdminEmailTemplates } from "./AdminEmailTemplates";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -100,6 +102,7 @@ const orderTabs = [
 const customerTabs = [
   ["customers", "ลูกค้าทั้งหมด"],
   ["broadcasts", "ประกาศถึงลูกค้า"],
+  ["fraud", "สัญญาณผิดปกติ"],
 ];
 const settingTabs = [
   ["settings", "ร้าน"],
@@ -109,6 +112,7 @@ const settingTabs = [
   ["settings/faq", "คำถามที่พบบ่อย"],
   ["settings/account", "บัญชีแอดมิน"],
   ["settings/alerts", "แจ้งเตือนนอกเว็บ"],
+  ["settings/email-templates", "ข้อความอีเมล"],
   ["settings/backup", "สำรองข้อมูล"],
   ["settings/audit", "ประวัติการทำงาน"],
   ["settings/health", "ตรวจระบบ"],
@@ -890,6 +894,7 @@ export default function Admin() {
             <AdminCustomers />
           ))}
         {tab === "broadcasts" && <AdminBroadcasts />}
+        {tab === "fraud" && <AdminFraud />}
         {["payments", "top-ups", "ledger"].includes(tab) && <AdminFinance />}
         {tab === "settings" &&
           (sub === "settings/payment" ? (
@@ -902,6 +907,8 @@ export default function Admin() {
             <AdminAudit />
           ) : sub === "settings/alerts" ? (
             <AdminAlerts />
+          ) : sub === "settings/email-templates" ? (
+            <AdminEmailTemplates />
           ) : sub === "settings/backup" ? (
             <AdminBackup />
           ) : sub === "settings/legal" ? (
@@ -954,6 +961,7 @@ export default function Admin() {
           "reviews",
           "customers",
           "broadcasts",
+          "fraud",
           "payments",
           "top-ups",
           "ledger",

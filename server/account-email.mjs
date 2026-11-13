@@ -12,7 +12,8 @@
  * Schema: ensureEmailAndReset() in ensure-admin-fr.mjs.
  */
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
-import { isRealEmail, maskEmail, templates } from "./email.mjs";
+import { isRealEmail, maskEmail } from "./email.mjs";
+import { renderTemplate } from "./email-templates.mjs";
 
 export const RESET_TOKEN_MS = 30 * 60000;
 export const RESET_PER_ACCOUNT_PER_HOUR = 3;
@@ -36,8 +37,11 @@ export function createAccountEmail({
   turnstile,
   publicBaseUrl,
   waitUntil,
+  // (key, args) → message: email-templates.mjs createEmailTemplateApis().render (admin edits win).
+  renderEmail = null,
 }) {
   const enabled = !!mailer?.enabled;
+  const render = (k, args) => (renderEmail ? renderEmail(k, args) : renderTemplate(k, args));
   const pending = new Set();
   const tokenHash = (token) => createHmac("sha256", key).update("password-reset:" + token).digest("hex");
   const shopName = () => {
@@ -150,7 +154,12 @@ export function createAccountEmail({
         sent = queue({
           kind: "password_reset",
           to: user.email,
-          message: templates.passwordReset({ shopName: shopName(), link, minutes: RESET_TOKEN_MS / 60000 }),
+          message: render("password_reset", {
+            shopName: shopName(),
+            customerName: user.name,
+            link,
+            minutes: RESET_TOKEN_MS / 60000,
+          }),
         });
       } else detail.throttled = true;
     }
@@ -205,7 +214,7 @@ export function createAccountEmail({
     ]) {
       const row = one(
         `SELECT o.id, o.status, o.total, o.quantity, ${preorder ? "o.queue_number" : "NULL"} AS queue_number,
-           p.name AS product, v.label, u.email
+           p.name AS product, v.label, u.email, u.name AS customer_name
          FROM ${table} o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id
          JOIN users u ON u.id=o.user_id WHERE o.id=?`,
         id,
@@ -227,8 +236,9 @@ export function createAccountEmail({
         kind: "order_confirmed",
         to: info.email,
         ref: "order-confirmed:" + info.id,
-        message: templates.orderConfirmed({
+        message: render(info.preorder ? "preorder_confirmed" : "order_confirmed", {
           shopName: shopName(),
+          customerName: info.customer_name,
           orderNumber: orderNumber(info.id),
           product: productName(info),
           quantity: info.quantity,
@@ -253,8 +263,9 @@ export function createAccountEmail({
         kind: "preorder_ready",
         to: info.email,
         ref: "preorder-ready:" + info.id,
-        message: templates.preorderReady({
+        message: render("preorder_ready", {
           shopName: shopName(),
+          customerName: info.customer_name,
           orderNumber: orderNumber(info.id),
           product: productName(info),
           quantity: info.quantity,

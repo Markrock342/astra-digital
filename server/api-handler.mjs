@@ -7,6 +7,7 @@ import { ApiError } from "./domain.mjs";
 export const COUPON_RATE_LIMIT = { perUser: 15, perIp: 40, windowMs: 600000 };
 import { TURNSTILE_ORIGIN, TURNSTILE_REJECTED, turnstileTokenFrom } from "./turnstile.mjs";
 import { STOCK_WATCH_RATE_LIMIT } from "./stock-watch.mjs";
+import { routeFraudAndTemplates } from "./fraud-template-routes.mjs";
 export const securityHeaders = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -337,6 +338,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           throw new ApiError(429, "มีคำขอมากเกินไป กรุณาลองอีกครั้งในอีก 15 นาที");
         return send(200, service.resetPassword(input, ctx));
       }
+      // Admin › สัญญาณผิดปกติ and › ข้อความอีเมล (server/fraud-template-routes.mjs).
+      const fraudOrTemplate = routeFraudAndTemplates(service, { method: request.method, path, user, input, url });
+      if (fraudOrTemplate) return send(...fraudOrTemplate);
       if (request.method === "GET") {
         if (/^\/api\/files\/[^/]+$/.test(path)) {
           const file = await service.getFile(path.split("/")[3]);
