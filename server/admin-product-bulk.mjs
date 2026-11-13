@@ -21,6 +21,8 @@ export function createAdminProductBulkApis({
   clean,
   randomUUID,
   categoryExists = () => true,
+  // Option groups (option-groups.mjs): the copy keeps its groups and variant names.
+  optionGroups = null,
 }) {
   const auditDetail = (user, action, entity, detail) =>
     run(
@@ -190,6 +192,8 @@ export function createAdminProductBulkApis({
           tagPrices += 1;
         }
       }
+      // Option groups + which value each variant names (option-groups.mjs).
+      const options = optionGroups ? optionGroups.copyGroups(sourceId, id, variantMap) : null;
       // Preorder "วิธีจอง" (deposit / free, preorder.mjs) follows the copy too.
       if (one("SELECT name FROM sqlite_master WHERE type='table' AND name='preorder_settings'"))
         run(
@@ -217,6 +221,8 @@ export function createAdminProductBulkApis({
         images: images.length,
         tagPrices,
         productMaxPerCustomer: source.max_per_customer ?? null,
+        deliveryType: source.delivery_type ?? null,
+        optionGroups: options?.groups ?? 0,
       });
       return { id, name, active: false, variants: variants.length, images: images.length };
     });

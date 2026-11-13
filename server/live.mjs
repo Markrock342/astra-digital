@@ -48,6 +48,11 @@ const LIVE_METHODS = {
   adminUpdateSeat: ["catalog", "orders", "notify"],
   adminUpdateGroupLogin: ["catalog", "orders", "notify"],
   fulfilOrder: ["orders", "notify"],
+  // Option groups (option-groups.mjs).
+  adminEnableOptionGroups: ["catalog"],
+  adminDisableOptionGroups: ["catalog"],
+  adminSaveOptionGroups: ["catalog"],
+  adminBulkVariants: ["catalog"],
   resendOrderCredentials: ["orders", "chat", "notify"],
   adminBulkOrderAction: ["orders", "chat", "notify"],
   adminCreateManualOrder: ["orders", "catalog", "notify", "customers"],

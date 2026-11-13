@@ -1,0 +1,482 @@
+/* Option groups (Options.tsx storefront, AdminOptions.tsx back office). Storefront uses the
+   storefront tokens (brand.css) so every theme / accent / corner shape works; back office uses
+   the merchant tokens (--brand, white cards on the cool-grey page). */
+
+/* ---------- Storefront: selectors ---------- */
+.option-picker {
+  display: grid;
+  gap: 14px;
+  margin: 16px 0 4px;
+  min-width: 0;
+}
+.option-group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.option-group legend {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.option-group-chosen {
+  font-weight: 400;
+  color: var(--muted);
+}
+.option-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.option-chip {
+  min-height: 44px;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn, 10px);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.option-chip:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+.option-chip.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  box-shadow: 0 0 0 1px var(--accent);
+  font-weight: 600;
+}
+.option-chip:focus-visible,
+.option-combobox-trigger:focus-visible,
+.all-options-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.option-chip small,
+.option-combobox-item small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.option-chip.state-out:not(.selected) {
+  color: var(--muted);
+  border-style: dashed;
+}
+/* Combination not sold: greyed and struck through (like the reference store). */
+.option-chip.state-none,
+.option-combobox-item.state-none {
+  color: var(--muted);
+  text-decoration: line-through;
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--raised);
+}
+.option-clear {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--accent-text, var(--accent));
+}
+.option-combobox {
+  position: relative;
+}
+.option-combobox-trigger {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn, 10px);
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.option-combobox-trigger.is-set {
+  color: var(--text);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.option-combobox-pop {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--surface);
+  box-shadow: var(--shadow, 0 12px 32px -12px rgb(0 0 0 / 0.2));
+  padding: 6px;
+}
+.option-combobox-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+}
+.option-combobox-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+.option-combobox-pop ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 264px;
+  overflow-y: auto;
+}
+.option-combobox-item {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: calc(var(--radius-sm, 10px) - 4px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.option-combobox-item span {
+  flex: 1;
+}
+.option-combobox-item:hover:not(:disabled),
+.option-combobox-item[aria-selected="true"] {
+  background: var(--hover, var(--raised));
+}
+.option-combobox-empty {
+  padding: 12px 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.option-need {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---------- Storefront: all options + prices ---------- */
+.all-options {
+  margin-top: 24px;
+  min-width: 0;
+}
+.all-options h2 {
+  font-size: 15px;
+  margin: 0 0 10px;
+}
+.all-options ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 10px);
+  overflow: hidden;
+  background: var(--surface);
+}
+.all-options li + li {
+  border-top: 1px solid var(--border);
+}
+.all-options-row {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.all-options-row:hover {
+  background: var(--hover, var(--raised));
+}
+.all-options-row.selected {
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.all-options-row.is-out .all-options-label {
+  color: var(--muted);
+}
+.all-options-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.all-options-price {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: none;
+  white-space: nowrap;
+}
+.all-options-price small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.all-options-more {
+  margin-top: 10px;
+  min-height: 44px;
+  width: 100%;
+  justify-content: center;
+}
+
+/* ---------- Back office: groups editor + combination grid ---------- */
+.option-editor {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+}
+.option-editor-groups {
+  display: grid;
+  gap: 10px;
+}
+.option-group-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+  display: grid;
+  gap: 8px;
+}
+.option-group-card-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.option-group-card-head input {
+  flex: 1;
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 600;
+}
+.option-value-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.option-value-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 32px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--brand-soft, #eef1ff);
+  color: var(--brand, #1534ff);
+  font-size: 13px;
+  cursor: grab;
+  user-select: none;
+}
+.option-value-chip.is-dragging {
+  opacity: 0.4;
+}
+.option-value-chip.is-over {
+  box-shadow: -3px 0 0 var(--brand, #1534ff);
+}
+.option-value-chip input {
+  width: 9ch;
+  min-width: 4ch;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+}
+.option-value-chip button {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.option-value-chip button:hover {
+  background: rgb(21 52 255 / 0.12);
+}
+.option-value-add {
+  min-height: 32px;
+  width: 140px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+}
+.option-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.option-editor-actions small {
+  color: var(--muted);
+}
+.option-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+}
+.option-bulk select,
+.option-bulk input {
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 8px;
+  font: inherit;
+  background: #fff;
+}
+.option-bulk input {
+  width: 110px;
+}
+.option-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.option-grid th {
+  text-align: left;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.option-grid td {
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.option-grid tr.is-off td:not(.option-grid-toggle) {
+  color: var(--muted);
+  background: #fafbfc;
+}
+.option-grid input[type="number"] {
+  width: 92px;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 6px;
+  font: inherit;
+}
+.option-grid input.days {
+  width: 64px;
+}
+/* Switch (shadcn/ui Switch idea): an on/off checkbox drawn as a pill. */
+.switch {
+  position: relative;
+  display: inline-flex;
+  width: 40px;
+  height: 24px;
+  flex: none;
+}
+.switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.switch span {
+  width: 100%;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background 0.15s;
+}
+.switch span::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  transition: transform 0.15s;
+}
+.switch input:checked + span {
+  background: var(--brand, #1534ff);
+}
+.switch input:checked + span::after {
+  transform: translateX(16px);
+}
+.switch input:focus-visible + span {
+  outline: 2px solid var(--brand, #1534ff);
+  outline-offset: 2px;
+}
+.option-grid-stock {
+  white-space: nowrap;
+}
+.option-grid-detail td {
+  background: #f8fafc;
+}
+.option-editor-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.option-editor-summary .admin-chip {
+  margin-left: 0;
+  padding: 2px 8px;
+}
+.option-enable {
+  margin-top: 10px;
+}
+.option-grid tr.is-dim td {
+  opacity: 0.45;
+}

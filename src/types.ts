@@ -24,7 +24,11 @@ export type Variant = {
   maxPerCustomer?: number | null;
   /** Units this signed-in customer can still buy (null when signed out / no limit). */
   remainingForYou?: number | null;
+  /** Option groups (server/option-groups.mjs): groupId → valueId this variant names. */
+  options?: Record<string, string>;
 };
+/** One option group of a product (แพ็กเกจ / ระยะเวลา / ...) and its values. */
+export type OptionGroup = { id: string; name: string; values: { id: string; label: string }[] };
 /** Admin APIs keep the exact ready-stock count. */
 export type AdminVariant = Omit<Variant, "stockStatus" | "available"> & {
   stock: number;
@@ -60,6 +64,8 @@ export type Product = {
   deliveryType?: "account" | "shared" | "code" | "invite" | "manual";
   /** Shop-fulfilled product: what the customer fills in at checkout. */
   checkoutFields?: CheckoutField[];
+  /** Option groups (empty = the simple variant list). */
+  optionGroups?: OptionGroup[];
 };
 export type PreorderMode = "full" | "deposit" | "free";
 export type PreorderTerms = {

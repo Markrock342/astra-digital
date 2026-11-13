@@ -79,6 +79,7 @@ import { createRetention } from "./retention.mjs";
 import { createTaxInvoices } from "./tax-invoices.mjs";
 import { createPreorders } from "./preorder.mjs";
 import { createDeliveryApis } from "./delivery.mjs";
+import { createOptionGroupApis } from "./option-groups.mjs";
 import {
   createMoneyScope,
   walletBalanceSql,
@@ -644,6 +645,19 @@ export function createCommerceCore({
     maybeNotifyStockExpiry: (id) => maybeNotifyStockExpiry(id),
     callPreorders: (id) => preorders.callForVariant(id),
     clock,
+  });
+  // Option groups (แพ็กเกจ / ระยะเวลา / ...) that name the variants (option-groups.mjs).
+  const optionGroups = createOptionGroupApis({
+    one,
+    all,
+    run,
+    tx: (fn) => tx(fn),
+    fail,
+    clean,
+    integer,
+    requireAdmin,
+    requireStaff,
+    randomUUID,
   });
 
   const categoryApis = createCategoryApis({ requireAdmin, one, all, run, tx, fail, fileStore });
@@ -1285,16 +1299,23 @@ export function createCommerceCore({
     const at = pricing.nowSql();
     // Shop-fulfilled products (delivery.mjs) have no stock: always orderable while on sale.
     const manual = row.delivery_type === "manual";
+    // Option groups (option-groups.mjs): each variant names one value per group.
+    const { optionGroups: groups, options } = optionGroups.publicOptions(p.id);
     return {
       ...p,
+      optionGroups: groups,
       // deliveryType + the checkout fields a manual product asks for (delivery.mjs).
       ...delivery.publicDelivery(row),
       ...productImageFields(p.id),
       variants: all(
         `SELECT v.*, CASE WHEN p.preorder=1 THEN 0 ELSE (SELECT COUNT(*) FROM inventory i WHERE i.variant_id=v.id AND ${inventoryAvailableAliased}) END AS stock FROM variants v JOIN products p ON p.id=v.product_id WHERE v.product_id=? AND COALESCE(v.active,1)=1 ORDER BY v.sort_order ASC, CASE WHEN v.id='stream-plus-full' THEN 0 WHEN v.id LIKE '%-30' THEN 1 ELSE 2 END, price, v.id`,
         p.id,
-      ).map(({ stock, compare_at, sale_price, sale_starts_at, sale_ends_at, max_per_customer, ...v }) => ({
+      )
+        // With groups, only variants that name a full combination are offered.
+        .filter((v) => !groups.length || options.has(v.id))
+        .map(({ stock, compare_at, sale_price, sale_starts_at, sale_ends_at, max_per_customer, ...v }) => ({
         ...v,
+        ...(groups.length ? { options: options.get(v.id) } : {}),
         // What this viewer pays now (sale / tag price) + the struck-through price (pricing.mjs).
         // The raw sale price and window stay internal so a scheduled sale is not shown early.
         ...publicPrice(
@@ -3435,6 +3456,7 @@ export function createCommerceCore({
     clean,
     randomUUID,
     categoryExists: categoryApis.exists,
+    optionGroups,
   });
   const { salesReport, profitReport } = createReportApis({
     requireAdmin,
@@ -3774,6 +3796,12 @@ export function createCommerceCore({
     adminUpdateGroupLogin: delivery.adminUpdateGroupLogin,
     fulfilmentQueue: delivery.fulfilmentQueue,
     fulfilOrder: delivery.fulfilOrder,
+    // Option groups (option-groups.mjs).
+    adminOptionGroups: optionGroups.adminOptionGroups,
+    adminEnableOptionGroups: optionGroups.adminEnableOptionGroups,
+    adminDisableOptionGroups: optionGroups.adminDisableOptionGroups,
+    adminSaveOptionGroups: optionGroups.adminSaveOptionGroups,
+    adminBulkVariants: optionGroups.adminBulkVariants,
     resendOrderCredentials,
     adminBulkOrderCheck: orderBulk.adminBulkOrderCheck,
     adminBulkOrderAction: orderBulk.adminBulkOrderAction,

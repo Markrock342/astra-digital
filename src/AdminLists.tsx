@@ -56,6 +56,7 @@ import {
 } from "./OrderHistory";
 import { StockImport } from "./StockImport";
 import { AdminFulfilment, FulfilmentQueue, SeatGroupPanel } from "./Delivery";
+import { EnableOptionGroups, OptionGrid, OptionGroupsEditor, useOptionGroups } from "./AdminOptions";
 import { CopyValue, ResendCredentials } from "./OrderCredentials";
 import { WarrantyStatus } from "./Warranty";
 import { ReceiptLink } from "./OrderExtras";
@@ -4398,6 +4399,9 @@ export function VariantManager({
 }) {
   // Shop-fulfilled product (Delivery.tsx): no stock to keep.
   const manual = deliveryType === "manual";
+  // Option groups (AdminOptions.tsx): the grid replaces the simple list while groups are on.
+  const og = useOptionGroups(productId);
+  const grouped = !!og.data?.groups.length;
   const { toast } = useStore();
   const [variants, setVariants] = useState<Variant[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -4467,7 +4471,43 @@ export function VariantManager({
       </p>
       <ErrorMessage message={error || pricing.error} />
       <ProductLimitForm productId={productId} pricing={pricing.data} onSaved={() => void pricing.load()} />
-      {variants?.map((v) => (
+      {grouped && og.data && (
+        <>
+          <OptionGroupsEditor
+            productId={productId}
+            groups={og.data.groups}
+            onSaved={() => {
+              void og.load();
+              void load();
+              void pricing.load();
+            }}
+          />
+          <OptionGrid
+            productId={productId}
+            groups={og.data.groups}
+            options={og.data.options}
+            variants={variants ?? []}
+            manual={manual}
+            pricingChips={(v) => <PricingChips row={pricing.data?.variants[v.id]} />}
+            waitingBadge={(v) => (v.waiting ? <WaitingBadge count={v.waiting} /> : null)}
+            renderStock={(v) => <VariantStock variant={v} deliveryType={deliveryType} onChanged={() => void load()} />}
+            renderPricing={(v, close) =>
+              pricing.data?.variants[v.id] ? (
+                <VariantPricingPanel
+                  variantId={v.id}
+                  regularPrice={v.price}
+                  row={pricing.data.variants[v.id]}
+                  tags={pricing.data.tags}
+                  onSaved={() => void pricing.load()}
+                  onClose={close}
+                />
+              ) : null
+            }
+            onChanged={() => void load()}
+          />
+        </>
+      )}
+      {!grouped && variants?.map((v) => (
         <div className={"variant-row" + (v.active ? "" : " inactive")} key={v.id}>
           {editing === v.id ? (
             <form
@@ -4548,15 +4588,26 @@ export function VariantManager({
           )}
         </div>
       ))}
-      <form className="variant-edit variant-new" onSubmit={create}>
-        <input name="label" aria-label="ชื่อตัวเลือกใหม่" placeholder="ชื่อตัวเลือก เช่น 30 วัน จอส่วนตัว" required maxLength={80} />
-        <input name="price" aria-label="ราคาตัวเลือกใหม่ (บาท)" type="number" min="1" step="0.01" placeholder="ราคา (บาท)" required />
-        <WarrantyInput label="วันรับประกันตัวเลือกใหม่" />
-        <button className="button secondary">
-          <Plus size={15} />
-          เพิ่มตัวเลือก
-        </button>
-      </form>
+      {!grouped && (
+        <form className="variant-edit variant-new" onSubmit={create}>
+          <input name="label" aria-label="ชื่อตัวเลือกใหม่" placeholder="ชื่อตัวเลือก เช่น 30 วัน จอส่วนตัว" required maxLength={80} />
+          <input name="price" aria-label="ราคาตัวเลือกใหม่ (บาท)" type="number" min="1" step="0.01" placeholder="ราคา (บาท)" required />
+          <WarrantyInput label="วันรับประกันตัวเลือกใหม่" />
+          <button className="button secondary">
+            <Plus size={15} />
+            เพิ่มตัวเลือก
+          </button>
+        </form>
+      )}
+      {!grouped && og.data && (
+        <EnableOptionGroups
+          productId={productId}
+          onDone={() => {
+            void og.load();
+            void load();
+          }}
+        />
+      )}
     </section>
   );
 }

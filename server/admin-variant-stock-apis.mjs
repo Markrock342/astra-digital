@@ -347,6 +347,9 @@ export function createAdminVariantStockApis({
     return tx(() => {
       if (one("SELECT id FROM variants WHERE id=?", id))
         fail(409, "รหัสตัวเลือกซ้ำ");
+      // A product with option groups gets its variants from the combination grid.
+      if (one("SELECT 1 AS y FROM product_option_groups WHERE product_id=? LIMIT 1", productId))
+        fail(409, "สินค้านี้ใช้กลุ่มตัวเลือก เพิ่มค่าในกลุ่มแทน");
       run(
         "INSERT INTO variants(id,product_id,label,price,active,sort_order,warranty_days) VALUES(?,?,?,?,1,?,?)",
         id,
@@ -450,6 +453,8 @@ export function createAdminVariantStockApis({
           409,
           "มีออเดอร์หรือสต็อกผูกกับตัวเลือกนี้แล้ว ให้ปิดการใช้งานแทนการลบ",
         );
+      // Option groups (option-groups.mjs): the variant no longer names a combination.
+      run("DELETE FROM variant_options WHERE variant_id=?", variantId);
       run("DELETE FROM variants WHERE id=?", variantId);
       audit(user, "DELETE_VARIANT", variantId);
       return { id: variantId, deleted: true };

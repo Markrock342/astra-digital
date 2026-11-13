@@ -709,6 +709,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         // Delivery type + checkout fields of one product (delivery.mjs).
         if (/^\/api\/admin\/products\/[^/]+\/delivery$/.test(path))
           return send(200, service.adminDelivery(user, path.split("/")[4]));
+        // Option groups + variant mapping (option-groups.mjs).
+        if (/^\/api\/admin\/products\/[^/]+\/options$/.test(path))
+          return send(200, service.adminOptionGroups(user, path.split("/")[4]));
         // One shared account / invite link with its seats (masked).
         if (/^\/api\/admin\/seat-groups\/[^/]+$/.test(path))
           return send(200, service.adminSeatGroup(user, path.split("/")[4]));
@@ -762,6 +765,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminSavePreorderSettings(user, path.split("/")[4], input));
         if (/^\/api\/admin\/products\/[^/]+\/delivery$/.test(path))
           return send(200, service.adminSetDelivery(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/products\/[^/]+\/options$/.test(path))
+          return send(200, service.adminSaveOptionGroups(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/products\/[^/]+\/variants\/bulk$/.test(path))
+          return send(200, service.adminBulkVariants(user, path.split("/")[4], input));
         if (/^\/api\/admin\/seat-groups\/[^/]+$/.test(path))
           return send(200, service.adminSetSeatCount(user, path.split("/")[4], input));
         if (/^\/api\/admin\/seat-groups\/[^/]+\/login$/.test(path))
@@ -985,6 +992,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             200,
             service.replaceOrderCredential(user, path.split("/")[4], input),
           );
+        if (/^\/api\/admin\/products\/[^/]+\/options\/enable$/.test(path))
+          return send(200, service.adminEnableOptionGroups(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/products\/[^/]+\/options\/disable$/.test(path))
+          return send(200, service.adminDisableOptionGroups(user, path.split("/")[4]));
         if (/^\/api\/admin\/orders\/[^/]+\/fulfil$/.test(path))
           return send(200, service.fulfilOrder(user, path.split("/")[4], input));
         if (/^\/api\/admin\/orders\/[^/]+\/resend-credentials$/.test(path))

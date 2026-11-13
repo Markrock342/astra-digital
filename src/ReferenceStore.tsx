@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { deliveryNote } from "./Delivery";
+import { AllOptionsList, FromPrice, OptionPicker, matchVariant, type Selection } from "./Options";
 import {
   ArrowLeft,
   ArrowRight,
@@ -59,7 +60,8 @@ export function ReferenceCatalog({ routed = false }: { routed?: boolean }) {
     .filter(
       (p) =>
         (!category || p.category === category.id) &&
-        (p.name + " " + p.description)
+        // Option labels count too (e.g. "Premium", "30 วัน").
+        (p.name + " " + p.description + " " + p.variants.map((v) => v.label).join(" "))
           .toLowerCase()
           .includes(query.toLowerCase()),
     )
@@ -467,10 +469,15 @@ export function ReferenceProduct({ id }: { id: string }) {
   );
   const [quantity, setQuantity] = useState(1);
   const [image, setImage] = useState(0);
-  const variant =
+  const fallback =
     product?.variants.find((v) => v.id === selected) ??
     product?.variants.find((v) => v.available) ??
     product?.variants[0];
+  // Option groups (Options.tsx): the picked values decide the variant; null = follow the default.
+  const grouped = !!product?.optionGroups?.length;
+  const [picked, setPicked] = useState<Selection | null>(null);
+  const selection: Selection = picked ?? fallback?.options ?? {};
+  const variant = grouped && product ? matchVariant(product, selection) : fallback;
   usePageTitle(
     product?.name ?? (loading ? t("สินค้า") : t("ไม่พบสินค้า")),
     product?.description,
@@ -500,7 +507,7 @@ export function ReferenceProduct({ id }: { id: string }) {
         </div>
       </main>
     );
-  if (!product || !variant)
+  if (!product || (!variant && !grouped))
     return (
       <main className="container page-main reference-product-page">
         <Empty
@@ -512,8 +519,9 @@ export function ReferenceProduct({ id }: { id: string }) {
     );
   const available =
     overview?.shop?.shopOpen !== false &&
-    variant.available;
+    !!variant?.available;
   const buy = (checkout: boolean) => {
+    if (!variant) return;
     setBasket({ variantId: variant.id, quantity });
     if (checkout) go("/checkout");
     else {
@@ -576,18 +584,32 @@ export function ReferenceProduct({ id }: { id: string }) {
               <span>{t("ขายแล้ว")}{" "}{product.sold}</span>
             </div>
           )}
-          <PriceDisplay variant={variant} className="reference-price" />
+          {variant ? (
+            <PriceDisplay variant={variant} className="reference-price" />
+          ) : (
+            <FromPrice product={product} selection={selection} />
+          )}
           {!!product.preorder && (product.preorderTerms?.mode ?? "full") === "full" && (
             <p className="preorder-how">
               {t("สินค้าพรีออเดอร์: ชำระแล้วได้เลขคิวทันที ร้านส่ง ID และรหัสผ่านตามลำดับคิว และแจ้งเตือนในเว็บเมื่อส่งแล้ว")}
             </p>
           )}
-          <fieldset className="reference-variants">
+          {grouped && (
+            <OptionPicker
+              product={product}
+              selection={selection}
+              onChange={(next) => {
+                setPicked(next);
+                setQuantity(1);
+              }}
+            />
+          )}
+          {!grouped && <fieldset className="reference-variants">
             <legend>{t("ตัวเลือก")}</legend>
             {product.variants.map((v) => (
               <button
                 key={v.id}
-                className={variant.id === v.id ? "selected" : ""}
+                className={variant?.id === v.id ? "selected" : ""}
                 onClick={() => {
                   setSelected(v.id);
                   setQuantity(1);
@@ -612,10 +634,12 @@ export function ReferenceProduct({ id }: { id: string }) {
                 </span>
               </button>
             ))}
-          </fieldset>
+          </fieldset>}
           <ShopClosedNote />
           <EmailVerifyNotice compact />
-          {!product.preorder && !variant.available ? (
+          {!variant ? (
+            <p className="option-need">{t("เลือกให้ครบทุกตัวเลือก")}</p>
+          ) : !product.preorder && !variant.available ? (
             // Out of stock (ready-stock only): ask to be told when it is back instead of buy.
             <StockWatchButton key={variant.id} variantId={variant.id} productId={product.id} />
           ) : (
@@ -642,8 +666,8 @@ export function ReferenceProduct({ id }: { id: string }) {
             </button>
           </div>
           )}
-          <PreorderRules product={product} total={variant.price * quantity} quantity={quantity} />
-          <PurchaseLimitNote variant={variant} />
+          {variant && <PreorderRules product={product} total={variant.price * quantity} quantity={quantity} />}
+          {variant && <PurchaseLimitNote variant={variant} />}
           <p className="reference-delivery-note">
             <KeyRound size={15} />
             {!product.preorder && deliveryNote(product.deliveryType)
@@ -655,6 +679,16 @@ export function ReferenceProduct({ id }: { id: string }) {
               : t("สินค้าดิจิทัล ได้รับทันทีหลังชำระเงินในหน้าประวัติการซื้อ")}
           </p>
           <AskInChat product={{ id: product.id, name: product.name, imageUrl: product.imageUrl }} />
+          {grouped && (
+            <AllOptionsList
+              product={product}
+              selectedId={variant?.id}
+              onSelect={(v) => {
+                setPicked(v.options ?? {});
+                setQuantity(1);
+              }}
+            />
+          )}
           <section className="reference-product-description">
             <h2>{t("รายละเอียด")}</h2>
             <p>{product.description}</p>
