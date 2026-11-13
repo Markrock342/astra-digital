@@ -709,6 +709,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             }),
           );
       } else if (request.method === "PATCH") {
+        if (/^\/api\/admin\/inventory\/[^/]+$/.test(path))
+          return send(200, service.updateInventoryUnit(user, path.split("/")[4], input));
         if (/^\/api\/admin\/canned-replies\/[^/]+$/.test(path))
           return send(200, service.adminUpdateCannedReply(user, path.split("/")[4], input));
         if (/^\/api\/admin\/categories\/[^/]+$/.test(path))
@@ -995,6 +997,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.bulkUpdateProducts(user, input, { origin: url.origin }));
         if (/^\/api\/admin\/products\/[^/]+\/duplicate$/.test(path))
           return send(201, service.duplicateProduct(user, path.split("/")[4]));
+        // Full ID + password of one stock unit (ADMIN, audited). POST so it is never cached.
+        if (/^\/api\/admin\/inventory\/[^/]+\/reveal$/.test(path))
+          return send(200, service.revealInventoryUnit(user, path.split("/")[4]));
         if (/^\/api\/admin\/inventory\/[^/]+\/defect$/.test(path))
           return send(
             200,

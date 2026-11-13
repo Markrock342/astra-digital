@@ -1,0 +1,109 @@
+/* Stock detail (/admin/inventory/:variantId): shadcn/ui Card stat tiles + Table row actions (MIT,
+   https://ui.shadcn.com/docs/components/card). White tiles on the cool-grey admin background. */
+.clickable-row {
+  cursor: pointer;
+}
+.clickable-row:hover td {
+  background: var(--hover, #f4f6f9);
+}
+.table-title-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+.table-title-link:hover {
+  color: var(--brand, #1534ff);
+  text-decoration: underline;
+}
+.table-action {
+  text-align: right;
+  white-space: nowrap;
+}
+.stock-detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.stock-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stock-summary-card {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid #e3e6eb;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.stock-summary-card small {
+  color: #5b6170;
+  font-size: 13px;
+}
+.stock-summary-card strong {
+  font-size: 24px;
+  font-weight: 700;
+  color: #18181b;
+  font-variant-numeric: tabular-nums;
+}
+.stock-summary-card.good strong {
+  color: #15834a;
+}
+.stock-summary-card.warn strong {
+  color: #b45309;
+}
+.stock-summary-card.bad strong {
+  color: #d92d20;
+}
+.stock-unit + .stock-unit {
+  border-top: 1px solid #eef0f3;
+}
+.stock-unit .settings-row {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.stock-unit-secret {
+  display: grid;
+  gap: 4px;
+}
+.stock-unit-edit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px 12px;
+  margin: 0 0 12px;
+  padding: 14px;
+  border: 1px solid #e3e6eb;
+  border-radius: 10px;
+  background: #f8f9fb;
+}
+.stock-unit-edit .field {
+  margin: 0;
+}
+.stock-unit-edit-actions {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+/* The account list always uses the full width (product editor and stock page). */
+.variant-stock > .variant-stock-list {
+  grid-column: 1 / -1;
+}
+.stock-detail-card .variant-stock {
+  padding: 0;
+  border-top: 0;
+}
+.variant-stock > * {
+  align-self: start;
+}
+.stock-unit .admin-action-row {
+  align-items: center;
+}
+.stock-unit .admin-action-row .button {
+  align-self: center;
+}

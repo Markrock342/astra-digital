@@ -27,6 +27,7 @@ import { SessionsCard } from "./Sessions";
 import { Change, TestMoneyBanner } from "./AdminDashboard";
 import { api, dateTime, money } from "./api";
 import "./alerts.css";
+import "./stock-detail.css";
 import { checkSource, toWebp, uploadImage } from "./image-upload";
 import { libraryBlob, type LibraryItem } from "./image-library";
 import { ImageLibraryDialog } from "./ImageLibrary";
@@ -111,7 +112,7 @@ function useCursorList<T>(path: string, key: string, filters: Filters, topics: L
       setLoadingMore(false);
     }
   }
-  return { rows, next, error, more, loadingMore, meta };
+  return { rows, next, error, more, loadingMore, meta, reload: () => setTick((n) => n + 1) };
 }
 
 function FilterBar({
@@ -3758,7 +3759,204 @@ type StockUnit = {
   cost?: number | null;
 };
 
-function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () => void }) {
+export type StockCounts = {
+  total: number;
+  available: number;
+  expiring: number;
+  expired: number;
+  sold: number;
+  defective: number;
+};
+export type StockVariantInfo = {
+  id: string;
+  label: string;
+  price: number;
+  active: boolean;
+  productId: string;
+  product: string;
+  preorder: boolean;
+  sellable: number;
+};
+
+/** Baht text for the cost input (satang → "45.5"). */
+const costText = (cost?: number | null) => (cost == null ? "" : String(cost / 100));
+/** "2030-01-31 23:59:59" → "2030-01-31" for a date input. */
+const dayText = (value?: string | null) => (value ? value.slice(0, 10) : "");
+/** Expiry is a calendar day (stored as that day 23:59:59): show the day only, never shifted by time zone. */
+const expiryDay = (value: string) =>
+  new Date(value.slice(0, 10) + "T12:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+
+/** One stock unit: masked by default; ADMIN can reveal (audited) and fix an unsold unit. */
+function StockUnitRow({
+  unit,
+  tab,
+  onDefect,
+  onRemove,
+  onSaved,
+}: {
+  unit: StockUnit;
+  tab: string;
+  onDefect: () => void;
+  onRemove: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useStore();
+  const [shown, setShown] = useState<{ loginId?: string; password?: string; code?: string } | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const legacy = !unit.loginIdMasked && !!unit.codeMasked;
+  const free = unit.status === "available" || tab === "expiring" || tab === "expired";
+  async function reveal() {
+    if (shown) return setShown(null);
+    setError("");
+    try {
+      setShown(await api("/admin/inventory/" + unit.id + "/reveal", {}));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  async function save(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const data = new FormData(e.currentTarget);
+    const patch: Record<string, string> = {
+      expiresAt: String(data.get("expiresAt") ?? ""),
+      cost: String(data.get("cost") ?? "").trim(),
+    };
+    if (legacy) {
+      const code = String(data.get("code") ?? "").trim();
+      if (code) patch.code = code;
+    } else {
+      const loginId = String(data.get("loginId") ?? "").trim();
+      const password = String(data.get("password") ?? "");
+      if (loginId) patch.loginId = loginId;
+      if (password) patch.password = password;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ changed: string[] }>("/admin/inventory/" + unit.id, patch, "PATCH");
+      toast(result.changed.length ? "บันทึกรายการสต็อกแล้ว" : "ไม่มีอะไรเปลี่ยน");
+      setEditing(false);
+      setShown(null);
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="stock-unit">
+      <div className="settings-row">
+        <span>
+          {shown ? (
+            <span className="stock-unit-secret">
+              {legacy ? (
+                <CopyValue value={shown.code ?? ""} label="โค้ด" copyable />
+              ) : (
+                <>
+                  <CopyValue value={shown.loginId ?? ""} label="ID" copyable />
+                  <CopyValue value={shown.password ?? ""} label="รหัสผ่าน" copyable />
+                </>
+              )}
+            </span>
+          ) : (
+            <code>{unit.loginIdMasked ?? unit.codeMasked ?? "•••"}</code>
+          )}
+          <small>
+            เติมเมื่อ {dateTime(unit.created_at)}
+            {unit.expires_at && " · หมดอายุ " + expiryDay(unit.expires_at)}
+            {unit.cost != null && " · ต้นทุน " + money(unit.cost)}
+            {unit.sold_at && " · ขาย " + dateTime(unit.sold_at)}
+            {(unit.order_id || unit.reservation_id) && (
+              <>
+                {" · "}
+                <Link to={"/admin/orders/" + (unit.order_id ?? unit.reservation_id)}>ออเดอร์</Link>
+              </>
+            )}
+            {unit.defective_reason && " · " + unit.defective_reason}
+          </small>
+        </span>
+        <span className="admin-action-row">
+          <button type="button" className="button ghost" aria-pressed={!!shown} onClick={() => void reveal()}>
+            <Eye size={15} />
+            {shown ? "ซ่อน" : "ดูรหัส"}
+          </button>
+          {free && (
+            <>
+              <button type="button" className="button ghost" aria-expanded={editing} onClick={() => setEditing(!editing)}>
+                แก้ไข
+              </button>
+              <button type="button" className="button ghost" onClick={onDefect}>
+                เสีย
+              </button>
+              <button type="button" className="button ghost" onClick={onRemove}>
+                ลบ
+              </button>
+            </>
+          )}
+          {unit.status === "sold" && (unit.order_id || unit.reservation_id) && (
+            // A sold account is fixed from its order (replace + notify the customer), not here.
+            <Link className="button ghost" to={"/admin/orders/" + (unit.order_id ?? unit.reservation_id)}>
+              บัญชีเสีย? เปลี่ยนในออเดอร์
+            </Link>
+          )}
+        </span>
+      </div>
+      {editing && (
+        <form className="stock-unit-edit" onSubmit={save} aria-label="แก้ไขรายการสต็อก">
+          {legacy ? (
+            <label className="field">
+              โค้ดใหม่
+              <input name="code" maxLength={500} placeholder="เว้นว่าง = ใช้โค้ดเดิม" autoComplete="off" />
+            </label>
+          ) : (
+            <>
+              <label className="field">
+                ID ใหม่
+                <input name="loginId" maxLength={200} placeholder="เว้นว่าง = ใช้ ID เดิม" autoComplete="off" />
+              </label>
+              <label className="field">
+                รหัสผ่านใหม่
+                <input name="password" maxLength={200} placeholder="เว้นว่าง = ใช้รหัสเดิม" autoComplete="new-password" />
+              </label>
+            </>
+          )}
+          <label className="field">
+            วันหมดอายุ
+            <input name="expiresAt" type="date" defaultValue={dayText(unit.expires_at)} />
+          </label>
+          <label className="field">
+            ต้นทุน (บาท)
+            <input name="cost" inputMode="decimal" defaultValue={costText(unit.cost)} placeholder="ไม่บังคับ" />
+          </label>
+          <div className="stock-unit-edit-actions">
+            <button type="button" className="button secondary" onClick={() => setEditing(false)}>
+              ยกเลิก
+            </button>
+            <button className="button primary" disabled={busy}>
+              {busy ? <LoaderCircle className="spin" size={15} /> : null}
+              บันทึก
+            </button>
+          </div>
+        </form>
+      )}
+      <ErrorMessage message={error} />
+    </div>
+  );
+}
+
+export function VariantStock({
+  variant,
+  onChanged,
+  onMeta,
+}: {
+  variant: { id: string; label: string };
+  onChanged: () => void;
+  /** Stock page: option info + counts from the first page. */
+  onMeta?: (meta: { variant?: StockVariantInfo; counts?: StockCounts }) => void;
+}) {
   const { toast } = useStore();
   const [status, setStatus] = useState("available");
   const [error, setError] = useState("");
@@ -3768,13 +3966,21 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
     { status, limit: "50" },
     ["catalog", "orders"],
   );
+  const counts = list.meta?.counts as StockCounts | undefined;
+  useEffect(() => {
+    if (list.meta) onMeta?.(list.meta as { variant?: StockVariantInfo; counts?: StockCounts });
+  }, [list.meta]); // eslint-disable-line react-hooks/exhaustive-deps
+  const changed = () => {
+    list.reload();
+    onChanged();
+  };
   async function defect(unit: StockUnit) {
     const reason = prompt("เหตุผลที่บัญชีนี้ใช้ไม่ได้");
     if (!reason) return;
     try {
       await api("/admin/inventory/" + unit.id + "/defect", { reason });
       toast("ทำเครื่องหมายว่าเสียแล้ว");
-      onChanged();
+      changed();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -3784,7 +3990,7 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
     try {
       await api("/admin/inventory/" + unit.id, {}, "DELETE");
       toast("ลบออกจากสต็อกแล้ว");
-      onChanged();
+      changed();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -3793,64 +3999,36 @@ function VariantStock({ variant, onChanged }: { variant: Variant; onChanged: () 
     <div className="variant-stock">
       <TestModeStockWarning />
       <div className="variant-stock-add">
-        <StockImport
-          variantId={variant.id}
-          kind="pair"
-          label={"เติมสต็อก " + variant.label}
-          onDone={onChanged}
-        />
-        <ErrorMessage message={error} />
+        <StockImport variantId={variant.id} kind="pair" label={"เติมสต็อก " + variant.label} onDone={changed} />
+        <ErrorMessage message={error || list.error} />
       </div>
       <div className="variant-stock-list">
         <div className="reference-status-tabs" role="group" aria-label="สถานะสต็อก">
-          {[
-            ["available", "พร้อมขาย"],
-            ["expiring", "ใกล้หมดอายุ"],
-            ["expired", "หมดอายุแล้ว"],
-            ["sold", "ขายแล้ว"],
-            ["defective", "เสีย"],
-          ].map(([key, label]) => (
+          {(
+            [
+              ["available", "พร้อมขาย"],
+              ["expiring", "ใกล้หมดอายุ"],
+              ["expired", "หมดอายุแล้ว"],
+              ["sold", "ขายแล้ว"],
+              ["defective", "เสีย"],
+            ] as const
+          ).map(([key, label]) => (
             <button key={key} type="button" className={status === key ? "active" : ""} onClick={() => setStatus(key)}>
               {label}
+              {counts ? " " + counts[key] : ""}
             </button>
           ))}
         </div>
         {list.rows?.length === 0 && <p className="muted">ไม่มีรายการ</p>}
         {list.rows?.map((u) => (
-          <div className="settings-row" key={u.id}>
-            <span>
-              <code>{u.loginIdMasked ?? u.codeMasked ?? "•••"}</code>
-              <small>
-                เติมเมื่อ {dateTime(u.created_at)}
-                {u.expires_at && " · หมดอายุ " + dateTime(u.expires_at)}
-                {u.cost != null && " · ต้นทุน " + money(u.cost)}
-                {u.sold_at && " · ขาย " + dateTime(u.sold_at)}
-                {(u.order_id || u.reservation_id) && (
-                  <>
-                    {" · "}
-                    <Link to={"/admin/orders/" + (u.order_id ?? u.reservation_id)}>ออเดอร์</Link>
-                  </>
-                )}
-                {u.defective_reason && " · " + u.defective_reason}
-              </small>
-            </span>
-            {(u.status === "available" || status === "expiring" || status === "expired") && (
-              <span className="admin-action-row">
-                <button type="button" className="button ghost" onClick={() => void defect(u)}>
-                  เสีย
-                </button>
-                <button type="button" className="button ghost" onClick={() => void remove(u)}>
-                  ลบ
-                </button>
-              </span>
-            )}
-            {u.status === "sold" && (u.order_id || u.reservation_id) && (
-              // A sold account is fixed from its order (replace + notify the customer), not here.
-              <Link className="button ghost" to={"/admin/orders/" + (u.order_id ?? u.reservation_id)}>
-                บัญชีเสีย? เปลี่ยนในออเดอร์
-              </Link>
-            )}
-          </div>
+          <StockUnitRow
+            key={u.id}
+            unit={u}
+            tab={status}
+            onDefect={() => void defect(u)}
+            onRemove={() => void remove(u)}
+            onSaved={changed}
+          />
         ))}
         {list.next && (
           <button type="button" className="button secondary" onClick={list.more}>
@@ -4752,5 +4930,70 @@ export function PendingProductImages({
       />
       <ErrorMessage message={error} />
     </section>
+  );
+}
+
+// ---------------------------------------------------------------- Stock detail (/admin/inventory/:variantId)
+
+/** One option's stock: how many accounts per status, then the list (reveal / edit / defect / delete). */
+export function StockDetail({ variantId }: { variantId: string }) {
+  const [info, setInfo] = useState<StockVariantInfo | null>(null);
+  const [counts, setCounts] = useState<StockCounts | null>(null);
+  return (
+    <>
+      <Link to="/admin/inventory" className="subtle-link stock-detail-back">
+        <ArrowLeft size={15} />
+        บัญชีสต็อก
+      </Link>
+      <div className="reference-admin-heading">
+        <div>
+          <h1>{info ? info.product + " · " + info.label : "รายการสต็อก"}</h1>
+          <p>
+            {info ? money(info.price) + (info.active ? "" : " · ตัวเลือกนี้ปิดขาย") : "กำลังโหลด…"}
+            {info?.preorder ? " · สินค้าสั่งจอง (ไม่ใช้สต็อก)" : ""}
+          </p>
+        </div>
+        {info && (
+          <Link className="button secondary" to={"/admin/products/" + info.productId}>
+            <Package size={16} />
+            เปิดหน้าสินค้า
+          </Link>
+        )}
+      </div>
+      {counts && (
+        <div className="stock-summary" aria-label="สรุปจำนวนไอดี">
+          {(
+            [
+              ["ทั้งหมด", counts.total, ""],
+              ["พร้อมขาย", info?.sellable ?? counts.available, "good"],
+              ["ใกล้หมดอายุ (7 วัน)", counts.expiring, counts.expiring ? "warn" : ""],
+              ["หมดอายุแล้ว", counts.expired, counts.expired ? "bad" : ""],
+              ["ขายแล้ว", counts.sold, ""],
+              ["เสีย", counts.defective, counts.defective ? "bad" : ""],
+            ] as const
+          ).map(([label, value, tone]) => (
+            <div key={label} className={"stock-summary-card " + tone}>
+              <small>{label}</small>
+              <strong>{value.toLocaleString("th-TH")}</strong>
+            </div>
+          ))}
+        </div>
+      )}
+      {info && counts && info.sellable !== counts.available && (
+        <p className="field-help">
+          พร้อมขายจริง {info.sellable} จาก {counts.available} รายการที่ยังไม่ขาย (ที่เหลือหมดอายุก่อนจบประกันของตัวเลือกนี้ จึงไม่ถูกส่งให้ลูกค้า)
+        </p>
+      )}
+      <section className="reference-admin-card editor-panel stock-detail-card">
+        <VariantStock
+          variant={{ id: variantId, label: info?.label ?? "" }}
+          onChanged={() => {}}
+          onMeta={(meta) => {
+            if (meta.variant) setInfo(meta.variant);
+            if (meta.counts) setCounts(meta.counts);
+          }}
+        />
+      </section>
+    </>
   );
 }

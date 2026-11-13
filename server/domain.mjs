@@ -2944,6 +2944,8 @@ export function createCommerceCore({
     adminVariantInventory,
     markInventoryDefect,
     deleteInventoryUnit,
+    revealInventoryUnit,
+    updateInventoryUnit,
   } = createAdminVariantStockApis({
     requireStaff,
     requireAdmin,
@@ -2960,6 +2962,9 @@ export function createCommerceCore({
     decrypt,
     getLowStockAt,
     randomUUID,
+    encrypt,
+    inventoryFingerprint,
+    inventoryLoginKey,
   });
   const { bulkUpdateProducts, duplicateProduct } = createAdminProductBulkApis({
     requireAdmin,
@@ -3299,6 +3304,8 @@ export function createCommerceCore({
     adminVariantInventory,
     markInventoryDefect,
     deleteInventoryUnit,
+    revealInventoryUnit,
+    updateInventoryUnit,
     getPaymentChannel,
     setPaymentChannel,
     pay,

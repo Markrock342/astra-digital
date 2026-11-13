@@ -54,6 +54,7 @@ import {
   PendingProductImages,
   ProductImages,
   ProductPreview,
+  StockDetail,
   type PendingImage,
   AdminAccount,
   AdminAudit,
@@ -187,7 +188,7 @@ export default function Admin() {
   const customerGroup = customerTabs.some(([key]) => key === tab);
   const financeGroup = ["payments", "top-ups", "ledger", "daily-close", "reconcile", "withdrawals"].includes(tab);
   const productId = path.split("/")[3];
-  const detailId = ["orders", "customers"].includes(tab) ? productId : undefined;
+  const detailId = ["orders", "customers", "inventory"].includes(tab) ? productId : undefined;
   const editingProduct = data?.products.find(
     (p) => p.id === (editing ?? productId),
   );
@@ -384,7 +385,7 @@ export default function Admin() {
         <input
           aria-label="ค้นหาในระบบจัดการร้าน"
           placeholder={
-            tab === "products"
+            tab === "products" || tab === "inventory"
               ? "ค้นหาชื่อสินค้า"
               : tab === "customers"
                 ? "ค้นหาลูกค้า"
@@ -860,7 +861,8 @@ export default function Admin() {
             </div>
           </>
         )}
-        {tab === "inventory" && (
+        {tab === "inventory" && detailId && <StockDetail variantId={detailId} />}
+        {tab === "inventory" && !detailId && (
           <>
             <div className="reference-admin-heading">
               <div>
@@ -893,6 +895,9 @@ export default function Admin() {
                     <th>ราคา</th>
                     <th>พร้อมส่ง</th>
                     <th>สถานะ</th>
+                    <th>
+                      <span className="sr-only">จัดการ</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -902,8 +907,18 @@ export default function Admin() {
                     )
                     .flatMap((p) =>
                       p.variants.map((v) => (
-                        <tr key={v.id}>
-                          <td>{p.name}</td>
+                        <tr
+                          key={v.id}
+                          className="clickable-row"
+                          onClick={(e) => {
+                            if (!(e.target as HTMLElement).closest("a,button")) go("/admin/inventory/" + v.id);
+                          }}
+                        >
+                          <td>
+                            <Link to={"/admin/inventory/" + v.id} className="table-title-link">
+                              {p.name}
+                            </Link>
+                          </td>
                           <td>{v.label}</td>
                           <td>{money(v.price)}</td>
                           <td>{v.stock}</td>
@@ -919,6 +934,11 @@ export default function Admin() {
                                   ? "พร้อมส่ง"
                                   : "สินค้าหมด"}
                             </span>
+                          </td>
+                          <td className="table-action">
+                            <Link to={"/admin/inventory/" + v.id} className="button ghost">
+                              ดูไอดี / แก้ไข
+                            </Link>
                           </td>
                         </tr>
                       )),
