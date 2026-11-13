@@ -16,12 +16,13 @@ import {
   STOCK_WATCH_RATE_LIMIT,
 } from "../server/stock-watch.mjs";
 import { REVIEW_REPLY_TITLE } from "../server/review-moderation.mjs";
+import { emailVerificationOff } from "./fixtures/email-verification-off.mjs";
 
 const PREORDER = "cinema-max-90";
 const IN_STOCK = "stream-plus-30";
 
 function fixture(t, options = {}) {
-  const s = createCommerce({ allowDemoAdmin: true, ...options });
+  const s = emailVerificationOff(createCommerce({ allowDemoAdmin: true, ...options }));
   t.after(() => s.db.close());
   let n = 0;
   const customer = (name = "Watcher " + ++n, email) => {

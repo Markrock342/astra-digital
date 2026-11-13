@@ -18,6 +18,7 @@ export function createAdminCustomerApis({
   clean,
   moneyScope,
   releaseCouponForOrder = () => ({ released: false }),
+  onEmailChanged = () => {},
 }) {
   const auditDetail = (user, action, entity, detail) =>
     run(
@@ -54,6 +55,8 @@ export function createAdminCustomerApis({
     phone: row.phone ?? null,
     note: row.note ?? null,
     status: row.status ?? "ACTIVE",
+    // null = not verified yet (email-verification.mjs).
+    emailVerifiedAt: row.email_verified_at ?? null,
     statusReason: row.status_reason ?? null,
     statusChangedAt: row.status_changed_at ?? null,
     created_at: row.created_at,
@@ -136,6 +139,7 @@ export function createAdminCustomerApis({
         note,
         row.id,
       );
+      if (String(row.email).toLowerCase() !== email) onEmailChanged(row.id);
       const after = publicCustomer(one("SELECT * FROM users WHERE id=?", row.id));
       const changed = {};
       for (const key of ["firstName", "lastName", "email", "phone", "note"])

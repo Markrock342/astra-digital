@@ -2827,3 +2827,47 @@ a.reference-bestseller {
     flex: 1 1 auto;
   }
 }
+
+/* Admin › ลูกค้า: "ยืนยันอีเมลแล้ว / ยังไม่ยืนยันอีเมล" badge + "ยืนยันให้" (email-verification.mjs). */
+.customer-heading-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.email-verified-badge {
+  gap: 4px;
+}
+.email-verified-badge.verified {
+  color: #15803d;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.email-verified-badge.unverified {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.customer-email-verify {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: -4px;
+  text-align: left;
+}
+.customer-email-verify .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+}
+.customer-email-verify small {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+.customer-email-verify .email-verified-badge + small {
+  flex-basis: auto;
+}

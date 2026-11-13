@@ -32,12 +32,13 @@ import { BrandLogo, shopName } from "./Theme";
 import { WarrantyDays } from "./Warranty";
 import { ProductFaq } from "./Faq";
 import { api, dateTime, money } from "./api";
-import type { Order, Product, Review } from "./types";
+import type { Order, Product, Review, User } from "./types";
 import { CategoryChips, categoryName, useCategoryParam } from "./Categories";
 import { ForgotPassword, TURNSTILE_WAIT, TurnstileBox, useAuthConfig } from "./AccountRecovery";
 import { StockWatchButton } from "./StockWatch";
 import { AskInChat } from "./ChatAttachments";
 import { ShopClosedNote } from "./ShopClosed";
+import { EmailVerifyNotice, needsEmailVerification } from "./EmailVerify";
 import { ReviewReply } from "./ReviewReply";
 import { PriceDisplay, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
 import { buyLabel, PreorderRules } from "./Preorder";
@@ -186,13 +187,16 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
   const [forgot, setForgot] = useState(
     () => !register && new URLSearchParams(location.search).has("forgot"),
   );
+  // Email verification on (ตั้งค่า › ร้าน) and email configured: the address is required.
+  const emailRequired =
+    register && !!authConfig?.email && overview?.shop?.requireEmailVerification !== false;
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     if (siteKey && !humanToken) return setError(TURNSTILE_WAIT);
     setBusy(true);
     try {
-      const result = await api<{ needsTotp?: boolean; challenge?: string }>(
+      const result = await api<{ needsTotp?: boolean; challenge?: string; user?: User }>(
         register ? "/register" : "/login",
         {
           ...Object.fromEntries(new FormData(e.currentTarget)),
@@ -206,7 +210,13 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
       }
       await refresh();
       go(target);
-      toast(register ? t("สมัครสมาชิกสำเร็จ") : t("เข้าสู่ระบบสำเร็จ"));
+      toast(
+        register
+          ? needsEmailVerification(result.user)
+            ? t("สมัครสมาชิกสำเร็จ ตรวจอีเมลเพื่อยืนยัน")
+            : t("สมัครสมาชิกสำเร็จ")
+          : t("เข้าสู่ระบบสำเร็จ"),
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -326,13 +336,18 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
         </label>
         {register && (
           <label className="field">
-            {t("อีเมล (ไม่บังคับ)")}
+            {emailRequired ? t("อีเมล") : t("อีเมล (ไม่บังคับ)")}
             <input
               name="email"
               type="email"
               autoComplete="email"
               maxLength={160}
+              required={emailRequired}
+              aria-describedby={emailRequired ? "email-verify-hint" : undefined}
             />
+            {emailRequired && (
+              <small id="email-verify-hint">{t("ร้านจะส่งลิงก์ยืนยันไปที่อีเมลนี้")}</small>
+            )}
           </label>
         )}
         <label className="field">
@@ -598,6 +613,7 @@ export function ReferenceProduct({ id }: { id: string }) {
             ))}
           </fieldset>
           <ShopClosedNote />
+          <EmailVerifyNotice compact />
           {!product.preorder && !variant.available ? (
             // Out of stock (ready-stock only): ask to be told when it is back instead of buy.
             <StockWatchButton key={variant.id} variantId={variant.id} productId={product.id} />

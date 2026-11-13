@@ -72,6 +72,15 @@ export type User = {
   balance: number;
   /** Public file URL, or null when the account has no photo. */
   avatarUrl?: string | null;
+  /** Email verification (server/email-verification.mjs). Staff / demo: always true. */
+  emailVerified?: boolean;
+  /** Only while not verified. required = orders / payment are blocked until verified. */
+  emailVerification?: {
+    required: boolean;
+    canSend: boolean;
+    hasEmail: boolean;
+    resendInSeconds: number;
+  };
 };
 export type Order = {
   id: string;
@@ -136,7 +145,7 @@ export type Ledger = {
   type?: "TOPUP" | "PURCHASE" | "REFUND" | "ADJUSTMENT";
   balanceAfter?: number;
 };
-export type ShopSettings={shopName:string;description:string;announcement:string;line:string;email:string;phone:string;facebook:string;discord:string;address?:string;contactMessage?:string;logoUrl?:string|null;policy:string;stockOrder:string;shopOpen:boolean;requireTerms:boolean;pendingExpiryMinutes?:number};
+export type ShopSettings={shopName:string;description:string;announcement:string;line:string;email:string;phone:string;facebook:string;discord:string;address?:string;contactMessage?:string;logoUrl?:string|null;policy:string;stockOrder:string;shopOpen:boolean;requireTerms:boolean;requireEmailVerification?:boolean;pendingExpiryMinutes?:number};
 export type Overview = {
   shop?:ShopSettings;
   customers: number;

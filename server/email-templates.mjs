@@ -12,7 +12,8 @@
  * - Links are built by the server (order page, reset link…). Only placeholder values that
  *   are http(s) URLs become <a href>; a URL typed by the admin stays plain text.
  * - The details table, the button and the footer stay fixed per template (no credentials,
- *   no passwords). The password-reset body must contain {ลิงก์รีเซ็ต}.
+ *   no passwords). The password-reset body must contain {ลิงก์รีเซ็ต}, the email-verification
+ *   body {ลิงก์ยืนยัน}.
  * - A stored override that no longer validates (placeholders changed in a later version)
  *   falls back to the default instead of breaking the send.
  * Schema: ensureEmailTemplates() in ensure-admin-fr.mjs.
@@ -67,9 +68,11 @@ export const PLACEHOLDER_HINTS = {
   หัวข้อประกาศ: "หัวข้อที่พิมพ์ตอนส่งประกาศ",
   ข้อความประกาศ: "ข้อความที่พิมพ์ตอนส่งประกาศ (ต้องมี)",
   ลิงก์ประกาศ: "ลิงก์ที่แนบกับประกาศ (ถ้ามี)",
+  ลิงก์ยืนยัน: "ลิงก์ยืนยันอีเมล (ต้องมี)",
+  ชั่วโมง: "อายุลิงก์เป็นชั่วโมง",
 };
 /** Placeholders whose value is a server-built URL (rendered as a link in HTML). */
-const LINK_PLACEHOLDERS = new Set(["ลิงก์ออเดอร์", "ลิงก์รีเซ็ต", "ลิงก์สินค้า", "ลิงก์ประกาศ"]);
+const LINK_PLACEHOLDERS = new Set(["ลิงก์ออเดอร์", "ลิงก์รีเซ็ต", "ลิงก์สินค้า", "ลิงก์ประกาศ", "ลิงก์ยืนยัน"]);
 
 const orderRows = (a, queue = false) => [
   ["เลขที่คำสั่งซื้อ", "#" + a.orderNumber],
@@ -202,6 +205,27 @@ export const EMAIL_TEMPLATES = {
     rows: () => [],
     button: (a) => ({ label: "ตั้งรหัสผ่านใหม่", href: a.link }),
     footer: "หากคุณไม่ได้ขอ ไม่ต้องทำอะไร รหัสผ่านเดิมยังใช้ได้ตามปกติ · " + AUTOMATED,
+  },
+  verify_email: {
+    label: "ลิงก์ยืนยันอีเมล",
+    when: "ส่งเมื่อลูกค้าสมัครสมาชิก กด “ส่งลิงก์อีกครั้ง” หรือเปลี่ยนอีเมล",
+    placeholders: ["ชื่อร้าน", "ชื่อลูกค้า", "ลิงก์ยืนยัน", "ชั่วโมง"],
+    required: ["ลิงก์ยืนยัน"],
+    defaults: {
+      subject: "ยืนยันอีเมลของคุณ — {ชื่อร้าน}",
+      heading: "ยืนยันอีเมลของคุณ",
+      body:
+        "สวัสดีคุณ{ชื่อลูกค้า} ขอบคุณที่สมัครสมาชิกกับ {ชื่อร้าน} กดปุ่มด้านล่างเพื่อยืนยันว่าอีเมลนี้เป็นของคุณ ลิงก์นี้ใช้ได้ครั้งเดียวและหมดอายุใน {ชั่วโมง} ชั่วโมง\n\nลิงก์ยืนยันอีเมล: {ลิงก์ยืนยัน}",
+    },
+    values: (a) => ({
+      ชื่อร้าน: a.shopName,
+      ชื่อลูกค้า: a.customerName || "ลูกค้า",
+      ลิงก์ยืนยัน: a.link,
+      ชั่วโมง: String(a.hours ?? 24),
+    }),
+    rows: () => [],
+    button: (a) => ({ label: "ยืนยันอีเมล", href: a.link }),
+    footer: "หากคุณไม่ได้สมัครสมาชิกกับร้านนี้ ไม่ต้องทำอะไร บัญชีจะยังไม่ได้รับการยืนยัน · " + AUTOMATED,
   },
   back_in_stock: {
     label: "สินค้าที่รอกลับมามีของ",
@@ -385,6 +409,7 @@ export function sampleArgs(key, { shopName = "ASIA EXTRA", base = "" } = {}) {
   if (key === "back_in_stock") return { ...common, link: origin + "/products" };
   if (key === "preorder_called" || key === "preorder_reminder")
     return { ...common, total: 10500, payBy: new Date(Date.now() + 24 * 3600000).toISOString().slice(0, 19).replace("T", " ") };
+  if (key === "verify_email") return { ...common, link: origin + "/verify-email?token=ตัวอย่าง", hours: 24 };
   if (key === "broadcast")
     return {
       shopName,

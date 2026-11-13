@@ -37,7 +37,8 @@ export function createPrivacyApis({
     requireUser(user);
     if (user.role !== "CUSTOMER") fail(403, "ใช้ได้เฉพาะบัญชีลูกค้า");
     const profile = one(
-      `SELECT id, email, name, username, first_name, last_name, phone, role, status, created_at, avatar_key
+      `SELECT id, email, name, username, first_name, last_name, phone, role, status, created_at, avatar_key,
+              email_verified_at
        FROM users WHERE id=?`,
       user.id,
     );
@@ -112,6 +113,8 @@ export function createPrivacyApis({
         status: profile.status,
         created_at: profile.created_at,
         hasAvatar: !!profile.avatar_key,
+        // Verification status only; verification links / tokens are never exported.
+        emailVerified: profile.email_verified_at != null,
       },
       orders,
       reservations,
@@ -212,6 +215,8 @@ export function createPrivacyApis({
       );
       run("DELETE FROM sessions WHERE user_id=?", subject.id);
       run("DELETE FROM password_resets WHERE user_id=?", subject.id);
+      // Email verification links carry the old address (email-verification.mjs).
+      run("DELETE FROM email_verifications WHERE user_id=?", subject.id);
       run("DELETE FROM stock_watch WHERE user_id=?", subject.id);
       run("DELETE FROM customer_tags WHERE user_id=?", subject.id);
       run(
