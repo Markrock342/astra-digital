@@ -16,7 +16,7 @@ type Entry = {
   loginId?: string;
   password?: string;
   code?: string;
-  /** Optional purchase cost in satang. */
+  /** Optional purchase cost in baht (≤2 decimals). Server stores satang. */
   cost?: number;
   /** Optional expiry YYYY-MM-DD. */
   expiresAt?: string;
@@ -39,7 +39,7 @@ const statusText: Record<LineStatus, string> = {
   invalid: "รูปแบบผิด",
 };
 
-/** Trailing YYYY-MM-DD… then optional cost digits. */
+/** Trailing YYYY-MM-DD… then optional cost in baht (≤2 decimals). */
 function takeExpiresAndCost(parts: string[], keep = 1): {
   head: string[];
   cost?: number;
@@ -52,14 +52,19 @@ function takeExpiresAndCost(parts: string[], keep = 1): {
     expiresAt = head[head.length - 1].trim().slice(0, 10);
     head = head.slice(0, -1);
   }
-  if (head.length > keep && /^\d+$/.test(head[head.length - 1].trim())) {
+  if (head.length > keep && /^\d+(\.\d{1,2})?$/.test(head[head.length - 1].trim())) {
     cost = Number(head[head.length - 1].trim());
     head = head.slice(0, -1);
   }
   return { head, cost, expiresAt };
 }
 
-/** Excel/Sheets paste; optional trailing cost (satang) and expiry date. */
+/** Format baht for preview (always show 2 decimals). */
+function formatBaht(cost: number) {
+  return cost.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Excel/Sheets paste; optional trailing cost (baht) and expiry date. */
 function parseEntries(text: string, kind: Kind): Entry[] {
   const entries: Entry[] = [];
   text.split(/\r?\n/).forEach((raw, index) => {
@@ -289,23 +294,28 @@ export function StockImport({
                 <th className="num">บรรทัด</th>
                 <th>{kind === "pair" ? "ไอดี" : "โค้ด"}</th>
                 {kind === "pair" && <th>รหัสผ่าน</th>}
+                <th className="num">ต้นทุน (บาท)</th>
                 <th>ผลตรวจ</th>
               </tr>
             </thead>
             <tbody>
-              {shown.map((l) => (
+              {shown.map((l) => {
+                const entryCost = entries.find((e) => e.line === l.line)?.cost;
+                return (
                 <tr key={l.line}>
                   <td className="num">{l.line}</td>
                   <td>
                     <code className="stock-import-id">{l.display || "–"}</code>
                   </td>
                   {kind === "pair" && <td>{l.passwordMasked ?? "–"}</td>}
+                  <td className="num">{entryCost != null ? formatBaht(entryCost) : "–"}</td>
                   <td>
                     <span className={"import-status import-" + l.status}>{statusText[l.status]}</span>
                     {l.status !== "ok" && l.reason && <small>{l.reason}</small>}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           {!shown.length && <p className="reference-empty-text">ไม่มีบรรทัดที่มีปัญหา</p>}
@@ -342,8 +352,8 @@ export function StockImport({
           placeholder={
             placeholder ??
             (kind === "pair"
-              ? "user1@mail.com,password1\nuser2@mail.com,password2,1500,2027-12-31"
-              : "รหัสสินค้าหนึ่งรายการต่อบรรทัด\nCODE-WITH-COST,1500,2027-12-31")
+              ? "user1@mail.com,password1\nuser2@mail.com,password2,15.00,2027-12-31"
+              : "รหัสสินค้าหนึ่งรายการต่อบรรทัด\nCODE-WITH-COST,15.00,2027-12-31")
           }
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -351,8 +361,8 @@ export function StockImport({
       </label>
       <p className="field-help">
         {kind === "pair"
-          ? "วางจาก Excel ได้ · คั่นด้วย , หรือแท็บ · คอลัมน์ท้ายเป็นต้นทุนสตางค์และวันหมดอายุ YYYY-MM-DD (ไม่บังคับ) · รหัสผ่านเก็บแบบเข้ารหัส ลูกค้าเห็นหลังจ่ายเงินเท่านั้น"
-          : "ระบบตรวจโค้ดซ้ำก่อนบันทึก · ต่อท้าย ,ต้นทุน และ/หรือ ,YYYY-MM-DD ได้ (ไม่บังคับ) · ยังไม่ส่งให้ลูกค้าก่อนยืนยันการชำระเงิน"}
+          ? "วางจาก Excel ได้ · คั่นด้วย , หรือแท็บ · คอลัมน์ท้ายเป็นต้นทุนบาท (ทศนิยมได้ 2 ตำแหน่ง) และวันหมดอายุ YYYY-MM-DD (ไม่บังคับ) · รหัสผ่านเก็บแบบเข้ารหัส ลูกค้าเห็นหลังจ่ายเงินเท่านั้น"
+          : "ระบบตรวจโค้ดซ้ำก่อนบันทึก · ต่อท้าย ,ต้นทุนบาท และ/หรือ ,YYYY-MM-DD ได้ (ไม่บังคับ) · ยังไม่ส่งให้ลูกค้าก่อนยืนยันการชำระเงิน"}
         {entries.length > 0 && ` · พร้อมเติม ${entries.length} ${unit}`}
         {entries.length > BATCH && ` (แบ่งส่ง ${batches.length} ชุด ชุดละ ${BATCH})`}
         {missing > 0 && <strong className="danger-text"> · {missing} บรรทัดไม่มีรหัสผ่าน</strong>}

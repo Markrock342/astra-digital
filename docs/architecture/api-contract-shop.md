@@ -153,7 +153,7 @@ Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์
 - `GET /api/admin/variants/:id/inventory?status=available|sold|defective&cursor&limit` — STAFF+ · ปิดบังรหัส (`credentialsMasked`)
 - `POST /api/admin/inventory/:id/defect` — ADMIN · `{ reason }` เฉพาะ available
 - `DELETE /api/admin/inventory/:id` — ADMIN · ลบได้เฉพาะ available
-- `POST /api/admin/inventory` รับ `csv` ข้อความเพิ่มจาก `codes`/`items` เดิม (บรรทัดละโค้ด หรือ `loginId,password`) · ฟิลด์ท้ายทางเลือก `cost` (สตางค์, integer ≥0) ทั้ง `items[].cost` และ `CODE,cost` / `loginId,password,cost`
+- `POST /api/admin/inventory` รับ `csv` ข้อความเพิ่มจาก `codes`/`items` เดิม (บรรทัดละโค้ด หรือ `loginId,password`) · ฟิลด์ท้ายทางเลือก `cost` (**บาท**, ≥0 ทศนิยมได้ ≤2 ตำแหน่ง) ทั้ง `items[].cost` และ `CODE,cost` / `loginId,password,cost` — เซิร์ฟเวอร์แปลงเป็นสตางค์เก็บใน `inventory.cost`
 - `POST /api/admin/settings` รับ `lowStockAt` (1–100, default 3) · แจ้งเตือน `stock_low` และ `stockStatus` ใช้ค่านี้
 - สต็อก available ไม่นับแถว `defective=1` · Migration 007 เพิ่มคอลัมน์ defective*
 - Migration `009_inventory_cost.sql`: `inventory.cost INTEGER NULL` (สตางค์)
@@ -182,12 +182,12 @@ Migration: `006_ledger_money.sql` (idempotent) ขยายคอลัมน์
 **นำเข้า ID + รหัสผ่าน** — `POST /api/admin/inventory` (ADMIN)
 
 ```json
-{ "variantId": "…", "items": [{ "loginId": "…", "password": "…", "cost": 1500 }] }
+{ "variantId": "…", "items": [{ "loginId": "…", "password": "…", "cost": 15.00 }] }
 ```
 
 - 1–100 รายการต่อครั้ง · `loginId` ถูก trim · `password` **ไม่ trim** ส่งมาตามที่กรอก (อาจมีช่องว่าง `:` `|` หรือแท็บ)
-- `cost` ทางเลือก = ต้นทุนสตางค์ (integer ≥0) · เก็บใน `inventory.cost` · ไม่ส่ง = NULL
-- `codes` รองรับ `CODE,cost` ต่อบรรทัด · CSV รองรับ `loginId,password,cost`
+- `cost` ทางเลือก = ต้นทุน**บาท** (≥0 ทศนิยมได้ ≤2 ตำแหน่ง เช่น `15` / `15.5` / `15.50`) · แปลงเป็นสตางค์เก็บใน `inventory.cost` · ไม่ส่ง = NULL
+- `codes` รองรับ `CODE,cost` ต่อบรรทัด · CSV รองรับ `loginId,password,cost` (ค่า cost เป็นบาทเช่นกัน)
 - ตอบ `{ "imported": n }` · ซ้ำ (fingerprint ชน) ตอบ 409 ทั้งชุด ไม่บันทึกบางส่วน
 - ยังรับ `codes` แบบเดิมได้ระหว่างเปลี่ยนผ่าน
 
