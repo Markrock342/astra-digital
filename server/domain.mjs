@@ -73,6 +73,7 @@ import { normalizeLegal } from "./legal.mjs";
 import { normalizeFaq } from "./faq.mjs";
 import { createBroadcastApis } from "./broadcast.mjs";
 import { createBannerApis } from "./banners.mjs";
+import { createAppearanceApis } from "./appearance.mjs";
 import { createManualOrderApis } from "./manual-orders.mjs";
 import { createLaunchCleanupApis } from "./launch-cleanup.mjs";
 import { createRetention } from "./retention.mjs";
@@ -1188,6 +1189,8 @@ export function createCommerceCore({
   });
   // Promo banners on the storefront home (server/banners.mjs).
   const bannerApis = createBannerApis({ requireAdmin, one, all, run, tx, fail, randomUUID, fileStore, clock });
+  // Storefront look and text (ตั้งค่า › หน้าตาร้าน, server/appearance.mjs).
+  const appearanceApis = createAppearanceApis({ requireAdmin, one, run, fail, randomUUID, fileStore });
   const {
     exportMyData,
     requestAccountDeletion,
@@ -1477,6 +1480,8 @@ export function createCommerceCore({
       categories: categoryApis.publicCategories(),
       // Home carousel: active banners inside their Bangkok start/end window (banners.mjs).
       banners: bannerApis.publicBanners(),
+      // Editable storefront look/text; public fields only (no file keys, no who/when).
+      appearance: appearanceApis.publicAppearance(),
       activity: all(
         "SELECT 'purchase' AS kind,u.name,p.name AS product,p.art,v.label,o.created_at AS time FROM orders o JOIN users u ON u.id=o.user_id JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id WHERE o.status='DELIVERED' UNION ALL SELECT 'register' AS kind,u.name,NULL AS product,NULL AS art,NULL AS label,u.created_at AS time FROM users u WHERE role='CUSTOMER' ORDER BY time DESC LIMIT 4",
       ).map((a) => ({
@@ -3656,6 +3661,11 @@ export function createCommerceCore({
     adminDeleteCategory: categoryApis.adminDeleteCategory,
     // Promo banners (server/banners.mjs).
     publicBanners: bannerApis.publicBanners,
+    adminAppearance: appearanceApis.adminAppearance,
+    saveAppearance: appearanceApis.saveAppearance,
+    resetAppearance: appearanceApis.resetAppearance,
+    setAppearanceImage: appearanceApis.setAppearanceImage,
+    removeAppearanceImage: appearanceApis.removeAppearanceImage,
     adminBanners: bannerApis.adminBanners,
     adminCreateBanner: bannerApis.adminCreateBanner,
     adminUpdateBanner: bannerApis.adminUpdateBanner,

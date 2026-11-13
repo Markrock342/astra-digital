@@ -42,6 +42,7 @@ import { EmailVerifyNotice, needsEmailVerification } from "./EmailVerify";
 import { ReviewReply } from "./ReviewReply";
 import { PriceDisplay, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
 import { buyLabel, PreorderRules } from "./Preorder";
+import { TrustBlock } from "./Appearance";
 /**
  * Product list with search + sort. On /products (`routed`) it also shows the category chips
  * and filters by ?category=<id>; the URL loads filtered and works with search and sort.
@@ -859,6 +860,8 @@ export function ReferenceReviews() {
           </div>
           )}
         </section>
+        {/* ตั้งค่า › หน้าตาร้าน › หน้าเครดิตร้าน (hidden until the admin switches it on). */}
+        <TrustBlock />
         {ready && reviews.length > 0 && (
         <div className="credit-filter-bar">
           {[0, 5, 4, 3, 2, 1].map((n) => (
