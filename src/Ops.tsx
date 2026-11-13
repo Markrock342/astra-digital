@@ -59,8 +59,28 @@ export function splitReply(body: string): { quote: ChatReply | null; text: strin
   };
 }
 
+const replySnippet = (body: string) => splitReply(body).text.replace(/\s+/g, " ").trim().slice(0, 80);
+
+/** The quote travels inside the message text, so anyone could type a fake one ("ทีมงาน: คืนเงินแล้ว").
+ * Only show the quote box when the quoted text is an earlier message in this thread, and take the
+ * author from that real message instead of the typed name. Otherwise show the text as it was sent. */
+function verifiedReply(
+  messages: ChatMessage[],
+  index: number,
+  authorOf: (m: ChatMessage) => string,
+): { quote: ChatReply | null; text: string } {
+  const body = messages[index].body;
+  const parsed = splitReply(body);
+  if (!parsed.quote) return parsed;
+  for (let j = index - 1; j >= 0; j--) {
+    if (replySnippet(messages[j].body) === parsed.quote.text)
+      return { quote: { author: authorOf(messages[j]), text: parsed.quote.text }, text: parsed.text };
+  }
+  return { quote: null, text: body.slice(REPLY_MARK.length) };
+}
+
 function replyTarget(message: ChatMessage, author: string): ChatReply {
-  const text = splitReply(message.body).text.replace(/\s+/g, " ").trim().slice(0, 80);
+  const text = replySnippet(message.body);
   return { author: author.replace(/[:\n]/g, "").trim().slice(0, 40) || "?", text };
 }
 
@@ -286,8 +306,8 @@ function MessageList({
   }, [messages.length]);
   return (
     <div className="chat-messages" aria-live="polite">
-      {messages.map((m) => {
-        const shown = splitReply(m.body);
+      {messages.map((m, index) => {
+        const shown = verifiedReply(messages, index, customerName);
         return (
           <div key={m.id} className={mine(m) ? "chat-bubble mine" : "chat-bubble"}>
             <small>{customerName(m)}</small>
