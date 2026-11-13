@@ -401,4 +401,12 @@ test("workerd: Pages proxy serves robots + sitemap and rewrites product <head> w
   assert.equal(await (await get("/products/other-id")).text(), indexHtml);
   const head = await get("/robots.txt", { method: "HEAD" });
   assert.equal(head.status, 200);
+
+  // www → apex, same path and query; the API on www still answers (no redirect for /api).
+  const www = await mf.dispatchFetch("https://www.shop.test/products?category=music", { redirect: "manual" });
+  assert.equal(www.status, 301);
+  assert.equal(www.headers.get("location"), "https://shop.test/products?category=music");
+  apiDown = false;
+  assert.deepEqual(await (await mf.dispatchFetch("https://www.shop.test/api/echo")).json(), { forwarded: true });
+  assert.equal((await get("/terms", { redirect: "manual" })).status, 200, "apex is not redirected");
 });

@@ -89,6 +89,11 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/")) return env.COMMERCE_API.fetch(request);
     const read = request.method === "GET" || request.method === "HEAD";
+    // One address for the shop: www.<domain> pages go to <domain> (same path and query).
+    if (read && url.hostname.startsWith("www.")) {
+      url.hostname = url.hostname.slice(4);
+      return Response.redirect(url.toString(), 301);
+    }
     if (read && url.pathname === "/robots.txt")
       return textResponse(robotsTxt(url.origin), "text/plain; charset=utf-8", request, 3600);
     if (read && url.pathname === "/sitemap.xml") {
