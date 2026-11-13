@@ -17,7 +17,7 @@
 ต้องมี Node.js 24.14+ และ npm
 
 ```sh
-cd /Users/code/nursejob/demos/astra-digital
+cd /Users/code/astra-digital
 npm ci
 npm run cloud:setup
 npm run build
