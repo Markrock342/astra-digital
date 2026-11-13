@@ -42,6 +42,8 @@ export type User = {
   name: string;
   role: "CUSTOMER" | "ADMIN" | "STAFF";
   balance: number;
+  /** Public file URL, or null when the account has no photo. */
+  avatarUrl?: string | null;
 };
 export type Order = {
   id: string;

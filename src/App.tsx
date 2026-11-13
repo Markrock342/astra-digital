@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
   type CSSProperties,
+  type ChangeEvent,
   type FormEvent,
   type MouseEvent,
   lazy,
@@ -64,7 +65,7 @@ import {
   useCardTilt,
 } from "./Theme";
 import { flushSync } from "react-dom";
-import { api, money, dateTime, relativeTime } from "./api";
+import { api, money, dateTime, relativeTime, uploadImage } from "./api";
 import type {
   Product,
   Variant,
@@ -277,6 +278,23 @@ export function ErrorMessage({ message }: { message: string }) {
     </div>
   ) : null;
 }
+const AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+function UserAvatar({ user, large = false }: { user: User; large?: boolean }) {
+  const [brokenUrl, setBrokenUrl] = useState("");
+  const photo = user.avatarUrl && brokenUrl !== user.avatarUrl ? user.avatarUrl : "";
+  return (
+    <span className={large ? "avatar large" : "avatar"}>
+      {photo ? (
+        <img src={photo} alt="" onError={() => setBrokenUrl(photo)} />
+      ) : (
+        user.name.slice(0, 1) || "?"
+      )}
+    </span>
+  );
+}
+
 function Header() {
   const { path, user, basket, go, refresh, toast, lang, changeLang } =
     useStore();
@@ -341,7 +359,7 @@ function Header() {
                   onClick={() => setAccount(!account)}
                   aria-expanded={account}
                 >
-                  <span className="avatar">{user.name[0]}</span>
+                  <UserAvatar user={user} />
                   <span className="account-name">{user.name}</span>
                   <ChevronDown size={14} />
                 </button>
@@ -2270,6 +2288,41 @@ function Account() {
   const testPayments = useTestPayments();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  async function onAvatar(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setAvatarError("");
+    if (!AVATAR_TYPES.has(file.type) || file.size < 1 || file.size > AVATAR_MAX_BYTES) {
+      setAvatarError("รูปต้องเป็น JPEG, PNG หรือ WebP และไม่เกิน 2MB");
+      return;
+    }
+    setAvatarBusy(true);
+    try {
+      await uploadImage("/profile/avatar", file, file.type);
+      await refresh();
+      toast(t("อัปเดตรูปโปรไฟล์แล้ว"));
+    } catch (err) {
+      setAvatarError((err as Error).message);
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+  async function removeAvatar() {
+    setAvatarError("");
+    setAvatarBusy(true);
+    try {
+      await api("/profile/avatar", undefined, "DELETE");
+      await refresh();
+      toast(t("ลบรูปโปรไฟล์แล้ว"));
+    } catch (err) {
+      setAvatarError((err as Error).message);
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -2298,10 +2351,35 @@ function Account() {
       ) : (
         <>
           <div className="account-summary panel">
-            <span className="avatar large">{user.name[0]}</span>
+            <UserAvatar user={user} large />
             <div>
               <h2>{user.name}</h2>
               <p>{user.email}</p>
+              <div className="account-avatar-actions">
+                <label className="button secondary" htmlFor="account-avatar">
+                  {avatarBusy ? <LoaderCircle className="spin" size={17} /> : null}
+                  {t("เปลี่ยนรูปโปรไฟล์")}
+                </label>
+                <input
+                  id="account-avatar"
+                  className="account-avatar-file"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={onAvatar}
+                  disabled={avatarBusy}
+                />
+                {user.avatarUrl ? (
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={removeAvatar}
+                    disabled={avatarBusy}
+                  >
+                    {t("ลบรูปโปรไฟล์")}
+                  </button>
+                ) : null}
+              </div>
+              <ErrorMessage message={avatarError} />
             </div>
             <span className="service-pill">
               {user.role === "ADMIN" ? t("ผู้ดูแลร้าน") : t("สมาชิก")}
