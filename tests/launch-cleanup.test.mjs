@@ -2,7 +2,7 @@
 // CUSTOMER commerce in sandbox, keep catalog/admin/audit, refuse live + bad password.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { createCommerce } from "../server/commerce.mjs";
 import { createAPIHandler } from "../server/api-handler.mjs";
 import { ROLES } from "../server/auth-policy.mjs";
@@ -160,4 +160,30 @@ test("HTTP: STAFF 403; ADMIN dryRun 200", async (t) => {
   const dry = await call(adminToken, { currentPassword: ADMIN_PASSWORD });
   assert.equal(dry.status, 200);
   assert.equal(dry.body.dryRun, true);
+});
+
+test("held preorder units go back to stock; email verification rows are removed", (t) => {
+  const { s, admin, buyer } = fixture(t);
+  const product = s.saveProduct(admin, {
+    name: "Launch Free Preorder",
+    description: "จองฟรีก่อนล้างข้อมูล",
+    category: "streaming",
+    price: 5000,
+    active: true,
+    preorder: true,
+    firstLabel: "1 เดือน",
+  });
+  const variantId = s.adminProductVariants(admin, product.id).variants[0].id;
+  s.adminSavePreorderSettings(admin, product.id, { mode: "free", payWindowHours: 24, lapsePolicy: "keep" });
+  s.createOrder(buyer, { variantId, quantity: 1, requestKey: randomUUID() });
+  s.importCodes(admin, { variantId, items: [{ loginId: "held-unit@launch.test", password: "pw" }] });
+  // The free reservation is called and holds the unit.
+  assert.equal(count(s, "SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND reservation_id IS NOT NULL AND sold_at IS NULL", variantId), 1);
+  s.db.prepare("INSERT INTO email_verifications(token_hash,user_id,email,expires_at,created_at,kind) VALUES(?,?,?,?,?,?)")
+    .run("launch-test-token", buyer.id, "launch-buyer@example.invalid", Date.now() + 3600000, Date.now(), "signup");
+  const dry = s.adminLaunchCleanup(admin, { currentPassword: ADMIN_PASSWORD });
+  s.adminLaunchCleanup(admin, { currentPassword: ADMIN_PASSWORD, dryRun: false });
+  assert.equal(count(s, "SELECT COUNT(*) AS n FROM inventory WHERE variant_id=? AND reservation_id IS NULL AND order_id IS NULL", variantId), 1, "unit back in stock");
+  assert.equal(count(s, "SELECT COUNT(*) AS n FROM email_verifications"), 0);
+  assert.ok(dry);
 });

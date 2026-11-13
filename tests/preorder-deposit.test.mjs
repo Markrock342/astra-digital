@@ -520,3 +520,12 @@ test("HTTP: settings, call and cancel routes; the lazy order sweep lapses past d
   const rows = queue.filter((r) => [first, second].includes(r.id)).map((r) => r.mode + ":" + r.stage).sort();
   assert.deepEqual(rows, ["deposit:lapsed", "deposit:shop_cancelled"]);
 });
+
+test("duplicating a preorder product copies its วิธีจอง settings", (t) => {
+  const { s, admin, product } = fixture(t, { mode: "free", settings: { payWindowHours: 6, lapsePolicy: "keep" } });
+  const copy = s.duplicateProduct(admin, product.id);
+  const read = (id) => ({ ...s.db.prepare("SELECT mode,deposit_type,deposit_value,pay_window_hours,lapse_policy,max_per_customer,queue_limit FROM preorder_settings WHERE product_id=?").get(id) });
+  assert.equal(read(copy.id).mode, "free");
+  assert.equal(read(copy.id).pay_window_hours, 6);
+  assert.deepEqual(read(copy.id), read(product.id));
+});

@@ -82,7 +82,9 @@ export function createLaunchCleanupApis({
       );
     if (reservationIds.length)
       soldInventory += n(
-        `SELECT COUNT(*) AS n FROM inventory WHERE reservation_id IN (${reservationIds.map(() => "?").join(",")})`,
+        // Held (not yet sold) preorder units go back to stock, not counted as removed.
+        `SELECT COUNT(*) AS n FROM inventory WHERE reservation_id IN (${reservationIds.map(() => "?").join(",")})
+           AND NOT (sold_at IS NULL AND order_id IS NULL)`,
         ...reservationIds,
       );
 
@@ -275,6 +277,12 @@ export function createLaunchCleanupApis({
           }
 
           run(
+            // Units only held for a called deposit / free preorder were never sold: back to stock.
+            `UPDATE inventory SET reservation_id=NULL WHERE sold_at IS NULL AND order_id IS NULL
+               AND reservation_id IN (SELECT id FROM reservations WHERE user_id IN (${marks}))`,
+            ...customerIds,
+          );
+          run(
             `DELETE FROM inventory WHERE
                (order_id IS NOT NULL AND order_id IN (SELECT id FROM orders WHERE user_id IN (${marks})))
                OR (reservation_id IS NOT NULL AND reservation_id IN (SELECT id FROM reservations WHERE user_id IN (${marks})))`,
@@ -307,6 +315,8 @@ export function createLaunchCleanupApis({
 
           run(`DELETE FROM reservations WHERE user_id IN (${marks})`, ...customerIds);
           run(`DELETE FROM orders WHERE user_id IN (${marks})`, ...customerIds);
+          if (tableExists(one, "email_verifications"))
+            run(`DELETE FROM email_verifications WHERE user_id IN (${marks})`, ...customerIds);
           run(`DELETE FROM users WHERE role='CUSTOMER' AND id IN (${marks})`, ...customerIds);
         } else {
           run(

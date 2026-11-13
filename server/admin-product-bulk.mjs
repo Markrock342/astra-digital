@@ -182,6 +182,15 @@ export function createAdminProductBulkApis({
           tagPrices += 1;
         }
       }
+      // Preorder "วิธีจอง" (deposit / free, preorder.mjs) follows the copy too.
+      if (one("SELECT name FROM sqlite_master WHERE type='table' AND name='preorder_settings'"))
+        run(
+          `INSERT INTO preorder_settings(product_id,mode,deposit_type,deposit_value,pay_window_hours,lapse_policy,max_per_customer,queue_limit,updated_by)
+           SELECT ?,mode,deposit_type,deposit_value,pay_window_hours,lapse_policy,max_per_customer,queue_limit,? FROM preorder_settings WHERE product_id=?`,
+          id,
+          user.id,
+          sourceId,
+        );
       const images = all(
         "SELECT file_key,sort_order FROM product_images WHERE product_id=? ORDER BY sort_order ASC, id ASC",
         sourceId,
