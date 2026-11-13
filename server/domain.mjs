@@ -75,6 +75,7 @@ import { createBroadcastApis } from "./broadcast.mjs";
 import { createBannerApis } from "./banners.mjs";
 import { createManualOrderApis } from "./manual-orders.mjs";
 import { createLaunchCleanupApis } from "./launch-cleanup.mjs";
+import { createRetention } from "./retention.mjs";
 import { createTaxInvoices } from "./tax-invoices.mjs";
 import { createPreorders } from "./preorder.mjs";
 import {
@@ -649,6 +650,13 @@ export function createCommerceCore({
     clock,
     hash,
     requireUser,
+  });
+  const retention = createRetention({
+    one,
+    all,
+    run,
+    clock,
+    fileStore,
   });
   const alerts = createAlerts({
     one,
@@ -3787,8 +3795,13 @@ export function createCommerceCore({
     alertSettings: alerts.alertSettings,
     saveAlertSettings: alerts.saveAlertSettings,
     testAlert: alerts.testAlert,
-    alertsTick: (now) => alerts.tick(now),
+    alertsTick: (now) => {
+      const at = now ?? clock();
+      retention.maybePurge(at);
+      return alerts.tick(at);
+    },
     alertsIdle: alerts.idle,
+    retentionPurge: retention.purgeOnce,
     backupStatus: backupApis.backupStatus,
     exportBackup: backupApis.exportBackup,
     runBackupNow: backupApis.runBackupNow,
@@ -3801,6 +3814,7 @@ export function createCommerceCore({
     },
     /** Durable Object alarm: daily summary (21:00) and R2 backup (from 04:00), both once a day. */
     runScheduledJobs: async (now = clock()) => {
+      retention.maybePurge(now, { force: true });
       const summary = alerts.tick(now, { force: true });
       const backup = backupApis.backupDue(now) ? await backupApis.runBackup(now) : null;
       if (summary) await summary;
