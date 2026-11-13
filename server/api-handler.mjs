@@ -445,7 +445,7 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (path === "/api/queue/me")
           return send(200, { queue: service.myQueue(user) });
         if (path === "/api/chat/threads")
-          return send(200, { threads: service.chatThreads(user) });
+          return send(200, { threads: service.chatThreads(user, { q: url.searchParams.get("q") }) });
         if (/^\/api\/chat\/threads\/[^/]+\/messages$/.test(path))
           return send(200, {
             messages: service.chatMessages(user, path.split("/")[4]),
@@ -904,6 +904,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.setStaffActive(user, path.split("/")[4], input));
         if (/^\/api\/chat\/threads\/[^/]+\/assign$/.test(path))
           return send(200, { thread: service.assignChatThread(user, path.split("/")[4], input) });
+        if (/^\/api\/chat\/threads\/[^/]+\/pin$/.test(path))
+          return send(200, { thread: service.pinChatThread(user, path.split("/")[4], input) });
         // Append-only internal notes; /note kept for older clients (also appends).
         if (/^\/api\/admin\/orders\/[^/]+\/notes?$/.test(path))
           return send(200, service.adminAddOrderNote(user, path.split("/")[4], input));

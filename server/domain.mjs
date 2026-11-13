@@ -2543,42 +2543,96 @@ export function createCommerceCore({
       queueNumber: row.queue_number,
     }));
   }
-  function chatThreads(user) {
-    requireUser(user);
-    if (isStaff(user))
-      return all(
-        `SELECT t.*,u.name AS customer,u.email AS customer_email,a.name AS assignee,
-                (SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id=t.id) AS messages,
-                COALESCE(
-                  (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.thread_id=t.id),
-                  t.created_at
-                ) AS lastMessageAt,
-                (
-                  -- A team member's own storefront thread: they wrote those messages.
-                  SELECT COUNT(*) FROM chat_messages m
-                  WHERE m.thread_id=t.id AND m.sender_type='USER' AND t.user_id<>?
-                    AND m.created_at > COALESCE(
-                      (SELECT r.last_read_at FROM chat_thread_reads r
-                       WHERE r.thread_id=t.id AND r.user_id=?),
-                      '1970-01-01 00:00:00'
-                    )
-                ) AS unreadCount
-         FROM chat_threads t JOIN users u ON u.id=t.user_id LEFT JOIN users a ON a.id=t.assigned_to
-         ORDER BY lastMessageAt DESC, t.id DESC`,
-        user.id,
-        user.id,
-      );
-    return all(
-      `SELECT t.*,
+  const STAFF_THREAD_SELECT = `SELECT t.*,u.name AS customer,u.email AS customer_email,a.name AS assignee,
               (SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id=t.id) AS messages,
               COALESCE(
                 (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.thread_id=t.id),
                 t.created_at
               ) AS lastMessageAt,
-              0 AS unreadCount
-       FROM chat_threads t WHERE t.user_id=? ORDER BY lastMessageAt DESC, t.id DESC`,
+              (
+                -- A team member's own storefront thread: they wrote those messages.
+                SELECT COUNT(*) FROM chat_messages m
+                WHERE m.thread_id=t.id AND m.sender_type='USER' AND t.user_id<>?
+                  AND m.created_at > COALESCE(
+                    (SELECT r.last_read_at FROM chat_thread_reads r
+                     WHERE r.thread_id=t.id AND r.user_id=?),
+                    '1970-01-01 00:00:00'
+                  )
+              ) AS unreadCount
+       FROM chat_threads t JOIN users u ON u.id=t.user_id LEFT JOIN users a ON a.id=t.assigned_to`;
+  const STAFF_THREAD_ORDER = ` ORDER BY (t.pinned_at IS NULL), t.pinned_at DESC, lastMessageAt DESC, t.id DESC`;
+  // Bound substring match. The Worker's SQLite rejects ordinary Thai phrases
+  // with "LIKE or GLOB pattern too complex", so this does not use LIKE.
+  // instr keeps % _ \ and quotes literal, and the value is never concatenated into SQL.
+  function clipMatch(body, q) {
+    const flat = String(body).replace(/\s+/g, " ").trim();
+    if (flat.length <= 60) return flat;
+    const at = flat.toLowerCase().indexOf(String(q).toLowerCase());
+    const start = Math.max(0, (at < 0 ? 0 : at) - 12);
+    const slice = flat.slice(start, start + 60);
+    return (start > 0 ? "…" : "") + slice + (start + slice.length < flat.length ? "…" : "");
+  }
+  function withoutPins(rows) {
+    return rows.map((row) => {
+      const copy = { ...row };
+      delete copy.pinned_at;
+      delete copy.pinned_by;
+      delete copy.matchText;
+      return copy;
+    });
+  }
+  function chatThreads(user, query = {}) {
+    requireUser(user);
+    const q = typeof query?.q === "string" ? query.q.trim() : "";
+    if (!isStaff(user)) {
+      // A customer q is ignored: they only see their own threads, with no pin fields.
+      return withoutPins(all(
+        `SELECT t.*,
+                (SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id=t.id) AS messages,
+                COALESCE(
+                  (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.thread_id=t.id),
+                  t.created_at
+                ) AS lastMessageAt,
+                0 AS unreadCount
+         FROM chat_threads t WHERE t.user_id=? ORDER BY lastMessageAt DESC, t.id DESC`,
+        user.id,
+      ));
+    }
+    if (q.length > 80) fail(400, "คำค้นยาวเกินไป");
+    if (!q)
+      return all(STAFF_THREAD_SELECT + STAFF_THREAD_ORDER, user.id, user.id);
+    const textNeedle = q.toLowerCase();
+    const orderNeedle = q.toLowerCase().replace(/#/g, "");
+    return all(
+      STAFF_THREAD_SELECT.replace(
+        "AS unreadCount",
+        `AS unreadCount,
+              (SELECT m.body FROM chat_messages m
+                WHERE m.thread_id=t.id AND instr(lower(m.body), ?) > 0
+                ORDER BY m.created_at DESC, m.rowid DESC LIMIT 1) AS matchText`,
+      ) + ` WHERE (
+            instr(lower(u.name), ?) > 0
+            OR instr(lower(u.email), ?) > 0
+            OR (? <> '' AND instr(lower(COALESCE(t.order_id,'')), ?) > 0)
+            OR EXISTS (
+              SELECT 1 FROM chat_messages m
+              WHERE m.thread_id=t.id AND (
+                instr(lower(m.body), ?) > 0
+                OR (? <> '' AND instr(lower(COALESCE(m.order_id,'')), ?) > 0)
+              )
+            )
+          )` + STAFF_THREAD_ORDER + " LIMIT 50",
       user.id,
-    );
+      user.id,
+      textNeedle,
+      textNeedle,
+      textNeedle,
+      orderNeedle,
+      orderNeedle,
+      textNeedle,
+      orderNeedle,
+      orderNeedle,
+    ).map((row) => ({ ...row, matchText: row.matchText ? clipMatch(row.matchText, q) : null }));
   }
   function openChatThread(user, rawInput) {
     requireUser(user);
@@ -2912,6 +2966,27 @@ export function createCommerceCore({
     if (thread?.assigned_to)
       alerts.emit("chat_assigned", { threadId: thread.id, assignee: thread.assignee, by: user.name });
     return thread;
+  }
+  function pinChatThread(user, threadId, input = {}) {
+    requireStaff(user);
+    const id = clean(threadId, 1, 80, "แชท");
+    if (input.pinned !== true && input.pinned !== false) fail(400, "ระบุ pinned เป็นจริงหรือเท็จ");
+    return tx(() => {
+      const thread = one("SELECT id, pinned_at FROM chat_threads WHERE id=?", id);
+      if (!thread) fail(404, "ไม่พบแชท");
+      if (input.pinned) {
+        if (!thread.pinned_at) {
+          const n = one("SELECT COUNT(*) AS n FROM chat_threads WHERE pinned_at IS NOT NULL").n;
+          if (n >= 20) fail(400, "ปักหมุดได้สูงสุด 20 แชท");
+        }
+        run("UPDATE chat_threads SET pinned_at=CURRENT_TIMESTAMP, pinned_by=? WHERE id=?", user.id, id);
+        audit(user, "CHAT_PIN", id);
+      } else {
+        run("UPDATE chat_threads SET pinned_at=NULL, pinned_by=NULL WHERE id=?", id);
+        audit(user, "CHAT_UNPIN", id);
+      }
+      return chatThreads(user).find((row) => row.id === id);
+    });
   }
   // Attach avatarUrl without editing admin-customers.mjs (MUST_NOT).
   function adminCustomerDetail(user, id) {
@@ -3321,6 +3396,7 @@ export function createCommerceCore({
     setMemberRole,
     setStaffActive,
     assignChatThread,
+    pinChatThread,
     salesReport,
     profitReport,
     adminExpiringInventory,

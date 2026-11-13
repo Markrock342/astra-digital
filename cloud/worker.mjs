@@ -36,6 +36,7 @@ import {
 } from "../server/migrate-011.mjs";
 import {
   ensureAppendOnlyMoney,
+  ensureChatPins,
   ensureChatThreadReads,
   ensureCoupons,
   ensureCategories,
@@ -141,6 +142,7 @@ export class Commerce extends DurableObject {
       );
       ensureInventoryAvailableIndex(db);
       ensureChatThreadReads(db);
+      ensureChatPins(db);
       ensureCannedReplies(db);
       ensureCustomerAdmin(db);
       ensureAuthHardening(db);
