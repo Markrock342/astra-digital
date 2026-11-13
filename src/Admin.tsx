@@ -51,8 +51,10 @@ import {
 import { AdminChat, BuyerRanking, BuyerRankingCard, PaymentChannelSettings } from "./Ops";
 import {
   PreorderQueue,
+  PendingProductImages,
   ProductImages,
   ProductPreview,
+  type PendingImage,
   AdminAccount,
   AdminAudit,
   AdminReports,
@@ -202,7 +204,20 @@ export default function Admin() {
   const captureSavedForm = useCallback((form: HTMLFormElement | null) => {
     if (form) savedForm.current = formSnapshot(form);
   }, []);
-  const formDirty = formOpen && formValues !== null && JSON.stringify(formValues) !== savedForm.current;
+  // New product: images picked before the draft exists; uploaded right after it is created.
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  const pendingRef = useRef(pendingImages);
+  pendingRef.current = pendingImages;
+  useEffect(
+    () => () => {
+      pendingRef.current.forEach((image) => URL.revokeObjectURL(image.url));
+      setPendingImages([]);
+    },
+    [newProduct],
+  );
+  const formDirty =
+    formOpen &&
+    ((formValues !== null && JSON.stringify(formValues) !== savedForm.current) || (newProduct && pendingImages.length > 0));
   const markFormClean = useUnsavedChangesGuard(formDirty);
   // Images as ProductImages holds them right now, so the preview cover follows uploads at once.
   const [liveImages, setLiveImages] = useState<{ id: string; url: string }[] | null>(null);
@@ -265,7 +280,8 @@ export default function Admin() {
     setError("");
     const { type, ...values } = Object.fromEntries(new FormData(form));
     try {
-      const cover = newProduct && useCover ? suggestedCover : null;
+      const ownImages = newProduct ? pendingImages : [];
+      const cover = newProduct && useCover && !ownImages.length ? suggestedCover : null;
       const result = await api<{ id: string }>("/admin/products", {
         ...values,
         preorder: type === "preorder",
@@ -278,7 +294,25 @@ export default function Admin() {
         ...(editingProduct ? { id: editingProduct.id } : {}),
       });
       let coverNote = "";
-      if (cover) {
+      if (ownImages.length) {
+        // Product exists now: upload the picked images in order (first = cover).
+        let failed = 0;
+        let lastError = "";
+        for (const image of ownImages) {
+          try {
+            await uploadImage("/admin/products/" + result.id + "/images", image.blob);
+          } catch (e) {
+            failed++;
+            lastError = (e as Error).message;
+          }
+        }
+        coverNote =
+          failed === 0
+            ? " · อัปโหลดรูป " + ownImages.length + " รูปแล้ว"
+            : " · อัปโหลดรูปไม่สำเร็จ " + failed + " รูป (" + lastError + ") เพิ่มเองได้ในส่วนรูปสินค้า";
+        ownImages.forEach((image) => URL.revokeObjectURL(image.url));
+        setPendingImages([]);
+      } else if (cover) {
         // Product exists now: upload the suggested cover through the normal image API.
         try {
           await uploadImage("/admin/products/" + result.id + "/images", await libraryBlob(cover));
@@ -573,7 +607,9 @@ export default function Admin() {
                   featured: formValues ? formValues.featured === "on" : !!editingProduct?.featured,
                   art: editingProduct?.art ?? "gift",
                   imageUrl: newProduct
-                    ? useCover && suggestedCover
+                    ? pendingImages.length
+                      ? pendingImages[0].url
+                      : useCover && suggestedCover
                       ? suggestedCover.file
                       : null
                     : liveImages
@@ -659,7 +695,7 @@ export default function Admin() {
                     defaultValue={editingProduct?.name}
                   />
                 </label>
-                {coverSuggest && (
+                {coverSuggest && !pendingImages.length && (
                   <div className={"library-suggest" + (suggestedCover ? "" : " empty")} aria-live="polite">
                     {suggestedCover ? (
                       <>
@@ -694,6 +730,9 @@ export default function Admin() {
                       </>
                     )}
                   </div>
+                )}
+                {coverSuggest && pendingImages.length > 0 && (
+                  <p className="field-help">ใช้รูปที่คุณเพิ่มเองเป็นรูปปก (ลบรูปของคุณออกหมดเพื่อกลับไปใช้รูปแนะนำ)</p>
                 )}
                 {!newProduct && editingProduct && (
                   <div className="field">
@@ -761,6 +800,9 @@ export default function Admin() {
                   แสดงในส่วน “สินค้าแนะนำ” บนหน้าแรกของร้าน
                 </p>
               </section>
+              {newProduct && features.uploads && (
+                <PendingProductImages images={pendingImages} onChange={setPendingImages} />
+              )}
               <UsageInstructionsField defaultValue={editingProductUsage} />
               {!newProduct && (
                 <>
