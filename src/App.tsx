@@ -88,6 +88,7 @@ import { SessionsCard } from "./Sessions";
 import { StockWatchList } from "./StockWatch";
 import { DeliveredExtras, hasReceipt, ReceiptLink, ReceiptPage, receiptRoute } from "./OrderExtras";
 import { AskInChat } from "./ChatAttachments";
+import { ShopClosedNote, useShopOpen } from "./ShopClosed";
 import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
 import { ContactPage } from "./Contact";
@@ -1223,6 +1224,7 @@ function RequireLogin() {
 }
 function Cart({ checkout = false }: { checkout?: boolean }) {
   const { basket, products, setBasket, user, go, loading } = useStore();
+  const shopOpen = useShopOpen();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const p = products.find((p) =>
@@ -1433,9 +1435,10 @@ function Cart({ checkout = false }: { checkout?: boolean }) {
               <strong>{money(checkout ? payable : subtotal)}</strong>
             </div>
             <ErrorMessage message={error} />
+            <ShopClosedNote />
             <button
               className="button primary full"
-              disabled={busy || !variant.available}
+              disabled={busy || !variant.available || !shopOpen}
               onClick={checkout ? order : () => go("/checkout")}
             >
               {busy ? (
@@ -1526,6 +1529,7 @@ function PayShell({ total }: { total: number }) {
 }
 function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
   const { user, refresh, toast, go, setBasket } = useStore();
+  const shopOpen = useShopOpen();
   usePageTitle(
     payment ? t("ชำระเงิน") : t("คำสั่งซื้อ"),
     t("รายละเอียดคำสั่งซื้อ การชำระเงิน และสินค้าที่ได้รับ"),
@@ -1792,10 +1796,11 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
                             {t("โหมดทดสอบ: ชำระด้วยเครดิตทดลอง")} · {t("เครดิตคงเหลือ")} {money(user.balance)}
                           </p>
                           <ErrorMessage message={error} />
+                          <ShopClosedNote pay />
                           <div className="pay-actions">
                             <button
                               className="button primary"
-                              disabled={busy || user.balance < order.total}
+                              disabled={busy || user.balance < order.total || !shopOpen}
                               onClick={() => pay("success")}
                             >
                               {busy ? <LoaderCircle className="spin" size={17} /> : <CreditCard size={17} />}

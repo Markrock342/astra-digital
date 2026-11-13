@@ -108,6 +108,9 @@ const passwordMatches = (value, stored) => {
   const actual = scryptSync(value, salt, 64);
   return expected.length === actual.length && timingSafeEqual(actual, expected);
 };
+/** Messages while the shop switch is off (ตั้งค่า › ร้านปิดอยู่). */
+export const SHOP_CLOSED_ORDER = "ร้านปิดให้บริการชั่วคราว ยังสั่งซื้อไม่ได้";
+export const SHOP_CLOSED_PAY = "ร้านปิดให้บริการชั่วคราว ยังชำระเงินไม่ได้ กรุณารอร้านเปิด";
 export function createCommerceCore({
   db,
   transaction,
@@ -1441,7 +1444,7 @@ export function createCommerceCore({
   }
   function createOrder(user, input) {
     requireUser(user);
-    if (!settings().shopOpen) fail(409, "ร้านปิดให้บริการชั่วคราว");
+    if (!settings().shopOpen) fail(409, SHOP_CLOSED_ORDER);
     const variantId = clean(input.variantId, 1, 80, "สินค้า");
     const quantity = integer(input.quantity, 1, 10, "จำนวน");
     const requestKey = clean(input.requestKey, 8, 128, "รหัสคำขอ");
@@ -1839,6 +1842,9 @@ export function createCommerceCore({
   function pay(user, id, input) {
     requireUser(user);
     assertSandboxPayAllowed();
+    // Closed shop: unpaid orders wait (they still expire on the normal timer). A future
+    // gateway callback for money already taken must not go through this check.
+    if (!settings().shopOpen) fail(409, SHOP_CLOSED_PAY);
     if (
       one("SELECT id FROM reservations WHERE id=? AND user_id=?", id, user.id)
     )
