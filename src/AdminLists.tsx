@@ -47,6 +47,7 @@ import { CopyValue, ResendCredentials } from "./OrderCredentials";
 import { WarrantyStatus } from "./Warranty";
 import { ReceiptLink } from "./OrderExtras";
 import { AdminReviews } from "./AdminReviews";
+import { BULK_CAP, OrderBulkBar, useOrderSelection, type BulkExportRow } from "./OrderBulk";
 
 type Filters = Record<string, string>;
 
@@ -264,6 +265,26 @@ export function ordersListHref() {
   }
 }
 
+/** Orders CSV (full export and the bulk "selected orders" export use the same columns). */
+function orderCsvRows(rows: BulkExportRow[]): unknown[][] {
+  return [
+    ["เลขออเดอร์", "วันที่", "ลูกค้า", "อีเมล", "สินค้า", "ตัวเลือก", "ประเภท", "คิว", "จำนวน", "ยอด (บาท)", "สถานะ"],
+    ...rows.map((o) => [
+      o.id,
+      o.created_at,
+      o.customer,
+      o.customer_email,
+      o.product,
+      o.variant_label,
+      o.preorder ? "พรีออเดอร์" : "พร้อมส่ง",
+      o.queue_number ?? "",
+      o.quantity,
+      (o.total / 100).toFixed(2),
+      o.status,
+    ]),
+  ];
+}
+
 export function AdminOrders() {
   const { go, user } = useStore();
   const staff = user?.role === "STAFF";
@@ -275,6 +296,15 @@ export function AdminOrders() {
   const serverFilters: Filters = { ...filters, group: tab === "all" ? "" : tab };
   const list = useCursorList<OrderRow>("/admin/orders", "orders", { ...serverFilters, limit: "50" }, ["orders"]);
   const counts = (list.meta?.counts as OrderCounts | undefined) ?? null;
+  // Bulk selection (OrderBulk.tsx): resets whenever the tab or a filter changes.
+  const selection = useOrderSelection(JSON.stringify(serverFilters));
+  const loaded = list.rows ?? [];
+  const matching = counts?.[tab] ?? 0;
+  const pageIds = loaded.slice(0, BULK_CAP).map((o) => o.id);
+  const pagePicked = pageIds.length > 0 && pageIds.every((id) => selection.picked.has(id));
+  const pickedCount = selection.allMatching ? Math.min(matching, BULK_CAP) : selection.picked.size;
+  const isPicked = (id: string, index: number) =>
+    selection.allMatching ? index < BULK_CAP : selection.picked.has(id);
   const set = (patch: Filters) => setFilters((f) => ({ ...f, ...patch }));
   const active = Object.values(filters).some(Boolean);
   useEffect(() => {
@@ -299,22 +329,7 @@ export function AdminOrders() {
         all.push(...page.orders);
         cursor = page.nextCursor;
       } while (cursor && all.length < 10000);
-      downloadCsv("orders.csv", [
-        ["เลขออเดอร์", "วันที่", "ลูกค้า", "อีเมล", "สินค้า", "ตัวเลือก", "ประเภท", "คิว", "จำนวน", "ยอด (บาท)", "สถานะ"],
-        ...all.map((o) => [
-          o.id,
-          o.created_at,
-          o.customer,
-          o.customer_email,
-          o.product,
-          o.variant_label,
-          o.preorder ? "พรีออเดอร์" : "พร้อมส่ง",
-          o.queue_number ?? "",
-          o.quantity,
-          (o.total / 100).toFixed(2),
-          o.status,
-        ]),
-      ]);
+      downloadCsv("orders.csv", orderCsvRows(all));
     } finally {
       setExporting(false);
     }
@@ -351,11 +366,65 @@ export function AdminOrders() {
         <DateRange from={filters.from} to={filters.to} onChange={(from, to) => set({ from, to })} />
       </FilterBar>
       <OrderStatusTabs value={tab} counts={counts} staff={staff} onChange={setTab} />
+      {pickedCount > 0 && (
+        <OrderBulkBar
+          count={pickedCount}
+          admin={!staff}
+          target={
+            selection.allMatching
+              ? { filter: { ...serverFilters } }
+              : { ids: loaded.filter((o) => selection.picked.has(o.id)).map((o) => o.id) }
+          }
+          onClear={selection.clear}
+          onExport={(rows) => downloadCsv("orders-selected.csv", orderCsvRows(rows))}
+        />
+      )}
+      {pagePicked && matching > pageIds.length && (
+        <p className="order-bulk-all" role="status">
+          {selection.allMatching ? (
+            <>
+              เลือกทุกออเดอร์ที่ตรงตัวกรองแล้ว {Math.min(matching, BULK_CAP).toLocaleString("th-TH")} รายการ
+              {matching > BULK_CAP && ` (สูงสุด ${BULK_CAP} รายการล่าสุด จากทั้งหมด ${matching.toLocaleString("th-TH")})`}
+              <button type="button" className="button ghost" onClick={selection.clear}>
+                ล้างที่เลือก
+              </button>
+            </>
+          ) : (
+            <>
+              เลือก {pageIds.length} รายการที่แสดงอยู่
+              <button type="button" className="button ghost" onClick={() => selection.setAllMatching(true)}>
+                เลือกทั้งหมดที่ตรงตัวกรอง {Math.min(matching, BULK_CAP).toLocaleString("th-TH")} รายการ
+                {matching > BULK_CAP ? ` (สูงสุด ${BULK_CAP})` : ""}
+              </button>
+            </>
+          )}
+        </p>
+      )}
       <ErrorMessage message={list.error} />
-      <div className="table-scroll reference-table admin-list-table">
+      {loaded.length > 0 && (
+        // Phones hide the table header (rows become cards), so select-all lives here too.
+        <label className="product-select-all checkbox-label order-select-all">
+          <input
+            type="checkbox"
+            checked={pagePicked}
+            onChange={() => selection.setPage(pageIds, !pagePicked)}
+          />
+          เลือกทั้งหมด {pageIds.length} รายการที่แสดง
+        </label>
+      )}
+      <div className="table-scroll reference-table admin-list-table order-bulk-table">
         <table>
           <thead>
             <tr>
+              <th className="select-col">
+                <input
+                  type="checkbox"
+                  aria-label="เลือกออเดอร์ทั้งหมดที่แสดง"
+                  checked={pagePicked}
+                  disabled={!loaded.length}
+                  onChange={() => selection.setPage(pageIds, !pagePicked)}
+                />
+              </th>
               <th>ออเดอร์</th>
               <th>ลูกค้า</th>
               <th>สถานะ</th>
@@ -364,8 +433,28 @@ export function AdminOrders() {
             </tr>
           </thead>
           <tbody>
-            {list.rows?.map((o) => (
-              <tr key={o.id} className="admin-row-link" onClick={() => go("/admin/orders/" + o.id)}>
+            {list.rows?.map((o, index) => (
+              <tr
+                key={o.id}
+                className={
+                  "admin-row-link" + (isPicked(o.id, index) ? " is-picked" : "")
+                }
+                onClick={() => go("/admin/orders/" + o.id)}
+              >
+                <td className="select-col" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    aria-label={"เลือกออเดอร์ " + shortId(o.id)}
+                    checked={isPicked(o.id, index)}
+                    disabled={
+                      !selection.allMatching && !selection.picked.has(o.id) && selection.picked.size >= BULK_CAP
+                    }
+                    onChange={() => {
+                      if (selection.allMatching) selection.setPage(pageIds.filter((id) => id !== o.id), true);
+                      else selection.toggle(o.id);
+                    }}
+                  />
+                </td>
                 <td>
                   <Link to={"/admin/orders/" + o.id} className="order-number">
                     {shortId(o.id)}
@@ -2867,6 +2956,11 @@ const actionText: Record<string, string> = {
   CHAT_ASSIGN: "มอบหมายแชท",
   ORDER_NOTE: "เขียนหมายเหตุออเดอร์",
   CANCEL_ORDER: "ยกเลิกออเดอร์",
+  ORDER_BULK_EXPORT: "ดาวน์โหลด CSV ออเดอร์ที่เลือก",
+  CANNED_REPLY_CREATE: "เพิ่มข้อความสำเร็จรูป",
+  CANNED_REPLY_UPDATE: "แก้ข้อความสำเร็จรูป",
+  CANNED_REPLY_DELETE: "ลบข้อความสำเร็จรูป",
+  CANNED_REPLY_REORDER: "เรียงข้อความสำเร็จรูป",
   COUPON_CREATE: "สร้างคูปอง",
   COUPON_UPDATE: "แก้คูปอง",
   COUPON_DISABLE: "ปิดใช้งานคูปอง",
@@ -2905,6 +2999,8 @@ const detailLabel: Record<string, string> = {
   code: "โค้ด",
   duplicatedFrom: "คัดลอกจาก",
   couponReleased: "คืนสิทธิ์คูปอง",
+  bulk: "ทำหลายรายการพร้อมกัน:",
+  title: "ชื่อ",
 };
 function auditDetailText(detail: Record<string, unknown>) {
   const parts: string[] = [];

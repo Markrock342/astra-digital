@@ -17,6 +17,15 @@ import { NAVIGATE_EVENT } from "./navigation";
 import { api, dateTime, money, relativeTime } from "./api";
 import { t } from "./i18n";
 import { ChatOrderTag, useReportDraft } from "./OrderExtras";
+import {
+  CannedReplyManager,
+  CannedReplyPicker,
+  matchCanned,
+  pickerKey,
+  useCannedReplies,
+  type CannedReply,
+} from "./CannedReplies";
+import { MessageSquareText } from "lucide-react";
 
 export type ChatThread = {
   id: string;
@@ -598,8 +607,57 @@ export function AdminChat() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"OPEN" | "MINE" | "ALL">("OPEN");
+  // ข้อความสำเร็จรูป: picker opened by the button or by "/" at the start of the composer.
+  const isAdmin = user?.role === "ADMIN";
+  const [picker, setPicker] = useState<null | "slash" | "button">(null);
+  const [pickQuery, setPickQuery] = useState("");
+  const [pickActive, setPickActive] = useState(0);
+  const [slashOff, setSlashOff] = useState(false);
+  const [managing, setManaging] = useState(false);
+  const [missing, setMissing] = useState<string[]>([]);
+  const canned = useCannedReplies(current, picker !== null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<HTMLFormElement>(null);
+  const closePicker = () => {
+    if (picker === "slash") setSlashOff(true);
+    setPicker(null);
+    setPickQuery("");
+    setPickActive(0);
+  };
+  function insertCanned(r: CannedReply) {
+    const fill = r.text ?? r.body;
+    const el = textRef.current;
+    let next = fill;
+    let caret = fill.length;
+    if (picker !== "slash") {
+      const start = el?.selectionStart ?? text.length;
+      const end = el?.selectionEnd ?? text.length;
+      next = text.slice(0, start) + fill + text.slice(end);
+      caret = start + fill.length;
+    }
+    setText(next);
+    setMissing(r.missing ?? []);
+    setPicker(null);
+    setPickQuery("");
+    setPickActive(0);
+    setSlashOff(false);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(caret, caret);
+    });
+  }
+  useEffect(() => {
+    if (!picker) return;
+    const away = (e: MouseEvent) => {
+      if (composerRef.current && !composerRef.current.contains(e.target as Node)) closePicker();
+    };
+    addEventListener("mousedown", away);
+    return () => removeEventListener("mousedown", away);
+  });
   useEffect(() => {
     setReplyTo(null);
+    setPicker(null);
+    setMissing([]);
   }, [current]);
   // Deep link from a notification: /admin/chat?thread=<id> opens that thread,
   // also when the bell is used while this page is already open.
@@ -666,6 +724,7 @@ export function AdminChat() {
       );
       setText("");
       setReplyTo(null);
+      setMissing([]);
       void loadThreads();
     } catch (e) {
       setError((e as Error).message);
@@ -697,7 +756,21 @@ export function AdminChat() {
             {unreadTotal > 0 ? ` · ยังไม่อ่าน ${unreadTotal} ข้อความ` : ""}
           </p>
         </div>
+        {isAdmin && (
+          <button type="button" className="button secondary" onClick={() => setManaging(true)}>
+            <MessageSquareText size={15} />
+            ข้อความสำเร็จรูป
+          </button>
+        )}
       </div>
+      {managing && (
+        <CannedReplyManager
+          onClose={() => {
+            setManaging(false);
+            canned.reload();
+          }}
+        />
+      )}
       <ErrorMessage message={error} />
       <div className={current ? "admin-chat has-thread" : "admin-chat"}>
         <aside className="admin-chat-list" aria-label="รายการแชท">
@@ -813,18 +886,92 @@ export function AdminChat() {
                 }
               />
               {thread.status === "OPEN" ? (
-                <form className="chat-composer" onSubmit={reply}>
+                <form className="chat-composer canned-host" onSubmit={reply} ref={composerRef}>
                   {replyTo && (
                     <ReplyBar reply={replyTo} clearLabel="ยกเลิกการตอบกลับ" onClear={() => setReplyTo(null)} />
                   )}
+                  {picker && (
+                    <CannedReplyPicker
+                      mode={picker}
+                      query={pickQuery}
+                      onQuery={setPickQuery}
+                      replies={canned.replies}
+                      error={canned.error}
+                      active={pickActive}
+                      onActive={setPickActive}
+                      onPick={insertCanned}
+                      onClose={() => {
+                        closePicker();
+                        textRef.current?.focus();
+                      }}
+                      onManage={
+                        isAdmin
+                          ? () => {
+                              closePicker();
+                              setManaging(true);
+                            }
+                          : undefined
+                      }
+                    />
+                  )}
+                  {missing.some((token) => text.includes(token)) && (
+                    <p className="canned-missing" role="status">
+                      ยังไม่มีข้อมูล {missing.filter((token) => text.includes(token)).join(" ")} กรุณาแก้ข้อความก่อนส่ง
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    className={"icon-button canned-trigger" + (picker === "button" ? " is-open" : "")}
+                    aria-label="ข้อความสำเร็จรูป"
+                    aria-haspopup="dialog"
+                    aria-expanded={picker === "button"}
+                    title="ข้อความสำเร็จรูป (พิมพ์ / ที่ต้นข้อความ)"
+                    onClick={() => {
+                      if (picker === "button") closePicker();
+                      else {
+                        setPickQuery("");
+                        setPickActive(0);
+                        setPicker("button");
+                      }
+                    }}
+                  >
+                    <MessageSquareText size={18} />
+                  </button>
                   <textarea
+                    ref={textRef}
                     aria-label="ข้อความตอบกลับ"
-                    placeholder="พิมพ์ข้อความตอบลูกค้า…"
+                    placeholder="พิมพ์ข้อความตอบลูกค้า… (พิมพ์ / เพื่อใช้ข้อความสำเร็จรูป)"
                     value={text}
                     maxLength={1000}
                     rows={2}
-                    onChange={(e) => setText(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setText(value);
+                      const slash = /^\/[^\n]{0,40}$/.test(value);
+                      if (!slash) {
+                        setSlashOff(false);
+                        if (picker === "slash") setPicker(null);
+                      } else if (!slashOff && picker !== "button") {
+                        if (picker !== "slash" || pickQuery !== value.slice(1)) setPickActive(0);
+                        setPickQuery(value.slice(1));
+                        setPicker("slash");
+                      }
+                    }}
                     onKeyDown={(e) => {
+                      if (
+                        picker === "slash" &&
+                        pickerKey(
+                          e,
+                          matchCanned(canned.replies ?? [], pickQuery),
+                          pickActive,
+                          setPickActive,
+                          insertCanned,
+                          closePicker,
+                        )
+                      ) {
+                        e.preventDefault();
+                        return;
+                      }
                       if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                         e.preventDefault();
                         void reply(e);

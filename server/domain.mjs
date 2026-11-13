@@ -34,7 +34,9 @@ import {
 } from "./admin-variant-stock-apis.mjs";
 import { createAdminProductBulkApis } from "./admin-product-bulk.mjs";
 import { createAdminOrderReplaceApis } from "./admin-order-replace.mjs";
-import { createAdminOrderResendApis } from "./admin-order-resend.mjs";
+import { createAdminOrderResendApis, RESEND_LIMIT } from "./admin-order-resend.mjs";
+import { createAdminOrderBulkApis } from "./admin-order-bulk.mjs";
+import { createCannedReplyApis } from "./canned-replies.mjs";
 import { createOrderHistoryApis } from "./admin-order-history.mjs";
 import { createAdminProductImageApis } from "./admin-product-images.mjs";
 import { createProfileUploadApis } from "./profile-uploads.mjs";
@@ -2854,6 +2856,34 @@ export function createCommerceCore({
     notify,
     randomUUID,
   });
+  // Orders list bulk actions (admin-order-bulk.mjs) reuse the single-order rules above.
+  const orderBulk = createAdminOrderBulkApis({
+    requireStaff,
+    requireAdmin,
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    ApiError,
+    adminOrders,
+    cancelUnpaidOrder,
+    resendOrderCredentials,
+    resendLimit: RESEND_LIMIT,
+  });
+  // Chat inbox ข้อความสำเร็จรูป (canned-replies.mjs).
+  const cannedReplyApis = createCannedReplyApis({
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    clean,
+    requireStaff,
+    requireAdmin,
+    randomUUID,
+  });
   /** S2: in live mode an order paid with sandbox money is not real spend. */
   const liveOnlySql = (idCol, payCol) =>
     moneyScope.live
@@ -3023,6 +3053,13 @@ export function createCommerceCore({
     adminAddOrderNote,
     replaceOrderCredential,
     resendOrderCredentials,
+    adminBulkOrderCheck: orderBulk.adminBulkOrderCheck,
+    adminBulkOrderAction: orderBulk.adminBulkOrderAction,
+    cannedReplies: cannedReplyApis.cannedReplies,
+    adminCreateCannedReply: cannedReplyApis.adminCreateCannedReply,
+    adminUpdateCannedReply: cannedReplyApis.adminUpdateCannedReply,
+    adminDeleteCannedReply: cannedReplyApis.adminDeleteCannedReply,
+    adminReorderCannedReplies: cannedReplyApis.adminReorderCannedReplies,
     loginTotp: (rawInput, ctx) => auth.loginTotp(rawInput, ctx),
     confirmPassword: auth.confirmPassword,
     reauthAdmin: auth.reauthAdmin,
