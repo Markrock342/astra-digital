@@ -418,7 +418,8 @@ test("S9: ledger and audit rows cannot be updated or deleted; demo cleanup still
   assert.equal(live.mode, "live");
   assert.ok(s.db.prepare("SELECT COUNT(*) AS n FROM ledger").get().n < ledgerBefore);
   const triggers = s.db
-    .prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE '%append_only%'")
+    // ledger/audit only (finance-close.mjs tables have their own append-only triggers).
+    .prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE '%append_only%' AND (name LIKE 'ledger_%' OR name LIKE 'audit_%')")
     .all()
     .map((r) => r.name)
     .sort();

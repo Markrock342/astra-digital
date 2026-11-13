@@ -81,6 +81,7 @@ import { AdminIntegrations } from "./AdminIntegrations";
 import { LegalSettings } from "./Legal";
 import { FaqSettingsPanel } from "./FaqAdmin";
 import { AdminBroadcasts } from "./AdminBroadcasts";
+import { AdminDailyClose, AdminReconcile, AdminWithdrawals } from "./AdminFinanceBooks";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
 const formSnapshot = (form: HTMLFormElement) => JSON.stringify(Object.fromEntries(new FormData(form)));
@@ -94,6 +95,13 @@ const productTabs = [
 const orderTabs = [
   ["orders", "ออเดอร์ทั้งหมด"],
   ["preorders", "คิวพรีออเดอร์"],
+];
+// การเงิน: transactions + daily close / reconciliation / withdrawals (AdminFinanceBooks.tsx).
+const financeTabs = [
+  ["payments", "รายการเงิน"],
+  ["daily-close", "ปิดยอดรายวัน"],
+  ["reconcile", "กระทบยอด"],
+  ["withdrawals", "ถอนเงิน"],
 ];
 const customerTabs = [
   ["customers", "ลูกค้าทั้งหมด"],
@@ -168,6 +176,7 @@ export default function Admin() {
   const productGroup = productTabs.some(([key]) => key === tab);
   const orderGroup = orderTabs.some(([key]) => key === tab);
   const customerGroup = customerTabs.some(([key]) => key === tab);
+  const financeGroup = ["payments", "top-ups", "ledger", "daily-close", "reconcile", "withdrawals"].includes(tab);
   const productId = path.split("/")[3];
   const detailId = ["orders", "customers"].includes(tab) ? productId : undefined;
   const editingProduct = data?.products.find(
@@ -380,6 +389,7 @@ export default function Admin() {
       {productGroup && <Subnav items={productTabs} current={tab} />}{" "}
       {orderGroup && <Subnav items={orderTabs} current={tab} />}{" "}
       {customerGroup && <Subnav items={customerTabs} current={tab} />}{" "}
+      {financeGroup && <Subnav items={financeTabs} current={["top-ups", "ledger"].includes(tab) ? "payments" : tab} />}{" "}
       {tab === "settings" && <Subnav items={settingTabs} current={sub} />}
       <main
         className={
@@ -881,6 +891,9 @@ export default function Admin() {
           ))}
         {tab === "broadcasts" && <AdminBroadcasts />}
         {["payments", "top-ups", "ledger"].includes(tab) && <AdminFinance />}
+        {tab === "daily-close" && <AdminDailyClose />}
+        {tab === "reconcile" && <AdminReconcile />}
+        {tab === "withdrawals" && <AdminWithdrawals />}
         {tab === "settings" &&
           (sub === "settings/payment" ? (
             <PaymentChannelSettings />
@@ -945,6 +958,9 @@ export default function Admin() {
           "payments",
           "top-ups",
           "ledger",
+          "daily-close",
+          "reconcile",
+          "withdrawals",
           "settings",
           "team",
           "guide",

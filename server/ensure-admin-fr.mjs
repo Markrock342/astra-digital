@@ -47,6 +47,8 @@ export function ensureCategories(db) {
 }
 
 export { ensurePrivacyRequests } from "./privacy.mjs";
+// การเงิน › ปิดยอดรายวัน / กระทบยอด / ถอนเงิน (append-only tables, server/finance-close.mjs).
+export { ensureFinanceBooks } from "./finance-close.mjs";
 
 export function ensureChatThreadReads(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS chat_thread_reads (

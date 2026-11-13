@@ -1,6 +1,7 @@
 /** Admin system health / invariants (credit vs ledger, stock integrity, migrations). */
 import { TRACK_A_MIGRATION_FILES } from "./migrate-005.mjs";
 import { walletRowSql } from "./money.mjs";
+import { FINANCE_APPEND_ONLY_TRIGGERS } from "./finance-close.mjs";
 
 export function createAdminHealthApis({ requireAdmin, one, all, db }) {
   function adminSystemHealth(user) {
@@ -16,18 +17,18 @@ export function createAdminHealthApis({ requireAdmin, one, all, db }) {
       (name) => !TRACK_A_MIGRATION_FILES.includes(name),
     );
 
-    const triggers = all(
-      `SELECT name FROM sqlite_master WHERE type='trigger' AND name IN (
-         'ledger_append_only_update','ledger_append_only_delete',
-         'audit_append_only_update','audit_append_only_delete'
-       )`,
-    ).map((r) => r.name);
     const expectedTriggers = [
       "ledger_append_only_update",
       "ledger_append_only_delete",
       "audit_append_only_update",
       "audit_append_only_delete",
+      // ปิดยอดรายวัน / ถอนเงิน / กระทบยอด (finance-close.mjs)
+      ...FINANCE_APPEND_ONLY_TRIGGERS,
     ];
+    const triggers = all(
+      `SELECT name FROM sqlite_master WHERE type='trigger' AND name IN (${expectedTriggers.map(() => "?").join(",")})`,
+      ...expectedTriggers,
+    ).map((r) => r.name);
     const missingTriggers = expectedTriggers.filter((n) => !triggers.includes(n));
 
     // Customers whose wallet net is negative (should not happen in normal flows).
@@ -83,10 +84,10 @@ export function createAdminHealthApis({ requireAdmin, one, all, db }) {
       {
         id: "append_only",
         ok: missingTriggers.length === 0,
-        label: "Append-only triggers (ledger/audit)",
+        label: "Append-only triggers (ledger/audit/ปิดยอด/ถอนเงิน/กระทบยอด)",
         detail:
           missingTriggers.length === 0
-            ? "ครบ 4 triggers"
+            ? "ครบ " + expectedTriggers.length + " triggers"
             : "ขาด: " + missingTriggers.join(", "),
       },
       {
