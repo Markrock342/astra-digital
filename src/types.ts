@@ -53,6 +53,8 @@ export type Product = {
   preorder?:number;
   hidden_seed?:number;
   active: number;
+  /** When the product was added (UTC "YYYY-MM-DD HH:MM:SS"); storefront "ใหม่ล่าสุด". */
+  created_at?: string | null;
   variants: Variant[];
   sold: number;
   rating: { average: number | null; count: number };
