@@ -68,10 +68,7 @@ const EN_SORT: Record<string, string> = {
 };
 for (const [th, en] of Object.entries(EN_SORT)) if (!(th in EN_STRINGS)) EN_STRINGS[th] = en;
 const lowest = (p: Product) => Math.min(...p.variants.map((v) => v.price));
-/**
- * Sorted copy. "ใหม่ล่าสุด" = newest first: the catalog arrives oldest-first (insertion order,
- * products have no public created date), so it is the reverse of that order.
- */
+/** Sorted copy. "ใหม่ล่าสุด" = products.created_at, newest first (catalog order breaks ties). */
 export function sortProducts(list: Product[], sort: string) {
   const order = new Map(list.map((p, i) => [p.id, i]));
   const rating = (p: Product) => (p.rating?.count ? (p.rating.average ?? 0) : -1);
@@ -79,7 +76,8 @@ export function sortProducts(list: Product[], sort: string) {
     if (sort === "low") return lowest(a) - lowest(b);
     if (sort === "high") return lowest(b) - lowest(a);
     if (sort === "bestselling") return (b.sold ?? 0) - (a.sold ?? 0);
-    if (sort === "newest") return order.get(b.id)! - order.get(a.id)!;
+    if (sort === "newest")
+      return (b.created_at ?? "").localeCompare(a.created_at ?? "") || order.get(b.id)! - order.get(a.id)!;
     if (sort === "rating") return rating(b) - rating(a) || (b.rating?.count ?? 0) - (a.rating?.count ?? 0);
     return b.featured - a.featured;
   });

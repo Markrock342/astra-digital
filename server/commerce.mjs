@@ -50,6 +50,7 @@ import {
   ensurePricing,
   ensurePreorderModes,
   ensureDeliveryOptions,
+  ensureProductCreatedAt,
 } from "./ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "./auth-hardening.mjs";
 import { ensureCannedReplies } from "./ensure-admin-fr.mjs";
@@ -119,6 +120,7 @@ export function createCommerce(options = {}) {
   ensureNotificationLinks(db);
   ensureSmallUxB(db);
   ensureOrderExtras(db);
+  ensureProductCreatedAt(db);
   ensureChatAttachments(db);
   ensureCoupons(db);
   ensureCategories(db);

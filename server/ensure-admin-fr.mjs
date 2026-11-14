@@ -778,3 +778,22 @@ export function ensureNewsAbout(db) {
   )`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_news_posts_feed ON news_posts(published, pinned, publish_at)");
 }
+
+/**
+ * products.created_at — when the product was added (storefront "ใหม่ล่าสุด"). Idempotent.
+ * Existing rows get increasing times in their insertion order (1 s apart, ending now), so the
+ * old order is kept. New rows: a trigger stamps CURRENT_TIMESTAMP, so no insert needs changing.
+ */
+export function ensureProductCreatedAt(db) {
+  const has = db.prepare("PRAGMA table_info(products)").all().some((c) => c.name === "created_at");
+  if (!has) db.exec("ALTER TABLE products ADD COLUMN created_at TEXT");
+  const top = db.prepare("SELECT MAX(rowid) AS m FROM products WHERE created_at IS NULL").get()?.m;
+  if (top != null)
+    db.prepare(
+      "UPDATE products SET created_at = datetime('now', '-' || (? - rowid) || ' seconds') WHERE created_at IS NULL",
+    ).run(top);
+  db.exec(`CREATE TRIGGER IF NOT EXISTS products_created_at AFTER INSERT ON products
+    WHEN NEW.created_at IS NULL
+    BEGIN UPDATE products SET created_at = CURRENT_TIMESTAMP WHERE rowid = NEW.rowid; END`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_products_created ON products(created_at)");
+}

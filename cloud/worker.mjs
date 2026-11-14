@@ -60,6 +60,7 @@ import {
   ensurePricing,
   ensurePreorderModes,
   ensureDeliveryOptions,
+  ensureProductCreatedAt,
 } from "../server/ensure-admin-fr.mjs";
 import { ensureAuthHardening } from "../server/auth-hardening.mjs";
 import { ensureCannedReplies } from "../server/ensure-admin-fr.mjs";
@@ -155,6 +156,7 @@ export class Commerce extends DurableObject {
       ensureNotificationLinks(db);
       ensureSmallUxB(db);
       ensureOrderExtras(db);
+      ensureProductCreatedAt(db);
       ensureChatAttachments(db);
       ensureCoupons(db);
       ensureCategories(db);
