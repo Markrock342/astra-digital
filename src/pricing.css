@@ -315,3 +315,22 @@
   margin: 0 0 12px;
   font-size: 13px;
 }
+
+/* Tags inside the "ข้อมูลลูกค้า" card (admin customer page). */
+.customer-tags-embedded {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border, #e4e4e7);
+}
+.customer-tags-embedded h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.customer-tags-embedded h3 small {
+  font-weight: 400;
+  font-size: 12px;
+}

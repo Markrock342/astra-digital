@@ -1,7 +1,7 @@
 // ASIA EXTRA brand pieces: logo, theme preferences, language toggle,
 // scroll progress and the marquee strip. Preferences are per-browser only.
 import { useEffect, useRef, useState } from "react";
-import { Globe, Monitor, Moon, Sun, X } from "lucide-react";
+import { Languages, Monitor, Moon, Sun, X } from "lucide-react";
 import { getLang, t, type Lang } from "./i18n";
 import { colorTokens } from "../server/appearance-rules.mjs";
 
@@ -18,7 +18,7 @@ export function BrandLogo({ className = "" }: { className?: string }) {
   );
 }
 
-type Accent = "blue" | "yellow" | "mono" | "duo";
+type Accent = "blue" | "yellow" | "mono" | "duo" | "custom";
 type Mode = "system" | "light" | "dark";
 const ACCENT_KEY = "asiax-accent";
 const MODE_KEY = "asiax-mode";
@@ -26,7 +26,9 @@ const MODE_KEY = "asiax-mode";
 // uses them: the default accent and the generated brand-colour CSS.
 const SHOP_ACCENT_KEY = "asiax-shop-accent";
 const SHOP_COLORS_KEY = "asiax-shop-colors";
-const ACCENT_VALUES: Accent[] = ["blue", "yellow", "duo", "mono"];
+const ACCENT_VALUES: Accent[] = ["blue", "yellow", "duo", "mono", "custom"];
+// "เลือกสีเอง": the visitor's own hue (0–359) on the colour slider.
+const HUE_KEY = "asiax-accent-hue";
 const MODE_VALUES: Mode[] = ["system", "light", "dark"];
 
 // Light/dark follows the device unless the visitor picks one; corners stay soft.
@@ -51,12 +53,52 @@ let accent: Accent = picked || read(SHOP_ACCENT_KEY, ACCENT_VALUES, "blue");
 /** True while the shop's own brand colours are applied (theme panel names change). */
 let custom = false;
 let mode = read(MODE_KEY, MODE_VALUES, "system");
+let hue = readHue();
+
+function readHue() {
+  try {
+    const n = Number(localStorage.getItem(HUE_KEY));
+    if (Number.isInteger(n) && n >= 0 && n < 360) return n;
+  } catch {
+    /* storage blocked */
+  }
+  return 220;
+}
+/** hsl → #rrggbb (fixed saturation / lightness: every hue stays a usable brand colour). */
+export function hueHex(h: number) {
+  const s = 0.82;
+  const l = 0.5;
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const c = l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return Math.round(c * 255)
+      .toString(16)
+      .padStart(2, "0");
+  };
+  return "#" + f(0) + f(8) + f(4);
+}
+/** Tokens for data-accent="custom", from the same contrast maths as the shop colours. */
+function writeHueStyle() {
+  let el = document.getElementById("visitor-accent") as HTMLStyleElement | null;
+  if (accent !== "custom") return el?.remove();
+  const c = colorTokens(hueHex(hue));
+  const css =
+    `:root:root[data-accent="custom"] .storefront-shell{--accent:${c.light.fill};--accent-2:${c.light.fill2};--accent-ink:${c.light.ink};--accent-text:${c.light.text}}` +
+    `:root:root[data-theme="dark"][data-accent="custom"] .storefront-shell{--accent:${c.dark.fill};--accent-ink:${c.dark.ink};--accent-text:${c.dark.text}}`;
+  if (!el) {
+    el = document.createElement("style");
+    el.id = "visitor-accent";
+    document.head.append(el);
+  }
+  if (el.textContent !== css) el.textContent = css;
+}
 
 function apply() {
   const root = document.documentElement;
   const dark = mode === "dark" || (mode === "system" && !!darkQuery?.matches);
   root.dataset.theme = dark ? "dark" : "light";
   root.dataset.accent = accent;
+  writeHueStyle();
   root.dataset.shape = "soft";
   root.dataset.motion = "full";
   document
@@ -94,6 +136,15 @@ function setAccent(value: Accent) {
   picked = value;
   save(ACCENT_KEY, value);
   fade();
+  listeners.forEach((fn) => fn());
+}
+function setHue(value: number) {
+  hue = Math.max(0, Math.min(359, Math.round(value)));
+  save(HUE_KEY, String(hue));
+  accent = "custom";
+  picked = "custom";
+  save(ACCENT_KEY, "custom");
+  apply();
   listeners.forEach((fn) => fn());
 }
 function setMode(value: Mode) {
@@ -267,7 +318,7 @@ export function PrefsPanel({
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        <Globe size={17} aria-hidden="true" />
+        <Languages size={17} aria-hidden="true" />
         <span aria-hidden="true">{lang === "th" ? "TH" : "EN"}</span>
       </button>
       <div
@@ -319,6 +370,22 @@ export function PrefsPanel({
               </button>
             ))}
           </div>
+          <label className={"hue-picker" + (current.accent === "custom" ? " selected" : "")}>
+            <span>
+              <i className="swatch" style={{ background: hueHex(hue) }} />
+              {t("เลือกสีเอง")}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={359}
+              step={1}
+              value={hue}
+              aria-label={t("เลือกสีเอง")}
+              aria-valuetext={hueHex(hue)}
+              onChange={(e) => setHue(Number(e.target.value))}
+            />
+          </label>
         </fieldset>
       </div>
     </>

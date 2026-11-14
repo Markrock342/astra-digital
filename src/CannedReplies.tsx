@@ -1,7 +1,7 @@
 // ข้อความสำเร็จรูป (canned replies) for the team chat inbox. API: server/canned-replies.mjs.
 // Picker follows the shadcn/ui Command / Combobox pattern (MIT): search, a listbox,
 // arrow keys + Enter, Esc closes. Inserting only fills the composer; it never sends.
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { ArrowDown, ArrowUp, LoaderCircle, MessageSquareText, Pencil, Plus, Search, Settings2, Trash2, X } from "lucide-react";
 import { ErrorMessage, useStore } from "./App";
 import { api } from "./api";
@@ -204,6 +204,9 @@ export function CannedReplyManager({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  // Caret after an inserted token: placed right after React writes the new text (not a frame
+  // later), so keys typed straight after the click land after the token.
+  const caret = useRef<number | null>(null);
   async function load() {
     try {
       setList((await api<{ replies: CannedReply[] }>("/admin/canned-replies")).replies);
@@ -268,12 +271,16 @@ export function CannedReplyManager({ onClose }: { onClose: () => void }) {
     const start = el?.selectionStart ?? draft.body.length;
     const end = el?.selectionEnd ?? draft.body.length;
     const body = draft.body.slice(0, start) + token + draft.body.slice(end);
+    caret.current = start + token.length;
     setDraft({ ...draft, body });
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(start + token.length, start + token.length);
-    });
   }
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (caret.current == null || !el) return;
+    el.focus();
+    el.setSelectionRange(caret.current, caret.current);
+    caret.current = null;
+  });
   const full = (list?.length ?? 0) >= LIMIT;
   return (
     <div className="reference-modal-backdrop" onClick={() => !busy && onClose()}>

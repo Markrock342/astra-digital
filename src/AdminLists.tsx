@@ -1703,8 +1703,8 @@ export function AdminCustomerDetail({ id }: { id: string }) {
                   </button>
                 )}
               </form>
+              <CustomerTagsCard customerId={c.id} tags={c.tags ?? []} onChanged={load} embedded />
             </section>
-            <CustomerTagsCard customerId={c.id} tags={c.tags ?? []} onChanged={load} />
             <section className="reference-admin-card admin-detail-card">
               <h2>สถานะบัญชี</h2>
               {!admin && <p className="muted">เฉพาะแอดมินเปลี่ยนสถานะบัญชีได้</p>}

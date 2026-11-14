@@ -371,9 +371,12 @@ export function CustomerTagsCard({
   customerId,
   tags,
   onChanged,
+  embedded = false,
 }: {
   customerId: string;
   tags: CustomerTag[];
+  /** Inside the "ข้อมูลลูกค้า" card (one card instead of two). */
+  embedded?: boolean;
   onChanged: () => Promise<void> | void;
 }) {
   const { user, toast } = useStore();
@@ -415,14 +418,29 @@ export function CustomerTagsCard({
   }
   const isNew = draft.trim() !== "" && !known.tags.some((t) => t.tag.toLowerCase() === draft.trim().toLowerCase());
   return (
-    <section className="reference-admin-card admin-detail-card customer-tags-card">
-      <h2>
-        <Tag size={16} className="customer-tags-icon" />
-        แท็กลูกค้า
-      </h2>
-      <p className="field-help customer-tags-help">
-        ใช้จัดกลุ่มลูกค้า เช่น VIP หรือ ตัวแทน · ถ้าตัวเลือกสินค้ามีราคาตามแท็ก ลูกค้าคนนี้จะเห็นและจ่ายราคานั้น
-      </p>
+    <section
+      className={
+        embedded ? "customer-tags-card customer-tags-embedded" : "reference-admin-card admin-detail-card customer-tags-card"
+      }
+      aria-labelledby={"customer-tags-" + customerId}
+    >
+      {embedded ? (
+        <h3 id={"customer-tags-" + customerId}>
+          <Tag size={15} className="customer-tags-icon" />
+          แท็กลูกค้า
+          <small className="muted">ใช้กับราคาตามแท็ก เช่น VIP / ตัวแทน</small>
+        </h3>
+      ) : (
+        <>
+          <h2 id={"customer-tags-" + customerId}>
+            <Tag size={16} className="customer-tags-icon" />
+            แท็กลูกค้า
+          </h2>
+          <p className="field-help customer-tags-help">
+            ใช้จัดกลุ่มลูกค้า เช่น VIP หรือ ตัวแทน · ถ้าตัวเลือกสินค้ามีราคาตามแท็ก ลูกค้าคนนี้จะเห็นและจ่ายราคานั้น
+          </p>
+        </>
+      )}
       {tags.length ? (
         <CustomerTagChips
           tags={tags}
