@@ -112,7 +112,10 @@ test("storefront delete-account dialog fits 390 in dark mode and translates", as
   expect(colors.contrast).toBeGreaterThanOrEqual(4.5);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await dialog.getByRole("button", { name: "ยกเลิก" }).click();
-  await page.getByRole("button", { name: "EN", exact: true }).click();
+  // Language lives in the header "ภาษาและธีม" popover since the client round (#97).
+  await page.getByRole("button", { name: "ภาษาและธีม" }).click();
+  await page.getByRole("dialog", { name: "ภาษาและธีม" }).getByRole("button", { name: "EN", exact: true }).click();
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Delete account" }).click();
   await expect(dialog).toContainText("Request account deletion?");
   await dialog.getByRole("button", { name: "Cancel" }).click();
