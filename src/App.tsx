@@ -342,12 +342,21 @@ function Header() {
     setOpen(false);
     setAccount(false);
   }, [path]);
-  const links = [
-    ["/", t("หน้าแรก")],
-    ["/products", t("สินค้า")],
-    ["/reviews", t("รีวิว")],
-    ["/orders", t("ประวัติการซื้อ")],
-  ];
+  // Desktop top menu = หน้าแรก + the footer menu (ตั้งค่า › หน้าตาร้าน › ส่วนท้าย), so both stay
+  // the same list; the footer column is hidden on desktop (client round, 14 Nov).
+  const menu = useAppearance().footer.links;
+  const links: [string, string][] = menu.length
+    ? [["/", t("หน้าแรก")], ...menu.filter((m) => m.link !== "/").map((m): [string, string] => [m.link, text(m.label)])]
+    : [
+        ["/", t("หน้าแรก")],
+        ["/products", t("สินค้า")],
+        ["/reviews", t("รีวิว")],
+        ["/orders", t("ประวัติการซื้อ")],
+      ];
+  const isActive = (to: string) => {
+    const base = to.split(/[?#]/)[0];
+    return base === "/" ? path === "/" : path === base || path.startsWith(base + "/") || (base === "/reviews" && path === "/credits");
+  };
   return (
     <>
       <header className="site-header">
@@ -357,22 +366,9 @@ function Header() {
           </Link>
           <nav aria-label={t("เมนูหลัก")} className="main-nav">
             {links.map(([to, label]) => (
-              <Link
-                key={to}
-                to={to}
-                className={
-                  (
-                    to === "/"
-                      ? path === "/"
-                      : path.startsWith(to) ||
-                        (to === "/reviews" && path === "/credits")
-                  )
-                    ? "nav-link active"
-                    : "nav-link"
-                }
-              >
+              <ShopLink key={to} to={to} className={isActive(to) ? "nav-link active" : "nav-link"}>
                 {label}
-              </Link>
+              </ShopLink>
             ))}
           </nav>
           {/* Exactly: ภาษา + ธีม · bell · balance · profile (the cart lives in the bottom nav). */}

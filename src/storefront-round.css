@@ -358,3 +358,31 @@
     margin-bottom: 24px;
   }
 }
+
+/* Desktop: every footer-menu link sits in the top menu (client, 14 Nov). Logo + actions on the
+   first row, the menu on its own row so 7–8 links never squeeze the balance / profile. */
+@media (min-width: 861px) {
+  .storefront-shell .site-header {
+    height: auto;
+  }
+  .storefront-shell .header-inner {
+    flex-wrap: wrap;
+    row-gap: 0;
+    min-height: 64px;
+  }
+  .storefront-shell .header-inner > .brand {
+    height: 64px;
+  }
+  .storefront-shell .header-inner > .main-nav {
+    order: 3;
+    flex: 1 0 100%;
+    margin: 0 0 0 -12px;
+    padding-bottom: 8px;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .storefront-shell .site-footer .footer-menu {
+    display: none;
+  }
+}

@@ -44,8 +44,8 @@ test("empty contact settings: /support keeps the default text and shows no chann
   await expect(page.locator(".contact-channel")).toHaveCount(0);
   await expect(page.getByRole("link", { name: /ตรวจสอบคำสั่งซื้อ/ })).toHaveAttribute("href", "/orders");
   await expect(page.getByRole("heading", { name: "ข้อมูลที่ควรเตรียมเมื่อแจ้งปัญหา" })).toBeVisible();
-  // The footer menu always links to the contact page.
-  await expect(page.locator(".footer-menu").getByRole("link", { name: "ติดต่อเรา" })).toHaveAttribute("href", "/support");
+  // The menu (top on desktop, footer on phones) always links to the contact page.
+  await expect(page.locator(".main-nav").getByRole("link", { name: "ติดต่อเรา" })).toHaveAttribute("href", "/support");
 });
 
 test("admin saves contact details → /support shows them with the right links", async ({ page }) => {

@@ -147,7 +147,8 @@ test("language switch, theme panel and brand assets", async ({ page }) => {
   await page.getByRole("button", { name: "EN", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(page.getByRole("link", { name: "Products", exact: true }).first()).toBeVisible();
+  // Top menu = the footer menu (desktop), English labels.
+  await expect(page.locator(".main-nav").getByRole("link", { name: "All products", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "All products" })).toBeVisible();
   await page.reload();
   await page.locator(".loading-row").waitFor({ state: "hidden" });

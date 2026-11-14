@@ -132,7 +132,8 @@ test("admin edits the FAQ; the product page and /faq show it, search works, JSON
   await expect(page.locator(".product-faq")).not.toContainText("ใช้ได้กี่จอ");
 
   // /faq from the footer: search, JSON-LD, no CSP violation.
-  await page.locator(".site-footer").getByRole("link", { name: "คำถามที่พบบ่อย" }).click();
+  // Desktop: the footer menu lives in the top menu.
+  await page.locator(".main-nav").getByRole("link", { name: "คำถามที่พบบ่อย" }).click();
   await expect(page).toHaveURL(base + "/faq");
   await expect(page.getByRole("heading", { name: "คำถามที่พบบ่อย", level: 1 })).toBeVisible();
   const items = page.locator(".faq-page details");
