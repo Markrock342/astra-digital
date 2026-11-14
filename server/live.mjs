@@ -4,7 +4,7 @@
  * clients refetch through the normal authenticated APIs. Without WebSockets,
  * clients poll GET /api/live and compare versions.
  */
-export const LIVE_TOPICS = ["chat", "orders", "catalog", "notify", "customers", "team"];
+export const LIVE_TOPICS = ["chat", "orders", "catalog", "notify", "customers", "team", "content"];
 
 const LIVE_METHODS = {
   createOrder: ["orders", "catalog"],
@@ -91,6 +91,16 @@ const LIVE_METHODS = {
   resetAppearance: ["catalog"],
   setAppearanceImage: ["catalog"],
   removeAppearanceImage: ["catalog"],
+  // News posts + the About page (news.mjs, about.mjs): open /news, /about pages refetch.
+  adminCreateNews: ["content"],
+  adminUpdateNews: ["content"],
+  adminSetNewsCover: ["content"],
+  adminRemoveNewsCover: ["content"],
+  adminDeleteNews: ["content"],
+  saveAbout: ["content"],
+  resetAbout: ["content"],
+  setAboutCover: ["content"],
+  removeAboutCover: ["content"],
   saveStaff: ["team"],
   setMemberRole: ["team", "customers", "notify"],
   setStaffActive: ["team"],
