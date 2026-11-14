@@ -11,8 +11,10 @@
  *
  * Create runs in one transaction: one bad line (closed, sold out, …) creates nothing.
  * Pay checks the credit against the sum due first, then pays each unpaid line through the normal
- * `pay` (its own transaction, emails and fraud rules). A line that runs out of stock at pay time
- * is marked OUT_OF_STOCK without a charge, exactly as a single order would be.
+ * `pay` (its own transaction). Multi-line success suppresses per-line email/notify and sends one
+ * customer email + one customer notify + one staff notify batch (link `/checkouts/:id`).
+ * A line that runs out of stock at pay time is marked OUT_OF_STOCK without a charge; that line is
+ * named in the checkout email. Single-line checkouts keep per-order `/orders/:id` behaviour.
  * A coupon goes on the line where it saves the most. With `pay` the summary page pays in the
  * same request; not enough credit rolls the whole checkout back (no order left waiting).
  */
@@ -34,7 +36,10 @@ export function ensureCheckouts(db) {
   }
 }
 
-export function hookCheckouts(service, { one, all, run, tx, fail, randomUUID, requireUser, publicUser }) {
+export function hookCheckouts(
+  service,
+  { one, all, run, tx, fail, randomUUID, requireUser, publicUser, notify, notifyStaffRoles },
+) {
   const lineIds = (userId, checkoutId) =>
     all(
       `SELECT id, created_at FROM orders WHERE checkout_id=? AND user_id=?
@@ -150,8 +155,52 @@ export function hookCheckouts(service, { one, all, run, tx, fail, randomUUID, re
     for (const o of payable) {
       if (typeof tokens[o.id] !== "string") fail(403, "ข้อมูลยืนยันการชำระเงินไม่ถูกต้อง");
     }
+    const multi = payable.length > 1 && input.outcome === "success";
     for (const o of payable)
-      service.pay(user, o.id, { paymentToken: tokens[o.id], outcome: input.outcome }, options);
-    return view(user, current.id);
+      service.pay(
+        user,
+        o.id,
+        {
+          paymentToken: tokens[o.id],
+          outcome: input.outcome,
+          ...(multi ? { suppressNotifications: true } : {}),
+        },
+        options,
+      );
+    const result = view(user, current.id);
+    if (multi) {
+      const paidOk = result.orders.filter((o) => o.status === "DELIVERED" || o.status === "PREORDER");
+      const oos = result.orders.filter((o) => o.status === "OUT_OF_STOCK");
+      if (paidOk.length) {
+        const names = paidOk.map((o) => o.name || o.label || o.id.slice(0, 8)).join(", ");
+        const oosNote = oos.length
+          ? " · ของหมดไม่ได้ตัดเงิน: " + oos.map((o) => o.name || o.label || o.id.slice(0, 8)).join(", ")
+          : "";
+        notify?.(
+          user.id,
+          "code_delivery",
+          "ส่งโค้ดสำเร็จ",
+          "คำสั่งซื้อ " + current.id.slice(0, 8) + " · " + names + oosNote,
+          "/checkouts/" + current.id,
+        );
+        notifyStaffRoles?.(
+          "order_new",
+          "ออเดอร์ใหม่",
+          "คำสั่งซื้อ " + current.id.slice(0, 8) + " · " + paidOk.length + " รายการ" + oosNote,
+          "/admin/orders/" + paidOk[0].id,
+        );
+        service.sendCheckoutConfirmation?.(current.id, options);
+      } else if (oos.length) {
+        // All lines OOS: still one customer note (no charge) — no success email.
+        notify?.(
+          user.id,
+          "order",
+          "สินค้าหมดขณะชำระ",
+          "คำสั่งซื้อ " + current.id.slice(0, 8) + " ของหมดทุกบรรทัด ไม่ได้ตัดเงิน",
+          "/checkouts/" + current.id,
+        );
+      }
+    }
+    return result;
   };
 }

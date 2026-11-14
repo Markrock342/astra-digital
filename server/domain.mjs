@@ -2002,19 +2002,21 @@ export function createCommerceCore({
       providerRef,
       actorId: payment.actorId ?? null,
     });
-    notify(
-      order.user_id,
-      manual ? "order" : "code_delivery",
-      manual ? "ชำระเงินแล้ว รอร้านส่งมอบ" : "ส่งโค้ดสำเร็จ",
-      "คำสั่งซื้อ " + id.slice(0, 8) + (manual ? " เข้าคิวแล้ว" : " ได้รับโค้ดแล้ว"),
-      "/orders/" + id,
-    );
-    notifyStaffRoles(
-      "order_new",
-      manual ? "ออเดอร์รอส่งมอบ" : "ออเดอร์ใหม่",
-      "คำสั่งซื้อ " + id.slice(0, 8) + (manual ? " ชำระแล้ว รอร้านส่งมอบ" : (payment.staffText ?? " ชำระแล้วและส่งของแล้ว")),
-      "/admin/orders/" + id,
-    );
+    if (!payment.suppressNotifications) {
+      notify(
+        order.user_id,
+        manual ? "order" : "code_delivery",
+        manual ? "ชำระเงินแล้ว รอร้านส่งมอบ" : "ส่งโค้ดสำเร็จ",
+        "คำสั่งซื้อ " + id.slice(0, 8) + (manual ? " เข้าคิวแล้ว" : " ได้รับโค้ดแล้ว"),
+        "/orders/" + id,
+      );
+      notifyStaffRoles(
+        "order_new",
+        manual ? "ออเดอร์รอส่งมอบ" : "ออเดอร์ใหม่",
+        "คำสั่งซื้อ " + id.slice(0, 8) + (manual ? " ชำระแล้ว รอร้านส่งมอบ" : (payment.staffText ?? " ชำระแล้วและส่งของแล้ว")),
+        "/admin/orders/" + id,
+      );
+    }
     maybeNotifyStockLow(order.variant_id);
     alerts.emit("order_paid", {
       id,
@@ -2066,19 +2068,21 @@ export function createCommerceCore({
         providerRef,
         actorId: payment.actorId ?? null,
       });
-    notify(
-      o.user_id,
-      "preorder_queue",
-      "ได้รับเลขคิวพรีออเดอร์",
-      "คิวของคุณคือ #" + queueNumber,
-      "/orders/" + id,
-    );
-    notifyStaffRoles(
-      "preorder_queue_admin",
-      "คิวพรีออเดอร์ใหม่",
-      "คิว #" + queueNumber + " · " + id.slice(0, 8),
-      "/admin/orders/" + id,
-    );
+    if (!payment.suppressNotifications) {
+      notify(
+        o.user_id,
+        "preorder_queue",
+        "ได้รับเลขคิวพรีออเดอร์",
+        "คิวของคุณคือ #" + queueNumber,
+        "/orders/" + id,
+      );
+      notifyStaffRoles(
+        "preorder_queue_admin",
+        "คิวพรีออเดอร์ใหม่",
+        "คิว #" + queueNumber + " · " + id.slice(0, 8),
+        "/admin/orders/" + id,
+      );
+    }
     alerts.emit("preorder_paid", {
       id,
       queueNumber,
@@ -2168,6 +2172,7 @@ export function createCommerceCore({
               idempotencyKey: "pay:reservation-deposit:" + id,
               providerRef: "sandbox:preorder-deposit:" + id,
               label: "รับมัดจำพรีออเดอร์ " + id.slice(0, 8),
+              suppressNotifications: !!input.suppressNotifications,
             },
           );
           preorders.afterDepositPaid(o, paymentId);
@@ -2186,7 +2191,7 @@ export function createCommerceCore({
             direction: "out",
             orderId: id,
           });
-        settlePaidReservation(o);
+        settlePaidReservation(o, { suppressNotifications: !!input.suppressNotifications });
         audit(user, "PREORDER_PAID", id);
         return orderDetail(user, id);
       });
@@ -2237,7 +2242,9 @@ export function createCommerceCore({
         direction: "out",
         orderId: id,
       });
-      deliverPaidOrder(order, available);
+      deliverPaidOrder(order, available, {
+        suppressNotifications: !!input.suppressNotifications,
+      });
       audit(user, "PAYMENT_AND_DELIVERY", id);
       return orderDetail(user, id);
     });
@@ -4081,6 +4088,7 @@ export function createCommerceCore({
     changeEmail: emailVerification.changeEmail,
     adminVerifyCustomerEmail: emailVerification.adminVerify,
     sendOrderConfirmation: accountEmail.sendOrderConfirmation,
+    sendCheckoutConfirmation: accountEmail.sendCheckoutConfirmation,
     adminIntegrations: accountEmail.integrationsStatus,
     emailIdle: accountEmail.idle,
     // Admin › ตั้งค่า › ข้อความอีเมล (email-templates.mjs).
@@ -4128,7 +4136,18 @@ export function createCommerceCore({
   // "สร้างโดยแอดมิน" marker + payment method on the existing order views.
   manualOrders.hook(service);
   // Several basket lines under one order number (checkouts.mjs).
-  hookCheckouts(service, { one, all, run, tx, fail, randomUUID, requireUser, publicUser });
+  hookCheckouts(service, {
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    randomUUID,
+    requireUser,
+    publicUser,
+    notify,
+    notifyStaffRoles,
+  });
   // Preorder emails queued inside a committed call go out now; a failed call drops them.
   for (const name of ["pay", "createOrder", "importCodes", "adminCallPreorders", "adminCancelPreorder", "cancelMyPreorder"]) {
     const call = service[name];
