@@ -97,19 +97,60 @@ test("summary page pays in one step; short credit leaves no order behind", () =>
   assert.equal(service.orders(user).length, 1);
 });
 
-test("a coupon goes on the line where it saves the most", () => {
+test("basket coupon: min_total across lines, proportional split, one redemption", () => {
   const { service, admin, make, reg } = setup();
-  const cheap = make("Cheap", 1000, 2);
-  const dear = make("Dear", 5000, 2);
-  service.adminCreateCoupon(admin, { code: "TENOFF", type: "PERCENT", value: 10 });
-  const user = reg("coupon@example.invalid");
-  const lines = [{ variantId: cheap, quantity: 1 }, { variantId: dear, quantity: 1 }];
-  const best = service.checkoutCoupon(user, { code: "TENOFF", lines });
-  assert.equal(best.valid, true);
-  assert.equal(best.variantId, dear);
-  assert.equal(best.discount, 500);
-  const c = service.createCheckout(user, { requestKey: "checkout-key-10", couponCode: "TENOFF", pay: "success", lines });
-  assert.deepEqual(c.orders.map((o) => o.discount), [0, 500]);
-  assert.ok(c.orders.every((o) => o.status === "DELIVERED"));
+  // ฿300 + ฿300 = ฿600 ≥ min ฿500 → 10% = ฿60 (6000 satang * 10% = 600)
+  const a = make("A300", 30000, 2);
+  const b = make("B300", 30000, 2);
+  service.adminCreateCoupon(admin, {
+    code: "BASKET10",
+    type: "PERCENT",
+    value: 10,
+    minTotal: 50000,
+  });
+  const user = reg("basket-coupon@example.invalid");
+  service.topup(user, { amount: 1000, requestKey: "basket-topup-01" });
+  const lines = [{ variantId: a, quantity: 1 }, { variantId: b, quantity: 1 }];
+  assert.equal(service.checkoutCoupon(user, { code: "BASKET10", lines: [{ variantId: a, quantity: 1 }] }).valid, false);
+  const quote = service.checkoutCoupon(user, { code: "BASKET10", lines });
+  assert.equal(quote.valid, true);
+  assert.equal(quote.discount, 6000);
+  assert.equal(quote.lines.length, 2);
+  assert.equal(quote.lines.reduce((n, l) => n + l.discount, 0), 6000);
+  const c = service.createCheckout(user, {
+    requestKey: "checkout-key-10",
+    couponCode: "BASKET10",
+    pay: "success",
+    lines,
+  });
+  assert.equal(c.orders.reduce((n, o) => n + o.discount, 0), 6000);
+  assert.ok(c.orders.every((o) => o.coupon_code === "BASKET10"));
+  const redemptions = service.db
+    .prepare("SELECT checkout_id, amount FROM coupon_redemptions WHERE code=? AND released_at IS NULL")
+    .all("BASKET10");
+  assert.equal(redemptions.length, 1);
+  assert.equal(redemptions[0].checkout_id, c.id);
+  assert.equal(redemptions[0].amount, 6000);
   assert.equal(service.checkoutCoupon(user, { code: "NOPE", lines }).valid, false);
+});
+
+test("basket coupon max_discount cap and leftover satang on last line", () => {
+  const { service, admin, make, reg } = setup();
+  const a = make("CapA", 10000, 2); // ฿100
+  const b = make("CapB", 20000, 2); // ฿200
+  service.adminCreateCoupon(admin, {
+    code: "CAP50",
+    type: "PERCENT",
+    value: 50,
+    maxDiscount: 5000, // ฿50 cap on ฿150 → 50% would be ฿75
+  });
+  const user = reg("cap-coupon@example.invalid");
+  const lines = [{ variantId: a, quantity: 1 }, { variantId: b, quantity: 1 }];
+  const quote = service.checkoutCoupon(user, { code: "CAP50", lines });
+  assert.equal(quote.valid, true);
+  assert.equal(quote.discount, 5000);
+  assert.equal(quote.lines.reduce((n, l) => n + l.discount, 0), 5000);
+  // Proportional: floor(5000*10000/30000)=1666, last gets remainder 3334
+  assert.equal(quote.lines[0].discount, 1666);
+  assert.equal(quote.lines[1].discount, 3334);
 });

@@ -358,6 +358,11 @@ export function ensureCoupons(db) {
   );
   const has = (table, column) =>
     db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  if (!has("coupon_redemptions", "checkout_id"))
+    db.exec(`ALTER TABLE coupon_redemptions ADD COLUMN checkout_id TEXT`);
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_coupon_redemptions_checkout ON coupon_redemptions(checkout_id) WHERE checkout_id IS NOT NULL",
+  );
   for (const table of ["orders", "reservations"]) {
     if (!has(table, "discount"))
       db.exec(`ALTER TABLE ${table} ADD COLUMN discount INTEGER NOT NULL DEFAULT 0`);

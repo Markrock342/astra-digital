@@ -13,8 +13,10 @@
  * Pay checks the credit against the sum due first, then pays each unpaid line through the normal
  * `pay` (its own transaction, emails and fraud rules). A line that runs out of stock at pay time
  * is marked OUT_OF_STOCK without a charge, exactly as a single order would be.
- * A coupon goes on the line where it saves the most. With `pay` the summary page pays in the
- * same request; not enough credit rolls the whole checkout back (no order left waiting).
+ * A basket coupon is evaluated against eligible lines (min_total / % / max_discount), then
+ * split across those lines; one coupon_redemptions row is stored per checkout_id.
+ * With `pay` the summary page pays in the same request; not enough credit rolls the whole
+ * checkout back (no order left waiting).
  */
 export const CHECKOUT_MAX_LINES = 20;
 
@@ -34,7 +36,10 @@ export function ensureCheckouts(db) {
   }
 }
 
-export function hookCheckouts(service, { one, all, run, tx, fail, randomUUID, requireUser, publicUser }) {
+export function hookCheckouts(
+  service,
+  { one, all, run, tx, fail, randomUUID, requireUser, publicUser, quoteBasketCoupon, redeemBasketCoupon },
+) {
   const lineIds = (userId, checkoutId) =>
     all(
       `SELECT id, created_at FROM orders WHERE checkout_id=? AND user_id=?
@@ -69,18 +74,25 @@ export function hookCheckouts(service, { one, all, run, tx, fail, randomUUID, re
     return lines;
   }
 
-  /** A code goes on the line where it saves the most (coupons are per product / order). */
+  /** Basket coupon preview: { valid, code, discount, lines:[{ variantId, discount }] }. */
   service.checkoutCoupon = (user, input = {}) => {
     requireUser(user);
     const lines = cleanLines(input);
-    let best = null;
-    let reason = "";
-    lines.forEach((line, index) => {
-      const result = service.checkCoupon(user, { code: input.code, variantId: line.variantId, quantity: line.quantity });
-      if (result.valid && (!best || result.discount > best.discount)) best = { ...result, variantId: line.variantId, index };
-      else if (!result.valid && !reason) reason = result.reason;
-    });
-    return best ?? { valid: false, reason: reason || "โค้ดส่วนลดไม่ถูกต้อง" };
+    try {
+      if (!quoteBasketCoupon) fail(500, "ระบบคูปองยังไม่พร้อม");
+      const result = quoteBasketCoupon(user, input.code, lines);
+      return {
+        valid: true,
+        code: result.code,
+        discount: result.discount,
+        subtotal: result.subtotal,
+        total: result.total,
+        lines: result.lines.map((l) => ({ variantId: l.variantId, discount: l.discount })),
+      };
+    } catch (error) {
+      if (error && error.status === 400) return { valid: false, reason: error.message };
+      throw error;
+    }
   };
 
   service.createCheckout = (user, input = {}, options) => {
@@ -93,28 +105,44 @@ export function hookCheckouts(service, { one, all, run, tx, fail, randomUUID, re
     const payNow = input.pay === "success" || input.pay === "failure" ? input.pay : null;
     const existing = one("SELECT id FROM checkouts WHERE user_id=? AND request_key=?", user.id, requestKey);
     if (existing) return withTokens(view(user, existing.id), {});
-    let couponIndex = -1;
+    let basketQuote = null;
     if (input.couponCode && input.couponCode.trim()) {
-      const best = service.checkoutCoupon(user, { code: input.couponCode, lines });
-      if (!best.valid) fail(400, best.reason);
-      couponIndex = best.index;
+      basketQuote = service.checkoutCoupon(user, { code: input.couponCode, lines });
+      if (!basketQuote.valid) fail(400, basketQuote.reason);
     }
+    const discountByVariant = new Map((basketQuote?.lines || []).map((l) => [l.variantId, l.discount]));
     const id = randomUUID();
     const tokens = {};
     tx(() => {
       run("INSERT INTO checkouts (id, user_id, request_key) VALUES (?,?,?)", id, user.id, requestKey);
+      const created = [];
       lines.forEach((line, i) => {
+        const lineDiscount = discountByVariant.has(line.variantId) ? discountByVariant.get(line.variantId) : null;
         const order = service.createOrder(user, {
           variantId: line.variantId,
           quantity: line.quantity,
           requestKey: requestKey + ":" + i,
-          ...(i === couponIndex ? { couponCode: input.couponCode } : {}),
+          ...(lineDiscount != null
+            ? { basketCoupon: { code: basketQuote.code, discount: lineDiscount } }
+            : {}),
           ...(line.deliveryInputs ? { deliveryInputs: line.deliveryInputs } : {}),
         });
         const table = order.preorder ? "reservations" : "orders";
         run(`UPDATE ${table} SET checkout_id=?, checkout_line=? WHERE id=? AND user_id=?`, id, i, order.id, user.id);
         if (order.paymentToken) tokens[order.id] = order.paymentToken;
+        created.push(order);
       });
+      if (basketQuote?.valid && basketQuote.discount > 0) {
+        const anchor = created.find((o) => (o.discount || 0) > 0) || created[0];
+        redeemBasketCoupon?.({
+          code: basketQuote.code,
+          userId: user.id,
+          checkoutId: id,
+          orderId: anchor.preorder ? null : anchor.id,
+          reservationId: anchor.preorder ? anchor.id : null,
+          amount: basketQuote.discount,
+        });
+      }
       if (payNow === "success") {
         const sum = view(user, id).orders.reduce((n, o) => n + due(o), 0);
         if (publicUser(user).balance < sum) fail(409, "เครดิตไม่เพียงพอ กรุณาเติมเครดิตหรือเลือกช่องทางอื่น");
