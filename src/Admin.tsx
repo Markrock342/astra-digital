@@ -138,7 +138,7 @@ const settingTabs = [
   ["settings/appearance", "หน้าตาร้าน"],
   ["settings/payment", "รับเงิน"],
   ["settings/banners", "แบนเนอร์หน้าแรก"],
-  ["settings/news", "ข่าวสารและกิจกรรม"],
+  ["settings/news", "ข่าวสาร"],
   ["settings/about", "เกี่ยวกับเรา"],
   ["settings/legal", "ข้อกำหนดและนโยบาย"],
   ["settings/receipts", "ใบเสร็จและใบกำกับภาษี"],

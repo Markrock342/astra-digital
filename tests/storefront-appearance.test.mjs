@@ -95,7 +95,7 @@ test("defaults are today's storefront text, word for word (TH and the current EN
       ["สินค้าทั้งหมด", "/products"],
       ["เครดิตร้าน", "/reviews"],
       ["ประวัติการซื้อ", "/orders"],
-      ["ข่าวสารและกิจกรรม", "/news"],
+      ["ข่าวสาร", "/news"],
       ["เกี่ยวกับเรา", "/about"],
       ["คำถามที่พบบ่อย", "/faq"],
       ["ติดต่อเรา", "/support"],
@@ -479,4 +479,15 @@ test("rev 3: a footer menu saved earlier gets ข่าวสาร + เกี�
   const full = migrateStoredAppearance({ rev: 2, footer: { links: Array.from({ length: 8 }, (_, i) => link("L" + i, "/p" + i)) } });
   assert.equal(full.footer.links.length, 8);
   assert.equal(migrateStoredAppearance({ rev: 3, footer: { links: [] } }).footer.links.length, 0);
+});
+
+test("rev 4: the /news link still named ข่าวสารและกิจกรรม becomes ข่าวสาร; a custom name stays", () => {
+  const old = (label) => ({ rev: 3, footer: { links: [{ label, link: "/news" }, { label: { th: "เกี่ยวกับเรา", en: "About us" }, link: "/about" }] } });
+  const a = migrateStoredAppearance(old({ th: "ข่าวสารและกิจกรรม", en: "News & events" }));
+  assert.deepEqual(a.footer.links[0].label, { th: "ข่าวสาร", en: "News" });
+  assert.equal(a.rev, APPEARANCE_REV);
+  const b = migrateStoredAppearance(old({ th: "โปรโมชันล่าสุด", en: "Deals" }));
+  assert.deepEqual(b.footer.links[0].label, { th: "โปรโมชันล่าสุด", en: "Deals" });
+  const c = migrateStoredAppearance(old({ th: "ข่าวสารและกิจกรรม", en: "Latest news" }));
+  assert.deepEqual(c.footer.links[0].label, { th: "ข่าวสาร", en: "Latest news" });
 });

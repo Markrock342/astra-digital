@@ -1,5 +1,6 @@
 // English storefront strings, keyed by the Thai source text (see i18n.ts).
 export const EN_STRINGS: Record<string, string> = {
+  "ข่าวสาร": "News",
   "เลือกสีเอง": "Pick your colour",
   "ทั้งคำสั่งซื้อ #{id}": "Whole order #{id}",
   " · เหลือน้อย": " · Low stock",

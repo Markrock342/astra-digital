@@ -197,7 +197,7 @@ test("admin edits the storefront look, customers see it in TH and EN, reset rest
   await expect(shop.locator(".marquee-track span").first()).toContainText("สินค้าพร้อมส่ง ได้รับทันทีหลังชำระเงิน");
   await expect(shop.locator(".stats-panel")).toHaveCount(1);
   expect(await shop.locator(".hero-cta").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(21, 52, 255)");
-  await expect(shop.locator(".footer-menu a")).toHaveText(["สินค้าทั้งหมด", "เครดิตร้าน", "ประวัติการซื้อ", "ข่าวสารและกิจกรรม", "เกี่ยวกับเรา", "คำถามที่พบบ่อย", "ติดต่อเรา"]);
+  await expect(shop.locator(".footer-menu a")).toHaveText(["สินค้าทั้งหมด", "เครดิตร้าน", "ประวัติการซื้อ", "ข่าวสาร", "เกี่ยวกับเรา", "คำถามที่พบบ่อย", "ติดต่อเรา"]);
   await expect(shop.locator('meta[property="og:image"]')).toHaveAttribute("content", /\/brand\/og\.png$/);
   await expect(shop.locator("#shop-colors")).toHaveCount(0);
   await expectCredit(shop);
