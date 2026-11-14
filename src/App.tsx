@@ -97,6 +97,7 @@ import { ContactPage } from "./Contact";
 import { AboutPage, NewsDetailPage, NewsListPage } from "./News";
 import { CheckoutFields, DeliveredLinks, FulfilmentCard, checkoutFieldsReady } from "./Delivery";
 import { RebuyActions } from "./Rebuy";
+import { HistoryPage } from "./OrderList";
 import { ManualOrderNote } from "./ManualOrderNote";
 import { DiscountBadge, PriceNote, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
 import { HomeCategoryRow } from "./Categories";
@@ -269,7 +270,7 @@ export function Status({ status }: { status: string }) {
   );
 }
 /** Unpaid order cancelled by the payment window: shown as its own status to the customer. */
-const shownStatus = (o: Order) =>
+export const shownStatus = (o: Order) =>
   o.status === "DELIVERED" && o.fulfilment?.state === "waiting"
     ? "WAITING"
     : o.status === "PREORDER" && o.stage === "called"
@@ -1240,7 +1241,7 @@ export function useTestPayments() {
   }, []);
   return on;
 }
-function RequireLogin() {
+export function RequireLogin() {
   return (
     <Empty
       icon={<KeyRound />}
@@ -1978,134 +1979,6 @@ function PayDeadline({ createdAt }: { createdAt: string }) {
     <p className="pay-deadline">
       {t("กรุณาชำระภายใน {time} หากเกินเวลา ระบบจะยกเลิกคำสั่งซื้ออัตโนมัติ", { time })}
     </p>
-  );
-}
-function HistoryPage() {
-  const { user } = useStore();
-  const [orders, setOrders] = useState<Order[] | null>(null);
-  const [error, setError] = useState("");
-  const [filter, setFilter] = useState("all");
-  const loadOrders = () => {
-    if (user)
-      api<{ orders: Order[] }>("/orders")
-        .then((r) => setOrders(r.orders))
-        .catch((e) => setError(e.message));
-  };
-  useEffect(loadOrders, [user?.id]);
-  useLive(["orders"], loadOrders);
-  const filtered = orders?.filter(
-    (o) => filter === "all" || o.status === filter,
-  );
-  return (
-    <main className="container page-main reference-history-page">
-      <div className="page-heading">
-        <span className="eyebrow">{t("คำสั่งซื้อของฉัน")}</span>
-        <h1>{t("ประวัติการซื้อ")}</h1>
-        <p>{t("ติดตามคำสั่งซื้อและเปิดดูโค้ดสินค้าของคุณ")}</p>
-      </div>
-      {!user ? (
-        <RequireLogin />
-      ) : (
-        <>
-          <div className="category-bar">
-            {[
-              ["all", t("ทั้งหมด")],
-              ["DELIVERED", t("จัดส่งสำเร็จ")],
-              ["PREORDER", t("รอส่ง (พรีออเดอร์)")],
-              ["PENDING_PAYMENT", t("รอชำระเงิน")],
-              ["FAILED", t("ไม่สำเร็จ")],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                className={
-                  filter === value ? "category-chip selected" : "category-chip"
-                }
-                onClick={() => setFilter(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <ErrorMessage message={error} />
-          {!orders && !error ? (
-            <div className="loading-row">
-              <LoaderCircle className="spin" />
-              {t("กำลังโหลดคำสั่งซื้อ")}
-            </div>
-          ) : filtered?.length ? (
-            <div className="orders-list">
-              {filtered.map((o) => (
-                <div className="history-item" key={o.id}>
-                <Link
-                  to={"/orders/" + o.id}
-                  className="panel history-card"
-                >
-                  <div className="history-card-top">
-                    <span>
-                      #{o.id.slice(0, 8).toUpperCase()}{" "}
-                      <small>{dateTime(o.created_at)}</small>
-                    </span>
-                    <Status status={shownStatus(o)} />
-                  </div>
-                  <div className="history-card-body">
-                    <div className="history-art">
-                      <Art type={o.art} name={o.name} />
-                    </div>
-                    <div>
-                      <h2>{o.name}</h2>
-                      <p>
-                        {o.label} · {o.quantity}{" "}{t("ชิ้น")}
-                      </p>
-                      {o.createdByAdmin && <ManualOrderNote method={o.paymentMethodLabel} />}
-                    </div>
-                    <strong>{money(o.total)}</strong>
-                    <ArrowUpRight size={18} />
-                  </div>
-                  <div className="history-card-bottom">
-                    {o.status === "DELIVERED" ? (
-                      <>
-                        <KeyRound size={16} />
-                        {t("ดูโค้ดสินค้า")}
-                      </>
-                    ) : o.status === "PENDING_PAYMENT" ? (
-                      t("รอเชื่อมการชำระเงิน")
-                    ) : (
-                      t("ดูรายละเอียด")
-                    )}
-                    <ArrowRight size={15} />
-                  </div>
-                </Link>
-                {(hasReceipt(o) || o.status === "DELIVERED") && (
-                  <div className="history-item-actions">
-                    <RebuyActions order={o} />
-                    {hasReceipt(o) && (
-                      <ReceiptLink id={o.id}>
-                        {t("ใบเสร็จ")} #{o.id.slice(0, 8).toUpperCase()}
-                      </ReceiptLink>
-                    )}
-                  </div>
-                )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            !error && (
-              <Empty
-                icon={<History />}
-                heading={t("ยังไม่มีคำสั่งซื้อในรายการนี้")}
-                description={t("เมื่อคุณเลือกซื้อสินค้า คำสั่งซื้อจะปรากฏที่นี่")}
-                action={
-                  <Link to="/products" className="button primary">
-                    {t("เลือกดูสินค้า")}
-                    <ArrowRight size={16} />
-                  </Link>
-                }
-              />
-            )
-          )}
-        </>
-      )}
-    </main>
   );
 }
 function WalletPage() {
