@@ -64,10 +64,9 @@ export function StorefrontMenu({ open, onClose }: { open: boolean; onClose: () =
         <div className="menu-user-card" data-testid="menu-user-card">
           <UserAvatar user={user} />
           <div className="menu-user-text">
-            <strong>{user.name}</strong>
-            <span>
-              {t("ยอดเงินคงเหลือ")} <b className="menu-balance">{money(user.balance)}</b>
-            </span>
+            <strong className="menu-user-name">{user.name}</strong>
+            <small className="msheet-balance-label">{t("ยอดเงินคงเหลือ")}</small>
+            <span className="msheet-balance">{money(user.balance)}</span>
           </div>
           {testPayments && (
             <Link to="/wallet" className="menu-topup">

@@ -190,8 +190,9 @@ test("admin edits the storefront look, customers see it in TH and EN, reset rest
   shop = await context.newPage();
   await shop.goto(base + "/");
   await expect(shop.locator(".hero-tagline")).toHaveText("ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที");
-  await expect(shop.locator(".hero-cta")).toHaveText("เลือกซื้อสินค้า");
-  await expect(shop.locator(".hero-ghost")).toHaveText("ดูรีวิวจากลูกค้า");
+  await expect(shop.locator(".hero-cta")).toHaveText("สินค้าทั้งหมด");
+  // Visitor (not signed in): the second button is "เข้าสู่ระบบ".
+  await expect(shop.locator(".hero-ghost")).toHaveText("เข้าสู่ระบบ");
   await expect(shop.locator(".marquee-track span").first()).toContainText("สินค้าพร้อมส่ง ได้รับทันทีหลังชำระเงิน");
   await expect(shop.locator(".stats-panel")).toHaveCount(1);
   expect(await shop.locator(".hero-cta").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(21, 52, 255)");

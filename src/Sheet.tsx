@@ -1,9 +1,10 @@
 // Storefront bottom sheet. Based on shadcn/ui Sheet (side="bottom") + Drawer (MIT,
 // https://ui.shadcn.com): dimmed overlay, panel sliding up from the bottom with a drag handle,
 // title, close X, Esc / overlay click / drag-down to close, focus kept inside while open and
-// returned to the trigger afterwards. Rendered inside .storefront-shell so it gets the shop tokens
-// (never inside the sticky header: its backdrop-filter would trap position: fixed).
+// returned to the trigger afterwards. Portalled to the top of .storefront-shell: it keeps the
+// shop tokens, and no page wrapper (transitions, the sticky header) can trap or cover it.
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useDialog } from "./dialog";
 import { t } from "./i18n";
@@ -53,7 +54,8 @@ export function BottomSheet({
   }, [open]);
   if (!mounted) return null;
   const titleId = id + "-title";
-  return (
+  const host = document.querySelector(".storefront-shell") ?? document.body;
+  return createPortal(
     <div className="sheet-root" data-state={open ? "open" : "closed"}>
       <div className="sheet-overlay" aria-hidden="true" onClick={onClose} />
       <div
@@ -97,6 +99,7 @@ export function BottomSheet({
         </div>
         <div className="sheet-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    host,
   );
 }

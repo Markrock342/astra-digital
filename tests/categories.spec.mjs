@@ -139,7 +139,8 @@ test("admin: create with a library icon, reorder, bulk-move a product; storefron
   await expect(page.locator(".product-card")).toHaveCount(0);
   await page.getByLabel("ค้นหาสินค้า").fill("tune");
   await expect(page.locator(".product-card")).toHaveCount(1);
-  await page.getByLabel("เรียงสินค้า").selectOption("high");
+  await page.getByRole("button", { name: /^ตัวกรอง/ }).click();
+  await page.getByRole("dialog", { name: "ตัวกรอง" }).getByRole("radio", { name: "ราคาสูง → ต่ำ" }).click();
   await expect(page.locator(".product-card")).toHaveCount(1);
   await expect(page).toHaveURL(base + "/products?category=" + CAT.id);
   // "ทั้งหมด" clears the filter; back returns to the category.
@@ -162,6 +163,10 @@ test("admin: create with a library icon, reorder, bulk-move a product; storefron
 });
 
 test("home category row links to the filtered list; EN names; all 8 themes", async ({ page }) => {
+  // Hidden on the home page by default since the client round; the admin can switch it on.
+  const admin = service.session(adminToken);
+  const sections = service.adminAppearance(admin).appearance.sections;
+  service.saveAppearance(admin, { sections: sections.map((s) => (s.id === "categories" ? { ...s, visible: true } : s)) });
   await as(page, null);
   await ready(page, "/");
   const row = page.getByRole("region", { name: "เลือกตามหมวดหมู่" });

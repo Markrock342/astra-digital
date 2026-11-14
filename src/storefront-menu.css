@@ -1,10 +1,19 @@
 /* Phone menu sheet (StorefrontMenu.tsx): customer card, shortcut tiles, contact chips, sign
-   out. shadcn/ui Card + Button look (MIT, https://ui.shadcn.com) on the storefront tokens. */
-.menu-sheet .sheet-body {
-  display: grid;
-  gap: 18px;
+   out. shadcn/ui Card + Button look (MIT, https://ui.shadcn.com) on the storefront tokens, with
+   cool neutral fills (no warm greys). */
+.storefront-shell .menu-sheet {
+  --menu-soft: #f3f4f6;
+  --menu-soft-hover: #e9ebef;
 }
-.menu-user-card {
+:root[data-theme="dark"] .storefront-shell .menu-sheet {
+  --menu-soft: #1c1c20;
+  --menu-soft-hover: #26262b;
+}
+.storefront-shell .menu-sheet .sheet-body {
+  display: grid;
+  gap: 16px;
+}
+.storefront-shell .menu-user-card {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -14,40 +23,47 @@
   color: #ffffff;
   box-shadow: 0 10px 24px -14px rgb(0 0 0 / 0.5);
 }
-:root[data-theme="dark"] .menu-user-card {
+:root[data-theme="dark"] .storefront-shell .menu-user-card {
   background: #1d1d21;
-  border: 1px solid #2c2c31;
+  box-shadow: inset 0 0 0 1px #2c2c31;
 }
-.menu-user-card .avatar {
-  width: 44px;
-  height: 44px;
+.storefront-shell .menu-user-card .avatar {
+  width: 48px;
+  height: 48px;
   flex: none;
   font-size: 18px;
-  background: rgb(255 255 255 / 0.12);
+  border: 0;
+  background: rgb(255 255 255 / 0.14);
   color: #ffffff;
 }
-.menu-user-text {
-  display: grid;
+.storefront-shell .menu-user-text {
+  display: flex;
+  flex-direction: column;
   gap: 2px;
   min-width: 0;
   flex: 1;
 }
-.menu-user-text strong {
+.storefront-shell .menu-user-name {
   font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.menu-user-text span {
-  font-size: 13px;
+.storefront-shell .msheet-balance-label {
+  font-size: 12px;
+  line-height: 1.3;
   color: rgb(255 255 255 / 0.72);
 }
-.menu-balance {
+.storefront-shell .msheet-balance {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
   color: #ffffff;
-  font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
-.menu-topup {
+.storefront-shell .menu-topup {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -60,57 +76,57 @@
   font-weight: 700;
   flex: none;
 }
-.menu-guest-card {
+.storefront-shell .menu-guest-card {
   display: grid;
   gap: 12px;
   padding: 16px;
   border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--raised);
+  background: var(--menu-soft);
 }
-.menu-guest-card p {
+.storefront-shell .menu-guest-card p {
   margin: 0;
   font-size: 14px;
   color: var(--muted);
 }
-.menu-guest-actions {
+.storefront-shell .menu-guest-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
-.menu-guest-actions .button {
+.storefront-shell .menu-guest-actions .button {
   min-height: 44px;
   justify-content: center;
 }
-.menu-tiles {
+.storefront-shell .menu-tiles {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 4px;
 }
-.menu-tile {
+.storefront-shell .menu-tile {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
   width: 100%;
-  min-height: 84px;
-  padding: 10px 4px;
+  min-height: 88px;
+  padding: 8px 2px;
   border: 0;
   border-radius: 14px;
   background: transparent;
   color: var(--text);
   font: 500 12px/1.3 inherit;
   text-align: center;
+  text-wrap: balance;
   cursor: pointer;
   box-sizing: border-box;
 }
-.menu-tile:hover {
-  background: var(--hover);
+.storefront-shell .menu-tile:hover {
+  background: var(--menu-soft);
 }
-.menu-tile-icon {
+.storefront-shell .menu-tile-icon {
   width: 46px;
   height: 46px;
   display: grid;
@@ -120,26 +136,26 @@
   color: var(--accent-text);
   flex: none;
 }
-.menu-contact {
+.storefront-shell .menu-contact {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 10px 12px 10px 16px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface);
 }
-.menu-contact strong {
+.storefront-shell .menu-contact strong {
   font-size: 14px;
 }
-.menu-contact-chips {
+.storefront-shell .menu-contact-chips {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
-.menu-chip {
+.storefront-shell .menu-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -147,15 +163,15 @@
   padding: 0 14px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: var(--raised);
+  background: var(--menu-soft);
   color: var(--text);
   font-size: 13px;
   font-weight: 600;
 }
-.menu-chip:hover {
+.storefront-shell .menu-chip:hover {
   border-color: var(--accent);
 }
-.menu-logout {
+.storefront-shell .menu-logout {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -168,14 +184,14 @@
   font: 600 15px/1 inherit;
   cursor: pointer;
 }
-:root[data-theme="dark"] .menu-logout {
+:root[data-theme="dark"] .storefront-shell .menu-logout {
   color: #f87171;
 }
-.menu-logout:hover {
-  background: var(--hover);
+.storefront-shell .menu-logout:hover {
+  background: var(--menu-soft);
 }
 @media (max-width: 340px) {
-  .menu-tiles {
+  .storefront-shell .menu-tiles {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

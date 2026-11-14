@@ -154,8 +154,20 @@
     font-size: 13px;
   }
 }
+.storefront-shell .header-actions > .notice-wrap,
+.storefront-shell .header-actions > .account-wrap {
+  flex-shrink: 0;
+}
+@media (max-width: 420px) {
+  /* Phone row: logo + 4 controls in 354 px. The amount is enough on its own. */
+  .storefront-shell .balance-pill svg {
+    display: none;
+  }
+  .storefront-shell .prefs-trigger {
+    padding: 0 9px;
+  }
+}
 @media (max-width: 370px) {
-  /* The bottom-nav menu sheet has sign in / sign up; keep the header row on one line. */
   .storefront-shell .prefs-trigger span {
     display: none;
   }
