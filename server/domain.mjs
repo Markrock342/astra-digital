@@ -1629,6 +1629,7 @@ export function createCommerceCore({
    */
   function checkCoupon(user, input = {}) {
     requireUser(user);
+    emailVerification.assertCanBuy(user);
     const variantId = clean(input.variantId, 1, 80, "สินค้า");
     const quantity = integer(input.quantity, 1, 10, "จำนวน");
     const variant = buyableVariant(variantId, user);
@@ -2268,6 +2269,7 @@ export function createCommerceCore({
   }
   function retry(user, id) {
     requireUser(user);
+    emailVerification.assertCanBuy(user, true);
     const reservation = one(
       "SELECT status,expired_at,stage FROM reservations WHERE id=? AND user_id=?",
       id,
@@ -2302,6 +2304,8 @@ export function createCommerceCore({
   const TEST_CREDIT_CAP = 10000 * 100;
   function topup(user, input) {
     requireUser(user);
+    // No credit, codes, payments or reviews before the email is verified (owner, 14 Nov).
+    emailVerification.assertCanBuy(user, true);
     if (!allowSandbox) fail(501, "การเติมเครดิตทดลองปิดอยู่");
     if (![100, 300, 500, 1000].includes(input.amount))
       fail(400, "กรุณาเลือกยอดเครดิตที่กำหนด");
@@ -2843,6 +2847,7 @@ export function createCommerceCore({
   }
   function addReview(user, input) {
     requireUser(user);
+    emailVerification.assertCanBuy(user);
     const orderId = clean(input.orderId, 1, 80, "คำสั่งซื้อ");
     const rating = integer(input.rating, 1, 5, "คะแนน");
     const comment = clean(input.comment, 2, 600, "ความคิดเห็น");
@@ -3818,6 +3823,8 @@ export function createCommerceCore({
     overview,
     createOrder,
     checkCoupon,
+    // Same gate as createOrder / pay, for the checkout module (checkouts.mjs).
+    assertEmailVerified: (user) => emailVerification.assertCanBuy(user),
     // Sale / compare-at / tag prices / purchase limits / customer tags (pricing.mjs).
     adminProductPricing: pricing.adminProductPricing,
     adminSetVariantPricing: pricing.adminSetVariantPricing,

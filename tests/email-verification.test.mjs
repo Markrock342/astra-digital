@@ -186,6 +186,18 @@ test("gate on: an unverified customer cannot order, preorder or pay; can still b
   const http = await api.call("POST", "/api/orders", { variantId: api.variantId, quantity: 1, requestKey: randomUUID() }, buyer.cookie);
   assert.equal(http.status, 403);
   assert.equal(http.body.error, "กรุณายืนยันอีเมลก่อนสั่งซื้อ");
+  // No transaction of any kind: test credit, basket checkout, discount codes, a new pay token.
+  const blocked = (e) => e.status === 403;
+  assert.throws(() => api.s.topup(user, { amount: 500, requestKey: randomUUID() }), blocked, "top-up");
+  assert.throws(
+    () => api.s.createCheckout(user, { requestKey: randomUUID(), lines: [{ variantId: api.variantId, quantity: 1 }] }),
+    blocked,
+    "checkout",
+  );
+  assert.throws(() => api.s.checkoutCoupon(user, { code: "X", lines: [{ variantId: api.variantId, quantity: 1 }] }), blocked, "coupon");
+  assert.throws(() => api.s.checkCoupon(user, { code: "X", variantId: api.variantId, quantity: 1 }), blocked, "coupon check");
+  assert.throws(() => api.s.retry(user, waiting.id), blocked, "new pay token");
+  assert.equal((await api.call("POST", "/api/topup", { amount: 500, requestKey: randomUUID() }, buyer.cookie)).status, 403);
   // Still allowed: products, account, chat.
   assert.equal((await api.call("GET", "/api/products", undefined, buyer.cookie)).status, 200);
   assert.equal((await api.call("GET", "/api/me", undefined, buyer.cookie)).status, 200);

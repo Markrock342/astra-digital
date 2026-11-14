@@ -553,3 +553,30 @@
   width: 22px;
   height: 22px;
 }
+
+/* บัญชีของฉัน: one narrow centred column (desktop); every card padded like the rest. */
+.storefront-shell .reference-account-page {
+  max-width: 760px;
+  margin-inline: auto;
+}
+.storefront-shell .reference-account-page :is(.stock-watch-list, .order-receipt-profiles, .privacy-panel) {
+  padding: 24px;
+  margin: 16px 0 0;
+}
+.storefront-shell .reference-account-page :is(.stock-watch-list, .order-receipt-profiles, .privacy-panel) h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  line-height: 1.4;
+}
+.storefront-shell .reference-account-page :is(.stock-watch-list, .order-receipt-profiles, .privacy-panel) > p {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.storefront-shell .reference-account-page .profile-form {
+  margin-top: 16px;
+}
+@media (max-width: 600px) {
+  .storefront-shell .reference-account-page :is(.stock-watch-list, .order-receipt-profiles, .privacy-panel) {
+    padding: 18px;
+  }
+}

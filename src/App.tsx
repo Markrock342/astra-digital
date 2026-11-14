@@ -1738,6 +1738,8 @@ function WalletPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(0);
   const testPayments = useTestPayments();
+  // No credit before the email is verified (server refuses too).
+  const verifyEmail = useEmailVerifyNeeded();
   async function topup(amount: number) {
     setBusy(amount);
     setError("");
@@ -1786,12 +1788,13 @@ function WalletPage() {
               <section className="panel topup-panel">
                 <h2>{t("เติมเครดิตทดลอง")}</h2>
                 <p>{t("สำหรับทดสอบระบบเท่านั้น ไม่มีการเก็บเงินจริง")}</p>
+                <EmailVerifyNotice compact />
                 <div className="topup-amounts">
                   {[100, 300, 500, 1000].map((amount) => (
                     <button
                       key={amount}
                       className="button secondary"
-                      disabled={!!busy}
+                      disabled={!!busy || verifyEmail}
                       onClick={() => topup(amount)}
                     >
                       {busy === amount ? <LoaderCircle className="spin" size={16} /> : <Plus size={16} />}
@@ -2283,7 +2286,7 @@ function PrivacyDataPanel() {
     }
   }
   return (
-    <section className="panel">
+    <section className="panel privacy-panel">
       <h2>{t("ข้อมูลส่วนบุคคล (PDPA)")}</h2>
       <p className="muted">
         {t("ดาวน์โหลดสำเนาข้อมูลของคุณ หรือขอลบบัญชีตามสิทธิ์เจ้าของข้อมูล — ร้านจะปิดบังชื่อ/อีเมล/เบอร์ แต่เก็บออเดอร์และการเงินไว้")}
