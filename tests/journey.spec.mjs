@@ -78,12 +78,10 @@ test("2. customer buys, pays, receives the account and writes a review", async (
   await expect(page.getByRole("heading", { name: "Journey Stream" })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(accounts[0][1]);
   await page.getByRole("button", { name: "ซื้อเลย", exact: true }).click();
-  const proceed = page.getByRole("button", { name: /^ไปบันทึกคำสั่งซื้อ/ });
-  if (await proceed.isVisible()) await proceed.click();
-  await page.getByRole("button", { name: /^บันทึกคำสั่งซื้อ/ }).click();
-  await expect(page).toHaveURL(/\/checkout\/[a-z0-9-]+$/);
+  // Summary → pay in one step.
+  await page.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ }).click();
+  await expect(page).toHaveURL(/\/orders\/[a-z0-9-]+$/);
   firstOrderId = page.url().split("/").pop();
-  await page.getByRole("button", { name: /^ชำระเงิน/ }).click();
   await expect(page.getByRole("heading", { name: "สั่งซื้อสำเร็จ พร้อมรับสินค้า" })).toBeVisible();
   await page.getByRole("button", { name: /แสดงโค้ด/ }).click();
   const delivered = await page.locator(".delivered-codes").innerText();
@@ -166,10 +164,7 @@ test("5. preorder: customer gets a queue number, a team member delivers, custome
   await as(page.context(), buyerToken);
   await page.goto(base + "/products/" + productId);
   await page.getByRole("button", { name: "จองเลย", exact: true }).click();
-  const proceed = page.getByRole("button", { name: /^ไปบันทึกคำสั่งซื้อ/ });
-  if (await proceed.isVisible()) await proceed.click();
-  await page.getByRole("button", { name: /^บันทึกคำสั่งซื้อ/ }).click();
-  await page.getByRole("button", { name: /^ชำระเงิน/ }).click();
+  await page.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ }).click();
   await expect(page.getByText(/^คิวที่ \d+$/)).toBeVisible();
   const orderUrl = page.url();
 

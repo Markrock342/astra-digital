@@ -98,6 +98,7 @@ import { AboutPage, NewsDetailPage, NewsListPage } from "./News";
 import { CheckoutFields, DeliveredLinks, FulfilmentCard, checkoutFieldsReady } from "./Delivery";
 import { RebuyActions } from "./Rebuy";
 import { HistoryPage } from "./OrderList";
+import { CartPage, CheckoutGroupPage, CheckoutPage, loadCart, saveCart, withLine, type CartLine } from "./Cart";
 import { ManualOrderNote } from "./ManualOrderNote";
 import { DiscountBadge, PriceNote, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
 import { HomeCategoryRow } from "./Categories";
@@ -122,8 +123,14 @@ type Store = {
   user: User | null;
   products: Product[];
   overview: Overview | null;
+  /** The one ticked basket line (single-order checkout); null when 0 or 2+ are ticked. */
   basket: Basket | null;
+  /** Set that line's quantity and tick only it; null removes the ticked lines. */
   setBasket: (basket: Basket | null) => void;
+  cart: CartLine[];
+  setCart: (lines: CartLine[]) => void;
+  /** Add to the basket; `only` (buy now) ticks just this line. */
+  addToCart: (variantId: string, quantity: number, only?: boolean) => void;
   refresh: () => Promise<void>;
   /** keepScroll: same-page URL changes (e.g. the /products category chips). */
   go: (path: string, options?: { keepScroll?: boolean }) => void;
@@ -324,7 +331,8 @@ export function UserAvatar({ user, large = false }: { user: User; large?: boolea
 }
 
 function Header() {
-  const { path, user, basket, go, refresh, toast, lang, changeLang } = useStore();
+  const { path, user, cart, go, refresh, toast, lang, changeLang } = useStore();
+  const cartCount = cart.reduce((n, l) => n + l.quantity, 0);
   const testPayments = useTestPayments();
   const [open, setOpen] = useState(false);
   const [account, setAccount] = useState(false);
@@ -442,7 +450,7 @@ function Header() {
         </Link>
         <Link to="/cart" className={path === "/cart" ? "active cart-tab" : "cart-tab"}>
           <ShoppingBag size={21} />
-          {basket && <span className="cart-count">{basket.quantity}</span>}
+          {cartCount > 0 && <span className="cart-count">{cartCount}</span>}
           <span>{t("ตะกร้า")}</span>
         </Link>
         <Link
@@ -976,7 +984,7 @@ export function Quantity({
   );
 }
 function ProductDetail({ id }: { id: string }) {
-  const { products, setBasket, go, toast, loading } = useStore();
+  const { products, addToCart, go, toast, loading } = useStore();
   const p = products.find((p) => p.id === id);
   const [variantId, setVariantId] = useState("");
   const [quantity, setQuantity] = useState(1);
@@ -989,7 +997,7 @@ function ProductDetail({ id }: { id: string }) {
     );
   if (!p || !variant) return <NotFound />;
   const buy = (checkout: boolean) => {
-    setBasket({ variantId: variant.id, quantity });
+    addToCart(variant.id, quantity, checkout);
     if (checkout) go("/checkout");
     else {
       toast(t("เพิ่มสินค้าในตะกร้าแล้ว"));
@@ -1259,266 +1267,6 @@ export function RequireLogin() {
     />
   );
 }
-function Cart({ checkout = false }: { checkout?: boolean }) {
-  const { basket, products, setBasket, user, go, loading } = useStore();
-  const shopOpen = useShopOpen();
-  const verifyEmail = useEmailVerifyNeeded();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const p = products.find((p) =>
-    p.variants.some((v) => v.id === basket?.variantId),
-  );
-  const variant = p?.variants.find((v) => v.id === basket?.variantId);
-  // Discount code (checkout only). The server works out the discount; this is a preview.
-  const [code, setCode] = useState("");
-  const [coupon, setCoupon] = useState<CouponPreview | null>(null);
-  const [couponError, setCouponError] = useState("");
-  const [checking, setChecking] = useState(false);
-  // Shop-fulfilled product (Delivery.tsx): what the shop needs from the customer.
-  const fields = p?.checkoutFields ?? [];
-  const [deliveryValues, setDeliveryValues] = useState<Record<string, string>>({});
-  const fieldsReady = checkoutFieldsReady(fields, deliveryValues);
-  async function checkCode(raw: string) {
-    if (!variant || !basket) return;
-    setChecking(true);
-    setCouponError("");
-    try {
-      const result = await api<CouponCheck>("/coupons/check", {
-        code: raw.trim(),
-        variantId: variant.id,
-        quantity: basket.quantity,
-      });
-      if (result.valid) {
-        setCoupon(result);
-        setCode("");
-      } else {
-        setCoupon(null);
-        setCouponError(result.reason);
-      }
-    } catch (e) {
-      setCoupon(null);
-      setCouponError((e as Error).message);
-    } finally {
-      setChecking(false);
-    }
-  }
-  // Quantity or option changed: the discount depends on the subtotal, so check again.
-  useEffect(() => {
-    if (coupon && variant && basket && coupon.subtotal !== variant.price * basket.quantity)
-      void checkCode(coupon.code);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [basket?.quantity, basket?.variantId]);
-  async function order() {
-    if (!user) return go("/login?next=%2Fcheckout");
-    setBusy(true);
-    setError("");
-    try {
-      const key = crypto.randomUUID();
-      const o = await api<Order>("/orders", {
-        variantId: variant!.id,
-        quantity: basket!.quantity,
-        requestKey: key,
-        ...(coupon ? { couponCode: coupon.code } : {}),
-        ...(fields.length ? { deliveryInputs: deliveryValues } : {}),
-      });
-      // Free preorder reservations (Preorder.tsx) have nothing to pay: no token.
-      if (o.paymentToken) sessionStorage.setItem("astra-pay-" + o.id, o.paymentToken);
-      else if (o.status === "PREORDER") setBasket(null);
-      go("/checkout/" + o.id);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  const subtotal = variant && basket ? variant.price * basket.quantity : 0;
-  const payable = coupon ? coupon.total : subtotal;
-  return (
-    <main className="container page-main reference-cart-page">
-      {loading ? (
-        <div className="skeleton-cart" aria-busy="true" aria-label={t("กำลังโหลดตะกร้า")}>
-          <div className="skeleton-block skeleton-line" />
-          <div className="skeleton-block skeleton-panel" />
-          <div className="skeleton-block skeleton-panel short" />
-        </div>
-      ) : (
-      <>
-      <div className="page-heading">
-        <span className="eyebrow">
-          {checkout ? t("ชำระเงิน") : t("กระเป๋าของคุณ")}
-        </span>
-        <h1>{checkout ? t("ตรวจสอบคำสั่งซื้อ") : t("ตะกร้าสินค้า")}</h1>
-        <p>
-          {checkout
-            ? t("ตรวจสอบข้อมูลให้ครบ ระบบจะบันทึกคำสั่งซื้อไว้ก่อน")
-            : t("สินค้าที่คุณเลือกไว้ พร้อมเมื่อคุณพร้อม")}
-        </p>
-      </div>
-      {!basket || !p || !variant ? (
-        <Empty
-          icon={<ShoppingBag />}
-          heading={t("ตะกร้าของคุณยังว่าง")}
-          description={t("เลือกสินค้าที่ชอบ แล้วกลับมาที่นี่เพื่อทำรายการ")}
-          action={
-            <Link to="/products" className="button primary">
-              {t("เลือกดูสินค้า")}
-              <ArrowRight size={17} />
-            </Link>
-          }
-        />
-      ) : (
-        <div className="checkout-layout">
-          <section className="panel cart-panel">
-            <div className="cart-product">
-              <div className="cart-art">
-                <Art type={p.art} name={p.name} image={p.imageUrl} />
-              </div>
-              <div className="cart-info">
-                <Link to={"/products/" + p.id}>{p.name}</Link>
-                <p>{variant.label}</p>
-                <span className="cart-price">
-                  <strong>{money(variant.price)}</strong>
-                  <WasPrice variant={variant} />
-                  <DiscountBadge variant={variant} />
-                  <PriceNote variant={variant} />
-                </span>
-                <Quantity
-                  value={basket.quantity}
-                  max={quantityCap(variant)}
-                  onChange={(quantity) => setBasket({ ...basket, quantity })}
-                />
-                <PurchaseLimitNote variant={variant} />
-              </div>
-              <button
-                className="icon-button"
-                aria-label={t("ลบสินค้า")}
-                onClick={() => setBasket(null)}
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-            {checkout && (
-              <CheckoutFields fields={fields} values={deliveryValues} onChange={setDeliveryValues} />
-            )}
-            <p className="small-note">
-              <ShieldCheck size={16} />
-              {t("โค้ดถูกส่งไปยังบัญชีที่ใช้สั่งซื้อเท่านั้น")}
-            </p>
-          </section>
-          <aside className="panel order-summary">
-            <h2>{t("สรุปคำสั่งซื้อ")}</h2>
-            <div>
-              <span>{t("สินค้า (")}{basket.quantity}{" "}{t("ชิ้น)")}</span>
-              <span>{money(subtotal)}</span>
-            </div>
-            <div>
-              <span>{t("ค่าจัดส่งดิจิทัล")}</span>
-              <span>{t("ฟรี")}</span>
-            </div>
-            {checkout && coupon && (
-              <div className="summary-discount">
-                <span>{t("ส่วนลด")} ({coupon.code})</span>
-                <span>−{money(coupon.discount)}</span>
-              </div>
-            )}
-            {checkout && (
-              <section className="coupon-box" aria-label={t("โค้ดส่วนลด")}>
-                {coupon ? (
-                  <div className="coupon-applied">
-                    <TicketPercent size={18} />
-                    <span>
-                      <strong>{coupon.code}</strong>
-                      <small>{t("ใช้โค้ดแล้ว ลด {amount}", { amount: money(coupon.discount) })}</small>
-                    </span>
-                    <button
-                      type="button"
-                      className="text-button"
-                      onClick={() => {
-                        setCoupon(null);
-                        setCouponError("");
-                      }}
-                    >
-                      {t("ลบโค้ด")}
-                    </button>
-                  </div>
-                ) : !user ? (
-                  <p className="coupon-login">
-                    <TicketPercent size={16} />
-                    <Link to="/login?next=%2Fcheckout">{t("เข้าสู่ระบบเพื่อใช้โค้ดส่วนลด")}</Link>
-                  </p>
-                ) : (
-                  <form
-                    className="coupon-form"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (code.trim()) void checkCode(code);
-                    }}
-                  >
-                    <label htmlFor="coupon-code">{t("โค้ดส่วนลด")}</label>
-                    <div>
-                      <input
-                        id="coupon-code"
-                        value={code}
-                        maxLength={32}
-                        autoCapitalize="characters"
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder={t("เช่น WELCOME10")}
-                        onChange={(e) => {
-                          setCode(e.target.value.toUpperCase());
-                          setCouponError("");
-                        }}
-                      />
-                      <button className="button secondary" disabled={checking || !code.trim()}>
-                        {checking ? <LoaderCircle className="spin" size={16} /> : t("ใช้โค้ด")}
-                      </button>
-                    </div>
-                  </form>
-                )}
-                <ErrorMessage message={couponError} />
-              </section>
-            )}
-            <div className="summary-total">
-              <strong>{t("ยอดรวม")}</strong>
-              <strong>{money(checkout ? payable : subtotal)}</strong>
-            </div>
-            <CheckoutPreorderRow product={p} total={checkout ? payable : subtotal} quantity={basket.quantity} />
-            <ErrorMessage message={error} />
-            <ShopClosedNote />
-            <EmailVerifyNotice compact />
-            <button
-              className="button primary full"
-              disabled={busy || !variant.available || !shopOpen || (checkout && (verifyEmail || !fieldsReady))}
-              onClick={checkout ? order : () => go("/checkout")}
-            >
-              {busy ? (
-                <LoaderCircle className="spin" size={17} />
-              ) : checkout ? (
-                t("บันทึกคำสั่งซื้อ")
-              ) : (
-                t("ไปบันทึกคำสั่งซื้อ")
-              )}
-              <ArrowRight size={17} />
-            </button>
-            {user && (
-              <p className="balance-note">
-                {p.deliveryType === "manual"
-                  ? t("ร้านทำรายการให้หลังชำระ แจ้งเตือนเมื่อเสร็จ")
-                  : p.preorder && p.preorderTerms?.mode === "free"
-                  ? t("จองฟรี ไม่ต้องจ่ายตอนนี้ ได้เลขคิวทันที")
-                  : p.preorder
-                  ? t("สินค้าพรีออเดอร์: ชำระแล้วได้เลขคิว ร้านจะส่ง ID และรหัสผ่านให้ภายหลัง")
-                  : t("ชำระแล้วได้รับ ID และรหัสผ่านทันทีในหน้าคำสั่งซื้อ")}
-              </p>
-            )}
-          </aside>
-        </div>
-      )}
-      </>
-      )}
-    </main>
-  );
-}
 /** Credit history type (เติม / ซื้อ / คืนเงิน / ปรับยอด). */
 export const ledgerTypeText: Record<string, string> = {
   TOPUP: "เติม",
@@ -1534,7 +1282,7 @@ function ledgerText(label: string) {
   }
   return t(label);
 }
-function PayShell({ total }: { total: number }) {
+export function PayShell({ total }: { total: number }) {
   const [slipName, setSlipName] = useState("");
   const [preview, setPreview] = useState("");
   return (
@@ -1582,7 +1330,7 @@ function PayShell({ total }: { total: number }) {
   );
 }
 function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
-  const { user, refresh, toast, go, setBasket } = useStore();
+  const { user, refresh, toast, go, setBasket, cart, setCart } = useStore();
   const shopOpen = useShopOpen();
   const verifyEmail = useEmailVerifyNeeded();
   usePageTitle(
@@ -1622,13 +1370,13 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
       });
       setOrder(result);
       if (result.status === "PREORDER") {
-        setBasket(null);
+        setCart(cart.filter((l) => l.variantId !== result.variant_id));
         sessionStorage.removeItem("astra-pay-" + id);
         await refresh();
         toast(t("ชำระเงินสำเร็จ ได้เลขคิวแล้ว"));
       }
       if (result.status === "DELIVERED") {
-        setBasket(null);
+        setCart(cart.filter((l) => l.variantId !== result.variant_id));
         sessionStorage.removeItem("astra-pay-" + id);
         setRevealed(true);
         await refresh();
@@ -1762,6 +1510,11 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               <span>{t("คำสั่งซื้อ #")}{order.id.slice(0, 8).toUpperCase()}</span>
               <span>{dateTime(order.created_at)}</span>
               {order.createdByAdmin && <ManualOrderNote method={order.paymentMethodLabel} />}
+              {order.checkout_id && (
+                <Link to={"/checkouts/" + order.checkout_id} className="receipt-link">
+                  {t("ทั้งคำสั่งซื้อ #{id}", { id: order.checkout_id.slice(0, 8).toUpperCase() })}
+                </Link>
+              )}
               {hasReceipt(order) && <ReceiptLink id={order.id} />}
               <AskInChat order={{ id: order.id, name: order.name }} />
             </div>
@@ -1969,7 +1722,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
   );
 }
 /** "Pay by HH:MM": unpaid orders are cancelled after the shop's payment window. */
-function PayDeadline({ createdAt }: { createdAt: string }) {
+export function PayDeadline({ createdAt }: { createdAt: string }) {
   const { overview } = useStore();
   const minutes = Number(overview?.shop?.pendingExpiryMinutes) || 30;
   const deadline = new Date(new Date(createdAt.replace(" ", "T") + "Z").getTime() + minutes * 60000);
@@ -2707,6 +2460,7 @@ function Router() {
     path.startsWith("/products/") ||
     path.startsWith("/orders/") ||
     path.startsWith("/checkout/") ||
+    path.startsWith("/checkouts/") ||
     path.startsWith("/news/");
   const page = dynamic
     ? ""
@@ -2734,8 +2488,9 @@ function Router() {
     return <ReferenceAuth key={path} register={path === "/register"} />;
   if (path === "/reset-password") return <ResetPasswordPage />;
   if (path === "/verify-email") return <VerifyEmailPage />;
-  if (path === "/cart" || path === "/checkout")
-    return <Cart checkout={path === "/checkout"} />;
+  if (path === "/cart") return <CartPage />;
+  if (path === "/checkout") return <CheckoutPage />;
+  if (path.startsWith("/checkouts/")) return <CheckoutGroupPage key={path} id={path.split("/")[2]} />;
   if (path.startsWith("/orders/") || path.startsWith("/checkout/"))
     return (
       <OrderPage
@@ -2873,24 +2628,17 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
-  const [basket, setBasketState] = useState<Basket | null>(() => {
-    try {
-      const b = JSON.parse(localStorage.getItem("astra-basket") ?? "null");
-      return b &&
-        typeof b.variantId === "string" &&
-        Number.isInteger(b.quantity) &&
-        b.quantity >= 1 &&
-        b.quantity <= 10
-        ? b
-        : null;
-    } catch {
-      return null;
-    }
-  });
-  const setBasket = (value: Basket | null) => {
-    setBasketState(value);
-    localStorage.setItem("astra-basket", JSON.stringify(value));
+  const [cart, setCartState] = useState<CartLine[]>(loadCart);
+  const setCart = (lines: CartLine[]) => {
+    setCartState(lines);
+    saveCart(lines);
   };
+  const ticked = cart.filter((l) => l.selected);
+  const basket: Basket | null = ticked.length === 1 ? { variantId: ticked[0].variantId, quantity: ticked[0].quantity } : null;
+  const setBasket = (value: Basket | null) =>
+    setCart(value ? withLine(cart, value.variantId, value.quantity, true) : cart.filter((l) => !l.selected));
+  const addToCart = (variantId: string, quantity: number, only = false) =>
+    setCart(withLine(cart, variantId, quantity, only));
   // The URL on screen, so a cancelled back/forward can be put back.
   const shownUrl = useRef(location.pathname + location.search);
   function go(to: string, options: { keepScroll?: boolean } = {}) {
@@ -2948,6 +2696,9 @@ export default function App() {
         overview: shownOverview,
         basket,
         setBasket,
+        cart,
+        setCart,
+        addToCart,
         refresh,
         go,
         toast: setToast,

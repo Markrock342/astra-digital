@@ -75,6 +75,7 @@ import { createBroadcastApis } from "./broadcast.mjs";
 import { createBannerApis } from "./banners.mjs";
 import { createAppearanceApis } from "./appearance.mjs";
 import { createNewsApis } from "./news.mjs";
+import { hookCheckouts } from "./checkouts.mjs";
 import { shopTitle } from "./seo.mjs";
 import { createAboutApis } from "./about.mjs";
 import { createManualOrderApis } from "./manual-orders.mjs";
@@ -150,7 +151,7 @@ export function createCommerceCore({
   const run = (sql, ...params) => db.prepare(sql).run(...params);
   const fileStore =
     fileStoreOption ?? createFileStore({ db, uploads });
-  const tx =
+  const baseTx =
     transaction ??
     ((fn) => {
       db.exec("BEGIN IMMEDIATE");
@@ -163,6 +164,17 @@ export function createCommerceCore({
         throw e;
       }
     });
+  // Re-entrant: a call inside another transaction (multi-item checkout) joins the outer one.
+  let txDepth = 0;
+  const tx = (fn) => {
+    if (txDepth) return fn();
+    txDepth++;
+    try {
+      return baseTx(fn);
+    } finally {
+      txDepth--;
+    }
+  };
   const encrypt = (value) => {
     const iv = randomBytes(12);
     const cipher = createCipheriv("aes-256-gcm", key, iv);
@@ -4082,6 +4094,8 @@ export function createCommerceCore({
   stockWatch.hook(service);
   // "สร้างโดยแอดมิน" marker + payment method on the existing order views.
   manualOrders.hook(service);
+  // Several basket lines under one order number (checkouts.mjs).
+  hookCheckouts(service, { one, all, run, tx, fail, randomUUID, requireUser, publicUser });
   // Preorder emails queued inside a committed call go out now; a failed call drops them.
   for (const name of ["pay", "createOrder", "importCodes", "adminCallPreorders", "adminCancelPreorder", "cancelMyPreorder"]) {
     const call = service[name];

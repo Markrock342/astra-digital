@@ -522,7 +522,7 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
   );
 }
 export function ReferenceProduct({ id }: { id: string }) {
-  const { products, loading, setBasket, go, toast, overview } = useStore();
+  const { products, loading, addToCart, go, toast, overview } = useStore();
   const product = products.find(
     (p) =>
       p.id === id ||
@@ -592,7 +592,7 @@ export function ReferenceProduct({ id }: { id: string }) {
     !!variant?.available;
   const buy = (checkout: boolean) => {
     if (!variant) return;
-    setBasket({ variantId: variant.id, quantity });
+    addToCart(variant.id, quantity, checkout);
     if (checkout) go("/checkout");
     else {
       toast(t("เพิ่มสินค้าในตะกร้าแล้ว"));
