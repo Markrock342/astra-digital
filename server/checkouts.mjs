@@ -92,6 +92,7 @@ export function hookCheckouts(
   /** Basket coupon preview: { valid, code, discount, lines:[{ variantId, discount }] }. */
   service.checkoutCoupon = (user, input = {}) => {
     requireUser(user);
+    service.assertEmailVerified?.(user);
     const lines = cleanLines(input);
     try {
       if (!quoteBasketCoupon) fail(500, "ระบบคูปองยังไม่พร้อม");
@@ -112,6 +113,7 @@ export function hookCheckouts(
 
   service.createCheckout = (user, input = {}, options) => {
     requireUser(user);
+    service.assertEmailVerified?.(user);
     const requestKey = typeof input.requestKey === "string" ? input.requestKey.trim() : "";
     if (requestKey.length < 8 || requestKey.length > 100) fail(400, "รหัสคำขอไม่ถูกต้อง");
     const lines = cleanLines(input);
@@ -182,6 +184,7 @@ export function hookCheckouts(
 
   service.payCheckout = (user, checkoutId, input = {}, options) => {
     requireUser(user);
+    service.assertEmailVerified?.(user);
     const current = view(user, String(checkoutId));
     const tokens = input.tokens && typeof input.tokens === "object" ? input.tokens : {};
     const payable = current.orders.filter((o) => due(o) > 0 || (o.status === "PENDING_PAYMENT" && !o.preorder));
