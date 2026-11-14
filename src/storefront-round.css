@@ -75,14 +75,14 @@
 .storefront-shell .balance-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 36px;
-  padding: 0 12px;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 10%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
   color: var(--accent-text);
-  font: 700 13px/1 inherit;
+  font: 800 13px/1 inherit;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex-shrink: 0;
@@ -123,7 +123,7 @@
     height: 36px;
   }
   .storefront-shell .balance-pill {
-    padding: 0 10px;
+    padding: 0 9px;
   }
   .storefront-shell .site-header .account-button {
     min-width: 36px;
@@ -385,4 +385,89 @@
   .storefront-shell .site-footer .footer-menu {
     display: none;
   }
+}
+
+/* Client, 14 Nov: every shop page has a plain background (no grid), no eyebrow / description
+   around the page title, and titles with normal letter spacing (the -0.04em looked cramped in
+   Thai). One place on purpose, so a later ask to bring them back is one edit. */
+/* Theme blocks set --grid-line on ":root[...] .storefront-shell"; match that weight. */
+:root .storefront-shell,
+:root[data-theme] .storefront-shell,
+:root:not([data-theme]) .storefront-shell {
+  --grid-line: transparent;
+}
+.storefront-shell .page-heading .eyebrow,
+.storefront-shell .page-heading > p:not(.legal-effective) {
+  display: none !important;
+}
+.storefront-shell .page-heading h1,
+.storefront-shell .reference-auth-heading h1,
+.storefront-shell .order-result-heading h1,
+.storefront-shell .reference-catalog-title h2 {
+  letter-spacing: 0.005em !important;
+  line-height: 1.3;
+}
+
+/* ภาษาและธีม › สีธีม › เลือกสีเอง: a hue slider under the four preset swatches. */
+.storefront-shell .hue-picker {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--raised);
+  font-size: 14px;
+  cursor: pointer;
+}
+.storefront-shell .hue-picker.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.storefront-shell .hue-picker > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.storefront-shell .hue-picker input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.storefront-shell .hue-picker input[type="range"]::-webkit-slider-runnable-track {
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f00, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00);
+}
+.storefront-shell .hue-picker input[type="range"]::-moz-range-track {
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f00, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00);
+}
+.storefront-shell .hue-picker input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+}
+.storefront-shell .hue-picker input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+}
+.storefront-shell .hue-picker input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 999px;
 }
