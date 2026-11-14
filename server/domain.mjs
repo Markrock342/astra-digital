@@ -83,6 +83,10 @@ import { createLaunchCleanupApis } from "./launch-cleanup.mjs";
 import { createRetention } from "./retention.mjs";
 import { createTaxInvoices } from "./tax-invoices.mjs";
 import { createOrderReceipts } from "./order-receipts.mjs";
+import {
+  createOrdersListApis,
+  inventoryPasswordSearchKey,
+} from "./orders-list.mjs";
 import { createPreorders } from "./preorder.mjs";
 import { createDeliveryApis } from "./delivery.mjs";
 import { createOptionGroupApis } from "./option-groups.mjs";
@@ -221,8 +225,8 @@ export function createCommerceCore({
   ) => {
     run(
       `INSERT INTO inventory(
-        id, variant_id, fingerprint, login_id_enc, password_enc, legacy_single_secret, login_key, cost, expires_at
-      ) VALUES(?,?,?,?,?,?,?,?,?)`,
+        id, variant_id, fingerprint, login_id_enc, password_enc, legacy_single_secret, login_key, cost, expires_at, password_search_key
+      ) VALUES(?,?,?,?,?,?,?,?,?,?)`,
       randomUUID(),
       variantId,
       inventoryFingerprint(loginId, password),
@@ -232,6 +236,7 @@ export function createCommerceCore({
       inventoryLoginKey(legacy, loginId),
       cost == null ? null : cost,
       expiresAt == null ? null : expiresAt,
+      legacy ? "" : inventoryPasswordSearchKey(key, password),
     );
   };
   /** Rows from before login_key existed (or written by migrations) get their key on first use. */
@@ -1654,7 +1659,12 @@ export function createCommerceCore({
     const requestKey = clean(input.requestKey, 8, 128, "รหัสคำขอ");
     if (input.couponCode != null && typeof input.couponCode !== "string")
       fail(400, "โค้ดส่วนลดไม่ถูกต้อง");
-    const couponCode = normalizeCouponCode(input.couponCode) || null;
+    // Basket checkout may pre-split the discount; skip per-line evaluate + redeem.
+    const basketCoupon =
+      input.basketCoupon && typeof input.basketCoupon === "object" ? input.basketCoupon : null;
+    const couponCode = basketCoupon
+      ? normalizeCouponCode(basketCoupon.code) || null
+      : normalizeCouponCode(input.couponCode) || null;
     // Check, count and insert in one transaction so a coupon's last use is taken once.
     return tx(() => {
       const reservation = one(
@@ -1701,11 +1711,18 @@ export function createCommerceCore({
         ).n < quantity
       )
         fail(409, "สินค้าคงเหลือไม่เพียงพอ กรุณาเลือกจำนวนใหม่");
-      // Discount from the coupon row and the database price only (never the client's).
-      const applied = couponCode
-        ? coupons.evaluate(user, couponCode, { productId: variant.product_id, subtotal })
-        : null;
-      const discount = applied?.discount ?? 0;
+      // Discount from the coupon row and the database price only (never the client's),
+      // unless createCheckout already split a basket coupon onto this line.
+      let applied = null;
+      let discount = 0;
+      if (basketCoupon && couponCode) {
+        discount = Math.trunc(Number(basketCoupon.discount) || 0);
+        if (discount < 0 || discount > subtotal - 100) fail(400, "ส่วนลดไม่ถูกต้อง");
+        applied = { code: couponCode, discount, coupon: null };
+      } else if (couponCode) {
+        applied = coupons.evaluate(user, couponCode, { productId: variant.product_id, subtotal });
+        discount = applied.discount;
+      }
       // Preorder mode (full / deposit / free) and its per-customer / queue limits.
       const terms = variant.preorder
         ? preorders.reservationTerms(user, variant, subtotal - discount, quantity)
@@ -1728,7 +1745,7 @@ export function createCommerceCore({
         applied ? applied.code : null,
         new Date(clock()).toISOString().slice(0, 19).replace("T", " "),
       );
-      if (applied)
+      if (applied && applied.coupon && !basketCoupon)
         coupons.redeem({
           coupon: applied.coupon,
           userId: user.id,
@@ -2002,19 +2019,21 @@ export function createCommerceCore({
       providerRef,
       actorId: payment.actorId ?? null,
     });
-    notify(
-      order.user_id,
-      manual ? "order" : "code_delivery",
-      manual ? "ชำระเงินแล้ว รอร้านส่งมอบ" : "ส่งโค้ดสำเร็จ",
-      "คำสั่งซื้อ " + id.slice(0, 8) + (manual ? " เข้าคิวแล้ว" : " ได้รับโค้ดแล้ว"),
-      "/orders/" + id,
-    );
-    notifyStaffRoles(
-      "order_new",
-      manual ? "ออเดอร์รอส่งมอบ" : "ออเดอร์ใหม่",
-      "คำสั่งซื้อ " + id.slice(0, 8) + (manual ? " ชำระแล้ว รอร้านส่งมอบ" : (payment.staffText ?? " ชำระแล้วและส่งของแล้ว")),
-      "/admin/orders/" + id,
-    );
+    if (!payment.suppressNotifications) {
+      notify(
+        order.user_id,
+        manual ? "order" : "code_delivery",
+        manual ? "ชำระเงินแล้ว รอร้านส่งมอบ" : "ส่งโค้ดสำเร็จ",
+        "คำสั่งซื้อ " + id.slice(0, 8) + (manual ? " เข้าคิวแล้ว" : " ได้รับโค้ดแล้ว"),
+        "/orders/" + id,
+      );
+      notifyStaffRoles(
+        "order_new",
+        manual ? "ออเดอร์รอส่งมอบ" : "ออเดอร์ใหม่",
+        "คำสั่งซื้อ " + id.slice(0, 8) + (manual ? " ชำระแล้ว รอร้านส่งมอบ" : (payment.staffText ?? " ชำระแล้วและส่งของแล้ว")),
+        "/admin/orders/" + id,
+      );
+    }
     maybeNotifyStockLow(order.variant_id);
     alerts.emit("order_paid", {
       id,
@@ -2066,19 +2085,21 @@ export function createCommerceCore({
         providerRef,
         actorId: payment.actorId ?? null,
       });
-    notify(
-      o.user_id,
-      "preorder_queue",
-      "ได้รับเลขคิวพรีออเดอร์",
-      "คิวของคุณคือ #" + queueNumber,
-      "/orders/" + id,
-    );
-    notifyStaffRoles(
-      "preorder_queue_admin",
-      "คิวพรีออเดอร์ใหม่",
-      "คิว #" + queueNumber + " · " + id.slice(0, 8),
-      "/admin/orders/" + id,
-    );
+    if (!payment.suppressNotifications) {
+      notify(
+        o.user_id,
+        "preorder_queue",
+        "ได้รับเลขคิวพรีออเดอร์",
+        "คิวของคุณคือ #" + queueNumber,
+        "/orders/" + id,
+      );
+      notifyStaffRoles(
+        "preorder_queue_admin",
+        "คิวพรีออเดอร์ใหม่",
+        "คิว #" + queueNumber + " · " + id.slice(0, 8),
+        "/admin/orders/" + id,
+      );
+    }
     alerts.emit("preorder_paid", {
       id,
       queueNumber,
@@ -2168,6 +2189,7 @@ export function createCommerceCore({
               idempotencyKey: "pay:reservation-deposit:" + id,
               providerRef: "sandbox:preorder-deposit:" + id,
               label: "รับมัดจำพรีออเดอร์ " + id.slice(0, 8),
+              suppressNotifications: !!input.suppressNotifications,
             },
           );
           preorders.afterDepositPaid(o, paymentId);
@@ -2186,7 +2208,7 @@ export function createCommerceCore({
             direction: "out",
             orderId: id,
           });
-        settlePaidReservation(o);
+        settlePaidReservation(o, { suppressNotifications: !!input.suppressNotifications });
         audit(user, "PREORDER_PAID", id);
         return orderDetail(user, id);
       });
@@ -2237,7 +2259,9 @@ export function createCommerceCore({
         direction: "out",
         orderId: id,
       });
-      deliverPaidOrder(order, available);
+      deliverPaidOrder(order, available, {
+        suppressNotifications: !!input.suppressNotifications,
+      });
       audit(user, "PAYMENT_AND_DELIVERY", id);
       return orderDetail(user, id);
     });
@@ -3755,6 +3779,17 @@ export function createCommerceCore({
     notify,
     clock,
   });
+  const ordersList = createOrdersListApis({
+    one,
+    all,
+    run,
+    fail,
+    requireUser,
+    key,
+    orderDetail,
+    inventoryLoginKey,
+    decrypt,
+  });
   const service = {
     db,
     reviews,
@@ -4081,6 +4116,7 @@ export function createCommerceCore({
     changeEmail: emailVerification.changeEmail,
     adminVerifyCustomerEmail: emailVerification.adminVerify,
     sendOrderConfirmation: accountEmail.sendOrderConfirmation,
+    sendCheckoutConfirmation: accountEmail.sendCheckoutConfirmation,
     adminIntegrations: accountEmail.integrationsStatus,
     emailIdle: accountEmail.idle,
     // Admin › ตั้งค่า › ข้อความอีเมล (email-templates.mjs).
@@ -4113,6 +4149,28 @@ export function createCommerceCore({
         .map((o) => orderDetail(user, o.id))
         .sort((a, b) => b.created_at.localeCompare(a.created_at));
     },
+    listOrders: (user, query) => {
+      const paged = ordersList.listOrders(user, query || {});
+      if (paged == null) {
+        requireUser(user);
+        return {
+          orders: all(
+            "SELECT id FROM orders WHERE user_id=? ORDER BY created_at DESC,rowid DESC",
+            user.id,
+          )
+            .concat(
+              all(
+                "SELECT id FROM reservations WHERE user_id=? ORDER BY created_at DESC,rowid DESC",
+                user.id,
+              ),
+            )
+            .map((o) => orderDetail(user, o.id))
+            .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+        };
+      }
+      return paged;
+    },
+    copyOrderLines: (user, ids) => ordersList.copyOrderLines(user, ids),
     ledger: (user) => {
       requireUser(user);
       // Wallet rows only (money.mjs); `amount` is signed, with the balance after each row.
@@ -4128,7 +4186,43 @@ export function createCommerceCore({
   // "สร้างโดยแอดมิน" marker + payment method on the existing order views.
   manualOrders.hook(service);
   // Several basket lines under one order number (checkouts.mjs).
-  hookCheckouts(service, { one, all, run, tx, fail, randomUUID, requireUser, publicUser });
+  hookCheckouts(service, {
+    one,
+    all,
+    run,
+    tx,
+    fail,
+    randomUUID,
+    requireUser,
+    publicUser,
+    notify,
+    notifyStaffRoles,
+    quoteBasketCoupon: (user, code, lines) => {
+      const priced = lines.map((line, index) => {
+        const variant = buyableVariant(line.variantId, user);
+        const quantity = integer(line.quantity, 1, 10, "จำนวน");
+        return {
+          variantId: line.variantId,
+          productId: variant.product_id,
+          subtotal: variant.unitPrice * quantity,
+          index,
+        };
+      });
+      return coupons.evaluateBasket(user, code, priced);
+    },
+    redeemBasketCoupon: ({ code, userId, checkoutId, orderId, reservationId, amount }) => {
+      const coupon = one("SELECT * FROM coupons WHERE code=?", normalizeCouponCode(code));
+      if (!coupon) fail(400, "ไม่พบโค้ดส่วนลดนี้");
+      coupons.redeem({
+        coupon,
+        userId,
+        checkoutId,
+        orderId,
+        reservationId,
+        amount,
+      });
+    },
+  });
   // Preorder emails queued inside a committed call go out now; a failed call drops them.
   for (const name of ["pay", "createOrder", "importCodes", "adminCallPreorders", "adminCancelPreorder", "cancelMyPreorder"]) {
     const call = service[name];

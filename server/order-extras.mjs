@@ -199,17 +199,48 @@ export function createOrderExtras({
     return { status, paidAt: paid.at ?? null };
   }
 
-  function buildReceipt(row, { includeRefund }) {
-    const customer = one("SELECT name,email FROM users WHERE id=?", row.user_id) ?? {};
+  function lineItem(row) {
     const discount = optionalAmount(row, ["discount", "discount_total", "discount_amount"]);
     const subtotal = optionalAmount(row, ["subtotal"]) || row.total + discount;
+    return {
+      orderId: row.id,
+      product: row.product,
+      option: row.option_label,
+      quantity: row.quantity,
+      unitPrice: Math.round(subtotal / Math.max(1, row.quantity)),
+      subtotal,
+      discount,
+      total: row.total,
+      couponCode: typeof row.coupon_code === "string" ? row.coupon_code : null,
+    };
+  }
+
+  function buildReceipt(row, { includeRefund, scope = null }) {
+    const rows = scope?.rows?.length ? scope.rows : [row];
+    const customer = one("SELECT name,email FROM users WHERE id=?", row.user_id) ?? {};
+    const items = rows.map(lineItem);
+    const discount = items.reduce((n, i) => n + i.discount, 0);
+    const subtotal = items.reduce((n, i) => n + i.subtotal, 0);
+    const total = items.reduce((n, i) => n + i.total, 0);
     const payment = paymentOf(row);
     const refund = includeRefund
-      ? orderRefundState(row.id, row.preorder)
+      ? rows.reduce(
+          (acc, r) => {
+            const oneRefund = orderRefundState(r.id, r.preorder);
+            return {
+              refundStatus: acc.refundStatus || oneRefund.refundStatus,
+              refundedTotal: acc.refundedTotal + (oneRefund.refundedTotal ?? 0),
+            };
+          },
+          { refundStatus: null, refundedTotal: 0 },
+        )
       : { refundStatus: null, refundedTotal: 0 };
+    const receiptId = scope?.checkoutId || row.id;
+    const first = items[0];
     return {
-      id: row.id,
-      number: row.id.slice(0, 8).toUpperCase(),
+      id: receiptId,
+      number: String(receiptId).slice(0, 8).toUpperCase(),
+      checkoutId: scope?.checkoutId ?? null,
       preorder: row.preorder,
       status: row.status,
       createdAt: row.created_at,
@@ -222,16 +253,18 @@ export function createOrderExtras({
         // Placeholder addresses of system accounts are not shown on paper.
         email: customer.email && !customer.email.endsWith(".local") ? customer.email : "",
       },
+      // Backward-compatible single item (first line / aggregate totals on multi).
       item: {
-        product: row.product,
-        option: row.option_label,
-        quantity: row.quantity,
-        unitPrice: Math.round(subtotal / row.quantity),
+        product: items.length > 1 ? items.map((i) => i.product).join(", ") : first.product,
+        option: items.length > 1 ? items.length + " รายการ" : first.option,
+        quantity: items.reduce((n, i) => n + i.quantity, 0),
+        unitPrice: first.unitPrice,
         subtotal,
         discount,
-        couponCode: typeof row.coupon_code === "string" ? row.coupon_code : null,
+        couponCode: first.couponCode,
       },
-      total: row.total,
+      items,
+      total,
       paymentStatus: payment.status,
       refundStatus: refund.refundStatus ?? null,
       refundedTotal: refund.refundedTotal ?? 0,
@@ -249,7 +282,11 @@ export function createOrderExtras({
     const row = loadOrderRow(orderId);
     if (!row || row.user_id !== user.id) fail(404, "ไม่พบคำสั่งซื้อ");
     if (orderReceipts) orderReceipts.assertCustomerDownload(user, orderId);
-    return buildReceipt(row, { includeRefund: true });
+    const scope = orderReceipts?.receiptScope?.(orderId);
+    return buildReceipt(row, {
+      includeRefund: true,
+      scope: scope?.kind === "checkout" ? scope : null,
+    });
   }
 
   /** GET /api/admin/orders/:id/receipt — staff; refund figures stay ADMIN-only. */
@@ -258,7 +295,11 @@ export function createOrderExtras({
     const orderId = clean(id, 1, 80, "คำสั่งซื้อ");
     const row = loadOrderRow(orderId);
     if (!row) fail(404, "ไม่พบคำสั่งซื้อ");
-    return buildReceipt(row, { includeRefund: isAdmin(user) });
+    const scope = orderReceipts?.receiptScope?.(orderId);
+    return buildReceipt(row, {
+      includeRefund: isAdmin(user),
+      scope: scope?.kind === "checkout" ? scope : null,
+    });
   }
 
   return {

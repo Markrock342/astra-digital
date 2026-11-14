@@ -159,10 +159,116 @@ export function createCouponApis({
     return { coupon, code: coupon.code, subtotal, discount, total: subtotal - discount };
   }
 
+  /**
+   * Basket coupon: min_total / % / max_discount against the sum of eligible lines
+   * (scope ALL = all lines; PRODUCTS = matching products only). Discount is split
+   * by subtotal share; leftover satang goes to the last eligible line. Each line
+   * stays at least MIN_PAYABLE.
+   * `lines` = [{ variantId, productId, subtotal, quantity? }]
+   */
+  function evaluateBasket(user, rawCode, lines = []) {
+    if (!Array.isArray(lines) || !lines.length) reject("กรุณาเลือกสินค้าอย่างน้อย 1 รายการ");
+    const code = normalizeCouponCode(rawCode);
+    if (!code) reject("กรุณาใส่โค้ดส่วนลด");
+    if (!COUPON_CODE_RE.test(code)) reject("ไม่พบโค้ดส่วนลดนี้");
+    const coupon = one("SELECT * FROM coupons WHERE code=?", code);
+    if (!coupon) reject("ไม่พบโค้ดส่วนลดนี้");
+    const at = now();
+    if (!coupon.active) reject("โค้ดนี้ถูกปิดใช้งานแล้ว");
+    if (coupon.starts_at && at < coupon.starts_at)
+      reject("โค้ดนี้ยังไม่เริ่มใช้ เริ่มใช้ได้ " + thaiDateTime(coupon.starts_at));
+    if (coupon.ends_at && at > coupon.ends_at) reject("โค้ดนี้หมดอายุแล้ว");
+    if (coupon.usage_limit != null && activeUses(coupon.id) >= coupon.usage_limit)
+      reject("โค้ดนี้ถูกใช้ครบจำนวนแล้ว");
+    if (coupon.per_user_limit != null && activeUserUses(coupon.id, user.id) >= coupon.per_user_limit)
+      reject(
+        coupon.per_user_limit === 1
+          ? "คุณใช้โค้ดนี้ไปแล้ว"
+          : "คุณใช้โค้ดนี้ครบ " + coupon.per_user_limit + " ครั้งแล้ว",
+      );
+    if (coupon.first_order_only && hasPaidOrder(user.id))
+      reject("โค้ดนี้ใช้ได้เฉพาะคำสั่งซื้อแรกของบัญชีเท่านั้น");
+
+    const eligible = [];
+    for (const line of lines) {
+      if (!line || typeof line.variantId !== "string" || typeof line.productId !== "string")
+        reject("สินค้าไม่ถูกต้อง");
+      const subtotal = Math.trunc(Number(line.subtotal) || 0);
+      if (subtotal <= 0) reject("ยอดสินค้าไม่ถูกต้อง");
+      if (coupon.scope === "PRODUCTS") {
+        if (
+          !one(
+            "SELECT 1 AS x FROM coupon_products WHERE coupon_id=? AND product_id=?",
+            coupon.id,
+            line.productId,
+          )
+        )
+          continue;
+      }
+      eligible.push({
+        variantId: line.variantId,
+        productId: line.productId,
+        subtotal,
+        index: line.index,
+      });
+    }
+    if (!eligible.length) reject("โค้ดนี้ใช้กับสินค้าในตะกร้าไม่ได้");
+    const basketSubtotal = eligible.reduce((n, l) => n + l.subtotal, 0);
+    if (basketSubtotal < coupon.min_total)
+      reject(
+        "ยอดสั่งซื้อขั้นต่ำ " +
+          thb(coupon.min_total) +
+          " (ขาดอีก " +
+          thb(coupon.min_total - basketSubtotal) +
+          ")",
+      );
+    const maxDiscount = basketSubtotal - eligible.length * MIN_PAYABLE;
+    if (maxDiscount <= 0)
+      reject("ยอดสั่งซื้อนี้ใช้โค้ดไม่ได้ ต้องชำระอย่างน้อย " + thb(MIN_PAYABLE));
+    let discount = Math.min(rawDiscount(coupon, basketSubtotal), maxDiscount);
+    if (discount <= 0)
+      reject("ยอดสั่งซื้อนี้ใช้โค้ดไม่ได้ ต้องชำระอย่างน้อย " + thb(MIN_PAYABLE));
+
+    const allocated = eligible.map((l) => ({ ...l, discount: 0 }));
+    let left = discount;
+    for (let i = 0; i < allocated.length; i++) {
+      const isLast = i === allocated.length - 1;
+      let share = isLast ? left : Math.floor((discount * allocated[i].subtotal) / basketSubtotal);
+      const cap = allocated[i].subtotal - MIN_PAYABLE;
+      if (share > cap) share = Math.max(0, cap);
+      allocated[i].discount = share;
+      left -= share;
+    }
+    if (left > 0) {
+      for (let i = allocated.length - 1; i >= 0 && left > 0; i--) {
+        const room = allocated[i].subtotal - MIN_PAYABLE - allocated[i].discount;
+        const add = Math.min(Math.max(0, room), left);
+        allocated[i].discount += add;
+        left -= add;
+      }
+    }
+    discount = allocated.reduce((n, l) => n + l.discount, 0);
+    if (discount <= 0)
+      reject("ยอดสั่งซื้อนี้ใช้โค้ดไม่ได้ ต้องชำระอย่างน้อย " + thb(MIN_PAYABLE));
+    return {
+      coupon,
+      code: coupon.code,
+      subtotal: basketSubtotal,
+      discount,
+      total: basketSubtotal - discount,
+      lines: allocated.map((l) => ({
+        variantId: l.variantId,
+        discount: l.discount,
+        subtotal: l.subtotal,
+        index: l.index,
+      })),
+    };
+  }
+
   /** Write the redemption row for a new order (call inside the order transaction). */
-  function redeem({ coupon, userId, orderId = null, reservationId = null, amount }) {
+  function redeem({ coupon, userId, orderId = null, reservationId = null, checkoutId = null, amount }) {
     run(
-      "INSERT INTO coupon_redemptions(id,coupon_id,code,user_id,order_id,reservation_id,amount,created_at) VALUES(?,?,?,?,?,?,?,?)",
+      "INSERT INTO coupon_redemptions(id,coupon_id,code,user_id,order_id,reservation_id,amount,created_at,checkout_id) VALUES(?,?,?,?,?,?,?,?,?)",
       randomUUID(),
       coupon.id,
       coupon.code,
@@ -171,6 +277,7 @@ export function createCouponApis({
       reservationId,
       amount,
       now(),
+      checkoutId ?? null,
     );
   }
 
@@ -191,18 +298,65 @@ export function createCouponApis({
    *  - The order row keeps `discount` and `coupon_code` as a record of what was offered.
    */
   function releaseCouponForOrder(orderId, reason = "CANCELLED") {
-    const row = one(
-      `SELECT r.id,r.code,r.amount FROM coupon_redemptions r
-       WHERE (r.order_id=? OR r.reservation_id=?) AND r.released_at IS NULL
-         AND NOT EXISTS (
-           SELECT 1 FROM payments p
-           WHERE (p.order_id=? OR p.reservation_id=?) AND p.status='SUCCEEDED')`,
-      orderId,
-      orderId,
+    let row = one(
+      `SELECT r.id,r.code,r.amount,r.checkout_id FROM coupon_redemptions r
+       WHERE (r.order_id=? OR r.reservation_id=?) AND r.released_at IS NULL`,
       orderId,
       orderId,
     );
+    if (!row) {
+      const checkoutId = one(
+        `SELECT checkout_id FROM orders WHERE id=? AND checkout_id IS NOT NULL
+         UNION ALL SELECT checkout_id FROM reservations WHERE id=? AND checkout_id IS NOT NULL`,
+        orderId,
+        orderId,
+      )?.checkout_id;
+      if (checkoutId)
+        row = one(
+          `SELECT r.id,r.code,r.amount,r.checkout_id FROM coupon_redemptions r
+           WHERE r.checkout_id=? AND r.released_at IS NULL`,
+          checkoutId,
+        );
+    }
     if (!row) return { released: false, code: null, amount: 0 };
+
+    if (row.checkout_id) {
+      // Basket redemption: release only when nothing in the checkout was paid and no
+      // coupon line is still waiting to pay (cancel / expire / OOS every discounted line).
+      const paid = one(
+        `SELECT 1 AS x FROM payments p
+         JOIN orders o ON o.id=p.order_id AND o.checkout_id=?
+         WHERE p.status='SUCCEEDED'
+         UNION ALL
+         SELECT 1 FROM payments p
+         JOIN reservations r ON r.id=p.reservation_id AND r.checkout_id=?
+         WHERE p.status='SUCCEEDED'
+         LIMIT 1`,
+        row.checkout_id,
+        row.checkout_id,
+      );
+      if (paid) return { released: false, code: null, amount: 0 };
+      const pending = one(
+        `SELECT 1 AS x FROM orders
+         WHERE checkout_id=? AND status='PENDING_PAYMENT' AND COALESCE(coupon_code,'')!=''
+         UNION ALL
+         SELECT 1 FROM reservations
+         WHERE checkout_id=? AND status='PENDING_PAYMENT' AND COALESCE(coupon_code,'')!=''
+         LIMIT 1`,
+        row.checkout_id,
+        row.checkout_id,
+      );
+      if (pending) return { released: false, code: null, amount: 0 };
+    } else {
+      const paid = one(
+        `SELECT 1 AS x FROM payments p
+         WHERE (p.order_id=? OR p.reservation_id=?) AND p.status='SUCCEEDED'`,
+        orderId,
+        orderId,
+      );
+      if (paid) return { released: false, code: null, amount: 0 };
+    }
+
     const changed = run(
       "UPDATE coupon_redemptions SET released_at=?, released_reason=? WHERE id=? AND released_at IS NULL",
       now(),
@@ -542,6 +696,7 @@ export function createCouponApis({
 
   return {
     evaluate,
+    evaluateBasket,
     redeem,
     releaseCouponForOrder,
     adminCoupons,

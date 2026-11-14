@@ -58,6 +58,7 @@ import { ensureBanners } from "./ensure-admin-fr.mjs";
 import { ensureTaxInvoices } from "./ensure-admin-fr.mjs";
 import { ensureOrderReceipts } from "./ensure-admin-fr.mjs";
 import { ensureCheckouts } from "./checkouts.mjs";
+import { ensureOrderFulfillmentSearch } from "./orders-list.mjs";
 import { ensureNewsAbout } from "./ensure-admin-fr.mjs";
 import { createEmailSender } from "./email.mjs";
 import { createTurnstile } from "./turnstile.mjs";
@@ -147,6 +148,7 @@ export function createCommerce(options = {}) {
   ensureDeliveryOptions(db);
   ensureNewsAbout(db);
   ensureCheckouts(db);
+  ensureOrderFulfillmentSearch(db);
   return createCommerceCore({ ...options, db, key });
 }
 export function openLocalCommerce({

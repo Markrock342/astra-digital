@@ -141,6 +141,62 @@ test("7-day window blocks first request and re-request after expiry", (t) => {
   assert.throws(() => s.requestOrderReceipt(user, order2.id, BUYER), status(409));
 });
 
+test("multi-line checkout: one receipt request, one document with 3 lines", (t) => {
+  const { s, user, admin, variantId } = fixture(t);
+  const p2 = s.saveProduct(admin, {
+    name: "Receipt Stream B",
+    description: "ทดสอบใบเสร็จ",
+    category: "streaming",
+    price: 3000,
+    active: true,
+  });
+  const p3 = s.saveProduct(admin, {
+    name: "Receipt Stream C",
+    description: "ทดสอบใบเสร็จ",
+    category: "streaming",
+    price: 2000,
+    active: true,
+  });
+  const b = s.adminProductVariants(admin, p2.id).variants[0].id;
+  const c = s.adminProductVariants(admin, p3.id).variants[0].id;
+  s.importCodes(admin, {
+    variantId: b,
+    items: [{ loginId: "rb1", password: "pwb1" }],
+  });
+  s.importCodes(admin, {
+    variantId: c,
+    items: [{ loginId: "rc1", password: "pwc1" }],
+  });
+  s.topup(user, { amount: 1000, requestKey: "rcp-checkout-topup-01" });
+  const checkout = s.createCheckout(user, {
+    requestKey: "rcp-checkout-3lines",
+    pay: "success",
+    lines: [
+      { variantId, quantity: 1 },
+      { variantId: b, quantity: 1 },
+      { variantId: c, quantity: 1 },
+    ],
+  });
+  assert.equal(checkout.orders.length, 3);
+  const first = checkout.orders[0].id;
+  const second = checkout.orders[1].id;
+  const state = s.requestOrderReceipt(user, second, BUYER);
+  assert.equal(state.checkoutId, checkout.id);
+  assert.equal(state.lineCount, 3);
+  assert.equal(state.request.checkoutId, checkout.id);
+  // Second request on another line hits the same pending checkout receipt.
+  assert.throws(() => s.requestOrderReceipt(user, first, BUYER), status(409));
+  const queue = s.adminOrderReceipts(admin, { status: "PENDING" });
+  assert.equal(queue.requests.filter((r) => r.checkoutId === checkout.id).length, 1);
+  s.adminApproveOrderReceipt(admin, first);
+  const receipt = s.orderReceipt(user, second);
+  assert.equal(receipt.checkoutId, checkout.id);
+  assert.equal(receipt.items.length, 3);
+  assert.equal(receipt.total, 5000 + 3000 + 2000);
+  assert.equal(receipt.items.reduce((n, i) => n + i.total, 0), receipt.total);
+  // Single-line (no multi checkout) still works — covered by other tests.
+});
+
 test("HTTP routes: profiles + request + admin approve; foreign order 404", async (t) => {
   const { s, user, admin, variantId, token, adminToken } = fixture(t);
   const otherAuth = s.register({

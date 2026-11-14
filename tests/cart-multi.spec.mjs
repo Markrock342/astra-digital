@@ -87,7 +87,8 @@ test("tick two of three lines, summary, pay once, one order number", async ({ pa
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("+ อีก 1 รายการ");
   await expect(rows.first()).toContainText("#" + checkoutId.slice(0, 8).toUpperCase());
-  await page.getByRole("searchbox").fill("cartbeta");
+  // ID / password / code match the whole value (server search); product names match in part.
+  await page.getByRole("searchbox").fill("cartbeta0@cart.test");
   await expect(rows).toHaveCount(1);
   await rows.first().locator(".history-card").click();
   await expect(page).toHaveURL(base + "/checkouts/" + checkoutId);

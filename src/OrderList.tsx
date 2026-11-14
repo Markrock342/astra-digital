@@ -3,7 +3,7 @@
 // Layout follows shadcn/ui Input + Sheet + Pagination + Checkbox (MIT, https://ui.shadcn.com);
 // the order list API already returns delivered items to their owner, so search and copy
 // run in the browser.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
@@ -23,7 +23,6 @@ import { EN_STRINGS } from "./i18n-en";
 import { useLive } from "./live";
 import { hasReceipt, ReceiptLink } from "./OrderExtras";
 import { RebuyActions } from "./Rebuy";
-import { groupStatus } from "./Cart";
 import { BottomSheet } from "./Sheet";
 import { ManualOrderNote } from "./ManualOrderNote";
 import type { Order, Product } from "./types";
@@ -43,8 +42,8 @@ const EN: Record<string, string> = {
   "หน้าก่อน": "Previous page",
   "หน้าถัดไป": "Next page",
   "เลือก {n} รายการ": "{n} selected",
-  "เลือกทั้งหมด": "Select all",
-  "ยกเลิกการเลือก": "Clear selection",
+  "เลือกทั้งหน้า": "Select this page",
+  "ยกเลิกทั้งหน้า": "Clear this page",
   "คัดลอก": "Copy",
   "ปิดโหมดคัดลอก": "Exit copy mode",
   "คัดลอก {n} บรรทัดแล้ว": "Copied {n} lines",
@@ -87,58 +86,11 @@ export function copyLines(o: Order): string[] {
   for (const link of o.links ?? []) lines.push(link);
   return lines;
 }
-/** Order number, product, option and every delivered value, lower-cased for search. */
-function haystack(o: Order) {
-  return [
-    o.id,
-    "#" + o.id.slice(0, 8),
-    o.name,
-    o.label,
-    ...(o.codes ?? []),
-    ...(o.links ?? []),
-    ...(o.credentials ?? []).flatMap((c) => [c.loginId, c.password, c.profile ?? ""]),
-  ]
-    .join("\n")
-    .toLowerCase();
-}
 type Entry = Order & { href?: string; lines?: Order[] };
-/** One row per checkout: lines bought together show as one order (Cart.tsx). */
-export function mergeCheckouts(orders: Order[]): Entry[] {
-  const groups = new Map<string, Order[]>();
-  for (const o of orders) if (o.checkout_id) groups.set(o.checkout_id, [...(groups.get(o.checkout_id) ?? []), o]);
-  const out: Entry[] = [];
-  const done = new Set<string>();
-  for (const o of orders) {
-    if (!o.checkout_id) {
-      out.push(o);
-      continue;
-    }
-    if (done.has(o.checkout_id)) continue;
-    done.add(o.checkout_id);
-    const lines = [...groups.get(o.checkout_id)!].sort((a, b) => (a.checkout_line ?? 0) - (b.checkout_line ?? 0));
-    const first = lines[0];
-    out.push({
-      ...first,
-      id: o.checkout_id,
-      name: lines.length > 1 ? first.name + " " + t("+ อีก {n} รายการ", { n: lines.length - 1 }) : first.name,
-      label: lines.map((l) => l.label).join(", "),
-      quantity: lines.reduce((n, l) => n + l.quantity, 0),
-      total: lines.reduce((n, l) => n + l.total, 0),
-      status: groupStatus(lines),
-      refundStatus: null,
-      stage: null,
-      expired_at: null,
-      fulfilment: null,
-      createdByAdmin: false,
-      codes: lines.flatMap((l) => l.codes ?? []),
-      credentials: lines.flatMap((l) => l.credentials ?? []),
-      links: lines.flatMap((l) => l.links ?? []),
-      href: "/checkouts/" + o.checkout_id,
-      lines,
-    });
-  }
-  return out;
-}
+type PageData = { orders: Entry[]; total: number; page: number; pages: number };
+/** Row name in the visitor's language ("+ อีก n รายการ" for several lines bought together). */
+const entryName = (o: Entry) =>
+  o.lines && o.lines.length > 1 ? o.lines[0].name + " " + t("+ อีก {n} รายการ", { n: o.lines.length - 1 }) : o.name;
 function coverFor(products: Product[], variantId?: string) {
   if (!variantId) return null;
   const p = products.find((x) => x.variants?.some((v) => v.id === variantId));
@@ -147,7 +99,6 @@ function coverFor(products: Product[], variantId?: string) {
 
 export function HistoryPage() {
   const { user, products, toast } = useStore();
-  const [orders, setOrders] = useState<Order[] | null>(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState<Group>("all");
@@ -155,34 +106,36 @@ export function HistoryPage() {
   const [page, setPage] = useState(0);
   const [copyMode, setCopyMode] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const loadOrders = () => {
-    if (user)
-      api<{ orders: Order[] }>("/orders")
-        .then((r) => setOrders(r.orders))
-        .catch((e) => setError(e.message));
-  };
-  useEffect(loadOrders, [user?.id]);
-  useLive(["orders"], loadOrders);
-  const entries = useMemo(() => mergeCheckouts(orders ?? []), [orders]);
-  const index = useMemo(
-    () => new Map(entries.map((o) => [o.id, (o.lines ?? [o]).map(haystack).join("\n") + "\n#" + o.id.slice(0, 8).toLowerCase()])),
-    [entries],
-  );
-  const filtered = useMemo(() => {
-    const words = query.trim().toLowerCase().replace(/^#/, "").split(/\s+/).filter(Boolean);
-    return entries.filter(
-      (o) =>
-        (group === "all" || statusGroup(o) === group) &&
-        words.every((w) => index.get(o.id)!.includes(w)),
-    );
-  }, [entries, index, query, group]);
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  useEffect(() => setPage(0), [query, group]);
+  const [data, setData] = useState<PageData | null>(null);
+  const [debounced, setDebounced] = useState("");
   useEffect(() => {
-    if (page > pages - 1) setPage(pages - 1);
-  }, [page, pages]);
-  const shown = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const copyable = filtered.filter((o) => copyLines(o).length);
+    const id = setTimeout(() => setDebounced(query.trim()), 300);
+    return () => clearTimeout(id);
+  }, [query]);
+  useEffect(() => setPage(0), [debounced, group]);
+  // Server pages, search and status (server/orders-list.mjs); a stale answer is dropped.
+  const want = `/orders?page=${page + 1}&limit=${PAGE_SIZE}&status=${group}` + (debounced ? "&q=" + encodeURIComponent(debounced) : "");
+  const wantRef = useRef(want);
+  wantRef.current = want;
+  const loadOrders = () => {
+    if (!user) return;
+    const path = want;
+    api<PageData>(path)
+      .then((r) => {
+        if (wantRef.current !== path) return;
+        setData(r);
+        setError("");
+      })
+      .catch((e) => setError(e.message));
+  };
+  useEffect(loadOrders, [user?.id, want]);
+  useLive(["orders"], loadOrders);
+  const orders = data?.orders ?? null;
+  const filtering = !!debounced || group !== "all";
+  const pages = data?.pages ?? 1;
+  const total = data?.total ?? 0;
+  const shown = orders ?? [];
+  const copyable = shown.filter((o) => copyLines(o).length);
   const allPicked = copyable.length > 0 && copyable.every((o) => picked.has(o.id));
   const groupLabel = t(GROUPS.find(([g]) => g === group)![1]);
 
@@ -199,14 +152,28 @@ export function HistoryPage() {
     setPicked(new Set());
   }
   async function copyPicked() {
-    // Newest first, the order the list shows.
-    const lines = entries.filter((o) => picked.has(o.id)).flatMap(copyLines);
-    if (!lines.length) return;
+    const ids = [...picked];
+    if (!ids.length) return;
+    // The server sends the lines (picks may span pages). Safari only lets a page write the
+    // clipboard inside the tap, so hand it a promise via ClipboardItem when it exists.
+    const fetchText = api<{ lines: string[] }>("/orders/copy", { ids }).then((r) => r.lines);
     try {
-      await navigator.clipboard.writeText(lines.join("\n"));
-      toast(t("คัดลอก {n} บรรทัดแล้ว", { n: lines.length }));
-    } catch {
-      toast(t("คัดลอกอัตโนมัติไม่ได้ กรุณาเลือกข้อความแล้วคัดลอกเอง"));
+      let count = 0;
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        const text = fetchText.then((lines) => {
+          count = lines.length;
+          return new Blob([lines.join("\n")], { type: "text/plain" });
+        });
+        await navigator.clipboard.write([new ClipboardItem({ "text/plain": text })]);
+      } else {
+        const lines = await fetchText;
+        count = lines.length;
+        await navigator.clipboard.writeText(lines.join("\n"));
+      }
+      toast(t("คัดลอก {n} บรรทัดแล้ว", { n: count }));
+    } catch (e) {
+      const message = (e as Error).message;
+      toast(message && !/clipboard|document|permission|NotAllowed/i.test(message) ? message : t("คัดลอกอัตโนมัติไม่ได้ กรุณาเลือกข้อความแล้วคัดลอกเอง"));
     }
   }
 
@@ -290,7 +257,7 @@ export function HistoryPage() {
               <LoaderCircle className="spin" />
               {t("กำลังโหลดคำสั่งซื้อ")}
             </div>
-          ) : filtered.length ? (
+          ) : shown.length ? (
             <section className="order-list-panel" aria-label={t("ประวัติการซื้อ")}>
               <nav className="order-pager" aria-label={t("ประวัติการซื้อ")}>
                 <button type="button" className="order-pager-step" aria-label={t("หน้าก่อน")} disabled={page === 0} onClick={() => setPage(page - 1)}>
@@ -300,7 +267,7 @@ export function HistoryPage() {
                   {t("หน้า {page} จาก {pages} · ทั้งหมด {count} รายการ", {
                     page: page + 1,
                     pages,
-                    count: filtered.length.toLocaleString(),
+                    count: total.toLocaleString(),
                   })}
                 </span>
                 <button type="button" className="order-pager-step" aria-label={t("หน้าถัดไป")} disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>
@@ -318,7 +285,7 @@ export function HistoryPage() {
                             <Art type={o.art} name={o.name} image={coverFor(products, o.variant_id)} small />
                           </span>
                           <span className="history-main">
-                            <strong className="history-name">{o.name}</strong>
+                            <strong className="history-name">{entryName(o)}</strong>
                             <span className="history-option">
                               {o.label} · × {o.quantity}
                             </span>
@@ -374,12 +341,12 @@ export function HistoryPage() {
             !error && (
               <Empty
                 icon={<History />}
-                heading={orders?.length ? t("ไม่พบคำสั่งซื้อที่ตรงกับการค้นหา") : t("ยังไม่มีคำสั่งซื้อในรายการนี้")}
+                heading={filtering ? t("ไม่พบคำสั่งซื้อที่ตรงกับการค้นหา") : t("ยังไม่มีคำสั่งซื้อในรายการนี้")}
                 description={
-                  orders?.length ? t("ลองค้นด้วยคำอื่น หรือเปลี่ยนสถานะ") : t("เมื่อคุณเลือกซื้อสินค้า คำสั่งซื้อจะปรากฏที่นี่")
+                  filtering ? t("ลองค้นด้วยคำอื่น หรือเปลี่ยนสถานะ") : t("เมื่อคุณเลือกซื้อสินค้า คำสั่งซื้อจะปรากฏที่นี่")
                 }
                 action={
-                  orders?.length ? undefined : (
+                  filtering ? undefined : (
                     <Link to="/products" className="button primary">
                       {t("เลือกดูสินค้า")}
                       <ArrowRight size={16} />
@@ -398,9 +365,18 @@ export function HistoryPage() {
                 type="button"
                 className="button ghost"
                 disabled={!copyable.length}
-                onClick={() => setPicked(allPicked ? new Set() : new Set(copyable.map((o) => o.id)))}
+                onClick={() =>
+                  setPicked((prev) => {
+                    const next = new Set(prev);
+                    for (const o of copyable) {
+                      if (allPicked) next.delete(o.id);
+                      else next.add(o.id);
+                    }
+                    return next;
+                  })
+                }
               >
-                {allPicked ? t("ยกเลิกการเลือก") : t("เลือกทั้งหมด")}
+                {allPicked ? t("ยกเลิกทั้งหน้า") : t("เลือกทั้งหน้า")}
               </button>
               <button type="button" className="button primary" disabled={!picked.size} onClick={() => void copyPicked()}>
                 <ClipboardCopy size={16} aria-hidden="true" />

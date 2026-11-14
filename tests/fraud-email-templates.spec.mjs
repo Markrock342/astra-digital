@@ -161,7 +161,8 @@ for (const [name, viewport] of [
     await expect(page.getByRole("heading", { name: "ข้อความอีเมล", exact: true })).toBeVisible();
     await expect(page.locator(".reference-subnav").getByRole("link", { name: "ข้อความอีเมล" })).toHaveClass(/active/);
     // 6 + the two preorder templates (preorder.mjs) + verify_email (email-verification.mjs).
-    await expect(page.locator(".email-template-list button")).toHaveCount(9);
+    // 10: + ยืนยันคำสั่งซื้อ (หลายรายการ) from the one-email checkout (#110).
+    await expect(page.locator(".email-template-list button")).toHaveCount(10);
     const editor = page.locator(".email-template-editor");
     await expect(editor).toHaveAttribute("data-template", "order_confirmed");
 

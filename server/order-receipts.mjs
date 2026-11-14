@@ -110,6 +110,91 @@ export function createOrderReceipts({
     return reservation ? { ...reservation, preorder: true } : null;
   }
 
+  /** Paid/delivered lines under a checkout (ready + preorder). */
+  function loadCheckoutLines(checkoutId) {
+    const selectLine = (alias) =>
+      `${alias}.id, ${alias}.user_id, ${alias}.variant_id, ${alias}.quantity, ${alias}.total, ${alias}.status,
+       ${alias}.created_at, ${alias}.discount, ${alias}.coupon_code, ${alias}.checkout_id, ${alias}.checkout_line,
+       ${alias}.warranty_days, p.name AS product, v.label AS option_label`;
+    return all(
+      `SELECT * FROM (
+         SELECT ${selectLine("o")}, 0 AS preorder, COALESCE(o.checkout_line, 0) AS line_no
+         FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id
+         WHERE o.checkout_id=? AND o.status='DELIVERED'
+         UNION ALL
+         SELECT ${selectLine("r")}, 1 AS preorder, COALESCE(r.checkout_line, 0) AS line_no
+         FROM reservations r JOIN variants v ON v.id=r.variant_id JOIN products p ON p.id=v.product_id
+         WHERE r.checkout_id=? AND r.status IN ('DELIVERED','PREORDER')
+       ) ORDER BY line_no, id`,
+      checkoutId,
+      checkoutId,
+    ).map((r) => ({ ...r, preorder: !!r.preorder }));
+  }
+
+  /**
+   * Multi-line checkout → one receipt for the whole basket (anchor = first line).
+   * Single line / no checkout_id → per-order behaviour (unchanged).
+   */
+  function receiptScope(orderId) {
+    const row = loadOrderRow(orderId);
+    if (!row) return null;
+    if (!row.checkout_id) return { kind: "order", rows: [row], anchor: row, checkoutId: null };
+    const lines = loadCheckoutLines(row.checkout_id);
+    if (lines.length <= 1) return { kind: "order", rows: [row], anchor: row, checkoutId: null };
+    return { kind: "checkout", rows: lines, anchor: lines[0], checkoutId: row.checkout_id };
+  }
+
+  function findReceiptRequest(scope) {
+    if (scope.checkoutId) {
+      const byCheckout = one(
+        "SELECT * FROM order_receipt_requests WHERE checkout_id=?",
+        scope.checkoutId,
+      );
+      if (byCheckout) return byCheckout;
+    }
+    for (const line of scope.rows) {
+      const hit = one("SELECT * FROM order_receipt_requests WHERE order_id=?", line.id);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  function windowStateForScope(scope, now = clock()) {
+    if (scope.kind === "order") return windowState(scope.anchor, now);
+    let earliest = null;
+    for (const line of scope.rows) {
+      const start = successAtMs(line);
+      if (start != null && (earliest == null || start < earliest)) earliest = start;
+    }
+    if (earliest == null) {
+      return {
+        eligible: false,
+        reason: "ออเดอร์ยังไม่ชำระสำเร็จ จึงยังขอใบเสร็จไม่ได้",
+        successAt: null,
+        expiresAt: null,
+        remainingMs: 0,
+      };
+    }
+    const expiresAt = earliest + RECEIPT_REQUEST_WINDOW_MS;
+    const remainingMs = Math.max(0, expiresAt - now);
+    if (now > expiresAt) {
+      return {
+        eligible: false,
+        reason: "หมดเวลายื่นคำขอใบเสร็จแล้ว (ภายใน 7 วันหลังสั่งซื้อสำเร็จ)",
+        successAt: dbTime(earliest),
+        expiresAt: dbTime(expiresAt),
+        remainingMs: 0,
+      };
+    }
+    return {
+      eligible: true,
+      reason: null,
+      successAt: dbTime(earliest),
+      expiresAt: dbTime(expiresAt),
+      remainingMs,
+    };
+  }
+
   function successAtMs(row) {
     const column = row.preorder ? "reservation_id" : "order_id";
     const paid = one(
@@ -172,6 +257,7 @@ export function createOrderReceipts({
     if (!row) return null;
     return {
       orderId: row.order_id,
+      checkoutId: row.checkout_id ?? null,
       preorder: !!row.preorder,
       status: row.status,
       statusLabel:
@@ -283,18 +369,20 @@ export function createOrderReceipts({
 
   function orderReceiptState(user, orderId) {
     requireUser(user);
-    const row = loadOrderRow(orderId);
-    if (!row || row.user_id !== user.id) fail(404, "ไม่พบคำสั่งซื้อ");
-    const existing = one("SELECT * FROM order_receipt_requests WHERE order_id=?", row.id);
-    const window = windowState(row);
+    const scope = receiptScope(orderId);
+    if (!scope || scope.anchor.user_id !== user.id) fail(404, "ไม่พบคำสั่งซื้อ");
+    const existing = findReceiptRequest(scope);
+    const window = windowStateForScope(scope);
     let canRequest = false;
     let canDownload = existing?.status === "APPROVED";
     if (!existing) canRequest = window.eligible;
     else if (existing.status === "REJECTED") canRequest = window.eligible;
     else canRequest = false;
     return {
-      orderId: row.id,
-      preorder: !!row.preorder,
+      orderId: scope.anchor.id,
+      checkoutId: scope.checkoutId,
+      preorder: !!scope.anchor.preorder,
+      lineCount: scope.rows.length,
       request: requestPublic(existing),
       window,
       canRequest,
@@ -314,20 +402,22 @@ export function createOrderReceipts({
   function requestOrderReceipt(user, orderId, input = {}) {
     requireUser(user);
     if (user.role !== "CUSTOMER" && !isAdmin(user)) fail(403, "ใช้ได้เฉพาะเจ้าของออเดอร์");
-    const row = loadOrderRow(orderId);
-    if (!row || row.user_id !== user.id) fail(404, "ไม่พบคำสั่งซื้อ");
-    const existing = one("SELECT * FROM order_receipt_requests WHERE order_id=?", row.id);
+    const scope = receiptScope(orderId);
+    if (!scope || scope.anchor.user_id !== user.id) fail(404, "ไม่พบคำสั่งซื้อ");
+    const anchor = scope.anchor;
+    const existing = findReceiptRequest(scope);
     if (existing?.status === "APPROVED") fail(409, "ออเดอร์นี้มีใบเสร็จที่อนุมัติแล้ว ขอใหม่ไม่ได้");
     if (existing?.status === "PENDING") fail(409, "มีคำขอใบเสร็จรอดำเนินการอยู่แล้ว");
-    const window = windowState(row);
+    const window = windowStateForScope(scope);
     if (!window.eligible) fail(409, window.reason);
     const { profileId, buyer } = resolveBuyerFromInput(user, input);
     const now = dbTime(clock());
+    const requestOrderId = existing?.order_id || anchor.id;
     if (existing) {
       run(
         `UPDATE order_receipt_requests SET status='PENDING', profile_id=?, buyer_type=?, buyer_name=?,
          buyer_tax_id=?, buyer_branch=?, buyer_address=?, reason=NULL, requested_at=?, updated_at=?,
-         resolved_at=NULL, resolved_by=NULL WHERE order_id=?`,
+         resolved_at=NULL, resolved_by=NULL, checkout_id=? WHERE order_id=?`,
         profileId,
         buyer.type,
         buyer.name,
@@ -336,16 +426,17 @@ export function createOrderReceipts({
         buyer.address,
         now,
         now,
-        row.id,
+        scope.checkoutId,
+        requestOrderId,
       );
     } else {
       run(
         `INSERT INTO order_receipt_requests(
            order_id,preorder,user_id,status,profile_id,buyer_type,buyer_name,buyer_tax_id,buyer_branch,
-           buyer_address,reason,requested_at,updated_at,resolved_at,resolved_by
-         ) VALUES(?,?,?,'PENDING',?,?,?,?,?,?,NULL,?,?,NULL,NULL)`,
-        row.id,
-        row.preorder ? 1 : 0,
+           buyer_address,reason,requested_at,updated_at,resolved_at,resolved_by,checkout_id
+         ) VALUES(?,?,?,'PENDING',?,?,?,?,?,?,NULL,?,?,NULL,NULL,?)`,
+        requestOrderId,
+        anchor.preorder ? 1 : 0,
         user.id,
         profileId,
         buyer.type,
@@ -355,16 +446,24 @@ export function createOrderReceipts({
         buyer.address,
         now,
         now,
+        scope.checkoutId,
       );
     }
-    auditDetail(user.id, "ORDER_RECEIPT_REQUEST", row.id, { profileId });
+    auditDetail(user.id, "ORDER_RECEIPT_REQUEST", requestOrderId, {
+      profileId,
+      checkoutId: scope.checkoutId,
+      lineCount: scope.rows.length,
+    });
     notifyStaffRoles(
       "order_receipt",
       "คำขอใบเสร็จคำสั่งซื้อ",
-      "ออเดอร์ #" + row.id.slice(0, 8).toUpperCase() + " รออนุมัติใบเสร็จ",
+      "ออเดอร์ #" +
+        (scope.checkoutId || requestOrderId).slice(0, 8).toUpperCase() +
+        (scope.kind === "checkout" ? " (" + scope.rows.length + " รายการ)" : "") +
+        " รออนุมัติใบเสร็จ",
       "/admin/order-receipts",
     );
-    return orderReceiptState(user, row.id);
+    return orderReceiptState(user, orderId);
   }
 
   function assertCustomerDownload(user, orderId) {
@@ -403,21 +502,30 @@ export function createOrderReceipts({
 
   function adminOrderReceiptRequest(user, orderId) {
     requireStaff(user);
-    const row = loadOrderRow(orderId);
-    if (!row) fail(404, "ไม่พบคำสั่งซื้อ");
-    const existing = one("SELECT * FROM order_receipt_requests WHERE order_id=?", row.id);
+    const scope = receiptScope(orderId);
+    if (!scope) fail(404, "ไม่พบคำสั่งซื้อ");
+    const existing = findReceiptRequest(scope);
     return {
-      orderId: row.id,
-      preorder: !!row.preorder,
-      customerId: row.user_id,
+      orderId: scope.anchor.id,
+      checkoutId: scope.checkoutId,
+      preorder: !!scope.anchor.preorder,
+      lineCount: scope.rows.length,
+      customerId: scope.anchor.user_id,
       request: requestPublic(existing),
-      window: windowState(row),
+      window: windowStateForScope(scope),
     };
+  }
+
+  function resolveRequestOrderId(orderId) {
+    const direct = one("SELECT * FROM order_receipt_requests WHERE order_id=?", orderId);
+    if (direct) return direct;
+    const scope = receiptScope(orderId);
+    return scope ? findReceiptRequest(scope) : null;
   }
 
   function adminApproveOrderReceipt(user, orderId) {
     requireAdmin(user);
-    const existing = one("SELECT * FROM order_receipt_requests WHERE order_id=?", orderId);
+    const existing = resolveRequestOrderId(orderId);
     if (!existing) fail(404, "ไม่พบคำขอใบเสร็จ");
     if (existing.status !== "PENDING") fail(409, "คำขอนี้ไม่อยู่ในสถานะรออนุมัติ");
     const now = dbTime(clock());
@@ -427,22 +535,25 @@ export function createOrderReceipts({
       now,
       user.id,
       now,
-      orderId,
+      existing.order_id,
     );
-    auditDetail(user.id, "ORDER_RECEIPT_APPROVE", orderId, null);
+    auditDetail(user.id, "ORDER_RECEIPT_APPROVE", existing.order_id, {
+      checkoutId: existing.checkout_id ?? null,
+    });
+    const ref = existing.checkout_id || existing.order_id;
     notify(
       existing.user_id,
       "order_receipt",
       "อนุมัติใบเสร็จคำสั่งซื้อแล้ว",
-      "ดาวน์โหลดหรือพิมพ์ใบเสร็จออเดอร์ #" + orderId.slice(0, 8).toUpperCase() + " ได้แล้ว",
-      "/orders/" + orderId + "/receipt",
+      "ดาวน์โหลดหรือพิมพ์ใบเสร็จออเดอร์ #" + ref.slice(0, 8).toUpperCase() + " ได้แล้ว",
+      "/orders/" + existing.order_id + "/receipt",
     );
-    return adminOrderReceiptRequest(user, orderId);
+    return adminOrderReceiptRequest(user, existing.order_id);
   }
 
   function adminRejectOrderReceipt(user, orderId, input = {}) {
     requireAdmin(user);
-    const existing = one("SELECT * FROM order_receipt_requests WHERE order_id=?", orderId);
+    const existing = resolveRequestOrderId(orderId);
     if (!existing) fail(404, "ไม่พบคำขอใบเสร็จ");
     if (existing.status !== "PENDING") fail(409, "คำขอนี้ไม่อยู่ในสถานะรออนุมัติ");
     const reason = text(input.reason ?? "", 400, "เหตุผล", fail, { required: true, min: 3 });
@@ -454,25 +565,30 @@ export function createOrderReceipts({
       now,
       user.id,
       now,
-      orderId,
+      existing.order_id,
     );
-    auditDetail(user.id, "ORDER_RECEIPT_REJECT", orderId, { reason });
+    auditDetail(user.id, "ORDER_RECEIPT_REJECT", existing.order_id, { reason });
     notify(
       existing.user_id,
       "order_receipt",
       "คำขอใบเสร็จไม่ได้รับการอนุมัติ",
       reason,
-      "/orders/" + orderId,
+      "/orders/" + existing.order_id,
     );
-    return adminOrderReceiptRequest(user, orderId);
+    return adminOrderReceiptRequest(user, existing.order_id);
   }
 
   /** Snapshot buyer for the printable short receipt when approved. */
   function receiptExtras(row) {
-    const req = one(
+    let req = one(
       "SELECT * FROM order_receipt_requests WHERE order_id=? AND status='APPROVED'",
       row.id,
     );
+    if (!req && row.checkout_id)
+      req = one(
+        "SELECT * FROM order_receipt_requests WHERE checkout_id=? AND status='APPROVED'",
+        row.checkout_id,
+      );
     if (!req) return {};
     return {
       buyer: {
@@ -484,6 +600,7 @@ export function createOrderReceipts({
         address: req.buyer_address,
       },
       orderReceiptApproved: true,
+      checkoutId: req.checkout_id ?? null,
     };
   }
 
@@ -500,6 +617,7 @@ export function createOrderReceipts({
     adminApproveOrderReceipt,
     adminRejectOrderReceipt,
     receiptExtras,
+    receiptScope,
     paymentMethodLabelForOrder: (row) => paymentMethodLabelForOrder({ one }, row),
     windowState,
     successAtMs,

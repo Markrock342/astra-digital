@@ -252,7 +252,9 @@ test("6–7 header: no shadow, ภาษา + ธีม popover, bell, balance, 
     await expect(prefs.getByRole("button", { name: "TH", exact: true })).toBeVisible();
     await expect(prefs.getByRole("button", { name: "EN", exact: true })).toBeVisible();
     await expect(prefs.getByRole("button", { name: "ธีมสว่าง" }).or(prefs.getByRole("button", { name: "สว่าง" }))).toBeVisible();
-    await expect(prefs.locator(".swatch")).toHaveCount(4);
+    // 4 preset swatches + the "เลือกสีเอง" colour dot, and the hue slider.
+    await expect(prefs.locator(".swatch")).toHaveCount(5);
+    await expect(prefs.getByRole("slider", { name: "เลือกสีเอง" })).toBeVisible();
     const box = await prefs.boundingBox();
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(390);
