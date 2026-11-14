@@ -19,13 +19,11 @@
   gap: 12px;
   padding: 16px;
   border-radius: 16px;
-  background: #111114;
-  color: #ffffff;
-  box-shadow: 0 10px 24px -14px rgb(0 0 0 / 0.5);
-}
-:root[data-theme="dark"] .storefront-shell .menu-user-card {
-  background: #1d1d21;
-  box-shadow: inset 0 0 0 1px #2c2c31;
+  /* Client, 14 Nov: white card with a grey border (was a black block). */
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: none;
 }
 .storefront-shell .menu-user-card .avatar {
   width: 48px;
@@ -33,8 +31,8 @@
   flex: none;
   font-size: 18px;
   border: 0;
-  background: rgb(255 255 255 / 0.14);
-  color: #ffffff;
+  background: var(--raised);
+  color: var(--text);
 }
 .storefront-shell .menu-user-text {
   display: flex;
@@ -54,7 +52,7 @@
 .storefront-shell .msheet-balance-label {
   font-size: 12px;
   line-height: 1.3;
-  color: rgb(255 255 255 / 0.72);
+  color: var(--muted);
 }
 .storefront-shell .msheet-balance {
   font-size: 20px;
@@ -62,6 +60,9 @@
   line-height: 1.2;
   color: #ffffff;
   font-variant-numeric: tabular-nums;
+}
+.storefront-shell .msheet-balance {
+  color: var(--text);
 }
 .storefront-shell .menu-topup {
   display: inline-flex;

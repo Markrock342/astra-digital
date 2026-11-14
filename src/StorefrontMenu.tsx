@@ -3,6 +3,7 @@
 // shortcuts, the shop's contact chips and sign out. Signed out: sign in / sign up instead.
 import {
   CircleUserRound,
+  FileText,
   History,
   Info,
   LogOut,
@@ -25,6 +26,8 @@ import "./storefront-menu.css";
 
 const EN_MENU: Record<string, string> = {
   "ข่าวสารและกิจกรรม": "News & events",
+  "ข่าวสาร": "News",
+  "ใบเสร็จ": "Receipts",
   "เกี่ยวกับเรา": "About us",
   "แจ้งปัญหา": "Report a problem",
   "เติมเงิน": "Top up",
@@ -55,7 +58,8 @@ export function StorefrontMenu({ open, onClose }: { open: boolean; onClose: () =
       },
     },
     { label: t("บัญชีของฉัน"), icon: CircleUserRound, to: "/account" },
-    { label: t("ข่าวสารและกิจกรรม"), icon: Newspaper, to: "/news" },
+    { label: t("ใบเสร็จ"), icon: FileText, to: "/receipts" },
+    { label: t("ข่าวสาร"), icon: Newspaper, to: "/news" },
     { label: t("เกี่ยวกับเรา"), icon: Info, to: "/about" },
   ];
   return (

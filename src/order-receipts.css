@@ -185,3 +185,40 @@ button.linkish {
 .storefront-shell .order-help-row {
   margin-top: 12px;
 }
+
+/* ใบเสร็จของฉัน (/receipts): the purchase-history list look, one row per receipt. */
+.storefront-shell .my-receipts-page {
+  max-width: 760px;
+  margin-inline: auto;
+}
+.storefront-shell .my-receipt-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.storefront-shell .my-receipt-row + .my-receipt-row {
+  border-top: 1px solid var(--border);
+}
+.storefront-shell .my-receipt-main {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.storefront-shell .my-receipt-main strong {
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.storefront-shell .my-receipt-meta {
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.storefront-shell .my-receipt-row > .button {
+  flex-shrink: 0;
+  min-height: 40px;
+  white-space: nowrap;
+}

@@ -1,5 +1,5 @@
 // ใบเสร็จคำสั่งซื้อ — account profiles + per-order request card (server/order-receipts.mjs).
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { FileText, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { ErrorMessage, Link, useStore } from "./App";
 import { api } from "./api";
@@ -172,8 +172,14 @@ export function OrderReceiptCard({ orderId }: { orderId: string }) {
   const [useNew, setUseNew] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  // Closed until the customer asks: most orders never need a receipt.
-  const [open, setOpen] = useState(false);
+  // Closed until the customer asks: most orders never need a receipt. ใบเสร็จของฉัน links here
+  // with ?receipt=open, which opens it and brings it into view.
+  const [open, setOpen] = useState(() => new URLSearchParams(location.search).get("receipt") === "open");
+  const cardRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (open && state) cardRef.current?.scrollIntoView({ block: "center" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!state]);
   const load = () =>
     Promise.all([
       api<ReceiptState>("/orders/" + encodeURIComponent(orderId) + "/order-receipt"),
@@ -221,7 +227,7 @@ export function OrderReceiptCard({ orderId }: { orderId: string }) {
             ? t("ขอได้ภายใน 7 วันหลังชำระ")
             : state.window.reason || state.downloadBlockedReason || t("หมดเวลายื่นคำขอแล้ว");
   return (
-    <section className="panel order-receipt-card" aria-labelledby={"order-receipt-" + orderId}>
+    <section ref={cardRef} className="panel order-receipt-card" aria-labelledby={"order-receipt-" + orderId}>
       <div className="order-receipt-row">
         <FileText size={18} aria-hidden="true" />
         <div>
