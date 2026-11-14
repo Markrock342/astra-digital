@@ -190,14 +190,14 @@
 .storefront-shell .cart-bar {
   position: fixed;
   left: 50%;
-  bottom: calc(96px + env(safe-area-inset-bottom));
+  bottom: calc(var(--storefront-bottom-clearance, 72px) + 10px);
   transform: translateX(-50%);
   z-index: 40;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  width: min(720px, calc(100% - 32px));
+  width: min(720px, calc(100% - 32px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
   padding: 10px 10px 10px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -221,7 +221,7 @@
   white-space: nowrap;
 }
 .storefront-shell:has(.cart-bar) .chat-fab {
-  bottom: calc(176px + env(safe-area-inset-bottom));
+  bottom: calc(var(--storefront-bottom-clearance, 72px) + 88px);
 }
 @media (min-width: 761px) {
   .storefront-shell .cart-bar {

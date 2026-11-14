@@ -1910,17 +1910,18 @@ html.lang-swap .storefront-shell .main-nav {
 }
 @media (max-width: 600px) {
   .chat-fab {
-    right: 16px;
-    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 80px);
+    right: max(16px, env(safe-area-inset-right, 0px));
+    /* Clear the dock + a gap so the bubble never covers เมนู. */
+    bottom: calc(var(--storefront-bottom-clearance, 72px) + 18px);
     width: 50px;
     height: 50px;
   }
   .chat-panel {
-    right: 16px;
-    left: 16px;
+    right: max(16px, env(safe-area-inset-right, 0px));
+    left: max(16px, env(safe-area-inset-left, 0px));
     width: auto;
-    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 140px);
-    height: min(520px, calc(100vh - 230px));
+    bottom: calc(var(--storefront-bottom-clearance, 72px) + 78px);
+    height: min(520px, calc(100dvh - var(--storefront-bottom-clearance, 72px) - 160px));
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2487,7 +2488,7 @@ html.lang-swap .storefront-shell .main-nav {
   font-size: 13px;
 }
 
-/* Bottom tab bar: flat, no drop shadow (client request); the hairline border keeps it apart. */
+/* Bottom tab bar: flat edge-to-edge dock (PWA safe-area); hairline top border only. */
 .storefront-shell .mobile-bottom-nav {
   box-shadow: none;
 }
