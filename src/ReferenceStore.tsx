@@ -318,9 +318,6 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
     return (
       <main className="reference-auth-main">
         <div className="reference-auth-heading">
-          <Link to="/" className="reference-auth-brand" aria-label={t("หน้าแรก")}>
-            <BrandLogo />
-          </Link>
           <h1>{t("ยืนยันตัวตน 2 ขั้น")}</h1>
           <p>
             {useRecovery
@@ -388,11 +385,7 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
   return (
     <main className="reference-auth-main">
       <div className="reference-auth-heading">
-        <Link to="/" className="reference-auth-brand" aria-label={t("หน้าแรก")}>
-          <BrandLogo />
-        </Link>
         <h1>{register ? t("สมัครสมาชิก") : t("เข้าสู่ระบบ")}</h1>
-        <p>{shopName(overview?.shop?.shopName)}</p>
       </div>
       <form onSubmit={submit} className="reference-auth-form">
         <ErrorMessage message={error} />
@@ -419,7 +412,7 @@ export function ReferenceAuth({ register = false }: { register?: boolean }) {
               aria-describedby={emailRequired ? "email-verify-hint" : undefined}
             />
             {emailRequired && (
-              <small id="email-verify-hint">{t("ร้านจะส่งลิงก์ยืนยันไปที่อีเมลนี้")}</small>
+              <small id="email-verify-hint">{t("ต้องเป็นอีเมลที่ใช้งานได้จริง")}</small>
             )}
           </label>
         )}
