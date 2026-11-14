@@ -1,7 +1,7 @@
 // ASIA EXTRA brand pieces: logo, theme preferences, language toggle,
 // scroll progress and the marquee strip. Preferences are per-browser only.
 import { useEffect, useRef, useState } from "react";
-import { Monitor, Moon, Palette, Sun, X } from "lucide-react";
+import { Globe, Monitor, Moon, Sun, X } from "lucide-react";
 import { getLang, t, type Lang } from "./i18n";
 import { colorTokens } from "../server/appearance-rules.mjs";
 
@@ -222,22 +222,33 @@ const CUSTOM_ACCENTS: [Accent, string][] = [
   ["mono", "ขาวดำ"],
 ];
 
-/** Header button + small panel to pick the accent colour. */
-export function ThemePanel() {
+/**
+ * Header "ภาษา + ธีม" button + small popover: TH/EN, light/dark/system and the accent colour.
+ * Popover pattern from shadcn/ui Popover (MIT, https://ui.shadcn.com): anchored panel, Esc and
+ * outside click close it, focus moves in on open and back to the trigger on Esc.
+ */
+export function PrefsPanel({
+  lang,
+  onLangChange,
+}: {
+  lang: Lang;
+  onLangChange: (lang: Lang, origin?: { x: number; y: number }) => void;
+}) {
   const current = useTheme();
   const [open, setOpen] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    panel.current?.querySelector<HTMLElement>("button[aria-pressed='true']")?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      trigger.current?.focus();
+    };
     const onClick = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (
-        panel.current &&
-        !panel.current.contains(target) &&
-        !(target as Element).closest?.(".theme-trigger")
-      )
-        setOpen(false);
+      if (panel.current && !panel.current.contains(target) && !trigger.current?.contains(target)) setOpen(false);
     };
     addEventListener("keydown", onKey);
     addEventListener("mousedown", onClick);
@@ -249,31 +260,34 @@ export function ThemePanel() {
   return (
     <>
       <button
-        className="icon-button theme-trigger"
-        aria-label={t("ปรับธีม")}
+        ref={trigger}
+        className="prefs-trigger"
+        aria-label={t("ภาษาและธีม")}
+        aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        <Palette size={20} />
+        <Globe size={17} aria-hidden="true" />
+        <span aria-hidden="true">{lang === "th" ? "TH" : "EN"}</span>
       </button>
       <div
         ref={panel}
-        className={open ? "theme-panel open" : "theme-panel"}
+        className={open ? "theme-panel prefs-panel open" : "theme-panel prefs-panel"}
         role="dialog"
-        aria-label={t("ปรับธีม")}
+        aria-label={t("ภาษาและธีม")}
         aria-hidden={!open}
         inert={!open}
       >
         <div className="theme-panel-head">
-          <strong>{t("ปรับธีม")}</strong>
-          <button
-            className="icon-button"
-            aria-label={t("ปิด")}
-            onClick={() => setOpen(false)}
-          >
+          <strong>{t("ภาษาและธีม")}</strong>
+          <button className="icon-button" aria-label={t("ปิด")} onClick={() => setOpen(false)}>
             <X size={18} />
           </button>
         </div>
+        <fieldset>
+          <legend>{t("ภาษา")}</legend>
+          <LanguageToggle lang={lang} onChange={onLangChange} />
+        </fieldset>
         <fieldset>
           <legend>{t("โหมดสี")}</legend>
           <div className="theme-options three">

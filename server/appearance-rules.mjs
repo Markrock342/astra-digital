@@ -27,6 +27,8 @@ export const HOME_SECTIONS = [
   "products",
 ];
 export const ALWAYS_VISIBLE_SECTIONS = ["products"];
+/** Blocks that start hidden (the admin can switch them back on). */
+export const DEFAULT_HIDDEN_SECTIONS = ["categories"];
 export const SECTION_LABELS = {
   banners: "แบนเนอร์โปรโมชัน",
   hero: "ส่วนหัว (ข้อความและปุ่ม)",
@@ -60,6 +62,7 @@ export const TRUST_ICONS = [
 export const ACCENTS = ["blue", "yellow", "duo", "mono"];
 
 export const LIMITS = {
+  heroTitle: 60,
   heroHeadline: 120,
   heroSubtext: 200,
   buttonLabel: 40,
@@ -83,13 +86,18 @@ const pair = (th, en = "") => ({ th, en });
 /** Today's storefront, word for word (English = the current translations in i18n-en.ts). */
 export const DEFAULT_APPEARANCE = Object.freeze({
   hero: {
+    // Big display line at the top of the home page. Empty = automatic:
+    // "WELCOME TO " + the shop name from ตั้งค่า › ร้าน (heroTitleFallback below).
+    title: pair(""),
     // Empty = automatic: the shop description (ตั้งค่า › ร้าน), else the standard tagline.
     headline: pair(""),
     // Empty = no second line.
     subtext: pair(""),
-    primary: { label: pair("เลือกซื้อสินค้า", "Shop now"), link: "/products" },
-    // Empty label = no second button.
-    secondary: { label: pair("ดูรีวิวจากลูกค้า", "See customer reviews"), link: "/reviews" },
+    primary: { label: pair("สินค้าทั้งหมด", "All products"), link: "/products" },
+    // Second button for signed-in customers. Empty label = no second button.
+    secondary: { label: pair("รีวิวจากลูกค้า", "Customer reviews"), link: "/reviews" },
+    // Second button for visitors who are not signed in. Empty label = no second button.
+    guest: { label: pair("เข้าสู่ระบบ", "Sign in"), link: "/login" },
   },
   marquee: [
     pair("สินค้าพร้อมส่ง ได้รับทันทีหลังชำระเงิน", "Ready-stock items arrive right after payment"),
@@ -98,7 +106,8 @@ export const DEFAULT_APPEARANCE = Object.freeze({
     pair("รีวิวจากผู้ซื้อจริง", "Reviews from verified buyers"),
     pair("สั่งจองล่วงหน้าได้", "Preorders available"),
   ],
-  sections: HOME_SECTIONS.map((id) => ({ id, visible: true })),
+  // The category block moved to /products only (client round, Nov 2026): hidden by default.
+  sections: HOME_SECTIONS.map((id) => ({ id, visible: !DEFAULT_HIDDEN_SECTIONS.includes(id) })),
   // null = the built-in ASIA EXTRA blue / yellow.
   colors: { primary: null, secondary: null, defaultAccent: "blue" },
   trust: {
@@ -302,10 +311,15 @@ export const NORMALIZERS = {
       return { label: text, link: text.th ? link(b.link, label, fail) : "" };
     };
     return {
+      title: textPair(input.title, LIMITS.heroTitle, "ชื่อร้านตัวใหญ่", fail),
       headline: textPair(input.headline, LIMITS.heroHeadline, "ข้อความหลัก", fail),
       subtext: textPair(input.subtext, LIMITS.heroSubtext, "ข้อความรอง", fail),
       primary: button(input.primary, "ปุ่มหลัก", true),
       secondary: button(input.secondary, "ปุ่มรอง", false),
+      // Saved before this button existed: keep the default instead of hiding it.
+      guest: has(input, "guest")
+        ? button(input.guest, "ปุ่มรองตอนยังไม่เข้าสู่ระบบ", false)
+        : JSON.parse(JSON.stringify(DEFAULT_APPEARANCE.hero.guest)),
     };
   },
   marquee(input, fail) {
@@ -325,8 +339,9 @@ export const NORMALIZERS = {
         fail(400, SECTION_LABELS[item.id] + "ซ่อนไม่ได้");
       return { id: item.id, visible: item.visible };
     });
-    // A section added in a later version (or left out) is shown, after the ones listed.
-    for (const id of HOME_SECTIONS) if (!seen.has(id)) out.push({ id, visible: true });
+    // A section added in a later version (or left out) gets its default, after the ones listed.
+    for (const id of HOME_SECTIONS)
+      if (!seen.has(id)) out.push({ id, visible: !DEFAULT_HIDDEN_SECTIONS.includes(id) });
     return out;
   },
   colors(input, fail) {
@@ -388,6 +403,38 @@ export function normalizeAppearanceParts(input, fail) {
   return out;
 }
 
+/** Version of the stored JSON. Bumped when defaults change in a way saved rows must follow. */
+export const APPEARANCE_REV = 2;
+/** Hero button labels that were the defaults before rev 2 (replaced by the new defaults). */
+const LEGACY_HERO_LABELS = {
+  primary: ["เลือกซื้อสินค้า", ["", "Shop now"]],
+  secondary: ["ดูรีวิวจากลูกค้า", ["", "See customer reviews"]],
+};
+
+/**
+ * Bring a row saved by an older version up to APPEARANCE_REV (pure; returns a copy):
+ * rev 2 (client storefront round) — the home category block is hidden, and hero buttons that
+ * still carried the old default labels get the new ones. Anything the admin typed stays.
+ */
+export function migrateStoredAppearance(stored) {
+  if (!isObject(stored)) return {};
+  const out = JSON.parse(JSON.stringify(stored));
+  if (Number(out.rev) >= APPEARANCE_REV) return out;
+  if (Array.isArray(out.sections))
+    out.sections = out.sections.map((item) =>
+      isObject(item) && DEFAULT_HIDDEN_SECTIONS.includes(item.id) ? { ...item, visible: false } : item,
+    );
+  if (isObject(out.hero))
+    for (const [key, [th, ens]] of Object.entries(LEGACY_HERO_LABELS)) {
+      const button = out.hero[key];
+      const label = typeof button?.label === "string" ? { th: button.label, en: "" } : button?.label;
+      if (isObject(label) && label.th === th && ens.includes(label.en ?? ""))
+        out.hero[key] = { ...button, label: { ...DEFAULT_APPEARANCE.hero[key].label } };
+    }
+  out.rev = APPEARANCE_REV;
+  return out;
+}
+
 /**
  * Stored JSON → complete appearance. A missing or damaged part falls back to its default, so a
  * bad row can never blank the storefront.
@@ -395,6 +442,7 @@ export function normalizeAppearanceParts(input, fail) {
 export function resolveAppearance(stored) {
   const base = defaultAppearance();
   if (!isObject(stored)) return base;
+  stored = migrateStoredAppearance(stored);
   const quiet = () => {
     throw new Error("invalid");
   };
@@ -408,6 +456,9 @@ export function resolveAppearance(stored) {
   }
   return base;
 }
+
+/** Automatic hero title: "WELCOME TO " + the shop name (same in Thai and English). */
+export const heroTitleFallback = (shopName) => "WELCOME TO " + shopName;
 
 /** Text for the visitor's language: English when chosen and filled in, else Thai. */
 export const pick = (value, lang) => (lang === "en" && value?.en ? value.en : (value?.th ?? ""));

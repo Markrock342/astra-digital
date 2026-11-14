@@ -19,6 +19,7 @@ import {
   APPEARANCE_PARTS,
   DEFAULT_APPEARANCE,
   LIMITS,
+  migrateStoredAppearance,
   normalizeAppearanceParts,
   resolveAppearance,
 } from "./appearance-rules.mjs";
@@ -37,7 +38,8 @@ export function createAppearanceApis({ requireAdmin, one, run, fail, randomUUID,
     if (!row) return {};
     try {
       const parsed = JSON.parse(row.value);
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+      // Rows saved by an older version are upgraded on read (and written back on the next save).
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? migrateStoredAppearance(parsed) : {};
     } catch {
       return {};
     }

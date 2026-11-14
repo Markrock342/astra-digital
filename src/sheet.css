@@ -1,0 +1,122 @@
+/* Bottom sheet (Sheet.tsx) — shadcn/ui Sheet side="bottom" / Drawer look (MIT,
+   https://ui.shadcn.com): dimmed overlay, white panel with rounded top corners, drag handle,
+   soft elevation. Uses the storefront tokens, so light / dark / every accent follow. */
+.sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+}
+.sheet-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgb(9 9 11 / 0.5);
+  animation: sheet-fade-in 0.22s ease both;
+}
+.sheet-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100dvh - 48px);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -12px 40px -12px rgb(0 0 0 / 0.25);
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: sheet-slide-in 0.32s var(--ease-out-expo, ease-out) both;
+  transition: transform 0.2s ease;
+}
+.sheet-root[data-state="closed"] .sheet-overlay {
+  animation: sheet-fade-out 0.22s ease both;
+}
+.sheet-root[data-state="closed"] .sheet-panel {
+  animation: sheet-slide-out 0.22s ease-in both;
+}
+.sheet-handle-area {
+  display: grid;
+  place-items: center;
+  height: 22px;
+  flex: none;
+  cursor: grab;
+  touch-action: none;
+}
+.sheet-handle {
+  width: 40px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--border);
+}
+:root[data-theme="dark"] .sheet-handle {
+  background: #3f3f46;
+}
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px 4px 20px;
+  flex: none;
+}
+.sheet-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+.sheet-head:has(h2.sr-only) {
+  justify-content: flex-end;
+}
+.sheet-close {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sheet-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.sheet-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 20px 24px;
+}
+@keyframes sheet-slide-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheet-slide-out {
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheet-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sheet-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet-panel,
+  .sheet-overlay {
+    animation-duration: 0.01ms !important;
+    transition: none;
+  }
+}
