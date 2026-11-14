@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { CircleAlert, Eye, LoaderCircle, Mail, RotateCcw, Save, Send } from "lucide-react";
 import { ErrorMessage, useStore } from "./App";
 import { api, dateTime } from "./api";
+import { confirmDialog } from "./dialogs";
 import "./alerts.css";
 import "./fraud-templates.css";
 
@@ -62,9 +63,9 @@ export function AdminEmailTemplates() {
   useEffect(() => {
     void load("");
   }, []);
-  function choose(key: string) {
+  async function choose(key: string) {
     if (key === selected) return;
-    if (dirty && !window.confirm("ข้อความที่แก้ยังไม่บันทึก ต้องการเปลี่ยนแม่แบบหรือไม่")) return;
+    if (dirty && !(await confirmDialog({ title: "ข้อความที่แก้ยังไม่บันทึก ต้องการเปลี่ยนแม่แบบหรือไม่" }))) return;
     const t = data?.templates.find((x) => x.key === key);
     if (!t) return;
     setSelected(key);
@@ -164,7 +165,7 @@ export function AdminEmailTemplates() {
                 type="button"
                 className={t.key === selected ? "active" : ""}
                 aria-current={t.key === selected ? "true" : undefined}
-                onClick={() => choose(t.key)}
+                onClick={() => void choose(t.key)}
               >
                 <Mail size={15} aria-hidden="true" />
                 <span>

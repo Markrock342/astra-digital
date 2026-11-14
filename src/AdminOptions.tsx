@@ -5,6 +5,7 @@ import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Layers, LoaderCircle, Pencil, Plus, Trash2, X } from "lucide-react";
 import { ErrorMessage, useStore } from "./App";
 import { api } from "./api";
+import { confirmDialog } from "./dialogs";
 import { useLive } from "./live";
 import type { OptionGroup } from "./types";
 import "./options.css";
@@ -189,7 +190,7 @@ export function OptionGroupsEditor({
     }
   }
   async function turnOff() {
-    if (!confirm("เลิกใช้กลุ่ม? ตัวเลือกทั้งหมดยังอยู่เป็นรายการธรรมดา")) return;
+    if (!(await confirmDialog({ title: "เลิกใช้กลุ่ม? ตัวเลือกทั้งหมดยังอยู่เป็นรายการธรรมดา" }))) return;
     try {
       await api("/admin/products/" + encodeURIComponent(productId) + "/options/disable", {});
       toast("กลับเป็นรายการตัวเลือกธรรมดาแล้ว");

@@ -43,8 +43,8 @@ test("built-in X mark by default; admin uploads, replaces and goes back to it; t
   await expect(page.locator(".platform-mark img")).toHaveAttribute("src", first);
   await card.getByLabel("เลือกไฟล์โลโก้").setInputFiles({ name: "logo2.webp", mimeType: "image/webp", buffer: spotify });
   await expect(card.getByAltText("โลโก้ร้านปัจจุบัน")).not.toHaveAttribute("src", first);
-  page.once("dialog", (d) => d.accept());
   await card.getByRole("button", { name: "กลับไปใช้โลโก้เดิม" }).click();
+  await page.locator(".astra-dialog").getByRole("button", { name: "ยืนยัน" }).click();
   await expect(card.getByAltText("โลโก้เดิมของร้าน")).toBeVisible();
   await expect(page.locator(".platform-mark img")).toHaveAttribute("src", "/brand/icon-512.png");
   // Put one back for the chat test.

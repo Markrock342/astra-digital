@@ -9,6 +9,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Ban, CheckCircle2, FileCheck2, FileText, LoaderCircle, Printer, Save, XCircle } from "lucide-react";
 import { ErrorMessage, Link, useStore } from "./App";
 import { api, dateTime, money } from "./api";
+import { confirmDialog } from "./dialogs";
 import { useLive } from "./live";
 import {
   BuyerFields,
@@ -521,11 +522,13 @@ export function AdminTaxInvoiceCard({ orderId }: { orderId: string }) {
     void run(() => api<AdminState>(path + "/buyer", buyerPayload(draft)), "บันทึกข้อมูลผู้ซื้อแล้ว");
   };
   const issue = () => {
-    if (!confirm("ออกใบกำกับภาษีให้ออเดอร์นี้? ระบบจะใช้เลขที่ถัดไป และแก้ไขใบที่ออกแล้วไม่ได้ (ยกเลิกแล้วออกใบใหม่ได้)")) return;
-    void run(
-      () => api<{ state: AdminState }>(path + "/issue", mode === "edit" || !state.request?.buyer ? { buyer: buyerPayload(draft) } : {}),
-      "ออกใบกำกับภาษีแล้ว ลูกค้าได้แจ้งเตือน",
-    );
+    void confirmDialog({ title: "ออกใบกำกับภาษีให้ออเดอร์นี้? ระบบจะใช้เลขที่ถัดไป และแก้ไขใบที่ออกแล้วไม่ได้ (ยกเลิกแล้วออกใบใหม่ได้)" }).then((ok) => {
+      if (!ok) return;
+      void run(
+        () => api<{ state: AdminState }>(path + "/issue", mode === "edit" || !state.request?.buyer ? { buyer: buyerPayload(draft) } : {}),
+        "ออกใบกำกับภาษีแล้ว ลูกค้าได้แจ้งเตือน",
+      );
+    });
   };
   const reject = (e: FormEvent) => {
     e.preventDefault();

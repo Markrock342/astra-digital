@@ -141,27 +141,17 @@ test("product editor asks before leaving with unsaved changes; saving clears it"
   const original = await name.inputValue();
 
   // Clean form: leaving needs no confirm.
-  let dialogs = 0;
-  const countDialogs = (d) => {
-    dialogs += 1;
-    void d.accept();
-  };
-  page.on("dialog", countDialogs);
   await page.locator(".editor-save-bar").getByRole("link", { name: "ยกเลิก" }).click();
   await expect(page).toHaveURL(/\/admin\/products$/);
-  expect(dialogs).toBe(0);
-  page.off("dialog", countDialogs);
+  await expect(page.locator(".astra-dialog")).toHaveCount(0);
 
   // Dirty form: in-app navigation asks; "cancel" stays on the page with the edit.
   await page.goto(base + "/admin/products/stream-plus");
   await name.fill(original + " แก้");
-  let message = "";
-  page.once("dialog", (d) => {
-    message = d.message();
-    void d.dismiss();
-  });
   await page.locator(".editor-save-bar").getByRole("link", { name: "ยกเลิก" }).click();
-  await expect.poll(() => message).toBe("มีการแก้ไขที่ยังไม่บันทึก ออกจากหน้านี้?");
+  const leaveDialog = page.locator(".astra-dialog");
+  await expect(leaveDialog).toContainText("มีการแก้ไขที่ยังไม่บันทึก ออกจากหน้านี้?");
+  await leaveDialog.getByRole("button", { name: "ยกเลิก" }).click();
   await expect(page).toHaveURL(/\/admin\/products\/stream-plus$/);
   await expect(name).toHaveValue(original + " แก้");
 
@@ -184,8 +174,8 @@ test("product editor asks before leaving with unsaved changes; saving clears it"
 
   // The back link asks too; accepting leaves.
   await name.fill(original + " แก้");
-  page.once("dialog", (d) => void d.accept());
   await page.locator(".back-link").first().click();
+  await page.locator(".astra-dialog").getByRole("button", { name: "ออกจากหน้านี้" }).click();
   await expect(page).toHaveURL(/\/admin\/products$/);
 
   // Saving clears the dirty state: no confirm on the way out afterwards.
@@ -193,11 +183,9 @@ test("product editor asks before leaving with unsaved changes; saving clears it"
   await name.fill(original + " ใหม่");
   await page.getByRole("button", { name: "บันทึก", exact: true }).click();
   await expect(page.getByText("บันทึกสินค้าแล้ว")).toBeVisible();
-  page.on("dialog", countDialogs);
   await page.locator(".back-link").first().click();
   await expect(page).toHaveURL(/\/admin\/products$/);
-  expect(dialogs).toBe(0);
-  page.off("dialog", countDialogs);
+  await expect(page.locator(".astra-dialog")).toHaveCount(0);
   // Put the name back for anything that runs later.
   const admin = service.session(adminToken);
   const p = service.adminProducts(admin, { q: original + " ใหม่" }).products[0];

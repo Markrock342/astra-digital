@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowLeft, Copy, LoaderCircle, Plus, Power, Search, TicketPercent } from "lucide-react";
 import { ErrorMessage, Link, Status, useStore } from "./App";
 import { api, dateTime, money } from "./api";
+import { confirmDialog } from "./dialogs";
 import { useLive } from "./live";
 
 export type CouponStatus = "active" | "scheduled" | "expired" | "used_up" | "disabled";
@@ -175,7 +176,7 @@ function CouponList() {
     }
   }
   async function disable(c: Coupon) {
-    if (!confirm("ปิดใช้งานโค้ด " + c.code + "? ลูกค้าจะใช้โค้ดนี้ไม่ได้อีก ออเดอร์ที่ใช้ไปแล้วไม่เปลี่ยน")) return;
+    if (!(await confirmDialog({ title: "ปิดใช้งานโค้ด " + c.code + "? ลูกค้าจะใช้โค้ดนี้ไม่ได้อีก ออเดอร์ที่ใช้ไปแล้วไม่เปลี่ยน", danger: true }))) return;
     try {
       await api("/admin/coupons/" + c.id + "/disable", {});
       toast("ปิดใช้งาน " + c.code + " แล้ว");
@@ -458,7 +459,7 @@ function CouponEditor({ id }: { id: string }) {
     }
   }
   async function disable() {
-    if (!coupon || !confirm("ปิดใช้งานโค้ด " + coupon.code + "? ลูกค้าจะใช้โค้ดนี้ไม่ได้อีก ออเดอร์ที่ใช้ไปแล้วไม่เปลี่ยน")) return;
+    if (!coupon || !(await confirmDialog({ title: "ปิดใช้งานโค้ด " + coupon.code + "? ลูกค้าจะใช้โค้ดนี้ไม่ได้อีก ออเดอร์ที่ใช้ไปแล้วไม่เปลี่ยน", danger: true }))) return;
     try {
       const { coupon: c } = await api<{ coupon: Coupon }>("/admin/coupons/" + id + "/disable", {});
       setCoupon(c);
