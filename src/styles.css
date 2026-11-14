@@ -737,13 +737,13 @@ svg {
 }
 .art-podcast,
 .art-studio {
-  background: #b98a59;
-  color: #291d15;
+  background: #115e59;
+  color: #ecfdf5;
 }
 .art-office,
 .art-design {
-  background: #d9ded8;
-  color: #284036;
+  background: #334155;
+  color: #f8fafc;
 }
 .art-secure,
 .art-cloud {
@@ -757,12 +757,21 @@ svg {
 }
 .art-pixel,
 .art-arcade {
-  background: #56483d;
-  color: #ecd6b4;
+  background: #312e81;
+  color: #eef2ff;
 }
 .art-gift {
-  background: #e4e0d8;
-  color: #3b3932;
+  background: #1534ff;
+  color: #ffffff;
+}
+.art-podcast .art-caption,
+.art-studio .art-caption,
+.art-office .art-caption,
+.art-design .art-caption,
+.art-pixel .art-caption,
+.art-arcade .art-caption,
+.art-gift .art-caption {
+  opacity: 1;
 }
 .art-screen,
 .art-discover {
