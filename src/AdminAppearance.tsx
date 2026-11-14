@@ -37,6 +37,7 @@ import {
   TRUST_ICONS,
   checkColor,
   colorTokens,
+  heroTitleFallback,
   normalizeAppearanceParts,
   type Accent,
   type Appearance,
@@ -61,7 +62,9 @@ const TABS: [AppearancePart, string][] = [
   ["footer", "ส่วนท้าย"],
   ["seo", "SEO และการแชร์"],
 ];
-const LINK_HINTS = ["/products", "/reviews", "/faq", "/support", "/orders", "/credits"];
+const LINK_HINTS = ["/products", "/reviews", "/login", "/register", "/faq", "/support", "/orders", "/credits"];
+/** Same rule as Theme.tsx shopName(): the untouched default name means "ASIA EXTRA". */
+const shopNameOf = (name?: string) => (name && name !== "ร้านค้า" ? name : "ASIA EXTRA");
 const DEFAULT_TAGLINE = "ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที";
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 /** The editable part of seo (images are uploaded on their own, not saved with the draft). */
@@ -241,6 +244,7 @@ export function AdminAppearance() {
                 value={draft.hero}
                 onChange={(v) => update("hero", v)}
                 automatic={shopDescription || DEFAULT_TAGLINE}
+                automaticTitle={heroTitleFallback(shopNameOf(overview?.shop?.shopName))}
               />
             )}
             {tab === "marquee" && <MarqueeForm value={draft.marquee} onChange={(v) => update("marquee", v)} />}
@@ -309,7 +313,7 @@ export function AdminAppearance() {
 }
 
 const PANEL_HELP: Record<AppearancePart, string> = {
-  hero: "ข้อความใต้โลโก้และปุ่มบนหน้าแรก",
+  hero: "ชื่อร้านตัวใหญ่ ข้อความ และปุ่มบนหน้าแรก",
   marquee: "ข้อความที่เลื่อนผ่านใต้ส่วนหัว ได้สูงสุด " + LIMITS.marqueeMax + " ข้อความ",
   sections: "เลือกว่าจะแสดงส่วนไหนบนหน้าแรก และเรียงลำดับ",
   colors: "สีหลักและสีรองของร้าน และสีธีมที่ลูกค้าเห็นครั้งแรก ใช้ได้ทั้งโหมดสว่างและโหมดมืด",
@@ -455,9 +459,27 @@ function RowTools({
 }
 
 /* ---------- Panels ---------- */
-function HeroForm({ value, onChange, automatic }: { value: Appearance["hero"]; onChange: (v: Appearance["hero"]) => void; automatic: string }) {
+function HeroForm({
+  value,
+  onChange,
+  automatic,
+  automaticTitle,
+}: {
+  value: Appearance["hero"];
+  onChange: (v: Appearance["hero"]) => void;
+  automatic: string;
+  automaticTitle: string;
+}) {
   return (
     <div className="appearance-fields">
+      <PairField
+        label="ชื่อร้านตัวใหญ่"
+        value={value.title}
+        max={LIMITS.heroTitle}
+        placeholder={automaticTitle}
+        help={"ตัวหนังสือใหญ่บนสุดของหน้าแรก เว้นว่าง = “" + automaticTitle + "” (ชื่อร้านจาก ตั้งค่า › ร้าน)"}
+        onChange={(title) => onChange({ ...value, title })}
+      />
       <PairField
         label="ข้อความหลัก"
         value={value.headline}
@@ -486,7 +508,7 @@ function HeroForm({ value, onChange, automatic }: { value: Appearance["hero"]; o
         <LinkField label="ลิงก์" value={value.primary.link} onChange={(link) => onChange({ ...value, primary: { ...value.primary, link } })} />
       </fieldset>
       <fieldset className="appearance-group">
-        <legend>ปุ่มรอง</legend>
+        <legend>ปุ่มรอง (ลูกค้าที่เข้าสู่ระบบแล้ว)</legend>
         <PairField
           label="ข้อความบนปุ่ม"
           value={value.secondary.label}
@@ -495,6 +517,17 @@ function HeroForm({ value, onChange, automatic }: { value: Appearance["hero"]; o
           onChange={(label) => onChange({ ...value, secondary: { ...value.secondary, label } })}
         />
         <LinkField label="ลิงก์" value={value.secondary.link} onChange={(link) => onChange({ ...value, secondary: { ...value.secondary, link } })} />
+      </fieldset>
+      <fieldset className="appearance-group">
+        <legend>ปุ่มรอง (ยังไม่เข้าสู่ระบบ)</legend>
+        <PairField
+          label="ข้อความบนปุ่ม"
+          value={value.guest.label}
+          max={LIMITS.buttonLabel}
+          help="แสดงแทนปุ่มรองเมื่อลูกค้ายังไม่เข้าสู่ระบบ · ลบข้อความภาษาไทยออกเพื่อซ่อน"
+          onChange={(label) => onChange({ ...value, guest: { ...value.guest, label } })}
+        />
+        <LinkField label="ลิงก์" value={value.guest.link} onChange={(link) => onChange({ ...value, guest: { ...value.guest, link } })} />
       </fieldset>
     </div>
   );
@@ -1128,7 +1161,7 @@ function AppearancePreview({ draft, tab }: { draft: Appearance; tab: AppearanceP
         />
       </div>
       <p className="shop-preview-note">
-        หน้าร้านจริง กดเล่นได้ · สิ่งที่ยังไม่บันทึกเห็นเฉพาะในกรอบนี้ · สลับภาษาไทย/อังกฤษได้ที่ปุ่ม TH/EN ในกรอบ
+        หน้าร้านจริง กดเล่นได้ · สิ่งที่ยังไม่บันทึกเห็นเฉพาะในกรอบนี้ · สลับภาษาไทย/อังกฤษได้ที่ปุ่มภาษาและธีม (รูปลูกโลก) ในกรอบ
       </p>
     </div>
   );

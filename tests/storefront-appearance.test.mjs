@@ -14,10 +14,13 @@ import {
   HOME_SECTIONS,
   LIMITS,
   TRUST_ICONS,
+  APPEARANCE_REV,
   checkColor,
   colorTokens,
   contrast,
   defaultAppearance,
+  heroTitleFallback,
+  migrateStoredAppearance,
   pick,
   resolveAppearance,
 } from "../server/appearance-rules.mjs";
@@ -65,10 +68,14 @@ test("defaults are today's storefront text, word for word (TH and the current EN
   const { s } = fixture(t);
   const a = s.overview().appearance;
   assert.equal(stored(s), null, "nothing stored until the admin saves");
-  // Hero buttons + links.
-  assert.deepEqual(a.hero.primary, { label: { th: "เลือกซื้อสินค้า", en: EN_STRINGS["เลือกซื้อสินค้า"] }, link: "/products" });
-  assert.deepEqual(a.hero.secondary, { label: { th: "ดูรีวิวจากลูกค้า", en: EN_STRINGS["ดูรีวิวจากลูกค้า"] }, link: "/reviews" });
-  // Automatic headline / footer description / SEO = empty (shop description or standard text).
+  // Hero buttons + links (client round, Nov 2026): "สินค้าทั้งหมด", then "รีวิวจากลูกค้า" for
+  // signed-in customers or "เข้าสู่ระบบ" for visitors.
+  assert.deepEqual(a.hero.primary, { label: { th: "สินค้าทั้งหมด", en: EN_STRINGS["สินค้าทั้งหมด"] }, link: "/products" });
+  assert.deepEqual(a.hero.secondary, { label: { th: "รีวิวจากลูกค้า", en: EN_STRINGS["รีวิวจากลูกค้า"] }, link: "/reviews" });
+  assert.deepEqual(a.hero.guest, { label: { th: "เข้าสู่ระบบ", en: EN_STRINGS["เข้าสู่ระบบ"] }, link: "/login" });
+  // Automatic hero title ("WELCOME TO " + shop name) / headline / footer description / SEO = empty.
+  assert.deepEqual(a.hero.title, { th: "", en: "" });
+  assert.equal(heroTitleFallback("ASIA EXTRA"), "WELCOME TO ASIA EXTRA");
   assert.deepEqual(a.hero.headline, { th: "", en: "" });
   assert.deepEqual(a.hero.subtext, { th: "", en: "" });
   assert.deepEqual(a.footer.description, { th: "", en: "" });
@@ -88,6 +95,8 @@ test("defaults are today's storefront text, word for word (TH and the current EN
       ["สินค้าทั้งหมด", "/products"],
       ["เครดิตร้าน", "/reviews"],
       ["ประวัติการซื้อ", "/orders"],
+      ["ข่าวสารและกิจกรรม", "/news"],
+      ["เกี่ยวกับเรา", "/about"],
       ["คำถามที่พบบ่อย", "/faq"],
       ["ติดต่อเรา", "/support"],
     ].map(([th, link]) => [th, EN_STRINGS[th], link]),
@@ -101,7 +110,8 @@ test("defaults are today's storefront text, word for word (TH and the current EN
     assert.ok(TRUST_ICONS.includes(card.icon));
   }
   assert.deepEqual(a.sections.map((x) => x.id), HOME_SECTIONS);
-  assert.ok(a.sections.every((x) => x.visible));
+  // The category block is only on /products now: hidden on the home page by default.
+  assert.deepEqual(a.sections.filter((x) => !x.visible).map((x) => x.id), ["categories"]);
   assert.deepEqual(a.colors, { primary: null, secondary: null, defaultAccent: "blue" });
   assert.deepEqual(a.seo, { title: { th: "", en: "" }, description: { th: "", en: "" }, ogImageUrl: null, faviconUrl: null });
   // Language pick: English when filled in, Thai otherwise.
@@ -116,6 +126,8 @@ test("validation: lengths, link schemes, colours, counts, sections, icons", (t) 
   const save = (part, value) => s.saveAppearance(admin, { [part]: value });
   // Lengths.
   rejects(() => save("hero", { ...d.hero, headline: { th: "ก".repeat(LIMITS.heroHeadline + 1) } }), /ยาวเกิน/);
+  rejects(() => save("hero", { ...d.hero, title: { th: "", en: "W".repeat(LIMITS.heroTitle + 1) } }), /ยาวเกิน/);
+  rejects(() => save("hero", { ...d.hero, guest: { label: { th: "เข้า" }, link: "javascript:alert(1)" } }));
   rejects(() => save("marquee", ["x".repeat(LIMITS.marqueeItem + 1)]), /ยาวเกิน/);
   rejects(() => save("seo", { title: { th: "", en: "t".repeat(LIMITS.seoTitle + 1) }, description: {} }), /ยาวเกิน/);
   rejects(() => save("hero", { ...d.hero, primary: { label: { th: "" }, link: "/products" } }), /กรุณาใส่/);
@@ -405,4 +417,66 @@ test("HTTP: routes, ADMIN only, JSON + image uploads, overview and live topic", 
   assert.equal(reset.status, 200);
   assert.deepEqual(reset.data.customized, []);
   assert.ok(s.liveVersions().catalog > before, "storefront tabs refetch the overview");
+});
+
+test("rows saved before the client round keep working: missing fields default, old defaults upgrade", (t) => {
+  const { s, admin } = fixture(t);
+  const legacySections = HOME_SECTIONS.map((id) => ({ id, visible: id !== "stats" }));
+  // A row written by the previous version: old hero labels, no title / guest button, the
+  // category block switched on (it was the default) and the stats hidden by the admin.
+  s.db.prepare("INSERT INTO runtime_flags(key,value) VALUES(?,?)").run(
+    APPEARANCE_KEY,
+    JSON.stringify({
+      hero: {
+        headline: { th: "ช้อปเลย", en: "" },
+        subtext: { th: "", en: "" },
+        primary: { label: { th: "เลือกซื้อสินค้า", en: "Shop now" }, link: "/products" },
+        secondary: { label: { th: "ดูรีวิวของจริง", en: "" }, link: "/reviews" },
+      },
+      sections: legacySections,
+      updatedAt: "2026-11-01T00:00:00.000Z",
+    }),
+  );
+  const a = s.overview().appearance;
+  assert.deepEqual(a.hero.title, { th: "", en: "" }, "no title saved = automatic");
+  assert.deepEqual(a.hero.guest, DEFAULT_APPEARANCE.hero.guest, "guest button gets its default, not hidden");
+  assert.deepEqual(a.hero.primary, DEFAULT_APPEARANCE.hero.primary, "old default label upgraded");
+  assert.equal(a.hero.secondary.label.th, "ดูรีวิวของจริง", "a label the admin typed stays");
+  assert.equal(a.hero.headline.th, "ช้อปเลย");
+  assert.equal(a.sections.find((x) => x.id === "categories").visible, false, "home categories hidden");
+  assert.equal(a.sections.find((x) => x.id === "stats").visible, false, "admin choices kept");
+  // The next save writes the upgraded row (rev) so the admin can switch categories back on.
+  s.saveAppearance(admin, { sections: a.sections.map((x) => (x.id === "categories" ? { ...x, visible: true } : x)) });
+  assert.equal(stored(s).rev, APPEARANCE_REV);
+  assert.equal(stored(s).hero.primary.label.th, "สินค้าทั้งหมด");
+  assert.equal(s.overview().appearance.sections.find((x) => x.id === "categories").visible, true, "switched back on sticks");
+  // A fresh shop (no row yet) that switches the category block on keeps it on.
+  {
+    const fresh = fixture(t);
+    const secs = fresh.s.adminAppearance(fresh.admin).appearance.sections;
+    fresh.s.saveAppearance(fresh.admin, { sections: secs.map((x) => (x.id === "categories" ? { ...x, visible: true } : x)) });
+    assert.equal(stored(fresh.s).rev, APPEARANCE_REV);
+    assert.equal(fresh.s.overview().appearance.sections.find((x) => x.id === "categories").visible, true);
+  }
+  // Pure helper: current rows pass through untouched; junk becomes {}.
+  const current = { rev: APPEARANCE_REV, sections: [{ id: "categories", visible: true }] };
+  assert.deepEqual(migrateStoredAppearance(current), current);
+  assert.deepEqual(migrateStoredAppearance(null), {});
+  // A section list that leaves categories out gets its default (hidden).
+  assert.equal(
+    resolveAppearance({ rev: APPEARANCE_REV, sections: [{ id: "products", visible: true }] }).sections.find((x) => x.id === "categories").visible,
+    false,
+  );
+});
+
+test("rev 3: a footer menu saved earlier gets ข่าวสาร + เกี่ยวกับเรา, unless already there or full", async () => {
+  const { migrateStoredAppearance } = await import("../server/appearance-rules.mjs");
+  const link = (th, url) => ({ label: { th, en: "" }, link: url });
+  const old = migrateStoredAppearance({ rev: 2, footer: { links: [link("สินค้า", "/products")] } });
+  assert.deepEqual(old.footer.links.map((l) => l.link), ["/products", "/news", "/about"]);
+  const has = migrateStoredAppearance({ rev: 2, footer: { links: [link("เกี่ยวกับร้าน", "/about")] } });
+  assert.deepEqual(has.footer.links.map((l) => l.link), ["/about", "/news"]);
+  const full = migrateStoredAppearance({ rev: 2, footer: { links: Array.from({ length: 8 }, (_, i) => link("L" + i, "/p" + i)) } });
+  assert.equal(full.footer.links.length, 8);
+  assert.equal(migrateStoredAppearance({ rev: 3, footer: { links: [] } }).footer.links.length, 0);
 });

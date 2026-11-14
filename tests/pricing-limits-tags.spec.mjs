@@ -142,16 +142,18 @@ test("tagged customer sees and pays the reseller price, then reaches the limit",
   await expect(price).toContainText("ราคาสำหรับ ตัวแทน");
   await page.getByRole("button", { name: "ซื้อเลย" }).click();
   await expect(page).toHaveURL(/\/checkout$/);
-  const line = page.locator(".cart-price");
-  await expect(line.locator("strong")).toHaveText("฿60.00");
+  const line = page.locator(".cart-line");
+  await expect(line.locator(".cart-line-price")).toHaveText("฿60.00");
   await expect(line.locator(".price-was")).toContainText("฿150.00");
   await expect(line).toContainText("ราคาสำหรับ ตัวแทน");
-  await expect(page.locator(".summary-total")).toContainText("฿60.00");
-  // Limit 1: the quantity cannot go above 1.
-  await expect(page.locator(".cart-info").getByRole("button", { name: "เพิ่มจำนวน" })).toBeDisabled();
+  await expect(page.locator(".cart-summary-total")).toContainText("฿60.00");
+  // Limit 1: the basket cannot go above 1.
+  await page.goto(base + "/cart");
+  await expect(page.locator(".cart-line").getByRole("button", { name: "เพิ่มจำนวน" })).toBeDisabled();
+  await page.goto(base + "/checkout");
   await shot(page, "checkout-reseller-desktop");
-  await page.getByRole("button", { name: "บันทึกคำสั่งซื้อ" }).click();
-  await expect(page).toHaveURL(/\/checkout\/[0-9a-f-]+$/);
+  await page.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ }).click();
+  await expect(page).toHaveURL(/\/orders\/[0-9a-f-]+$/);
   const id = page.url().split("/").pop();
   expect(service.db.prepare("SELECT total,discount FROM orders WHERE id=?").get(id).total).toBe(6000);
 

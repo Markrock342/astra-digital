@@ -85,10 +85,10 @@ test("deposit: admin sets the mode → reserve with deposit → import calls →
   await reserve.click();
   await expect(page).toHaveURL(/\/checkout$/);
   await expect(page.locator(".preorder-summary-row").first()).toContainText("฿30.00");
-  await page.getByRole("button", { name: "บันทึกคำสั่งซื้อ" }).click();
-  await expect(page).toHaveURL(/\/checkout\/[^/]+$/);
+  await expect(page.locator(".cart-bar")).toContainText("฿30.00");
+  await page.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ }).click();
+  await expect(page).toHaveURL(/\/orders\/[^/]+$/);
   const orderId = page.url().split("/").pop();
-  await page.getByRole("button", { name: /ชำระเงิน ฿30\.00/ }).click();
   const progress = page.locator(".preorder-progress");
   await expect(progress).toContainText("จ่ายมัดจำแล้ว ฿30.00");
   await expect(progress).toContainText("รอของเข้า");
@@ -134,8 +134,9 @@ test("free: reserve without paying → first lets the deadline pass → next is 
   await page.goto(base + "/products/" + product.id);
   await expect(page.locator(".preorder-rules")).toContainText("จองฟรี ไม่ต้องจ่ายตอนนี้");
   await page.getByRole("button", { name: "จองคิวฟรี" }).click();
-  await page.getByRole("button", { name: "บันทึกคำสั่งซื้อ" }).click();
-  await expect(page).toHaveURL(/\/checkout\/[^/]+$/);
+  await expect(page.locator(".cart-bar")).toContainText("฿0.00");
+  await page.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ }).click();
+  await expect(page).toHaveURL(/\/orders\/[^/]+$/);
   const firstId = page.url().split("/").pop();
   const progress = page.locator(".preorder-progress");
   await expect(progress).toContainText("ไม่ได้จ่ายเงินตอนจอง");

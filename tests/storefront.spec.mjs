@@ -35,7 +35,7 @@ test("reference composition, catalog search, categories, theme and responsive la
   page.on("pageerror", (e) => errors.push(e.message));
   await ready(page);
   await expect(
-    page.getByRole("heading", { name: "ASIA EXTRA", exact: true }),
+    page.getByRole("heading", { name: "WELCOME TO ASIA EXTRA", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".stat-value strong").nth(1)).toHaveText("25");
   await screenshot(page, "desktop-home");
@@ -74,8 +74,8 @@ test("reference composition, catalog search, categories, theme and responsive la
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "เมนูลัด" }).click();
   await page
-    .getByRole("navigation", { name: "เมนูหลัก" })
-    .getByRole("link", { name: "สินค้า", exact: true })
+    .getByRole("dialog", { name: "เมนูทั้งหมด" })
+    .getByRole("link", { name: "สินค้าทั้งหมด", exact: true })
     .click();
   await expect(page).toHaveURL(base + "/products");
   expect(
@@ -143,7 +143,9 @@ test("language switch, theme panel and brand assets", async ({ page }) => {
   page.on("pageerror", (e) => errors.push(e.message));
   await ready(page);
   await expect(page.locator("header .brand-logo img")).toHaveAttribute("alt", "ASIA EXTRA");
+  await page.getByRole("button", { name: "ภาษาและธีม" }).click();
   await page.getByRole("button", { name: "EN", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.getByRole("link", { name: "Products", exact: true }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "All products" })).toBeVisible();
@@ -152,12 +154,12 @@ test("language switch, theme panel and brand assets", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "All products" })).toBeVisible();
   await expect(page.locator("main")).not.toContainText("สินค้าทั้งหมด");
 
-  await page.getByRole("button", { name: "Customize theme" }).click();
+  await page.getByRole("button", { name: "Language & theme" }).click();
   await page.getByRole("button", { name: /EXTRA yellow/ }).click();
   await expect(page.locator("html")).toHaveAttribute("data-accent", "yellow");
   await expect(page.locator("html")).toHaveAttribute("data-shape", "soft");
-  await expect(page.getByRole("dialog", { name: "Customize theme" })).toContainText("Dark");
-  await expect(page.getByRole("dialog", { name: "Customize theme" })).not.toContainText(/Sharp|Animations/);
+  await expect(page.getByRole("dialog", { name: "Language & theme" })).toContainText("Dark");
+  await expect(page.getByRole("dialog", { name: "Language & theme" })).not.toContainText(/Sharp|Animations/);
   await page.keyboard.press("Escape");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-accent", "yellow");
@@ -166,6 +168,7 @@ test("language switch, theme panel and brand assets", async ({ page }) => {
   await page.goto(page.url().replace(/\/[^/]*$/, "/admin"));
   await expect(page.locator("html")).toHaveAttribute("lang", "th");
   await page.goBack();
+  await page.getByRole("button", { name: "Language & theme" }).click();
   await page.getByRole("button", { name: "TH", exact: true }).click();
   await expect(page.getByRole("heading", { name: "สินค้าทั้งหมด" })).toBeVisible();
   expect(errors).toEqual([]);

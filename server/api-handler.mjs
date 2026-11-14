@@ -80,6 +80,8 @@ function isImageUploadPath(method, path) {
     path === "/api/admin/appearance/og-image" ||
     path === "/api/admin/appearance/favicon" ||
     /^\/api\/admin\/banners\/[^/]+\/(?:image|mobile-image)$/.test(path) ||
+    /^\/api\/admin\/news\/[^/]+\/cover$/.test(path) ||
+    path === "/api/admin/about/cover" ||
     /^\/api\/admin\/orders\/[^/]+\/slip$/.test(path)
   );
 }
@@ -237,7 +239,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
       const jsonLimit =
         path === "/api/admin/settings" && user?.role === "ADMIN"
           ? MAX_SETTINGS_BYTES
-          : path === "/api/admin/appearance" && user?.role === "ADMIN"
+          : (path === "/api/admin/appearance" || path === "/api/admin/about" || /^\/api\/admin\/news(?:\/[^/]+)?$/.test(path)) &&
+              user?.role === "ADMIN"
             ? MAX_APPEARANCE_BYTES
           : reconUploadPaths.includes(path) && user?.role === "ADMIN"
             ? MAX_RECON_JSON_BYTES
@@ -425,6 +428,10 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         if (path === "/api/overview") return send(200, service.overview());
         if (path === "/api/legal") return send(200, service.legal());
         if (path === "/api/faq") return send(200, service.faq());
+        // ข่าวสารและกิจกรรม + เกี่ยวกับเรา (news.mjs, about.mjs): public, no session needed.
+        if (path === "/api/news") return send(200, service.publicNews());
+        if (/^\/api\/news\/[^/]+$/.test(path)) return send(200, service.publicNewsPost(path.split("/")[3]));
+        if (path === "/api/about") return send(200, service.publicAbout());
         if (path === "/api/reviews")
           return send(200, { reviews: service.reviews() });
         if (path === "/api/stock-watch")
@@ -440,6 +447,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           }));
         if (path === "/api/orders")
           return send(200, { orders: service.orders(user) });
+        if (/^\/api\/checkouts\/[^/]+$/.test(path))
+          return send(200, service.checkout(user, path.split("/")[3]));
         if (/^\/api\/orders\/[^/]+$/.test(path))
           return send(200, service.orderDetail(user, path.split("/")[3]));
         if (/^\/api\/orders\/[^/]+\/receipt$/.test(path))
@@ -593,6 +602,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminCategories(user));
         if (path === "/api/admin/banners") return send(200, service.adminBanners(user));
         if (path === "/api/admin/appearance") return send(200, service.adminAppearance(user));
+        if (path === "/api/admin/news") return send(200, service.adminNews(user));
+        if (path === "/api/admin/about") return send(200, service.adminAbout(user));
         if (path === "/api/admin/reports/profit") {
           const report = service.profitReport(user, {
             from: url.searchParams.get("from") ?? undefined,
@@ -752,6 +763,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminUpdateCategory(user, path.split("/")[4], input));
         if (/^\/api\/admin\/banners\/[^/]+$/.test(path))
           return send(200, service.adminUpdateBanner(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/news\/[^/]+$/.test(path))
+          return send(200, service.adminUpdateNews(user, path.split("/")[4], input));
         if (/^\/api\/admin\/coupons\/[^/]+$/.test(path))
           return send(200, service.adminUpdateCoupon(user, path.split("/")[4], input));
         if (/^\/api\/admin\/products\/[^/]+\/images$/.test(path))
@@ -818,6 +831,11 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, await service.adminRemoveBannerMobileImage(user, path.split("/")[4]));
         if (/^\/api\/admin\/banners\/[^/]+$/.test(path))
           return send(200, await service.adminDeleteBanner(user, path.split("/")[4]));
+        if (/^\/api\/admin\/news\/[^/]+\/cover$/.test(path))
+          return send(200, await service.adminRemoveNewsCover(user, path.split("/")[4]));
+        if (/^\/api\/admin\/news\/[^/]+$/.test(path))
+          return send(200, await service.adminDeleteNews(user, path.split("/")[4]));
+        if (path === "/api/admin/about/cover") return send(200, await service.removeAboutCover(user));
         if (path === "/api/profile/avatar")
           return send(200, await service.removeAvatar(user));
         if (path === "/api/admin/settings/logo")
@@ -883,6 +901,12 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminReorderCategories(user, input));
         if (path === "/api/admin/banners")
           return send(201, service.adminCreateBanner(user, input));
+        if (path === "/api/admin/news") return send(201, service.adminCreateNews(user, input));
+        if (/^\/api\/admin\/news\/[^/]+\/cover$/.test(path))
+          return send(200, await service.adminSetNewsCover(user, path.split("/")[4], input));
+        if (path === "/api/admin/about") return send(200, service.saveAbout(user, input));
+        if (path === "/api/admin/about/reset") return send(200, await service.resetAbout(user));
+        if (path === "/api/admin/about/cover") return send(200, await service.setAboutCover(user, input));
         if (path === "/api/admin/banners/reorder")
           return send(200, service.adminReorderBanners(user, input));
         if (/^\/api\/admin\/banners\/[^/]+\/(?:image|mobile-image)$/.test(path)) {
@@ -898,6 +922,18 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminDisableCoupon(user, path.split("/")[4]));
         if (/^\/api\/admin\/coupons\/[^/]+\/duplicate$/.test(path))
           return send(201, service.adminDuplicateCoupon(user, path.split("/")[4]));
+        if (path === "/api/checkouts") {
+          if (user && typeof input.couponCode === "string" && input.couponCode.trim())
+            assertCouponRate(request, env, user);
+          return send(201, service.createCheckout(user, input, { origin: url.origin }));
+        }
+        if (path === "/api/checkouts/coupon") {
+          if (!user) throw new ApiError(401, "กรุณาเข้าสู่ระบบเพื่อใช้โค้ดส่วนลด");
+          assertCouponRate(request, env, user);
+          return send(200, service.checkoutCoupon(user, input));
+        }
+        if (/^\/api\/checkouts\/[^/]+\/pay$/.test(path))
+          return send(200, service.payCheckout(user, path.split("/")[3], input, { origin: url.origin }));
         if (/^\/api\/orders\/[^/]+\/pay$/.test(path))
           return send(
             200,

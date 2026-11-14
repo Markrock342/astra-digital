@@ -2409,9 +2409,17 @@ html.lang-swap .storefront-shell .main-nav {
     position: absolute;
     inset: -10px 0;
   }
+  .storefront-shell .site-footer .theme-switch {
+    height: auto;
+    padding: 3px;
+  }
   .storefront-shell .site-footer .theme-switch button {
+    flex: none;
     width: 36px;
     height: 36px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
   }
 }
 
@@ -2477,4 +2485,9 @@ html.lang-swap .storefront-shell .main-nav {
   margin: 2px 0 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+/* Bottom tab bar: flat, no drop shadow (client request); the hairline border keeps it apart. */
+.storefront-shell .mobile-bottom-nav {
+  box-shadow: none;
 }

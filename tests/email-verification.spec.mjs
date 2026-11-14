@@ -81,7 +81,7 @@ test("register → notice → blocked checkout → resend cooldown → link → 
   await page.getByRole("button", { name: "ซื้อเลย" }).click();
   await expect(page).toHaveURL(/\/checkout$/);
   await expect(page.locator(".email-verify-card.compact")).toBeVisible();
-  await expect(page.getByRole("button", { name: /บันทึกคำสั่งซื้อ/ })).toBeDisabled();
+  await expect(page.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ })).toBeDisabled();
   expect(await noSideScroll(page)).toBe(true);
   if (shots) await page.screenshot({ path: shots + "/checkout-390.png", fullPage: true });
 
@@ -108,9 +108,7 @@ test("register → notice → blocked checkout → resend cooldown → link → 
   await page.getByRole("button", { name: "ไปชำระเงินต่อ" }).click();
   await expect(page).toHaveURL(/\/checkout$/);
   await expect(page.locator(".email-verify-card")).toHaveCount(0);
-  await page.getByRole("button", { name: /บันทึกคำสั่งซื้อ/ }).click();
-  await expect(page).toHaveURL(/\/checkout\/[^/]+$/);
-  await page.getByRole("button", { name: /ชำระเงิน/ }).click();
+  await page.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ }).click();
   await expect(page.locator(".delivered-codes")).toBeVisible();
 
   // Same link again: already verified, not an error.

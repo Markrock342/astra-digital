@@ -58,10 +58,9 @@ import {
 import { t, getLang, locale, setLang, setMerchantScope, type Lang } from "./i18n";
 import {
   BrandLogo,
-  LanguageToggle,
   Marquee,
+  PrefsPanel,
   ScrollProgress,
-  ThemePanel,
   shopName,
   ThemeSwitch,
   useCardTilt,
@@ -96,8 +95,11 @@ import { EmailVerifyNotice, useEmailVerifyNeeded, VerifyEmailPage } from "./Emai
 import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
 import { ContactPage } from "./Contact";
+import { AboutPage, NewsDetailPage, NewsListPage } from "./News";
 import { CheckoutFields, DeliveredLinks, FulfilmentCard, checkoutFieldsReady } from "./Delivery";
 import { RebuyActions } from "./Rebuy";
+import { HistoryPage } from "./OrderList";
+import { CartPage, CheckoutGroupPage, CheckoutPage, loadCart, saveCart, withLine, type CartLine } from "./Cart";
 import { ManualOrderNote } from "./ManualOrderNote";
 import { DiscountBadge, PriceNote, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
 import { HomeCategoryRow } from "./Categories";
@@ -110,7 +112,8 @@ import {
   ReferenceProduct,
 } from "./ReferenceStore";
 import { AppearanceEffects, ShopLink, text, useAppearance } from "./Appearance";
-import type { Appearance } from "../server/appearance-rules.mjs";
+import { heroTitleFallback, type Appearance } from "../server/appearance-rules.mjs";
+import { StorefrontMenu } from "./StorefrontMenu";
 const Admin = lazy(() => import("./Admin"));
 const LegalPage = lazy(() =>
   import("./Legal").then((m) => ({ default: m.LegalPage })),
@@ -121,8 +124,14 @@ type Store = {
   user: User | null;
   products: Product[];
   overview: Overview | null;
+  /** The one ticked basket line (single-order checkout); null when 0 or 2+ are ticked. */
   basket: Basket | null;
+  /** Set that line's quantity and tick only it; null removes the ticked lines. */
   setBasket: (basket: Basket | null) => void;
+  cart: CartLine[];
+  setCart: (lines: CartLine[]) => void;
+  /** Add to the basket; `only` (buy now) ticks just this line. */
+  addToCart: (variantId: string, quantity: number, only?: boolean) => void;
   refresh: () => Promise<void>;
   /** keepScroll: same-page URL changes (e.g. the /products category chips). */
   go: (path: string, options?: { keepScroll?: boolean }) => void;
@@ -269,7 +278,7 @@ export function Status({ status }: { status: string }) {
   );
 }
 /** Unpaid order cancelled by the payment window: shown as its own status to the customer. */
-const shownStatus = (o: Order) =>
+export const shownStatus = (o: Order) =>
   o.status === "DELIVERED" && o.fulfilment?.state === "waiting"
     ? "WAITING"
     : o.status === "PREORDER" && o.stage === "called"
@@ -308,7 +317,7 @@ export function ErrorMessage({ message }: { message: string }) {
 const AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 
-function UserAvatar({ user, large = false }: { user: User; large?: boolean }) {
+export function UserAvatar({ user, large = false }: { user: User; large?: boolean }) {
   const [brokenUrl, setBrokenUrl] = useState("");
   const photo = user.avatarUrl && brokenUrl !== user.avatarUrl ? user.avatarUrl : "";
   return (
@@ -323,8 +332,9 @@ function UserAvatar({ user, large = false }: { user: User; large?: boolean }) {
 }
 
 function Header() {
-  const { path, user, basket, go, refresh, toast, lang, changeLang } =
-    useStore();
+  const { path, user, cart, go, refresh, toast, lang, changeLang } = useStore();
+  const cartCount = cart.reduce((n, l) => n + l.quantity, 0);
+  const testPayments = useTestPayments();
   const [open, setOpen] = useState(false);
   const [account, setAccount] = useState(false);
   useEffect(() => {
@@ -344,10 +354,7 @@ function Header() {
           <Link to="/" className="brand" aria-label={t("หน้าแรก")}>
             <BrandLogo />
           </Link>
-          <nav
-            aria-label={t("เมนูหลัก")}
-            className={open ? "main-nav nav-open" : "main-nav"}
-          >
+          <nav aria-label={t("เมนูหลัก")} className="main-nav">
             {links.map(([to, label]) => (
               <Link
                 key={to}
@@ -367,24 +374,27 @@ function Header() {
               </Link>
             ))}
           </nav>
+          {/* Exactly: ภาษา + ธีม · bell · balance · profile (the cart lives in the bottom nav). */}
           <div className="header-actions">
-            <LanguageToggle lang={lang} onChange={changeLang} />
-            <ThemePanel />
+            <PrefsPanel lang={lang} onLangChange={changeLang} />
             <NotificationBell />
-            <Link
-              to="/cart"
-              className="icon-button cart-button"
-              aria-label={t("ตะกร้าสินค้า")}
-            >
-              <ShoppingBag size={21} />
-              {basket && <span className="cart-count">{basket.quantity}</span>}
-            </Link>
+            {user && (
+              <Link
+                to={testPayments ? "/wallet" : "/account"}
+                className="balance-pill"
+                aria-label={t("ยอดเงินคงเหลือ") + " " + money(user.balance)}
+              >
+                <Wallet size={15} aria-hidden="true" />
+                <span>{money(user.balance)}</span>
+              </Link>
+            )}
             {user ? (
               <div className="account-wrap">
                 <button
                   className="account-button"
                   onClick={() => setAccount(!account)}
                   aria-expanded={account}
+                  aria-label={t("บัญชีของฉัน")}
                 >
                   <UserAvatar user={user} />
                   <span className="account-name">{user.name}</span>
@@ -424,11 +434,12 @@ function Header() {
             )}
             <button
               className="icon-button mobile-menu"
-              aria-label={open ? t("ปิดเมนู") : t("เปิดเมนู")}
+              aria-label={t("เปิดเมนู")}
+              aria-haspopup="dialog"
               aria-expanded={open}
-              onClick={() => setOpen(!open)}
+              onClick={() => setOpen(true)}
             >
-              {open ? <X /> : <Menu />}
+              <Menu />
             </button>
           </div>
         </div>
@@ -438,8 +449,9 @@ function Header() {
           <HomeIcon size={21} />
           <span>{t("หน้าร้าน")}</span>
         </Link>
-        <Link to="/cart" className={path === "/cart" ? "active" : ""}>
+        <Link to="/cart" className={path === "/cart" ? "active cart-tab" : "cart-tab"}>
           <ShoppingBag size={21} />
+          {cartCount > 0 && <span className="cart-count">{cartCount}</span>}
           <span>{t("ตะกร้า")}</span>
         </Link>
         <Link
@@ -452,13 +464,16 @@ function Header() {
         <button
           className={open ? "active" : ""}
           aria-label={t("เมนูลัด")}
+          aria-haspopup="dialog"
           aria-expanded={open}
-          onClick={() => setOpen(!open)}
+          onClick={() => setOpen(true)}
         >
           <Menu size={21} />
           <span>{t("เมนู")}</span>
         </button>
       </nav>
+      {/* Outside the sticky header: its backdrop-filter would trap the fixed sheet. */}
+      <StorefrontMenu open={open} onClose={() => setOpen(false)} />
     </>
   );
 }
@@ -557,21 +572,28 @@ function Footer() {
 }
 export function ProductCard({ product }: { product: Product }) {
   const soldOut = product.variants.every((v) => v.stockStatus === "out");
+  const preorder = !!product.preorder;
   // Cheapest option for this viewer (sale / tag price already applied by the server).
   const cheapest = product.variants.reduce<Product["variants"][number] | undefined>(
     (best, v) => (!best || v.price < best.price ? v : best),
     undefined,
   );
+  // One clear action under the price: solid = ready stock, outlined = preorder. The whole card
+  // is the link (options are picked on the product page), so this is a styled label, not a
+  // nested button.
+  const choose = (product.optionGroups?.length ?? 0) > 0 || product.variants.length > 1;
+  const action = preorder
+    ? t("จองล่วงหน้า")
+    : soldOut
+      ? t("ดูรายละเอียด")
+      : choose
+        ? t("เลือกตัวเลือก")
+        : t("ซื้อเลย");
   return (
     <Link to={"/products/" + product.id} className="product-card">
       <div className="product-image">
         <Art type={product.art} name={product.name} image={product.imageUrl} />
-        {!!product.preorder ? (
-          <span className="stock-tag">{t("สั่งจอง")}</span>
-        ) : soldOut ? (
-          <span className="stock-tag">{t("สินค้าหมด")}</span>
-        ) : null}
-        <span className="card-hover-action">{t("เลือกตัวเลือก")}</span>
+        {!preorder && soldOut ? <span className="stock-tag">{t("สินค้าหมด")}</span> : null}
       </div>
       <div className="product-card-info">
         <div className="product-title">
@@ -600,12 +622,21 @@ export function ProductCard({ product }: { product: Product }) {
             {t("ขายแล้ว")}{" "}{product.sold} <span>{t("รายการ")}</span>
           </div>
         )}
+        <span
+          className={
+            "card-action " +
+            (preorder ? "card-action-preorder" : soldOut ? "card-action-muted" : "card-action-ready")
+          }
+          data-kind={preorder ? "preorder" : soldOut ? "soldout" : "ready"}
+        >
+          {action}
+        </span>
       </div>
     </Link>
   );
 }
 function Home() {
-  const { overview, products, loading } = useStore();
+  const { overview, loading, user } = useStore();
   const [activityIndex, setActivityIndex] = useState(0);
   useEffect(() => {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -631,38 +662,17 @@ function Home() {
   const appearance = useAppearance();
   const hero = appearance.hero;
   const subtext = text(hero.subtext);
-  const secondary = text(hero.secondary.label);
+  // Second button: reviews for signed-in customers, sign in for everyone else (both editable).
+  const second = user ? hero.secondary : hero.guest;
+  const secondLabel = text(second.label);
+  const heroTitle = text(hero.title) || heroTitleFallback(shopName(overview?.shop?.shopName));
   const blocks: Record<string, ReactNode> = {
     banners: <HomeBanners />,
     hero: (
-        <section className="home-hero">
-          <div className="hero-grid" aria-hidden="true">
-            <i className="grid-streak streak-y streak-y-one" />
-            <i className="grid-streak streak-y streak-y-two" />
-            <i className="grid-streak streak-y streak-y-three" />
-            <i className="grid-streak streak-x streak-x-one" />
-            <i className="grid-streak streak-x streak-x-two" />
-          </div>
-          <span className="service-pill">
-            <span className="service-dot" />
-            {overview?.shop?.shopOpen === false
-              ? t("ปิดให้บริการ")
-              : t("เปิดให้บริการ")}
-          </span>
-          <h1 className="hero-title">
-            <span className="sr-only">{shopName(overview?.shop?.shopName)}</span>
-            <span className="hero-logo" aria-hidden="true">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <img
-                  key={i}
-                  src={`/brand/l${i}.png`}
-                  alt=""
-                  draggable={false}
-                  className={i === 4 ? "hero-x" : ""}
-                  style={{ "--i": i } as CSSProperties}
-                />
-              ))}
-            </span>
+        <section className="home-hero" aria-labelledby="home-hero-title">
+          {/* Plain background; the shop name as a big display line (ตั้งค่า › หน้าตาร้าน › ส่วนหัว). */}
+          <h1 className="hero-title hero-display" id="home-hero-title">
+            {heroTitle}
           </h1>
           <p className="hero-tagline">
             {text(hero.headline) ||
@@ -673,17 +683,12 @@ function Home() {
           <div className="hero-actions">
             <ShopLink to={hero.primary.link} className="button primary hero-cta">
               {text(hero.primary.label)}
-              <ArrowRight size={18} />
             </ShopLink>
-            {secondary && hero.secondary.link && (
-              <ShopLink to={hero.secondary.link} className="button hero-ghost">
-                {secondary}
+            {secondLabel && second.link && (
+              <ShopLink to={second.link} className="button hero-ghost">
+                {secondLabel}
               </ShopLink>
             )}
-          </div>
-          <div className="hero-orbs" aria-hidden="true">
-            <i className="orb orb-blue" />
-            <i className="orb orb-yellow" />
           </div>
         </section>
     ),
@@ -980,7 +985,7 @@ export function Quantity({
   );
 }
 function ProductDetail({ id }: { id: string }) {
-  const { products, setBasket, go, toast, loading } = useStore();
+  const { products, addToCart, go, toast, loading } = useStore();
   const p = products.find((p) => p.id === id);
   const [variantId, setVariantId] = useState("");
   const [quantity, setQuantity] = useState(1);
@@ -993,7 +998,7 @@ function ProductDetail({ id }: { id: string }) {
     );
   if (!p || !variant) return <NotFound />;
   const buy = (checkout: boolean) => {
-    setBasket({ variantId: variant.id, quantity });
+    addToCart(variant.id, quantity, checkout);
     if (checkout) go("/checkout");
     else {
       toast(t("เพิ่มสินค้าในตะกร้าแล้ว"));
@@ -1235,7 +1240,7 @@ function Auth({ register = false }: { register?: boolean }) {
 }
 /** Server test mode (ASTRA_TEST_PAYMENTS): sandbox pay + test credit until a real provider is live. */
 let testModeCache: Promise<boolean> | null = null;
-function useTestPayments() {
+export function useTestPayments() {
   const [on, setOn] = useState(false);
   useEffect(() => {
     testModeCache ??= api<{ mode?: string }>("/health")
@@ -1245,7 +1250,7 @@ function useTestPayments() {
   }, []);
   return on;
 }
-function RequireLogin() {
+export function RequireLogin() {
   return (
     <Empty
       icon={<KeyRound />}
@@ -1263,266 +1268,6 @@ function RequireLogin() {
     />
   );
 }
-function Cart({ checkout = false }: { checkout?: boolean }) {
-  const { basket, products, setBasket, user, go, loading } = useStore();
-  const shopOpen = useShopOpen();
-  const verifyEmail = useEmailVerifyNeeded();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const p = products.find((p) =>
-    p.variants.some((v) => v.id === basket?.variantId),
-  );
-  const variant = p?.variants.find((v) => v.id === basket?.variantId);
-  // Discount code (checkout only). The server works out the discount; this is a preview.
-  const [code, setCode] = useState("");
-  const [coupon, setCoupon] = useState<CouponPreview | null>(null);
-  const [couponError, setCouponError] = useState("");
-  const [checking, setChecking] = useState(false);
-  // Shop-fulfilled product (Delivery.tsx): what the shop needs from the customer.
-  const fields = p?.checkoutFields ?? [];
-  const [deliveryValues, setDeliveryValues] = useState<Record<string, string>>({});
-  const fieldsReady = checkoutFieldsReady(fields, deliveryValues);
-  async function checkCode(raw: string) {
-    if (!variant || !basket) return;
-    setChecking(true);
-    setCouponError("");
-    try {
-      const result = await api<CouponCheck>("/coupons/check", {
-        code: raw.trim(),
-        variantId: variant.id,
-        quantity: basket.quantity,
-      });
-      if (result.valid) {
-        setCoupon(result);
-        setCode("");
-      } else {
-        setCoupon(null);
-        setCouponError(result.reason);
-      }
-    } catch (e) {
-      setCoupon(null);
-      setCouponError((e as Error).message);
-    } finally {
-      setChecking(false);
-    }
-  }
-  // Quantity or option changed: the discount depends on the subtotal, so check again.
-  useEffect(() => {
-    if (coupon && variant && basket && coupon.subtotal !== variant.price * basket.quantity)
-      void checkCode(coupon.code);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [basket?.quantity, basket?.variantId]);
-  async function order() {
-    if (!user) return go("/login?next=%2Fcheckout");
-    setBusy(true);
-    setError("");
-    try {
-      const key = crypto.randomUUID();
-      const o = await api<Order>("/orders", {
-        variantId: variant!.id,
-        quantity: basket!.quantity,
-        requestKey: key,
-        ...(coupon ? { couponCode: coupon.code } : {}),
-        ...(fields.length ? { deliveryInputs: deliveryValues } : {}),
-      });
-      // Free preorder reservations (Preorder.tsx) have nothing to pay: no token.
-      if (o.paymentToken) sessionStorage.setItem("astra-pay-" + o.id, o.paymentToken);
-      else if (o.status === "PREORDER") setBasket(null);
-      go("/checkout/" + o.id);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  const subtotal = variant && basket ? variant.price * basket.quantity : 0;
-  const payable = coupon ? coupon.total : subtotal;
-  return (
-    <main className="container page-main reference-cart-page">
-      {loading ? (
-        <div className="skeleton-cart" aria-busy="true" aria-label={t("กำลังโหลดตะกร้า")}>
-          <div className="skeleton-block skeleton-line" />
-          <div className="skeleton-block skeleton-panel" />
-          <div className="skeleton-block skeleton-panel short" />
-        </div>
-      ) : (
-      <>
-      <div className="page-heading">
-        <span className="eyebrow">
-          {checkout ? t("ชำระเงิน") : t("กระเป๋าของคุณ")}
-        </span>
-        <h1>{checkout ? t("ตรวจสอบคำสั่งซื้อ") : t("ตะกร้าสินค้า")}</h1>
-        <p>
-          {checkout
-            ? t("ตรวจสอบข้อมูลให้ครบ ระบบจะบันทึกคำสั่งซื้อไว้ก่อน")
-            : t("สินค้าที่คุณเลือกไว้ พร้อมเมื่อคุณพร้อม")}
-        </p>
-      </div>
-      {!basket || !p || !variant ? (
-        <Empty
-          icon={<ShoppingBag />}
-          heading={t("ตะกร้าของคุณยังว่าง")}
-          description={t("เลือกสินค้าที่ชอบ แล้วกลับมาที่นี่เพื่อทำรายการ")}
-          action={
-            <Link to="/products" className="button primary">
-              {t("เลือกดูสินค้า")}
-              <ArrowRight size={17} />
-            </Link>
-          }
-        />
-      ) : (
-        <div className="checkout-layout">
-          <section className="panel cart-panel">
-            <div className="cart-product">
-              <div className="cart-art">
-                <Art type={p.art} name={p.name} image={p.imageUrl} />
-              </div>
-              <div className="cart-info">
-                <Link to={"/products/" + p.id}>{p.name}</Link>
-                <p>{variant.label}</p>
-                <span className="cart-price">
-                  <strong>{money(variant.price)}</strong>
-                  <WasPrice variant={variant} />
-                  <DiscountBadge variant={variant} />
-                  <PriceNote variant={variant} />
-                </span>
-                <Quantity
-                  value={basket.quantity}
-                  max={quantityCap(variant)}
-                  onChange={(quantity) => setBasket({ ...basket, quantity })}
-                />
-                <PurchaseLimitNote variant={variant} />
-              </div>
-              <button
-                className="icon-button"
-                aria-label={t("ลบสินค้า")}
-                onClick={() => setBasket(null)}
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-            {checkout && (
-              <CheckoutFields fields={fields} values={deliveryValues} onChange={setDeliveryValues} />
-            )}
-            <p className="small-note">
-              <ShieldCheck size={16} />
-              {t("โค้ดถูกส่งไปยังบัญชีที่ใช้สั่งซื้อเท่านั้น")}
-            </p>
-          </section>
-          <aside className="panel order-summary">
-            <h2>{t("สรุปคำสั่งซื้อ")}</h2>
-            <div>
-              <span>{t("สินค้า (")}{basket.quantity}{" "}{t("ชิ้น)")}</span>
-              <span>{money(subtotal)}</span>
-            </div>
-            <div>
-              <span>{t("ค่าจัดส่งดิจิทัล")}</span>
-              <span>{t("ฟรี")}</span>
-            </div>
-            {checkout && coupon && (
-              <div className="summary-discount">
-                <span>{t("ส่วนลด")} ({coupon.code})</span>
-                <span>−{money(coupon.discount)}</span>
-              </div>
-            )}
-            {checkout && (
-              <section className="coupon-box" aria-label={t("โค้ดส่วนลด")}>
-                {coupon ? (
-                  <div className="coupon-applied">
-                    <TicketPercent size={18} />
-                    <span>
-                      <strong>{coupon.code}</strong>
-                      <small>{t("ใช้โค้ดแล้ว ลด {amount}", { amount: money(coupon.discount) })}</small>
-                    </span>
-                    <button
-                      type="button"
-                      className="text-button"
-                      onClick={() => {
-                        setCoupon(null);
-                        setCouponError("");
-                      }}
-                    >
-                      {t("ลบโค้ด")}
-                    </button>
-                  </div>
-                ) : !user ? (
-                  <p className="coupon-login">
-                    <TicketPercent size={16} />
-                    <Link to="/login?next=%2Fcheckout">{t("เข้าสู่ระบบเพื่อใช้โค้ดส่วนลด")}</Link>
-                  </p>
-                ) : (
-                  <form
-                    className="coupon-form"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (code.trim()) void checkCode(code);
-                    }}
-                  >
-                    <label htmlFor="coupon-code">{t("โค้ดส่วนลด")}</label>
-                    <div>
-                      <input
-                        id="coupon-code"
-                        value={code}
-                        maxLength={32}
-                        autoCapitalize="characters"
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder={t("เช่น WELCOME10")}
-                        onChange={(e) => {
-                          setCode(e.target.value.toUpperCase());
-                          setCouponError("");
-                        }}
-                      />
-                      <button className="button secondary" disabled={checking || !code.trim()}>
-                        {checking ? <LoaderCircle className="spin" size={16} /> : t("ใช้โค้ด")}
-                      </button>
-                    </div>
-                  </form>
-                )}
-                <ErrorMessage message={couponError} />
-              </section>
-            )}
-            <div className="summary-total">
-              <strong>{t("ยอดรวม")}</strong>
-              <strong>{money(checkout ? payable : subtotal)}</strong>
-            </div>
-            <CheckoutPreorderRow product={p} total={checkout ? payable : subtotal} quantity={basket.quantity} />
-            <ErrorMessage message={error} />
-            <ShopClosedNote />
-            <EmailVerifyNotice compact />
-            <button
-              className="button primary full"
-              disabled={busy || !variant.available || !shopOpen || (checkout && (verifyEmail || !fieldsReady))}
-              onClick={checkout ? order : () => go("/checkout")}
-            >
-              {busy ? (
-                <LoaderCircle className="spin" size={17} />
-              ) : checkout ? (
-                t("บันทึกคำสั่งซื้อ")
-              ) : (
-                t("ไปบันทึกคำสั่งซื้อ")
-              )}
-              <ArrowRight size={17} />
-            </button>
-            {user && (
-              <p className="balance-note">
-                {p.deliveryType === "manual"
-                  ? t("ร้านทำรายการให้หลังชำระ แจ้งเตือนเมื่อเสร็จ")
-                  : p.preorder && p.preorderTerms?.mode === "free"
-                  ? t("จองฟรี ไม่ต้องจ่ายตอนนี้ ได้เลขคิวทันที")
-                  : p.preorder
-                  ? t("สินค้าพรีออเดอร์: ชำระแล้วได้เลขคิว ร้านจะส่ง ID และรหัสผ่านให้ภายหลัง")
-                  : t("ชำระแล้วได้รับ ID และรหัสผ่านทันทีในหน้าคำสั่งซื้อ")}
-              </p>
-            )}
-          </aside>
-        </div>
-      )}
-      </>
-      )}
-    </main>
-  );
-}
 /** Credit history type (เติม / ซื้อ / คืนเงิน / ปรับยอด). */
 export const ledgerTypeText: Record<string, string> = {
   TOPUP: "เติม",
@@ -1538,7 +1283,7 @@ function ledgerText(label: string) {
   }
   return t(label);
 }
-function PayShell({ total }: { total: number }) {
+export function PayShell({ total }: { total: number }) {
   const [slipName, setSlipName] = useState("");
   const [preview, setPreview] = useState("");
   return (
@@ -1586,7 +1331,7 @@ function PayShell({ total }: { total: number }) {
   );
 }
 function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
-  const { user, refresh, toast, go, setBasket } = useStore();
+  const { user, refresh, toast, go, setBasket, cart, setCart } = useStore();
   const shopOpen = useShopOpen();
   const verifyEmail = useEmailVerifyNeeded();
   usePageTitle(
@@ -1626,13 +1371,13 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
       });
       setOrder(result);
       if (result.status === "PREORDER") {
-        setBasket(null);
+        setCart(cart.filter((l) => l.variantId !== result.variant_id));
         sessionStorage.removeItem("astra-pay-" + id);
         await refresh();
         toast(t("ชำระเงินสำเร็จ ได้เลขคิวแล้ว"));
       }
       if (result.status === "DELIVERED") {
-        setBasket(null);
+        setCart(cart.filter((l) => l.variantId !== result.variant_id));
         sessionStorage.removeItem("astra-pay-" + id);
         setRevealed(true);
         await refresh();
@@ -1766,6 +1511,11 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               <span>{t("คำสั่งซื้อ #")}{order.id.slice(0, 8).toUpperCase()}</span>
               <span>{dateTime(order.created_at)}</span>
               {order.createdByAdmin && <ManualOrderNote method={order.paymentMethodLabel} />}
+              {order.checkout_id && (
+                <Link to={"/checkouts/" + order.checkout_id} className="receipt-link">
+                  {t("ทั้งคำสั่งซื้อ #{id}", { id: order.checkout_id.slice(0, 8).toUpperCase() })}
+                </Link>
+              )}
               {hasReceipt(order) && <ReceiptLink id={order.id} />}
               <AskInChat order={{ id: order.id, name: order.name }} />
             </div>
@@ -1973,7 +1723,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
   );
 }
 /** "Pay by HH:MM": unpaid orders are cancelled after the shop's payment window. */
-function PayDeadline({ createdAt }: { createdAt: string }) {
+export function PayDeadline({ createdAt }: { createdAt: string }) {
   const { overview } = useStore();
   const minutes = Number(overview?.shop?.pendingExpiryMinutes) || 30;
   const deadline = new Date(new Date(createdAt.replace(" ", "T") + "Z").getTime() + minutes * 60000);
@@ -1983,134 +1733,6 @@ function PayDeadline({ createdAt }: { createdAt: string }) {
     <p className="pay-deadline">
       {t("กรุณาชำระภายใน {time} หากเกินเวลา ระบบจะยกเลิกคำสั่งซื้ออัตโนมัติ", { time })}
     </p>
-  );
-}
-function HistoryPage() {
-  const { user } = useStore();
-  const [orders, setOrders] = useState<Order[] | null>(null);
-  const [error, setError] = useState("");
-  const [filter, setFilter] = useState("all");
-  const loadOrders = () => {
-    if (user)
-      api<{ orders: Order[] }>("/orders")
-        .then((r) => setOrders(r.orders))
-        .catch((e) => setError(e.message));
-  };
-  useEffect(loadOrders, [user?.id]);
-  useLive(["orders"], loadOrders);
-  const filtered = orders?.filter(
-    (o) => filter === "all" || o.status === filter,
-  );
-  return (
-    <main className="container page-main reference-history-page">
-      <div className="page-heading">
-        <span className="eyebrow">{t("คำสั่งซื้อของฉัน")}</span>
-        <h1>{t("ประวัติการซื้อ")}</h1>
-        <p>{t("ติดตามคำสั่งซื้อและเปิดดูโค้ดสินค้าของคุณ")}</p>
-      </div>
-      {!user ? (
-        <RequireLogin />
-      ) : (
-        <>
-          <div className="category-bar">
-            {[
-              ["all", t("ทั้งหมด")],
-              ["DELIVERED", t("จัดส่งสำเร็จ")],
-              ["PREORDER", t("รอส่ง (พรีออเดอร์)")],
-              ["PENDING_PAYMENT", t("รอชำระเงิน")],
-              ["FAILED", t("ไม่สำเร็จ")],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                className={
-                  filter === value ? "category-chip selected" : "category-chip"
-                }
-                onClick={() => setFilter(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <ErrorMessage message={error} />
-          {!orders && !error ? (
-            <div className="loading-row">
-              <LoaderCircle className="spin" />
-              {t("กำลังโหลดคำสั่งซื้อ")}
-            </div>
-          ) : filtered?.length ? (
-            <div className="orders-list">
-              {filtered.map((o) => (
-                <div className="history-item" key={o.id}>
-                <Link
-                  to={"/orders/" + o.id}
-                  className="panel history-card"
-                >
-                  <div className="history-card-top">
-                    <span>
-                      #{o.id.slice(0, 8).toUpperCase()}{" "}
-                      <small>{dateTime(o.created_at)}</small>
-                    </span>
-                    <Status status={shownStatus(o)} />
-                  </div>
-                  <div className="history-card-body">
-                    <div className="history-art">
-                      <Art type={o.art} name={o.name} />
-                    </div>
-                    <div>
-                      <h2>{o.name}</h2>
-                      <p>
-                        {o.label} · {o.quantity}{" "}{t("ชิ้น")}
-                      </p>
-                      {o.createdByAdmin && <ManualOrderNote method={o.paymentMethodLabel} />}
-                    </div>
-                    <strong>{money(o.total)}</strong>
-                    <ArrowUpRight size={18} />
-                  </div>
-                  <div className="history-card-bottom">
-                    {o.status === "DELIVERED" ? (
-                      <>
-                        <KeyRound size={16} />
-                        {t("ดูโค้ดสินค้า")}
-                      </>
-                    ) : o.status === "PENDING_PAYMENT" ? (
-                      t("รอเชื่อมการชำระเงิน")
-                    ) : (
-                      t("ดูรายละเอียด")
-                    )}
-                    <ArrowRight size={15} />
-                  </div>
-                </Link>
-                {(hasReceipt(o) || o.status === "DELIVERED") && (
-                  <div className="history-item-actions">
-                    <RebuyActions order={o} />
-                    {hasReceipt(o) && (
-                      <ReceiptLink id={o.id}>
-                        {t("ใบเสร็จ")} #{o.id.slice(0, 8).toUpperCase()}
-                      </ReceiptLink>
-                    )}
-                  </div>
-                )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            !error && (
-              <Empty
-                icon={<History />}
-                heading={t("ยังไม่มีคำสั่งซื้อในรายการนี้")}
-                description={t("เมื่อคุณเลือกซื้อสินค้า คำสั่งซื้อจะปรากฏที่นี่")}
-                action={
-                  <Link to="/products" className="button primary">
-                    {t("เลือกดูสินค้า")}
-                    <ArrowRight size={16} />
-                  </Link>
-                }
-              />
-            )
-          )}
-        </>
-      )}
-    </main>
   );
 }
 function WalletPage() {
@@ -2811,6 +2433,8 @@ function Router() {
     "/credits": t("เครดิตร้าน"),
     "/support": t("ติดต่อเรา"),
     "/faq": t("คำถามที่พบบ่อย"),
+    "/news": t("ข่าวสารและกิจกรรม"),
+    "/about": t("เกี่ยวกับเรา"),
     "/terms": t("ข้อกำหนดการใช้บริการ"),
     "/privacy": t("นโยบายความเป็นส่วนตัว"),
     "/stores": t("ร้านค้า"),
@@ -2831,6 +2455,8 @@ function Router() {
     "/credits": t("รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์"),
     "/support": t("เราพร้อมช่วยเหลือคุณ"),
     "/faq": t("คำตอบเรื่องการรับสินค้า การรับประกัน และการติดต่อร้าน"),
+    "/news": t("ข่าวสาร โปรโมชัน และกิจกรรมของร้าน"),
+    "/about": t("รู้จักร้านและช่องทางติดต่อ"),
     "/terms": t("ข้อกำหนดการใช้บริการ การสั่งซื้อ การรับประกัน และการคืนเงินของร้าน"),
     "/privacy": t("วิธีที่ร้านเก็บรวบรวม ใช้ และคุ้มครองข้อมูลส่วนบุคคลตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562"),
   };
@@ -2839,7 +2465,9 @@ function Router() {
     path === "/products" ||
     path.startsWith("/products/") ||
     path.startsWith("/orders/") ||
-    path.startsWith("/checkout/");
+    path.startsWith("/checkout/") ||
+    path.startsWith("/checkouts/") ||
+    path.startsWith("/news/");
   const page = dynamic
     ? ""
     : walletHidden
@@ -2866,8 +2494,9 @@ function Router() {
     return <ReferenceAuth key={path} register={path === "/register"} />;
   if (path === "/reset-password") return <ResetPasswordPage />;
   if (path === "/verify-email") return <VerifyEmailPage />;
-  if (path === "/cart" || path === "/checkout")
-    return <Cart checkout={path === "/checkout"} />;
+  if (path === "/cart") return <CartPage />;
+  if (path === "/checkout") return <CheckoutPage />;
+  if (path.startsWith("/checkouts/")) return <CheckoutGroupPage key={path} id={path.split("/")[2]} />;
   if (path.startsWith("/orders/") || path.startsWith("/checkout/"))
     return (
       <OrderPage
@@ -2910,6 +2539,9 @@ function Router() {
     );
   if (path === "/support") return <InfoPage kind="support" />;
   if (path === "/faq") return <FaqPage />;
+  if (path === "/news") return <NewsListPage />;
+  if (path.startsWith("/news/")) return <NewsDetailPage key={path} id={path.slice(6).replace(/\/$/, "")} />;
+  if (path === "/about") return <AboutPage />;
   return <NotFound />;
 }
 export default function App() {
@@ -3002,24 +2634,17 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
-  const [basket, setBasketState] = useState<Basket | null>(() => {
-    try {
-      const b = JSON.parse(localStorage.getItem("astra-basket") ?? "null");
-      return b &&
-        typeof b.variantId === "string" &&
-        Number.isInteger(b.quantity) &&
-        b.quantity >= 1 &&
-        b.quantity <= 10
-        ? b
-        : null;
-    } catch {
-      return null;
-    }
-  });
-  const setBasket = (value: Basket | null) => {
-    setBasketState(value);
-    localStorage.setItem("astra-basket", JSON.stringify(value));
+  const [cart, setCartState] = useState<CartLine[]>(loadCart);
+  const setCart = (lines: CartLine[]) => {
+    setCartState(lines);
+    saveCart(lines);
   };
+  const ticked = cart.filter((l) => l.selected);
+  const basket: Basket | null = ticked.length === 1 ? { variantId: ticked[0].variantId, quantity: ticked[0].quantity } : null;
+  const setBasket = (value: Basket | null) =>
+    setCart(value ? withLine(cart, value.variantId, value.quantity, true) : cart.filter((l) => !l.selected));
+  const addToCart = (variantId: string, quantity: number, only = false) =>
+    setCart(withLine(cart, variantId, quantity, only));
   // The URL on screen, so a cancelled back/forward can be put back.
   const shownUrl = useRef(location.pathname + location.search);
   function go(to: string, options: { keepScroll?: boolean } = {}) {
@@ -3083,6 +2708,9 @@ export default function App() {
         overview: shownOverview,
         basket,
         setBasket,
+        cart,
+        setCart,
+        addToCart,
         refresh,
         go,
         toast: setToast,

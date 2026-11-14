@@ -53,6 +53,8 @@ export type Product = {
   preorder?:number;
   hidden_seed?:number;
   active: number;
+  /** When the product was added (UTC "YYYY-MM-DD HH:MM:SS"); storefront "ใหม่ล่าสุด". */
+  created_at?: string | null;
   variants: Variant[];
   sold: number;
   rating: { average: number | null; count: number };
@@ -138,6 +140,9 @@ export type Order = {
   coupon_code?: string | null;
   /** The shop created this order in the back office (customer paid outside the site). */
   createdByAdmin?: boolean;
+  /** Bought together with other lines under one order number (server/checkouts.mjs). */
+  checkout_id?: string | null;
+  checkout_line?: number | null;
   paymentMethodLabel?: string;
   // Preorder modes (server/preorder.mjs reservationView).
   preorderMode?: PreorderMode;

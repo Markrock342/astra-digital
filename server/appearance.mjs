@@ -17,8 +17,10 @@
 import { assertAllowedImage } from "./file-store.mjs";
 import {
   APPEARANCE_PARTS,
+  APPEARANCE_REV,
   DEFAULT_APPEARANCE,
   LIMITS,
+  migrateStoredAppearance,
   normalizeAppearanceParts,
   resolveAppearance,
 } from "./appearance-rules.mjs";
@@ -37,12 +39,15 @@ export function createAppearanceApis({ requireAdmin, one, run, fail, randomUUID,
     if (!row) return {};
     try {
       const parsed = JSON.parse(row.value);
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+      // Rows saved by an older version are upgraded on read (and written back on the next save).
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? migrateStoredAppearance(parsed) : {};
     } catch {
       return {};
     }
   }
   function writeStored(stored) {
+    // Always written at the current rev, so an older-version migration never reapplies.
+    stored.rev = APPEARANCE_REV;
     run(
       "INSERT INTO runtime_flags(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
       APPEARANCE_KEY,

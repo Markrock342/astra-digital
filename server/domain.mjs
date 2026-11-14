@@ -74,6 +74,10 @@ import { normalizeFaq } from "./faq.mjs";
 import { createBroadcastApis } from "./broadcast.mjs";
 import { createBannerApis } from "./banners.mjs";
 import { createAppearanceApis } from "./appearance.mjs";
+import { createNewsApis } from "./news.mjs";
+import { hookCheckouts } from "./checkouts.mjs";
+import { shopTitle } from "./seo.mjs";
+import { createAboutApis } from "./about.mjs";
 import { createManualOrderApis } from "./manual-orders.mjs";
 import { createLaunchCleanupApis } from "./launch-cleanup.mjs";
 import { createRetention } from "./retention.mjs";
@@ -147,7 +151,7 @@ export function createCommerceCore({
   const run = (sql, ...params) => db.prepare(sql).run(...params);
   const fileStore =
     fileStoreOption ?? createFileStore({ db, uploads });
-  const tx =
+  const baseTx =
     transaction ??
     ((fn) => {
       db.exec("BEGIN IMMEDIATE");
@@ -160,6 +164,17 @@ export function createCommerceCore({
         throw e;
       }
     });
+  // Re-entrant: a call inside another transaction (multi-item checkout) joins the outer one.
+  let txDepth = 0;
+  const tx = (fn) => {
+    if (txDepth) return fn();
+    txDepth++;
+    try {
+      return baseTx(fn);
+    } finally {
+      txDepth--;
+    }
+  };
   const encrypt = (value) => {
     const iv = randomBytes(12);
     const cipher = createCipheriv("aes-256-gcm", key, iv);
@@ -1245,6 +1260,17 @@ export function createCommerceCore({
   const bannerApis = createBannerApis({ requireAdmin, one, all, run, tx, fail, randomUUID, fileStore, clock });
   // Storefront look and text (ตั้งค่า › หน้าตาร้าน, server/appearance.mjs).
   const appearanceApis = createAppearanceApis({ requireAdmin, one, run, fail, randomUUID, fileStore });
+  // ข่าวสารและกิจกรรม (/news) and เกี่ยวกับเรา (/about): news.mjs, about.mjs.
+  const newsApis = createNewsApis({ requireAdmin, one, all, run, tx, fail, randomUUID, fileStore, clock });
+  const aboutApis = createAboutApis({
+    requireAdmin,
+    one,
+    run,
+    fail,
+    randomUUID,
+    fileStore,
+    shopName: () => shopTitle(settings()),
+  });
   const {
     exportMyData,
     requestAccountDeletion,
@@ -3772,6 +3798,21 @@ export function createCommerceCore({
     adminSetBannerImage: bannerApis.adminSetBannerImage,
     adminRemoveBannerMobileImage: bannerApis.adminRemoveBannerMobileImage,
     adminDeleteBanner: bannerApis.adminDeleteBanner,
+    // News / events and the About page (news.mjs, about.mjs).
+    publicNews: newsApis.publicNews,
+    publicNewsPost: newsApis.publicNewsPost,
+    adminNews: newsApis.adminNews,
+    adminCreateNews: newsApis.adminCreateNews,
+    adminUpdateNews: newsApis.adminUpdateNews,
+    adminSetNewsCover: newsApis.adminSetNewsCover,
+    adminRemoveNewsCover: newsApis.adminRemoveNewsCover,
+    adminDeleteNews: newsApis.adminDeleteNews,
+    publicAbout: aboutApis.publicAbout,
+    adminAbout: aboutApis.adminAbout,
+    saveAbout: aboutApis.saveAbout,
+    resetAbout: aboutApis.resetAbout,
+    setAboutCover: aboutApis.setAboutCover,
+    removeAboutCover: aboutApis.removeAboutCover,
     // For code that ends an unpaid order (e.g. auto-expiry); see server/coupons.mjs.
     releaseCouponForOrder,
     orderDetail,
@@ -3979,6 +4020,9 @@ export function createCommerceCore({
       broadcasts: true,
       categories: true,
       homeBanners: true,
+      // ข่าวสารและกิจกรรม (/news) + เกี่ยวกับเรา (/about).
+      news: true,
+      aboutPage: true,
       stockWatch: true,
       reviewModeration: true,
       manualOrders: true,
@@ -4050,6 +4094,8 @@ export function createCommerceCore({
   stockWatch.hook(service);
   // "สร้างโดยแอดมิน" marker + payment method on the existing order views.
   manualOrders.hook(service);
+  // Several basket lines under one order number (checkouts.mjs).
+  hookCheckouts(service, { one, all, run, tx, fail, randomUUID, requireUser, publicUser });
   // Preorder emails queued inside a committed call go out now; a failed call drops them.
   for (const name of ["pay", "createOrder", "importCodes", "adminCallPreorders", "adminCancelPreorder", "cancelMyPreorder"]) {
     const call = service[name];

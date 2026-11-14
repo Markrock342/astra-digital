@@ -135,6 +135,12 @@ export function PreorderRules({ product, total, quantity }: { product: Product; 
   );
 }
 
+/** What one basket line charges at checkout: full price, the deposit, or nothing (free queue). */
+export function payNowFor(product: Product, total: number, quantity: number) {
+  if (!product.preorder) return total;
+  const mode = modeOf(product);
+  return mode === "full" ? total : mode === "deposit" ? depositPreview(product.preorderTerms, total, quantity) : 0;
+}
 /** Checkout summary row: what is charged when the reservation is saved. */
 export function CheckoutPreorderRow({ product, total, quantity }: { product: Product; total: number; quantity: number }) {
   const mode = modeOf(product);

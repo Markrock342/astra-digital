@@ -1,0 +1,336 @@
+/* Client storefront round (Nov 2026): plain hero with the shop name as a display line, header
+   controls (ภาษา + ธีม · bell · balance · profile), catalog "สินค้าทั้งหมด" button + ตัวกรอง,
+   and one clear action button on each product card. Loaded after brand.css (main.tsx).
+   Look: mainstream commercial app — white cards, one brand colour (the accent tokens), soft
+   elevation. References: shadcn/ui Button (default / outline), Popover, Sheet, RadioGroup
+   (MIT, https://ui.shadcn.com). */
+
+/* ---------- Hero: plain background, display title ---------- */
+.storefront-shell .home-hero::before {
+  content: none;
+  display: none;
+}
+.storefront-shell .home-hero .hero-orbs,
+.storefront-shell .home-hero .hero-grid {
+  display: none;
+}
+.storefront-shell .home-hero .hero-display {
+  margin: 0;
+  max-width: 100%;
+  font-family: Geist, "Noto Thai", system-ui, sans-serif;
+  font-weight: 900;
+  font-size: clamp(38px, 10.5vw, 96px);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  animation: rise 0.7s var(--ease-out-expo) both;
+}
+.storefront-shell .home-hero .hero-tagline {
+  margin-top: 18px;
+}
+.storefront-shell .hero-actions .hero-ghost {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+/* ---------- Header ---------- */
+.storefront-shell .site-header {
+  box-shadow: none;
+  border-bottom-color: transparent;
+}
+.storefront-shell .prefs-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: 600 13px/1 inherit;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.storefront-shell .prefs-trigger:hover,
+.storefront-shell .prefs-trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.storefront-shell .prefs-panel .lang-toggle {
+  display: grid;
+  width: 100%;
+}
+.storefront-shell .prefs-panel .lang-toggle button {
+  height: 36px;
+  font-size: 13px;
+}
+.storefront-shell .balance-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  color: var(--accent-text);
+  font: 700 13px/1 inherit;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.storefront-shell .balance-pill:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+/* Basket count moved from the header to the bottom-nav cart tab. */
+.storefront-shell .mobile-bottom-nav .cart-tab {
+  position: relative;
+}
+.storefront-shell .mobile-bottom-nav .cart-tab .cart-count {
+  position: absolute;
+  top: 4px;
+  left: calc(50% + 6px);
+  min-width: 18px;
+  width: auto;
+  height: 18px;
+  padding: 0 4px;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  box-sizing: border-box;
+  display: grid;
+  place-content: center;
+}
+
+@media (max-width: 600px) {
+  .storefront-shell .header-actions {
+    gap: 8px;
+  }
+  .storefront-shell .site-header .icon-button {
+    width: 36px;
+    height: 36px;
+  }
+  .storefront-shell .balance-pill {
+    padding: 0 10px;
+  }
+  .storefront-shell .site-header .account-button {
+    min-width: 36px;
+    min-height: 36px;
+    justify-content: center;
+  }
+  /* Phone tap targets: same invisible hit-area pattern as brand.css, widened to 44 × 48
+     (36px controls + 4px each side, inside the 8px gaps, so neighbours never overlap). */
+  .storefront-shell .site-header .prefs-trigger,
+  .storefront-shell .site-header .balance-pill,
+  .storefront-shell .site-header .register-link {
+    position: relative;
+  }
+  .storefront-shell .site-header .icon-button::after,
+  .storefront-shell .site-header .account-button::after,
+  .storefront-shell .site-header .prefs-trigger::after,
+  .storefront-shell .site-header .balance-pill::after,
+  .storefront-shell .site-header .register-link::after {
+    content: "";
+    position: absolute;
+    inset: -6px -4px;
+  }
+  .storefront-shell .site-header .register-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    box-sizing: border-box;
+    font-size: 13px;
+  }
+}
+.storefront-shell .header-actions > .notice-wrap,
+.storefront-shell .header-actions > .account-wrap {
+  flex-shrink: 0;
+}
+@media (max-width: 420px) {
+  /* Phone row: logo + 4 controls in 354 px. The amount is enough on its own. */
+  .storefront-shell .balance-pill svg {
+    display: none;
+  }
+  .storefront-shell .prefs-trigger {
+    padding: 0 9px;
+  }
+}
+@media (max-width: 370px) {
+  .storefront-shell .prefs-trigger span {
+    display: none;
+  }
+}
+
+/* ---------- Catalog heading + tools ---------- */
+.storefront-shell .home-main .reference-catalog-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.storefront-shell .catalog-all-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-btn);
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition:
+    background-color 0.2s ease,
+    transform 0.25s var(--spring);
+}
+.storefront-shell .catalog-all-button:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.storefront-shell .filter-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  background: var(--surface);
+  color: var(--text);
+  font: 600 14px/1.2 inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  max-width: 50%;
+}
+.storefront-shell .filter-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.storefront-shell .filter-button svg {
+  color: var(--accent-text);
+  flex: none;
+}
+.storefront-shell .filter-button:hover {
+  border-color: var(--accent);
+}
+.storefront-shell .reference-catalog-tools .search-field {
+  min-height: 44px;
+  box-sizing: border-box;
+}
+@media (max-width: 760px) {
+  .storefront-shell .reference-catalog-page .reference-catalog-tools {
+    flex-direction: row;
+  }
+  .storefront-shell .catalog-all-button {
+    min-height: 44px;
+  }
+}
+
+/* Sort sheet: radio rows with a check mark (shadcn/ui RadioGroup look). */
+.storefront-shell .sort-options {
+  display: grid;
+}
+.storefront-shell .sort-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: 500 15px/1.3 inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.storefront-shell .sort-option:last-child {
+  border-bottom: 0;
+}
+.storefront-shell .sort-option[aria-checked="true"] {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+.storefront-shell .sort-check {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  flex: none;
+}
+.storefront-shell .sort-option[aria-checked="true"] .sort-check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ---------- Product card action ---------- */
+.storefront-shell .product-card-info {
+  display: flex;
+  flex-direction: column;
+}
+.storefront-shell .card-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: auto;
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: var(--radius-btn);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  box-sizing: border-box;
+  transition:
+    filter 0.2s ease,
+    background-color 0.2s ease;
+}
+.storefront-shell .product-card-info > :nth-last-child(2) {
+  margin-bottom: 12px;
+}
+.storefront-shell .card-action-ready {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 1.5px solid var(--accent);
+}
+.storefront-shell .product-card:hover .card-action-ready {
+  filter: brightness(1.06);
+}
+.storefront-shell .card-action-preorder {
+  background: transparent;
+  color: var(--accent-text);
+  border: 1.5px solid var(--accent);
+}
+.storefront-shell .product-card:hover .card-action-preorder {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.storefront-shell .card-action-muted {
+  background: var(--raised);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+@media (max-width: 600px) {
+  .storefront-shell .card-action {
+    min-height: 44px;
+    font-size: 13px;
+  }
+}
