@@ -1,11 +1,12 @@
 // Basic SEO: sitemap.xml, robots.txt and link-preview meta tags.
 // Pure functions (no Workers APIs) so the Pages proxy, the Node server and tests share them.
+import { richTextPlain } from "./content-rules.mjs";
 
 export const BRAND = "ASIA EXTRA";
 export const DEFAULT_DESCRIPTION = "ร้านสินค้าดิจิทัล ส่งไว ปลอดภัย ใช้งานได้ทันที";
 export const DEFAULT_IMAGE = "/brand/og.png";
 /** Storefront pages listed in the sitemap besides one URL per active product. */
-export const STATIC_PATHS = ["/", "/products", "/reviews", "/faq", "/terms", "/privacy"];
+export const STATIC_PATHS = ["/", "/products", "/reviews", "/faq", "/news", "/about", "/terms", "/privacy"];
 
 const XML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
 export const escapeXml = (value) =>
@@ -54,7 +55,14 @@ export function categoryIdFromQuery(value) {
 export const isListedCategory = (c) =>
   !!c && typeof c.id === "string" && !!categoryIdFromQuery(c.id) && !c.hidden && (c.count ?? 1) > 0;
 
-export function sitemapXml(origin, products = [], categories = []) {
+/** "/news/<id>" (ข่าวสารและกิจกรรม) → id; anything else → null. */
+export function newsIdFromPath(pathname) {
+  const match = /^\/news\/([0-9a-fA-F-]{8,64})\/?$/.exec(pathname);
+  return match ? match[1] : null;
+}
+export const newsPath = (id) => "/news/" + encodeURIComponent(id);
+
+export function sitemapXml(origin, products = [], categories = [], news = []) {
   const base = trimOrigin(origin);
   const seen = new Set();
   const urls = [];
@@ -69,6 +77,8 @@ export function sitemapXml(origin, products = [], categories = []) {
     add(path, path === "/" ? "1.0" : path === "/products" ? "0.9" : "0.5");
   for (const category of categories.filter(isListedCategory)) add(categoryPath(category.id), "0.7");
   for (const product of products.filter(isListedProduct)) add(productPath(product.id), "0.8");
+  // Published news posts (/api/news lists only those visitors can read).
+  for (const post of news) if (post && newsIdFromPath(newsPath(post.id))) add(newsPath(post.id), "0.6");
   return (
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
@@ -172,6 +182,38 @@ export function categoryMeta(origin, category, shop, appearance = null) {
     imageIsDefault: !image,
     icon: siteIcon(appearance) ? absoluteUrl(origin, siteIcon(appearance)) : null,
     url: trimOrigin(origin) + categoryPath(category.id),
+    type: "website",
+  };
+}
+
+/** "/news/<id>" link preview: the post title, summary and cover (Thai, the default language). */
+export function newsMeta(origin, post, shop, appearance = null) {
+  const name = siteTitle(shop, appearance);
+  const fallback = siteImage(appearance);
+  return {
+    title: summary(post.title, 90) + " — " + name,
+    siteName: name,
+    description: summary(richTextPlain(post.summary || post.body || "") || post.title),
+    image: absoluteUrl(origin, post.coverUrl || fallback),
+    imageIsDefault: !post.coverUrl && !fallback,
+    icon: siteIcon(appearance) ? absoluteUrl(origin, siteIcon(appearance)) : null,
+    url: trimOrigin(origin) + newsPath(post.id),
+    type: "article",
+  };
+}
+
+/** "/news" and "/about" link previews. `page` = { path, title, description, image? }. */
+export function pageMeta(origin, page, shop, appearance = null) {
+  const name = siteTitle(shop, appearance);
+  const image = page.image || siteImage(appearance);
+  return {
+    title: summary(page.title, 90) + " — " + name,
+    siteName: name,
+    description: summary(page.description || appearance?.seo?.description?.th || DEFAULT_DESCRIPTION),
+    image: absoluteUrl(origin, image || DEFAULT_IMAGE),
+    imageIsDefault: !image,
+    icon: siteIcon(appearance) ? absoluteUrl(origin, siteIcon(appearance)) : null,
+    url: trimOrigin(origin) + page.path,
     type: "website",
   };
 }

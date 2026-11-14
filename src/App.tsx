@@ -94,6 +94,7 @@ import { EmailVerifyNotice, useEmailVerifyNeeded, VerifyEmailPage } from "./Emai
 import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
 import { ContactPage } from "./Contact";
+import { AboutPage, NewsDetailPage, NewsListPage } from "./News";
 import { CheckoutFields, DeliveredLinks, FulfilmentCard, checkoutFieldsReady } from "./Delivery";
 import { RebuyActions } from "./Rebuy";
 import { ManualOrderNote } from "./ManualOrderNote";
@@ -2800,6 +2801,8 @@ function Router() {
     "/credits": t("เครดิตร้าน"),
     "/support": t("ติดต่อเรา"),
     "/faq": t("คำถามที่พบบ่อย"),
+    "/news": t("ข่าวสารและกิจกรรม"),
+    "/about": t("เกี่ยวกับเรา"),
     "/terms": t("ข้อกำหนดการใช้บริการ"),
     "/privacy": t("นโยบายความเป็นส่วนตัว"),
     "/stores": t("ร้านค้า"),
@@ -2820,6 +2823,8 @@ function Router() {
     "/credits": t("รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์"),
     "/support": t("เราพร้อมช่วยเหลือคุณ"),
     "/faq": t("คำตอบเรื่องการรับสินค้า การรับประกัน และการติดต่อร้าน"),
+    "/news": t("ข่าวสาร โปรโมชัน และกิจกรรมของร้าน"),
+    "/about": t("รู้จักร้านและช่องทางติดต่อ"),
     "/terms": t("ข้อกำหนดการใช้บริการ การสั่งซื้อ การรับประกัน และการคืนเงินของร้าน"),
     "/privacy": t("วิธีที่ร้านเก็บรวบรวม ใช้ และคุ้มครองข้อมูลส่วนบุคคลตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562"),
   };
@@ -2828,7 +2833,8 @@ function Router() {
     path === "/products" ||
     path.startsWith("/products/") ||
     path.startsWith("/orders/") ||
-    path.startsWith("/checkout/");
+    path.startsWith("/checkout/") ||
+    path.startsWith("/news/");
   const page = dynamic
     ? ""
     : walletHidden
@@ -2899,6 +2905,9 @@ function Router() {
     );
   if (path === "/support") return <InfoPage kind="support" />;
   if (path === "/faq") return <FaqPage />;
+  if (path === "/news") return <NewsListPage />;
+  if (path.startsWith("/news/")) return <NewsDetailPage key={path} id={path.slice(6).replace(/\/$/, "")} />;
+  if (path === "/about") return <AboutPage />;
   return <NotFound />;
 }
 export default function App() {

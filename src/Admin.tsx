@@ -87,6 +87,7 @@ import { AdminCoupons } from "./AdminCoupons";
 import { AdminCategories } from "./AdminCategories";
 import { AdminBanners } from "./AdminBanners";
 import { AdminAppearance } from "./AdminAppearance";
+import { AdminAbout, AdminNews } from "./AdminNews";
 import { AdminReviews } from "./AdminReviews";
 import { AdminIntegrations } from "./AdminIntegrations";
 import { authConfig } from "./turnstile";
@@ -134,6 +135,8 @@ const settingTabs = [
   ["settings/appearance", "หน้าตาร้าน"],
   ["settings/payment", "รับเงิน"],
   ["settings/banners", "แบนเนอร์หน้าแรก"],
+  ["settings/news", "ข่าวสารและกิจกรรม"],
+  ["settings/about", "เกี่ยวกับเรา"],
   ["settings/legal", "ข้อกำหนดและนโยบาย"],
   ["settings/receipts", "ใบเสร็จและใบกำกับภาษี"],
   ["settings/faq", "คำถามที่พบบ่อย"],
@@ -1031,6 +1034,10 @@ export default function Admin() {
             <AdminAppearance />
           ) : sub === "settings/banners" ? (
             <AdminBanners />
+          ) : sub === "settings/news" ? (
+            <AdminNews />
+          ) : sub === "settings/about" ? (
+            <AdminAbout />
           ) : sub === "settings/receipts" ? (
             <AdminReceiptSettings />
           ) : sub === "settings/health" ? (

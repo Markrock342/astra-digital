@@ -1,0 +1,421 @@
+/* ตั้งค่า › ข่าวสารและกิจกรรม / เกี่ยวกับเรา (AdminNews.tsx). shadcn/ui Card / Tabs / Switch /
+   Badge anatomy (MIT, https://ui.shadcn.com): white cards on the cool-grey admin background,
+   the one admin brand colour (--brand), soft elevation, no side stripes. 390 px: one column,
+   44 px tap targets. */
+
+.merchant-shell .news-admin {
+  min-width: 0;
+}
+.merchant-shell .news-admin .reference-admin-heading > .button {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* ---------- List ---------- */
+.merchant-shell .news-admin-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.merchant-shell .news-admin-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.merchant-shell .news-admin-thumb {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #64748b;
+}
+.merchant-shell .news-admin-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.merchant-shell .news-admin-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.merchant-shell .news-admin-info strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.merchant-shell .news-admin-pin {
+  flex: none;
+  color: var(--brand);
+}
+.merchant-shell .news-admin-info small {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 13px;
+}
+.merchant-shell .news-admin-event {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: var(--brand);
+  background: var(--brand-soft, #eef1ff);
+  font-size: 12px;
+  font-weight: 600;
+}
+.merchant-shell .news-admin-status {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #475569;
+  background: #f1f5f9;
+}
+.merchant-shell .news-admin-status.live {
+  color: #047857;
+  background: #ecfdf5;
+}
+.merchant-shell .news-admin-status.scheduled {
+  color: #1d4ed8;
+  background: #eff4ff;
+}
+.merchant-shell .news-admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.merchant-shell .news-admin-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 16px;
+  color: #64748b;
+  text-align: center;
+  background: #fff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+}
+
+/* ---------- Editor ---------- */
+.merchant-shell .news-editor-back {
+  margin: 0 0 6px -10px;
+  min-height: 40px;
+}
+.merchant-shell .news-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.merchant-shell .news-editor-form {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.merchant-shell .news-card-panel {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.merchant-shell .news-card-panel h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.merchant-shell .news-card-panel .field {
+  margin: 0;
+}
+.merchant-shell .news-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.merchant-shell .news-label-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.merchant-shell .news-counter {
+  margin-left: auto;
+  color: #94a3b8;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.merchant-shell .news-counter.over,
+.merchant-shell .news-link-problem {
+  color: #dc2626;
+}
+.merchant-shell .news-en-help {
+  margin: 0;
+}
+.merchant-shell .news-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.merchant-shell .news-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+.merchant-shell .news-switch-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.merchant-shell .news-switch-row small {
+  color: #64748b;
+  font-size: 13px;
+}
+.merchant-shell .news-editor-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 12px 0;
+  background: linear-gradient(to top, var(--bg, #f5f6f8) 70%, transparent);
+}
+
+/* Tabs (shadcn/ui Tabs list) */
+.merchant-shell .news-lang-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: #f1f5f9;
+}
+.merchant-shell .news-lang-tabs button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: #334155;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.merchant-shell .news-lang-tabs button.active {
+  background: #fff;
+  color: var(--brand);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
+}
+.merchant-shell .news-lang-tabs button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Cover */
+.merchant-shell .news-cover-field {
+  display: grid;
+  gap: 8px;
+}
+.merchant-shell .news-field-label {
+  font-weight: 600;
+  font-size: 14px;
+}
+.merchant-shell .news-cover-frame {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  max-width: 420px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+.merchant-shell .news-cover-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.merchant-shell .news-cover-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 13px;
+}
+.merchant-shell .news-cover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* About highlights */
+.merchant-shell .about-highlight-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.merchant-shell .about-highlight-row {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.merchant-shell .about-highlight-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.merchant-shell .about-highlight-index {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-right: auto;
+  border-radius: 50%;
+  background: var(--brand-soft, #eef1ff);
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 700;
+}
+.merchant-shell .about-icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.merchant-shell .about-icon-picker button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+}
+.merchant-shell .about-icon-picker button.active {
+  border-color: var(--brand);
+  background: var(--brand-soft, #eef1ff);
+  color: var(--brand);
+}
+
+/* ---------- Preview (storefront tokens, light) ---------- */
+.merchant-shell .news-preview-card {
+  position: sticky;
+  top: 16px;
+  min-width: 0;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 12px 32px -18px rgba(15, 23, 42, 0.25);
+}
+.merchant-shell .news-preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.merchant-shell .news-preview-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.merchant-shell .storefront-preview-scope {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --raised: #f1f3f5;
+  --text: #0b0b0c;
+  --muted: #5f6066;
+  --border: #e4e7eb;
+  --accent: #1534ff;
+  --accent-text: #1534ff;
+  --accent-ink: #ffffff;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 8px 24px -12px rgb(16 24 40 / 0.14);
+  max-height: 78vh;
+  overflow: auto;
+  padding: 16px;
+  background: var(--bg);
+  color: var(--text);
+}
+.merchant-shell .news-preview-cardwrap {
+  max-width: 360px;
+  margin: 0 auto;
+}
+.merchant-shell .storefront-preview-scope .news-card,
+.merchant-shell .storefront-preview-scope .news-article {
+  animation: none;
+}
+.merchant-shell .storefront-preview-scope .page-heading {
+  margin-bottom: 0;
+}
+.merchant-shell .storefront-preview-scope .page-heading h1 {
+  margin: 4px 0 0;
+  font-size: 28px;
+}
+
+@media (max-width: 980px) {
+  .merchant-shell .news-editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .merchant-shell .news-preview-card {
+    position: static;
+  }
+}
+@media (max-width: 640px) {
+  .merchant-shell .news-admin-row {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+  .merchant-shell .news-admin-thumb {
+    width: 72px;
+  }
+  .merchant-shell .news-admin-status {
+    justify-self: start;
+    grid-column: 2;
+  }
+  .merchant-shell .news-admin-actions {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+  }
+  .merchant-shell .news-admin-actions .button {
+    min-height: 44px;
+  }
+  .merchant-shell .news-two-col {
+    grid-template-columns: 1fr;
+  }
+  .merchant-shell .news-card-panel {
+    padding: 16px;
+  }
+}
