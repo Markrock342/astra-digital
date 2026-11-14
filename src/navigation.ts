@@ -5,6 +5,7 @@
 // - NAVIGATE_EVENT: fired after every in-app navigation, so a page that stays
 //   mounted (same pathname) can react to a new ?query, e.g. /admin/chat?thread=.
 import { useCallback, useEffect, useRef } from "react";
+import { confirmDialog } from "./dialogs";
 
 export const NAVIGATE_EVENT = "astra:navigate";
 export const UNSAVED_MESSAGE = "มีการแก้ไขที่ยังไม่บันทึก ออกจากหน้านี้?";
@@ -13,10 +14,10 @@ type Guard = () => string | null;
 const guards = new Set<Guard>();
 
 /** True when no page blocks leaving, or the user confirmed leaving. */
-export function confirmLeave(): boolean {
+export async function confirmLeave(): Promise<boolean> {
   for (const guard of guards) {
     const message = guard();
-    if (message && !window.confirm(message)) return false;
+    if (message && !(await confirmDialog({ title: message, confirmText: "ออกจากหน้านี้" }))) return false;
   }
   return true;
 }

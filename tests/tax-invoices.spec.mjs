@@ -126,8 +126,8 @@ test("3. the admin reviews the request and issues the tax invoice", async ({ pag
   const card = page.getByRole("region", { name: "ใบกำกับภาษี" });
   await expect(card).toContainText("ลูกค้าขอใบกำกับภาษี · รอออก");
   await expect(card).toContainText(BUYER_NAME);
-  page.once("dialog", (d) => d.accept());
   await card.getByRole("button", { name: "ออกใบกำกับภาษี", exact: true }).click();
+  await page.locator(".astra-dialog").getByRole("button", { name: "ยืนยัน" }).click();
   await expect(page.getByText("ออกใบกำกับภาษีแล้ว ลูกค้าได้แจ้งเตือน")).toBeVisible();
   await expect(card.locator(".alert-badge").first()).toHaveText("ออกใบกำกับภาษีแล้ว");
   const invoice = service.db.prepare("SELECT number,vat,net,total FROM tax_invoices WHERE order_id=?").get(orderId);

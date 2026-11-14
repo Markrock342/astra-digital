@@ -80,6 +80,7 @@ import type {
 } from "./types";
 import { MAX_PER_ORDER } from "./types";
 import { NAVIGATE_EVENT, confirmLeave } from "./navigation";
+import { confirmDialog } from "./dialogs";
 import Stores, { MerchantHeader } from "./Stores";
 import { CustomerChat, NotificationBell } from "./Ops";
 import { CountUp, useRouteMotion } from "./motion";
@@ -2264,7 +2265,12 @@ function PrivacyDataPanel() {
     }
   }
   async function requestDelete() {
-    if (!confirm(t("ยืนยันขอลบบัญชี? แอดมินจะตรวจสอบก่อนปิดบังข้อมูลส่วนตัว และเก็บประวัติออเดอร์ไว้")))
+    if (!(await confirmDialog({
+      title: t("ยืนยันขอลบบัญชี? แอดมินจะตรวจสอบก่อนปิดบังข้อมูลส่วนตัว และเก็บประวัติออเดอร์ไว้"),
+      confirmText: t("ยืนยัน"),
+      cancelText: t("ยกเลิก"),
+      danger: true,
+    })))
       return;
     setBusy(true);
     setError("");
@@ -2645,12 +2651,14 @@ export default function App() {
   const shownUrl = useRef(location.pathname + location.search);
   function go(to: string, options: { keepScroll?: boolean } = {}) {
     // A page with unsaved changes (useUnsavedChangesGuard) may cancel.
-    if (!confirmLeave()) return;
-    history.pushState({}, "", to);
-    shownUrl.current = location.pathname + location.search;
-    setPath(location.pathname);
-    dispatchEvent(new Event(NAVIGATE_EVENT));
-    if (!options.keepScroll) window.scrollTo({ top: 0, behavior: "instant" });
+    void confirmLeave().then((ok) => {
+      if (!ok) return;
+      history.pushState({}, "", to);
+      shownUrl.current = location.pathname + location.search;
+      setPath(location.pathname);
+      dispatchEvent(new Event(NAVIGATE_EVENT));
+      if (!options.keepScroll) window.scrollTo({ top: 0, behavior: "instant" });
+    });
   }
   async function refresh() {
     try {
@@ -2674,13 +2682,17 @@ export default function App() {
   useEffect(() => {
     void refresh();
     const onPop = () => {
-      if (location.pathname + location.search !== shownUrl.current && !confirmLeave()) {
-        history.pushState({}, "", shownUrl.current);
-        return;
-      }
-      shownUrl.current = location.pathname + location.search;
-      setPath(location.pathname);
-      dispatchEvent(new Event(NAVIGATE_EVENT));
+      const next = location.pathname + location.search;
+      if (next === shownUrl.current) return;
+      void confirmLeave().then((ok) => {
+        if (!ok) {
+          history.pushState({}, "", shownUrl.current);
+          return;
+        }
+        shownUrl.current = location.pathname + location.search;
+        setPath(location.pathname);
+        dispatchEvent(new Event(NAVIGATE_EVENT));
+      });
     };
     addEventListener("popstate", onPop);
     return () => removeEventListener("popstate", onPop);

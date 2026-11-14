@@ -32,6 +32,7 @@ import {
   MailWarning,
 } from "lucide-react";
 import { useLive, type LiveTopic } from "./live";
+import { confirmDialog, promptDialog } from "./dialogs";
 import { AdminChat as AdminChatLazy, BuyerRankingCard as BuyerRankingInline } from "./Ops";
 import { Art, ErrorMessage, Link, Status, ledgerTypeText, useStore } from "./App";
 import { SessionsCard } from "./Sessions";
@@ -4290,7 +4291,7 @@ export function VariantStock({
     onChanged();
   };
   async function defect(unit: StockUnit) {
-    const reason = prompt("เหตุผลที่บัญชีนี้ใช้ไม่ได้");
+    const reason = await promptDialog({ title: "เหตุผลที่บัญชีนี้ใช้ไม่ได้", placeholder: "ระบุเหตุผล", required: true });
     if (!reason) return;
     try {
       await api("/admin/inventory/" + unit.id + "/defect", { reason });
@@ -4301,7 +4302,7 @@ export function VariantStock({
     }
   }
   async function remove(unit: StockUnit) {
-    if (!confirm("ลบบัญชีนี้ออกจากสต็อก?")) return;
+    if (!(await confirmDialog({ title: "ลบบัญชีนี้ออกจากสต็อก?", danger: true }))) return;
     try {
       await api("/admin/inventory/" + unit.id, {}, "DELETE");
       toast("ลบออกจากสต็อกแล้ว");
@@ -4455,7 +4456,7 @@ export function VariantManager({
     }
   }
   async function remove(v: Variant) {
-    if (!confirm("ลบตัวเลือก " + v.label + "? ถ้าเคยมีออเดอร์ ระบบจะให้ปิดแทน")) return;
+    if (!(await confirmDialog({ title: "ลบตัวเลือก " + v.label + "? ถ้าเคยมีออเดอร์ ระบบจะให้ปิดแทน", danger: true }))) return;
     try {
       await api("/admin/variants/" + v.id, {}, "DELETE");
       toast("ลบตัวเลือกแล้ว");
@@ -5105,7 +5106,7 @@ export function ProductImages({
     }
   }
   async function remove(image: ProductImage) {
-    if (!confirm("ลบรูปนี้?")) return;
+    if (!(await confirmDialog({ title: "ลบรูปนี้?", danger: true }))) return;
     try {
       await api("/admin/product-images/" + image.id, {}, "DELETE");
       setList((current) => current.filter((x) => x.id !== image.id));
