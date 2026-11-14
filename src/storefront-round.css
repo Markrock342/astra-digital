@@ -508,3 +508,48 @@
 .storefront-shell .store-card:hover {
   box-shadow: none;
 }
+/* "เอาเงาออกให้หมดเลย": also the glows and floating layers. Thin borders keep them apart. */
+.storefront-shell :is(
+    .chat-fab,
+    .storefront-category-chip,
+    .credit-score-ring,
+    .cart-bar,
+    .order-copy-bar,
+    .sheet-panel,
+    .notice-panel,
+    .chat-panel,
+    .prefs-panel,
+    .theme-panel,
+    .account-menu,
+    .product-card,
+    .store-card,
+    .panel
+  ),
+.storefront-shell :is(.product-card, .store-card, .panel):hover {
+  box-shadow: none !important;
+}
+.storefront-shell :is(.sheet-panel, .chat-panel, .prefs-panel, .theme-panel, .notice-panel) {
+  border: 1px solid var(--border);
+}
+
+/* ประกาศจากร้าน (home): readable text on phones too (was 12px / 11px). */
+.storefront-shell .announcement h2 {
+  font-size: 17px;
+  line-height: 1.4;
+}
+.storefront-shell .announcement p {
+  font-size: 15px;
+  line-height: 1.6;
+}
+.storefront-shell .announcement small {
+  font-size: 13px;
+}
+.storefront-shell .announcement-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.storefront-shell .announcement-icon svg {
+  width: 22px;
+  height: 22px;
+}
