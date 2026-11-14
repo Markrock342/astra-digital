@@ -152,6 +152,8 @@ export const DEFAULT_APPEARANCE = Object.freeze({
       { label: pair("สินค้าทั้งหมด", "All products"), link: "/products" },
       { label: pair("เครดิตร้าน", "Store credit"), link: "/reviews" },
       { label: pair("ประวัติการซื้อ", "Purchase history"), link: "/orders" },
+      { label: pair("ข่าวสารและกิจกรรม", "News & events"), link: "/news" },
+      { label: pair("เกี่ยวกับเรา", "About us"), link: "/about" },
       { label: pair("คำถามที่พบบ่อย", "FAQ"), link: "/faq" },
       { label: pair("ติดต่อเรา", "Contact us"), link: "/support" },
     ],
@@ -404,7 +406,7 @@ export function normalizeAppearanceParts(input, fail) {
 }
 
 /** Version of the stored JSON. Bumped when defaults change in a way saved rows must follow. */
-export const APPEARANCE_REV = 2;
+export const APPEARANCE_REV = 3;
 /** Hero button labels that were the defaults before rev 2 (replaced by the new defaults). */
 const LEGACY_HERO_LABELS = {
   primary: ["เลือกซื้อสินค้า", ["", "Shop now"]],
@@ -419,7 +421,20 @@ const LEGACY_HERO_LABELS = {
 export function migrateStoredAppearance(stored) {
   if (!isObject(stored)) return {};
   const out = JSON.parse(JSON.stringify(stored));
-  if (Number(out.rev) >= APPEARANCE_REV) return out;
+  const rev = Number(out.rev) || 0;
+  if (rev >= APPEARANCE_REV) return out;
+  // rev 3: footer menus saved before /news and /about existed get those two links (if room).
+  if (rev < 3 && isObject(out.footer) && Array.isArray(out.footer.links)) {
+    for (const link of ["/news", "/about"]) {
+      if (out.footer.links.length >= 8 || out.footer.links.some((l) => isObject(l) && l.link === link)) continue;
+      const def = DEFAULT_APPEARANCE.footer.links.find((l) => l.link === link);
+      out.footer.links.push(JSON.parse(JSON.stringify(def)));
+    }
+  }
+  if (rev >= 2) {
+    out.rev = APPEARANCE_REV;
+    return out;
+  }
   if (Array.isArray(out.sections))
     out.sections = out.sections.map((item) =>
       isObject(item) && DEFAULT_HIDDEN_SECTIONS.includes(item.id) ? { ...item, visible: false } : item,

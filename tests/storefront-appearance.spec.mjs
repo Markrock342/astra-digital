@@ -115,8 +115,9 @@ test("admin edits the storefront look, customers see it in TH and EN, reset rest
   await page.getByLabel("ชื่อเมนูที่ 1 (ไทย)").fill("ช้อปทั้งหมด");
   await page.getByLabel("ชื่อเมนูที่ 1 (อังกฤษ)").fill("Shop all");
   await page.getByRole("button", { name: "เพิ่มเมนู" }).click();
-  await page.getByLabel("ชื่อเมนูที่ 6 (ไทย)").fill("LINE ร้าน");
-  await page.locator(".appearance-row").nth(5).getByLabel("ลิงก์").fill("https://line.me/R/ti/p/@shop");
+  // Default menu has 7 links (news + about added), so the new one is the 8th.
+  await page.getByLabel("ชื่อเมนูที่ 8 (ไทย)").fill("LINE ร้าน");
+  await page.locator(".appearance-row").nth(7).getByLabel("ลิงก์").fill("https://line.me/R/ti/p/@shop");
 
   await page.getByRole("button", { name: "บันทึก", exact: true }).click();
   await expect(page.locator(".appearance-save-bar")).toContainText("ตรงกับหน้าร้าน");
@@ -196,7 +197,7 @@ test("admin edits the storefront look, customers see it in TH and EN, reset rest
   await expect(shop.locator(".marquee-track span").first()).toContainText("สินค้าพร้อมส่ง ได้รับทันทีหลังชำระเงิน");
   await expect(shop.locator(".stats-panel")).toHaveCount(1);
   expect(await shop.locator(".hero-cta").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(21, 52, 255)");
-  await expect(shop.locator(".footer-menu a")).toHaveText(["สินค้าทั้งหมด", "เครดิตร้าน", "ประวัติการซื้อ", "คำถามที่พบบ่อย", "ติดต่อเรา"]);
+  await expect(shop.locator(".footer-menu a")).toHaveText(["สินค้าทั้งหมด", "เครดิตร้าน", "ประวัติการซื้อ", "ข่าวสารและกิจกรรม", "เกี่ยวกับเรา", "คำถามที่พบบ่อย", "ติดต่อเรา"]);
   await expect(shop.locator('meta[property="og:image"]')).toHaveAttribute("content", /\/brand\/og\.png$/);
   await expect(shop.locator("#shop-colors")).toHaveCount(0);
   await expectCredit(shop);

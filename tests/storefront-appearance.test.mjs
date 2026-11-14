@@ -95,6 +95,8 @@ test("defaults are today's storefront text, word for word (TH and the current EN
       ["สินค้าทั้งหมด", "/products"],
       ["เครดิตร้าน", "/reviews"],
       ["ประวัติการซื้อ", "/orders"],
+      ["ข่าวสารและกิจกรรม", "/news"],
+      ["เกี่ยวกับเรา", "/about"],
       ["คำถามที่พบบ่อย", "/faq"],
       ["ติดต่อเรา", "/support"],
     ].map(([th, link]) => [th, EN_STRINGS[th], link]),
@@ -465,4 +467,16 @@ test("rows saved before the client round keep working: missing fields default, o
     resolveAppearance({ rev: APPEARANCE_REV, sections: [{ id: "products", visible: true }] }).sections.find((x) => x.id === "categories").visible,
     false,
   );
+});
+
+test("rev 3: a footer menu saved earlier gets ข่าวสาร + เกี่ยวกับเรา, unless already there or full", async () => {
+  const { migrateStoredAppearance } = await import("../server/appearance-rules.mjs");
+  const link = (th, url) => ({ label: { th, en: "" }, link: url });
+  const old = migrateStoredAppearance({ rev: 2, footer: { links: [link("สินค้า", "/products")] } });
+  assert.deepEqual(old.footer.links.map((l) => l.link), ["/products", "/news", "/about"]);
+  const has = migrateStoredAppearance({ rev: 2, footer: { links: [link("เกี่ยวกับร้าน", "/about")] } });
+  assert.deepEqual(has.footer.links.map((l) => l.link), ["/about", "/news"]);
+  const full = migrateStoredAppearance({ rev: 2, footer: { links: Array.from({ length: 8 }, (_, i) => link("L" + i, "/p" + i)) } });
+  assert.equal(full.footer.links.length, 8);
+  assert.equal(migrateStoredAppearance({ rev: 3, footer: { links: [] } }).footer.links.length, 0);
 });

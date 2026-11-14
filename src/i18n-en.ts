@@ -464,6 +464,8 @@ export const EN_STRINGS: Record<string, string> = {
   "นโยบายความเป็นส่วนตัว": "Privacy Policy",
   "ลืมรหัสผ่าน? ติดต่อร้านผ่านช่องทางในหน้า": "Forgot your password? Reach the shop through",
   "ติดต่อเรา": "Contact us",
+  "ข่าวสารและกิจกรรม": "News & events",
+  "เกี่ยวกับเรา": "About us",
   "ร้านจะตั้งรหัสผ่านชั่วคราวให้หลังยืนยันตัวตน": "and the shop will set a temporary password after verifying you.",
   "ยืนยันตัวตน 2 ขั้น": "Two-step verification",
   "กรอกรหัสกู้คืนที่บันทึกไว้ตอนเปิดใช้งาน รหัสแต่ละชุดใช้ได้ครั้งเดียว":
