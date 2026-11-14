@@ -253,6 +253,63 @@ export function createAccountEmail({
       return false;
     }
   }
+  /**
+   * One confirmation for a multi-line checkout: all line names, no secrets,
+   * link to /checkouts/:id. Mentions OUT_OF_STOCK lines that were not charged.
+   */
+  function sendCheckoutConfirmation(checkoutId, ctx = {}) {
+    if (!enabled) return false;
+    try {
+      const checkout = one("SELECT id, user_id FROM checkouts WHERE id=?", checkoutId);
+      if (!checkout) return false;
+      const user = one("SELECT email, name FROM users WHERE id=?", checkout.user_id);
+      if (!user) return false;
+      const lines = all(
+        `SELECT id, status, total, quantity, product, label FROM (
+           SELECT o.id, o.status, o.total, o.quantity, p.name AS product, v.label, o.checkout_line AS line_no
+           FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id
+           WHERE o.checkout_id=?
+           UNION ALL
+           SELECT r.id, r.status, r.total, r.quantity, p.name AS product, v.label, r.checkout_line AS line_no
+           FROM reservations r JOIN variants v ON v.id=r.variant_id JOIN products p ON p.id=v.product_id
+           WHERE r.checkout_id=?
+         ) ORDER BY line_no, id`,
+        checkoutId,
+        checkoutId,
+      );
+      if (!lines.length) return false;
+      const paid = lines.filter((l) => l.status === "DELIVERED" || l.status === "PREORDER");
+      const oos = lines.filter((l) => l.status === "OUT_OF_STOCK");
+      if (!paid.length && !oos.length) return false;
+      const nameOf = (l) => (l.label ? l.product + " · " + l.label : l.product);
+      const product = paid.length
+        ? paid.map((l) => nameOf(l) + " ×" + l.quantity).join(", ")
+        : "(ไม่มีรายการที่ตัดเงิน)";
+      const oosNote = oos.length
+        ? " รายการที่ของหมดและไม่ได้ตัดเงิน: " + oos.map(nameOf).join(", ")
+        : "";
+      const total = paid.reduce((n, l) => n + (l.total || 0), 0);
+      const quantity = paid.reduce((n, l) => n + (l.quantity || 0), 0);
+      return queue({
+        kind: "checkout_confirmed",
+        to: user.email,
+        ref: "checkout-confirmed:" + checkoutId,
+        message: render("checkout_confirmed", {
+          shopName: shopName(),
+          customerName: user.name,
+          orderNumber: orderNumber(checkoutId),
+          product: product + oosNote,
+          quantity,
+          total,
+          link: baseUrl(ctx) + "/checkouts/" + encodeURIComponent(checkoutId),
+        }),
+      });
+    } catch (error) {
+      console.error("Checkout email skipped:", error?.message);
+      return false;
+    }
+  }
+
   /** "สินค้าพรีออเดอร์พร้อมแล้ว" once per preorder, after staff delivered it. */
   function sendPreorderReady(reservationId, ctx = {}) {
     if (!enabled) return false;
@@ -287,7 +344,7 @@ export function createAccountEmail({
     const deliver = service.deliverReservation;
     service.pay = (user, id, input, ctx) => {
       const result = pay(user, id, input);
-      if (enabled && input?.outcome === "success") {
+      if (enabled && input?.outcome === "success" && !input?.suppressNotifications) {
         // Deposit / free preorder paid in full when called → delivered: "พร้อมแล้ว" email.
         if (result?.preorder && result.status === "DELIVERED") sendPreorderReady(result.id ?? id, ctx);
         else sendOrderConfirmation(result?.id ?? id, ctx);
@@ -334,6 +391,7 @@ export function createAccountEmail({
     requestPasswordReset,
     resetPassword,
     sendOrderConfirmation,
+    sendCheckoutConfirmation,
     sendPreorderReady,
     hookOrderEmails,
     integrationsStatus,
