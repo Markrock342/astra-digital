@@ -187,3 +187,22 @@ test("held preorder units go back to stock; email verification rows are removed"
   assert.equal(count(s, "SELECT COUNT(*) AS n FROM email_verifications"), 0);
   assert.ok(dry);
 });
+
+test("multi-item checkouts and receipt rows of customers go too", (t) => {
+  const { s, admin, buyer } = fixture(t);
+  s.setPaymentChannel(admin, { provider: "sandbox", active: true });
+  s.createCheckout(buyer, {
+    requestKey: "launch-checkout-" + Date.now(),
+    lines: [
+      { variantId: "stream-plus-30", quantity: 1 },
+      { variantId: "stream-plus-90", quantity: 1 },
+    ],
+  });
+  assert.equal(count(s, "SELECT COUNT(*) AS n FROM checkouts"), 1);
+  const dry = s.adminLaunchCleanup(admin, { currentPassword: ADMIN_PASSWORD, dryRun: true });
+  assert.equal(dry.remove.checkouts, 1);
+  s.adminLaunchCleanup(admin, { currentPassword: ADMIN_PASSWORD, dryRun: false });
+  assert.equal(count(s, "SELECT COUNT(*) AS n FROM checkouts"), 0);
+  assert.equal(count(s, "SELECT COUNT(*) AS n FROM order_receipt_requests"), 0);
+  assert.equal(count(s, "SELECT COUNT(*) AS n FROM receipt_profiles"), 0);
+});

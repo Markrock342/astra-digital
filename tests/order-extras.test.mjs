@@ -210,10 +210,23 @@ test("report issue: linked to the order, delivered only, owner only, 3 per order
   void other;
 });
 
+const RECEIPT_BUYER = {
+  type: "PERSON",
+  name: "Extras Buyer",
+  taxId: "1234567890121",
+  address: "10 หมู่ 2 ต.บางพลี อ.บางพลี สมุทรปราการ 10540",
+};
+function approveOrderReceipt(s, admin, user, orderId) {
+  s.requestOrderReceipt(user, orderId, RECEIPT_BUYER);
+  s.adminApproveOrderReceipt(admin, orderId);
+}
+
 test("receipt: customer and admin views, no credentials, discount and refund fields", async (t) => {
   const { s, user, admin, staff, variantId, token, adminToken, staffToken, otherToken } = fixture(t);
   s.saveSettings(admin, { shopName: "ร้านทดสอบใบเสร็จ", email: "shop@example.invalid", phone: "02-000-0000" });
   const order = buy(s, user, variantId, "extras-receipt-01");
+  assert.equal((await call(s, "GET", "/api/orders/" + order.id + "/receipt", token)).status, 403);
+  approveOrderReceipt(s, admin, user, order.id);
   const mine = await call(s, "GET", "/api/orders/" + order.id + "/receipt", token);
   assert.equal(mine.status, 200);
   const r = mine.data.receipt;
@@ -257,12 +270,14 @@ test("receipt: customer and admin views, no credentials, discount and refund fie
   if (!cols.includes("discount")) s.db.exec("ALTER TABLE orders ADD COLUMN discount INTEGER");
   const discounted = buy(s, user, variantId, "extras-receipt-02");
   s.db.prepare("UPDATE orders SET discount=1000 WHERE id=?").run(discounted.id);
+  approveOrderReceipt(s, admin, user, discounted.id);
   const d = s.orderReceipt(user, discounted.id);
   assert.deepEqual([d.item.subtotal, d.item.discount, d.item.unitPrice, d.total], [10900, 1000, 10900, 9900]);
 
-  // Unpaid orders still get an order confirmation with the payment state.
+  // Unpaid: customer cannot download; admin still sees payment state on confirmation.
   const pending = buy(s, user, variantId, "extras-receipt-03", false);
-  assert.equal(s.orderReceipt(user, pending.id).paymentStatus, "PENDING");
+  assert.throws(() => s.orderReceipt(user, pending.id), (e) => e.status === 403);
+  assert.equal(s.adminOrderReceipt(admin, pending.id).paymentStatus, "PENDING");
 });
 
 test("new product: first option label and warranty from the form; old callers keep the default", (t) => {

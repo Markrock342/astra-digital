@@ -145,19 +145,29 @@ test("3. after delivery the buyer sees the instructions and reports a problem th
 });
 
 test("4. receipt: printable page for the buyer, linked from the order and history", async ({ page }) => {
+  const admin = service.session(adminToken);
+  const customer = service.session(buyerToken);
+  service.requestOrderReceipt(customer, deliveredId, {
+    type: "PERSON",
+    name: "Extras Buyer",
+    taxId: "1234567890121",
+    address: "10 หมู่ 2 ต.บางพลี อ.บางพลี สมุทรปราการ 10540",
+  });
+  service.adminApproveOrderReceipt(admin, deliveredId);
+
   await as(page.context(), buyerToken);
   await page.goto(base + "/orders");
   await expect(page.locator(".history-card")).toHaveCount(2);
-  // Only the paid order offers a receipt.
+  // Only the paid + approved-receipt order offers a download link.
   await expect(page.locator(".history-item-actions .receipt-link")).toHaveCount(1);
   await page.goto(base + "/orders/" + deliveredId);
   await page.locator(".order-meta").getByRole("link", { name: "ใบเสร็จ" }).click();
   await expect(page).toHaveURL(base + "/orders/" + deliveredId + "/receipt");
   const paper = page.locator(".receipt-paper");
-  await expect(page.getByRole("heading", { name: "ใบยืนยันการสั่งซื้อ / ใบเสร็จรับเงิน (อย่างย่อ)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "ใบเสร็จคำสั่งซื้อ" })).toBeVisible();
   await expect(paper).toContainText("#" + deliveredId.slice(0, 8).toUpperCase());
   await expect(paper).toContainText("Extras Buyer");
-  await expect(paper).toContainText("extras-ui@example.invalid");
+  await expect(paper).toContainText("1234567890121");
   await expect(paper).toContainText("Extras Stream");
   await expect(paper).toContainText("1 เดือน");
   await expect(paper).toContainText("ชำระเงินแล้ว");
@@ -203,7 +213,7 @@ test("4. receipt: printable page for the buyer, linked from the order and histor
 test("5. admin opens the receipt from the order detail", async ({ page }) => {
   await as(page.context(), adminToken);
   await page.goto(base + "/admin/orders/" + deliveredId);
-  await page.getByRole("link", { name: "ใบเสร็จ" }).click();
+  await page.locator("a.admin-receipt-link").click();
   await expect(page).toHaveURL(base + "/admin/orders/" + deliveredId + "/receipt");
   await expect(page.locator(".receipt-paper")).toContainText("Extras Buyer");
   await expect(page.locator(".receipt-paper")).toContainText("ชำระเงินแล้ว");

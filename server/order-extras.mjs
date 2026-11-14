@@ -76,6 +76,8 @@ export function createOrderExtras({
   orderRefundState,
   // Receipt settings + buyer details (tax-invoices.mjs); optional so older callers keep working.
   taxInvoices = null,
+  // ใบเสร็จคำสั่งซื้อ approval gate + payment channel (order-receipts.mjs).
+  orderReceipts = null,
 }) {
   /** Ready-stock order or preorder row, with product + option, or null. */
   function loadOrderRow(orderId) {
@@ -233,17 +235,20 @@ export function createOrderExtras({
       paymentStatus: payment.status,
       refundStatus: refund.refundStatus ?? null,
       refundedTotal: refund.refundedTotal ?? 0,
-      // Buyer block (ใบเสร็จรับเงิน in the buyer's name) + the issued tax invoice number.
+      paymentMethodLabel: orderReceipts?.paymentMethodLabelForOrder?.(row) ?? null,
+      // Buyer block (ใบเสร็จรับเงิน / approved order-receipt) + tax invoice number.
       ...(taxInvoices ? taxInvoices.receiptExtras(row) : {}),
+      ...(orderReceipts ? orderReceipts.receiptExtras(row) : {}),
     };
   }
 
-  /** GET /api/orders/:id/receipt — the buyer's own order only. */
+  /** GET /api/orders/:id/receipt — the buyer's own order only; gated until approved. */
   function orderReceipt(user, id) {
     requireUser(user);
     const orderId = clean(id, 1, 80, "คำสั่งซื้อ");
     const row = loadOrderRow(orderId);
     if (!row || row.user_id !== user.id) fail(404, "ไม่พบคำสั่งซื้อ");
+    if (orderReceipts) orderReceipts.assertCustomerDownload(user, orderId);
     return buildReceipt(row, { includeRefund: true });
   }
 

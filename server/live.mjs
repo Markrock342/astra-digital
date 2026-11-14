@@ -112,6 +112,13 @@ const LIVE_METHODS = {
   adminIssueTaxInvoice: ["orders", "notify"],
   adminRejectTaxInvoice: ["orders", "notify"],
   adminVoidTaxInvoice: ["orders", "notify"],
+  // ใบเสร็จคำสั่งซื้อ (order-receipts.mjs).
+  requestOrderReceipt: ["orders", "notify"],
+  adminApproveOrderReceipt: ["orders", "notify"],
+  adminRejectOrderReceipt: ["orders", "notify"],
+  createReceiptProfile: ["customers"],
+  updateReceiptProfile: ["customers"],
+  deleteReceiptProfile: ["customers"],
 };
 
 export function ensureLiveVersions(db) {

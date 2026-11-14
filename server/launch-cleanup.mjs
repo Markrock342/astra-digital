@@ -182,6 +182,18 @@ export function createLaunchCleanupApis({
       taxInvoiceRequests: customers.length
         ? n(`SELECT COUNT(*) AS n FROM tax_invoice_requests WHERE user_id ${customerSet}`, ...cparams)
         : 0,
+      orderReceiptRequests:
+        customers.length && tableExists(one, "order_receipt_requests")
+          ? n(`SELECT COUNT(*) AS n FROM order_receipt_requests WHERE user_id ${customerSet}`, ...cparams)
+          : 0,
+      receiptProfiles:
+        customers.length && tableExists(one, "receipt_profiles")
+          ? n(`SELECT COUNT(*) AS n FROM receipt_profiles WHERE user_id ${customerSet}`, ...cparams)
+          : 0,
+      checkouts:
+        customers.length && tableExists(one, "checkouts")
+          ? n(`SELECT COUNT(*) AS n FROM checkouts WHERE user_id ${customerSet}`, ...cparams)
+          : 0,
       taxInvoicesTest: tableExists(one, "tax_invoices")
         ? n(`SELECT COUNT(*) AS n FROM tax_invoices WHERE scope='sandbox' OR number LIKE 'TEST-%'`)
         : 0,
@@ -340,6 +352,12 @@ export function createLaunchCleanupApis({
 
           if (tableExists(one, "tax_invoice_requests"))
             run(`DELETE FROM tax_invoice_requests WHERE user_id IN (${marks})`, ...customerIds);
+          if (tableExists(one, "order_receipt_requests"))
+            run(`DELETE FROM order_receipt_requests WHERE user_id IN (${marks})`, ...customerIds);
+          if (tableExists(one, "receipt_profiles"))
+            run(`DELETE FROM receipt_profiles WHERE user_id IN (${marks})`, ...customerIds);
+          if (tableExists(one, "checkouts"))
+            run(`DELETE FROM checkouts WHERE user_id IN (${marks})`, ...customerIds);
 
           run(`DELETE FROM payments WHERE user_id IN (${marks})`, ...customerIds);
           run(

@@ -88,6 +88,7 @@ import { WarrantyStatus } from "./Warranty";
 import { SessionsCard } from "./Sessions";
 import { StockWatchList } from "./StockWatch";
 import { DeliveredExtras, hasReceipt, ReceiptLink, ReceiptPage, receiptRoute } from "./OrderExtras";
+import { ReceiptProfilesPanel } from "./OrderReceipts";
 import { AskInChat } from "./ChatAttachments";
 import { ShopClosedNote, useShopOpen } from "./ShopClosed";
 import { CheckoutPreorderRow, isQueueMode, PreorderProgress, preorderHeading } from "./Preorder";
@@ -2179,6 +2180,7 @@ function Account() {
             )}
           </div>
           <StockWatchList />
+          <ReceiptProfilesPanel />
           <form className="panel profile-form" onSubmit={save}>
             <h2>{t("ข้อมูลส่วนตัว")}</h2>
             <ErrorMessage message={error} />

@@ -346,6 +346,13 @@ test("price override: lower or higher needs a reason, never 0 or less; receipt s
   const audit = JSON.parse(s.db.prepare("SELECT detail FROM audit WHERE action='MANUAL_ORDER_CREATE' AND entity_id=?").get(made.order.id).detail);
   assert.equal(audit.reason, "ลูกค้าประจำ ลดพิเศษ");
   assert.equal(audit.normalUnitPrice, 10000);
+  s.requestOrderReceipt(buyer, made.order.id, {
+    type: "PERSON",
+    name: "Manual Buyer",
+    taxId: "1234567890121",
+    address: "10 หมู่ 2 ต.บางพลี อ.บางพลี สมุทรปราการ 10540",
+  });
+  s.adminApproveOrderReceipt(admin, made.order.id);
   const receipt = s.orderReceipt(buyer, made.order.id);
   assert.equal(receipt.item.unitPrice, 8000);
   assert.equal(receipt.total, 24000);
