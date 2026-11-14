@@ -382,11 +382,15 @@ export function createOrderReceipts({
        FROM order_receipt_requests r
        JOIN users u ON u.id=r.user_id
        WHERE r.status=?
-       ORDER BY r.requested_at ASC`,
+       ORDER BY CASE WHEN r.status='PENDING' THEN r.requested_at END ASC, r.requested_at DESC`,
       st,
     );
+    const counts = Object.fromEntries(RECEIPT_REQUEST_STATUSES.map((k) => [k, 0]));
+    for (const c of all("SELECT status, COUNT(*) AS n FROM order_receipt_requests GROUP BY status"))
+      if (c.status in counts) counts[c.status] = c.n;
     return {
       status: st,
+      counts,
       requests: rows.map((row) => ({
         ...requestPublic(row),
         customerName: row.customer_name,

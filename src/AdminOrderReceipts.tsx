@@ -1,10 +1,11 @@
 // Admin queue for ใบเสร็จคำสั่งซื้อ approvals (server/order-receipts.mjs).
 import { useEffect, useState } from "react";
-import { CheckCircle2, LoaderCircle, XCircle } from "lucide-react";
+import { Check, Eye, LoaderCircle, X } from "lucide-react";
 import { ErrorMessage, Link, useStore } from "./App";
 import { api, dateTime } from "./api";
 import { useLive } from "./live";
 import "./alerts.css";
+import "./tax-invoice.css";
 import "./order-receipts.css";
 
 type Row = {
@@ -23,19 +24,34 @@ const TABS = [
   ["APPROVED", "อนุมัติแล้ว"],
   ["REJECTED", "ไม่อนุมัติ"],
 ] as const;
+type Tab = (typeof TABS)[number][0];
+const EMPTY: Record<Tab, string> = {
+  PENDING: "ไม่มีคำขอที่รออนุมัติ",
+  APPROVED: "ยังไม่มีใบเสร็จที่อนุมัติ",
+  REJECTED: "ยังไม่มีคำขอที่ไม่อนุมัติ",
+};
+const shortId = (id: string) => id.slice(0, 8).toUpperCase();
 
+/** /admin/order-receipts — same list pattern as ใบกำกับภาษี (tabs with counts + table). */
 export function AdminOrderReceipts() {
   const { toast } = useStore();
-  const [status, setStatus] = useState<(typeof TABS)[number][0]>("PENDING");
-  const [rows, setRows] = useState<Row[]>([]);
+  const [status, setStatus] = useState<Tab>("PENDING");
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [counts, setCounts] = useState<Partial<Record<Tab, number>>>({});
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState("");
-  const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
+  const [rejecting, setRejecting] = useState("");
+  const [reason, setReason] = useState("");
   const load = () =>
-    api<{ requests: Row[] }>("/admin/order-receipts?status=" + status)
-      .then((r) => setRows(r.requests))
+    api<{ requests: Row[]; counts?: Partial<Record<Tab, number>> }>("/admin/order-receipts?status=" + status)
+      .then((r) => {
+        setRows(r.requests);
+        if (r.counts) setCounts(r.counts);
+      })
       .catch((e: Error) => setError(e.message));
   useEffect(() => {
+    setRows(null);
+    setRejecting("");
     void load();
   }, [status]);
   useLive(["orders", "notify"], () => void load());
@@ -45,7 +61,7 @@ export function AdminOrderReceipts() {
     setError("");
     try {
       await api("/admin/orders/" + encodeURIComponent(id) + "/order-receipt/approve", {});
-      toast("อนุมัติใบเสร็จแล้ว");
+      toast("อนุมัติใบเสร็จแล้ว ลูกค้าดาวน์โหลดได้");
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -54,16 +70,18 @@ export function AdminOrderReceipts() {
     }
   }
   async function reject(id: string) {
-    const reason = (rejectReason[id] || "").trim();
-    if (reason.length < 3) {
+    const text = reason.trim();
+    if (text.length < 3) {
       setError("กรุณาใส่เหตุผลอย่างน้อย 3 ตัวอักษร");
       return;
     }
     setBusyId(id);
     setError("");
     try {
-      await api("/admin/orders/" + encodeURIComponent(id) + "/order-receipt/reject", { reason });
-      toast("ไม่อนุมัติใบเสร็จแล้ว");
+      await api("/admin/orders/" + encodeURIComponent(id) + "/order-receipt/reject", { reason: text });
+      toast("ไม่อนุมัติแล้ว ลูกค้าได้แจ้งเตือน");
+      setRejecting("");
+      setReason("");
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -73,74 +91,144 @@ export function AdminOrderReceipts() {
   }
 
   return (
-    <div className="admin-order-receipts">
-      <div className="page-heading">
-        <span className="eyebrow">ออเดอร์</span>
-        <h1>ใบเสร็จคำสั่งซื้อ</h1>
-        <p>คิวอนุมัติก่อนลูกค้าดาวน์โหลดหรือพิมพ์ใบเสร็จ</p>
+    <div className="alerts-page tax-list-page order-receipt-admin">
+      <div className="reference-admin-heading">
+        <div>
+          <h1>ใบเสร็จคำสั่งซื้อ</h1>
+          <p>ลูกค้าส่งคำขอ · อนุมัติแล้วลูกค้าจึงดาวน์โหลดหรือพิมพ์ได้</p>
+        </div>
+        <Link to="/admin/settings/receipts" className="button secondary">
+          ตั้งค่าใบเสร็จ
+        </Link>
       </div>
-      <div className="admin-tabs" role="tablist">
+      <ErrorMessage message={error} />
+      <div className="reference-status-tabs order-status-tabs" role="tablist" aria-label="สถานะ">
         {TABS.map(([key, label]) => (
           <button
             key={key}
             type="button"
             role="tab"
-            className={status === key ? "is-active" : ""}
             aria-selected={status === key}
+            className={status === key ? "active" : ""}
             onClick={() => setStatus(key)}
           >
             {label}
+            {counts[key] != null && <span className="tab-count">{counts[key]!.toLocaleString("th-TH")}</span>}
           </button>
         ))}
       </div>
-      <ErrorMessage message={error} />
-      {rows.length === 0 ? <p className="muted">ไม่พบรายการในสถานะนี้</p> : null}
-      <ul className="order-receipt-profile-list">
-        {rows.map((row) => (
-          <li key={row.orderId} className="panel order-receipt-profile-item">
-            <div>
-              <Link to={"/admin/orders/" + row.orderId}>#{row.orderId.slice(0, 8).toUpperCase()}</Link>
-              <p>
-                {row.customerName}
-                {row.customerEmail ? " · " + row.customerEmail : ""}
-              </p>
-              <p>
-                {row.buyer.name} · {row.buyer.taxId}
-              </p>
-              <p className="muted">{row.buyer.address}</p>
-              <p className="muted">ส่งคำขอ {dateTime(row.requestedAt)}</p>
-              {row.reason ? <p className="order-receipt-status is-fail">{row.reason}</p> : null}
-            </div>
-            {status === "PENDING" ? (
-              <div className="order-receipt-actions">
-                <button type="button" className="button primary" disabled={busyId === row.orderId} onClick={() => void approve(row.orderId)}>
-                  {busyId === row.orderId ? <LoaderCircle className="spin" size={16} /> : <CheckCircle2 size={16} />}
-                  อนุมัติ
-                </button>
-                <label className="field">
-                  เหตุผลไม่อนุมัติ
-                  <input
-                    value={rejectReason[row.orderId] || ""}
-                    onChange={(e) => setRejectReason({ ...rejectReason, [row.orderId]: e.target.value })}
-                    placeholder="เช่น ข้อมูลไม่ครบ"
-                  />
-                </label>
-                <button type="button" className="button secondary" disabled={busyId === row.orderId} onClick={() => void reject(row.orderId)}>
-                  <XCircle size={16} />
-                  ไม่อนุมัติ
-                </button>
-                <Link to={"/admin/orders/" + row.orderId + "/receipt"} className="button secondary">
-                  ดูใบเสร็จ
-                </Link>
-              </div>
-            ) : (
-              <Link to={"/admin/orders/" + row.orderId + "/receipt"} className="button secondary">
-                ดูใบเสร็จ
-              </Link>
-            )}
-          </li>
-        ))}
-      </ul>
+      {!rows ? (
+        <section className="reference-admin-card editor-panel">
+          <p className="reference-empty-text">กำลังโหลด…</p>
+        </section>
+      ) : !rows.length ? (
+        <section className="reference-admin-card editor-panel fraud-empty">
+          <p>{EMPTY[status]}</p>
+        </section>
+      ) : (
+        <div className="table-scroll reference-table admin-list-table">
+          <table>
+            <thead>
+              <tr>
+                <th>ออเดอร์</th>
+                <th>{status === "PENDING" ? "ขอเมื่อ" : "ส่งคำขอ"}</th>
+                <th>ผู้ซื้อบนใบเสร็จ</th>
+                <th>ลูกค้า</th>
+                {status === "REJECTED" && <th>เหตุผล</th>}
+                <th className="order-receipt-col-actions">
+                  <span className="sr-only">จัดการ</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const busy = busyId === row.orderId;
+                return (
+                  <tr key={row.orderId}>
+                    <td>
+                      <Link to={"/admin/orders/" + row.orderId} className="num">
+                        #{shortId(row.orderId)}
+                      </Link>
+                    </td>
+                    <td>{dateTime(row.requestedAt)}</td>
+                    <td>
+                      <span className="order-receipt-stack">
+                        <span>{row.buyer.name}</span>
+                        {row.buyer.taxId && <small>{row.buyer.taxId}</small>}
+                        {row.buyer.address && <small>{row.buyer.address}</small>}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="order-receipt-stack">
+                        <span>{row.customerName}</span>
+                        {row.customerEmail && <small>{row.customerEmail}</small>}
+                      </span>
+                    </td>
+                    {status === "REJECTED" && <td>{row.reason}</td>}
+                    <td>
+                      <div className="order-receipt-row-actions">
+                        <Link to={"/admin/orders/" + row.orderId + "/receipt"} className="button ghost small">
+                          <Eye size={15} />
+                          ดูใบเสร็จ
+                        </Link>
+                        {status === "PENDING" && rejecting !== row.orderId && (
+                          <>
+                            <button
+                              type="button"
+                              className="button secondary small"
+                              disabled={busy}
+                              onClick={() => {
+                                setRejecting(row.orderId);
+                                setReason("");
+                              }}
+                            >
+                              <X size={15} />
+                              ไม่อนุมัติ
+                            </button>
+                            <button type="button" className="button primary small" disabled={busy} onClick={() => void approve(row.orderId)}>
+                              {busy ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}
+                              อนุมัติ
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      {rejecting === row.orderId && (
+                        <form
+                          className="order-receipt-reject"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            void reject(row.orderId);
+                          }}
+                        >
+                          <label className="field">
+                            <span>เหตุผลที่ไม่อนุมัติ (ลูกค้าเห็น)</span>
+                            <input
+                              autoFocus
+                              value={reason}
+                              maxLength={200}
+                              onChange={(e) => setReason(e.target.value)}
+                              placeholder="เช่น เลขผู้เสียภาษีไม่ถูกต้อง"
+                            />
+                          </label>
+                          <div>
+                            <button type="button" className="button ghost small" onClick={() => setRejecting("")}>
+                              ยกเลิก
+                            </button>
+                            <button className="button primary small" disabled={busy || reason.trim().length < 3}>
+                              {busy ? <LoaderCircle className="spin" size={15} /> : null}
+                              ยืนยันไม่อนุมัติ
+                            </button>
+                          </div>
+                        </form>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

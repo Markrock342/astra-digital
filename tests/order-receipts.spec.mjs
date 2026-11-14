@@ -13,6 +13,7 @@ const BUYER = {
   address: "10 หมู่ 2 ต.บางพลี อ.บางพลี สมุทรปราการ 10540",
 };
 
+const shots = process.env.RECEIPT_SHOTS;
 test.describe.configure({ mode: "serial" });
 test.setTimeout(90000);
 test.beforeAll(async () => {
@@ -82,9 +83,13 @@ test("account profiles + request → admin approve → print receipt (desktop)",
   await as(page.context(), adminToken);
   await page.goto(base + "/admin/order-receipts");
   await expect(page.getByRole("heading", { name: "ใบเสร็จคำสั่งซื้อ" })).toBeVisible();
-  await expect(page.locator(".panel", { hasText: orderId.slice(0, 8).toUpperCase() })).toBeVisible();
-  await page.getByRole("button", { name: "อนุมัติ" }).first().click();
-  await expect(page.getByText("อนุมัติใบเสร็จแล้ว")).toBeVisible();
+  const row = page.locator("tr", { hasText: orderId.slice(0, 8).toUpperCase() });
+  await expect(row).toBeVisible();
+  await expect(page.getByRole("tab", { name: /รออนุมัติ/ })).toContainText("1");
+  if (shots) await page.screenshot({ path: shots + "/admin-queue.png", fullPage: true, animations: "disabled" });
+  await row.getByRole("button", { name: "อนุมัติ", exact: true }).click();
+  await expect(page.getByText("อนุมัติใบเสร็จแล้ว ลูกค้าดาวน์โหลดได้")).toBeVisible();
+  await expect(page.getByText("ไม่มีคำขอที่รออนุมัติ")).toBeVisible();
 
   await as(page.context(), buyerToken);
   await page.goto(base + "/orders/" + orderId);
@@ -120,4 +125,7 @@ test("390px: account profiles, order card, receipt page, admin queue fit without
   await page.goto(base + "/admin/order-receipts");
   await expect(page.getByRole("heading", { name: "ใบเสร็จคำสั่งซื้อ" })).toBeVisible();
   expect(await noSideScroll(page)).toBe(true);
+  await page.getByRole("tab", { name: /อนุมัติแล้ว/ }).click();
+  await expect(page.locator("tr", { hasText: orderId.slice(0, 8).toUpperCase() })).toBeVisible();
+  if (shots) await page.screenshot({ path: shots + "/admin-approved-390.png", fullPage: true, animations: "disabled" });
 });
