@@ -987,8 +987,10 @@ export function AdminChat() {
     const pick = () => {
       const id = new URLSearchParams(location.search).get("thread");
       if (!id) return;
-      setMessages([]);
-      setCurrent(id);
+      setCurrent((prev) => {
+        if (prev !== id) setMessages([]);
+        return id;
+      });
     };
     pick();
     addEventListener(NAVIGATE_EVENT, pick);
@@ -1005,16 +1007,17 @@ export function AdminChat() {
   useEffect(() => {
     void loadThreads();
   }, [loadThreads]);
+  // The open thread right now: an answer for a thread the admin already left is dropped.
+  const openRef = useRef(current);
+  openRef.current = current;
   const loadMessages = useCallback(async () => {
     if (!current) return;
     try {
-      setMessages(
-        (
-          await api<{ messages: ChatMessage[] }>(
-            "/chat/threads/" + current + "/messages",
-          )
-        ).messages,
+      const { messages: list } = await api<{ messages: ChatMessage[] }>(
+        "/chat/threads/" + current + "/messages",
       );
+      if (openRef.current !== current) return;
+      setMessages(list);
       // Opening a thread marks it read on the server (and clears its bell alerts).
       setThreads(
         (list) =>
@@ -1032,6 +1035,15 @@ export function AdminChat() {
     return () => clearTimeout(id);
   }, [query]);
   usePoll(loadMessages, 60000, !!current, ["chat"]);
+  // usePoll only loads on its first run; switching threads must load the new one now.
+  const firstLoad = useRef(true);
+  useEffect(() => {
+    if (firstLoad.current) {
+      firstLoad.current = false;
+      return;
+    }
+    void loadMessages();
+  }, [loadMessages]);
   const thread = threads?.find((x) => x.id === current);
   const shown = (threads ?? []).filter((x) =>
     filter === "ALL"
@@ -1202,8 +1214,9 @@ export function AdminChat() {
                     : "admin-chat-thread"
                 }
                 onClick={() => {
-                  setCurrent(x.id);
+                  if (x.id === current) return;
                   setMessages([]);
+                  setCurrent(x.id);
                 }}
               >
                 {x.customer_avatar ? (

@@ -81,3 +81,27 @@ test("pin rises to the top, search highlights, and 390px stays on screen", async
   await page.screenshot({ path: "test-results/chat-pin-search/390-dark.png" });
   expect(await noHorizontalScroll(page)).toBe(true);
 });
+
+test("switching threads and clicking the open one again never empties the messages", async ({ page }) => {
+  await asAdmin(page.context());
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(base + "/admin/chat");
+  const rows = page.locator(".admin-chat-thread");
+  const pane = page.locator(".admin-chat-room .chat-messages");
+  await rows.filter({ hasText: "ค้นหาชื่อพิเศษ" }).click();
+  await expect(pane).toContainText("ข้อความสีส้มในแชท");
+  // Straight to another thread: its messages show now, not after the next poll.
+  await rows.filter({ hasText: "คนใหม่กว่า" }).click();
+  await expect(pane).toContainText("ทักทีหลัง");
+  await expect(pane).not.toContainText("ข้อความสีส้มในแชท");
+  // The open thread clicked again, several times: still there.
+  for (let i = 0; i < 4; i++) await rows.filter({ hasText: "คนใหม่กว่า" }).click();
+  await expect(pane).toContainText("ทักทีหลัง");
+  // Fast back and forth ends on the last one clicked.
+  for (let i = 0; i < 3; i++) {
+    await rows.filter({ hasText: "ค้นหาชื่อพิเศษ" }).click();
+    await rows.filter({ hasText: "คนใหม่กว่า" }).click();
+  }
+  await expect(pane).toContainText("ทักทีหลัง");
+  await expect(pane).not.toContainText("ข้อความสีส้มในแชท");
+});
