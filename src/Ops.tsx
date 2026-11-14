@@ -1,6 +1,6 @@
 // In-web chat, notifications and buyer ranking (SOW items). API: docs/architecture/api-contract-shop.md
 import { useLive, type LiveTopic } from "./live";
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactElement } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactElement } from "react";
 import {
   ArrowLeft,
   Bell,
@@ -934,6 +934,7 @@ export function AdminChat() {
   const canned = useCannedReplies(current, picker !== null);
   const attach = useChatAttachments(true);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const caretAfter = useRef<number | null>(null);
   const composerRef = useRef<HTMLFormElement>(null);
   const closePicker = () => {
     if (picker === "slash") setSlashOff(true);
@@ -952,17 +953,22 @@ export function AdminChat() {
       next = text.slice(0, start) + fill + text.slice(end);
       caret = start + fill.length;
     }
+    caretAfter.current = caret;
     setText(next);
     setMissing(r.missing ?? []);
     setPicker(null);
     setPickQuery("");
     setPickActive(0);
     setSlashOff(false);
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(caret, caret);
-    });
   }
+  // Same render as the new text (not a frame later): typing right after a pick stays after it.
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (caretAfter.current == null || !el) return;
+    el.focus();
+    el.setSelectionRange(caretAfter.current, caretAfter.current);
+    caretAfter.current = null;
+  });
   useEffect(() => {
     if (!picker) return;
     const away = (e: MouseEvent) => {

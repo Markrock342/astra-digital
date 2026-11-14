@@ -30,19 +30,18 @@ export function BottomSheet({
   className?: string;
   children: ReactNode;
 }) {
-  // Stay mounted for the slide-down after close.
+  // Stay mounted for the slide-down after close. Opening mounts in the same render (not an
+  // effect later), so Esc / focus work at once even when it is reopened mid-slide-down.
   const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
   const [drag, setDrag] = useState(0);
   const start = useRef<number | null>(null);
   useEffect(() => {
-    if (open) {
-      setMounted(true);
-      return;
-    }
+    if (open) return;
     const timer = setTimeout(() => setMounted(false), EXIT_MS);
     return () => clearTimeout(timer);
   }, [open]);
-  useDialog(open && mounted, "#" + id, onClose);
+  useDialog(open, "#" + id, onClose);
   // No page scroll behind an open sheet.
   useEffect(() => {
     if (!open) return;
@@ -52,7 +51,7 @@ export function BottomSheet({
       document.body.style.overflow = previous;
     };
   }, [open]);
-  if (!mounted) return null;
+  if (!mounted && !open) return null;
   const titleId = id + "-title";
   const host = document.querySelector(".storefront-shell") ?? document.body;
   return createPortal(
