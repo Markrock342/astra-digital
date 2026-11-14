@@ -145,6 +145,8 @@ export type Order = {
   /** Bought together with other lines under one order number (server/checkouts.mjs). */
   checkout_id?: string | null;
   checkout_line?: number | null;
+  /** Lines under this order number (1 = bought on its own). */
+  checkoutSize?: number;
   paymentMethodLabel?: string;
   // Preorder modes (server/preorder.mjs reservationView).
   preorderMode?: PreorderMode;

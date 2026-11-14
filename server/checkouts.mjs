@@ -173,6 +173,17 @@ export function hookCheckouts(
     orders: result.orders.map((o) => (tokens[o.id] ? { ...o, paymentToken: tokens[o.id] } : o)),
   });
 
+  // How many lines share this order number: the order page links to /checkouts/:id only for 2+.
+  const baseDetail = service.orderDetail;
+  service.orderDetail = (user, id, ...rest) => {
+    const o = baseDetail(user, id, ...rest);
+    if (o && o.checkout_id)
+      o.checkoutSize =
+        one("SELECT COUNT(*) AS n FROM orders WHERE checkout_id=?", o.checkout_id).n +
+        one("SELECT COUNT(*) AS n FROM reservations WHERE checkout_id=?", o.checkout_id).n;
+    return o;
+  };
+
   service.checkout = (user, checkoutId) => {
     requireUser(user);
     return view(user, String(checkoutId));

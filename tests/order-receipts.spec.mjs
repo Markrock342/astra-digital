@@ -76,6 +76,10 @@ test("account profiles + request → admin approve → print receipt (desktop)",
 
   await page.goto(base + "/orders/" + orderId);
   await expect(page.getByRole("heading", { name: "ใบเสร็จคำสั่งซื้อ" })).toBeVisible();
+  // Closed until asked: one row with the window and a button.
+  await expect(page.getByText("ขอได้ภายใน 7 วันหลังชำระ")).toBeVisible();
+  await expect(page.getByRole("button", { name: "ส่งคำขอ" })).toHaveCount(0);
+  await page.getByRole("button", { name: "ขอใบเสร็จ" }).click();
   await page.getByRole("button", { name: "ส่งคำขอ" }).click();
   await expect(page.getByText("รอทีมงานอนุมัติ")).toBeVisible();
   await expect(page.getByRole("link", { name: "ใบเสร็จ", exact: true })).toHaveCount(0);

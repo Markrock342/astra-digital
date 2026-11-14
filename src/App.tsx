@@ -1508,7 +1508,7 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
               <span>{t("คำสั่งซื้อ #")}{order.id.slice(0, 8).toUpperCase()}</span>
               <span>{dateTime(order.created_at)}</span>
               {order.createdByAdmin && <ManualOrderNote method={order.paymentMethodLabel} />}
-              {order.checkout_id && (
+              {order.checkout_id && (order.checkoutSize ?? 1) > 1 && (
                 <Link to={"/checkouts/" + order.checkout_id} className="receipt-link">
                   {t("ทั้งคำสั่งซื้อ #{id}", { id: order.checkout_id.slice(0, 8).toUpperCase() })}
                 </Link>
