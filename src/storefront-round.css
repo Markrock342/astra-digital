@@ -496,3 +496,15 @@
   margin-bottom: 20px;
   font-size: 13px;
 }
+
+/* Client, 14 Nov: no shadow on any card frame in the shop — the 1px border carries it.
+   Floating layers (sticky total bar, popovers, sheets, chat button) keep theirs. */
+:root .storefront-shell,
+:root[data-theme] .storefront-shell,
+:root:not([data-theme]) .storefront-shell {
+  --shadow: none;
+}
+.storefront-shell .product-card:hover,
+.storefront-shell .store-card:hover {
+  box-shadow: none;
+}
