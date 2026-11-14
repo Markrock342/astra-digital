@@ -1659,7 +1659,12 @@ export function createCommerceCore({
     const requestKey = clean(input.requestKey, 8, 128, "รหัสคำขอ");
     if (input.couponCode != null && typeof input.couponCode !== "string")
       fail(400, "โค้ดส่วนลดไม่ถูกต้อง");
-    const couponCode = normalizeCouponCode(input.couponCode) || null;
+    // Basket checkout may pre-split the discount; skip per-line evaluate + redeem.
+    const basketCoupon =
+      input.basketCoupon && typeof input.basketCoupon === "object" ? input.basketCoupon : null;
+    const couponCode = basketCoupon
+      ? normalizeCouponCode(basketCoupon.code) || null
+      : normalizeCouponCode(input.couponCode) || null;
     // Check, count and insert in one transaction so a coupon's last use is taken once.
     return tx(() => {
       const reservation = one(
@@ -1706,11 +1711,18 @@ export function createCommerceCore({
         ).n < quantity
       )
         fail(409, "สินค้าคงเหลือไม่เพียงพอ กรุณาเลือกจำนวนใหม่");
-      // Discount from the coupon row and the database price only (never the client's).
-      const applied = couponCode
-        ? coupons.evaluate(user, couponCode, { productId: variant.product_id, subtotal })
-        : null;
-      const discount = applied?.discount ?? 0;
+      // Discount from the coupon row and the database price only (never the client's),
+      // unless createCheckout already split a basket coupon onto this line.
+      let applied = null;
+      let discount = 0;
+      if (basketCoupon && couponCode) {
+        discount = Math.trunc(Number(basketCoupon.discount) || 0);
+        if (discount < 0 || discount > subtotal - 100) fail(400, "ส่วนลดไม่ถูกต้อง");
+        applied = { code: couponCode, discount, coupon: null };
+      } else if (couponCode) {
+        applied = coupons.evaluate(user, couponCode, { productId: variant.product_id, subtotal });
+        discount = applied.discount;
+      }
       // Preorder mode (full / deposit / free) and its per-customer / queue limits.
       const terms = variant.preorder
         ? preorders.reservationTerms(user, variant, subtotal - discount, quantity)
@@ -1733,7 +1745,7 @@ export function createCommerceCore({
         applied ? applied.code : null,
         new Date(clock()).toISOString().slice(0, 19).replace("T", " "),
       );
-      if (applied)
+      if (applied && applied.coupon && !basketCoupon)
         coupons.redeem({
           coupon: applied.coupon,
           userId: user.id,
@@ -4185,6 +4197,31 @@ export function createCommerceCore({
     publicUser,
     notify,
     notifyStaffRoles,
+    quoteBasketCoupon: (user, code, lines) => {
+      const priced = lines.map((line, index) => {
+        const variant = buyableVariant(line.variantId, user);
+        const quantity = integer(line.quantity, 1, 10, "จำนวน");
+        return {
+          variantId: line.variantId,
+          productId: variant.product_id,
+          subtotal: variant.unitPrice * quantity,
+          index,
+        };
+      });
+      return coupons.evaluateBasket(user, code, priced);
+    },
+    redeemBasketCoupon: ({ code, userId, checkoutId, orderId, reservationId, amount }) => {
+      const coupon = one("SELECT * FROM coupons WHERE code=?", normalizeCouponCode(code));
+      if (!coupon) fail(400, "ไม่พบโค้ดส่วนลดนี้");
+      coupons.redeem({
+        coupon,
+        userId,
+        checkoutId,
+        orderId,
+        reservationId,
+        amount,
+      });
+    },
   });
   // Preorder emails queued inside a committed call go out now; a failed call drops them.
   for (const name of ["pay", "createOrder", "importCodes", "adminCallPreorders", "adminCancelPreorder", "cancelMyPreorder"]) {
