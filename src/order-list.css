@@ -1,0 +1,214 @@
+/* Purchase history (/orders): search, status + copy buttons, one card of compact rows,
+   pager and the copy bar. shadcn/ui Input / Table-row list / Pagination (MIT). */
+.storefront-shell .order-tools {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+.storefront-shell .order-search {
+  max-width: none;
+}
+.storefront-shell .order-search input {
+  font-size: 15px;
+}
+.storefront-shell .order-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.storefront-shell .order-tool-row {
+  display: flex;
+  gap: 8px;
+}
+.storefront-shell .order-tool-row .filter-button {
+  max-width: none;
+}
+.storefront-shell .filter-button.is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent-text);
+}
+
+/* One white card, rows split by hairlines (reference: compact order list). */
+.storefront-shell .order-list-panel {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.storefront-shell .order-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+.storefront-shell .order-pager-step {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.storefront-shell .order-pager-step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.storefront-shell .reference-history-page .order-list-panel .orders-list {
+  gap: 0;
+  margin: 0;
+  animation: none;
+}
+.storefront-shell .order-list-panel .history-item + .history-item {
+  border-top: 1px solid var(--border);
+}
+.storefront-shell .reference-history-page .order-list-panel .history-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  transform: none;
+  transition: background-color 0.15s ease;
+}
+.storefront-shell .reference-history-page .order-list-panel .history-card:hover {
+  transform: none;
+  background: var(--raised);
+}
+.storefront-shell .reference-history-page .order-list-panel button.history-card {
+  cursor: pointer;
+}
+.storefront-shell .reference-history-page .order-list-panel .history-art {
+  width: 56px;
+  height: 56px;
+}
+.storefront-shell .history-main {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.storefront-shell .history-name {
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.storefront-shell .history-option,
+.storefront-shell .history-meta {
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.storefront-shell .history-meta {
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+}
+.storefront-shell .history-side {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.storefront-shell .history-side strong {
+  font-size: 15px;
+}
+.storefront-shell .order-list-panel .history-item-actions {
+  padding: 0 16px 12px;
+}
+.storefront-shell .order-list-panel .history-item-actions:empty {
+  display: none;
+}
+
+/* Copy mode: tick box on each row, rows without delivered items greyed out. */
+.storefront-shell .order-pick {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--border-strong, var(--muted));
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--accent-ink);
+}
+.storefront-shell .history-card[aria-pressed="true"] .order-pick {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.storefront-shell .history-card[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+.storefront-shell .history-item.is-muted .history-card {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.storefront-shell .reference-history-page.is-copying {
+  padding-bottom: 150px;
+}
+.storefront-shell .order-copy-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(640px, calc(100% - 32px));
+  padding: 8px 8px 8px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 28px rgb(15 23 42 / 0.16);
+}
+.storefront-shell .order-copy-count {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.storefront-shell .order-copy-bar .button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+.storefront-shell .order-copy-close {
+  width: 44px;
+  padding: 0;
+  justify-content: center;
+}
+@media (min-width: 761px) {
+  .storefront-shell .order-copy-bar {
+    bottom: 24px;
+  }
+}
+@media (max-width: 420px) {
+  .storefront-shell .order-copy-count {
+    font-size: 13px;
+  }
+  .storefront-shell .history-card {
+    padding: 12px;
+  }
+}
+/* The chat bubble would sit on top of the copy bar. */
+.storefront-shell:has(.reference-history-page.is-copying) .chat-fab {
+  display: none;
+}
