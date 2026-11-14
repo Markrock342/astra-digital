@@ -340,7 +340,6 @@ test("verify_email template: editable, link placeholder required", () => {
 
 test("existing users are backfilled verified once; later sign-ups start unverified", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "astra-verify-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const path = join(dir, "shop.sqlite");
   const key = randomBytes(32);
   let s = createCommerce({ path, key });
@@ -358,6 +357,18 @@ test("existing users are backfilled verified once; later sign-ups start unverifi
   const fresh = s.register({ name: "New Customer", email: "new@mail.example.com", password: PASSWORD }, {});
   s.db.close();
   s = createCommerce({ path, key, email: fakeMailer() });
-  t.after(() => s.db.close());
+  // Close DB before rmSync — Windows may EPERM while the SQLite lock lingers.
+  t.after(() => {
+    try {
+      s.db.close();
+    } catch {
+      /* already closed */
+    }
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch (e) {
+      if (e && e.code !== "EPERM" && e.code !== "ENOENT") throw e;
+    }
+  });
   assert.equal(s.db.prepare("SELECT email_verified_at FROM users WHERE id=?").get(fresh.user.id).email_verified_at, null, "reopen does not backfill again");
 });

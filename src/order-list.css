@@ -167,13 +167,13 @@
 .storefront-shell .order-copy-bar {
   position: fixed;
   left: 50%;
-  bottom: calc(96px + env(safe-area-inset-bottom));
+  bottom: calc(var(--storefront-bottom-clearance, 72px) + 10px);
   transform: translateX(-50%);
   z-index: 40;
   display: flex;
   align-items: center;
   gap: 8px;
-  width: min(640px, calc(100% - 32px));
+  width: min(640px, calc(100% - 32px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
   padding: 8px 8px 8px 16px;
   background: var(--surface);
   border: 1px solid var(--border);

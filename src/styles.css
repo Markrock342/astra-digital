@@ -3527,20 +3527,32 @@ td small {
 .mobile-bottom-nav {
   display: none;
 }
+/* Phone dock: edge-to-edge so PWA / rounded-screen corners do not clip a floating pill.
+   Background paints into safe-area-inset-bottom; tabs sit above the home indicator. */
 @media (max-width: 600px) {
+  :root {
+    --storefront-bottom-nav-h: 61px;
+    --storefront-bottom-clearance: calc(
+      var(--storefront-bottom-nav-h) + env(safe-area-inset-bottom, 0px)
+    );
+  }
   .mobile-bottom-nav {
     display: flex;
     position: fixed;
-    bottom: max(12px, env(safe-area-inset-bottom));
-    left: 12px;
-    right: 12px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    box-sizing: border-box;
     background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 5px;
+    border: none;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    padding: 6px max(6px, env(safe-area-inset-right, 0px))
+      calc(6px + env(safe-area-inset-bottom, 0px)) max(6px, env(safe-area-inset-left, 0px));
     z-index: 35;
-    box-shadow: 0 8px 32px #0004;
-    gap: 4px;
+    box-shadow: none;
+    gap: 2px;
   }
   .mobile-bottom-nav > a,
   .mobile-bottom-nav > button {
@@ -3550,24 +3562,43 @@ td small {
     justify-content: center;
     gap: 3px;
     flex: 1;
+    min-width: 0;
     border-radius: 11px;
     min-height: 49px;
     color: var(--muted);
     background: transparent;
     font-size: 9px;
+    line-height: 1.15;
   }
   .mobile-bottom-nav .active {
     background: var(--hover);
     color: var(--text);
   }
   .site-footer {
-    padding-bottom: 92px;
+    padding-bottom: calc(var(--storefront-bottom-clearance) + 24px);
   }
   .toast {
-    bottom: 86px;
+    bottom: calc(var(--storefront-bottom-clearance) + 12px);
   }
   .product-notes {
     padding-bottom: 12px;
+  }
+}
+/* Very narrow phones: keep labels on one line and taps ≥44px. */
+@media (max-width: 360px) {
+  .mobile-bottom-nav > a,
+  .mobile-bottom-nav > button {
+    font-size: 10px;
+    gap: 2px;
+    min-height: 44px;
+    padding-inline: 2px;
+  }
+  .mobile-bottom-nav > a span,
+  .mobile-bottom-nav > button span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 /* Motion follows the reference's quiet, staggered entrances. */
