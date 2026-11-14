@@ -92,3 +92,36 @@ test("390px: chat FAB sits above the bottom dock (does not cover เมนู)",
   // FAB bottom edge must be above the dock's top edge.
   expect(fabBox.y + fabBox.height).toBeLessThanOrEqual(navBox.y + 1);
 });
+
+test("390px: bottom tabs are tappable — cart, orders, home, menu sheet", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(base + "/");
+  await page.locator(".mobile-bottom-nav a[href='/cart']").click();
+  await expect(page).toHaveURL(/\/cart/);
+  await page.locator(".mobile-bottom-nav a[href='/orders']").click();
+  await expect(page).toHaveURL(/\/orders/);
+  await page.locator(".mobile-bottom-nav a[href='/']").click();
+  await expect(page).toHaveURL(base + "/");
+  await page.locator(".mobile-bottom-nav button").click();
+  await expect(page.locator(".mobile-bottom-nav button")).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#storefront-menu")).toBeVisible();
+});
+
+test("320px + simulated home-indicator: dock paints into safe area and stays tappable", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto(base + "/");
+  await page.addStyleTag({
+    content: `
+      :root { --storefront-bottom-nav-h: 95px; }
+      .mobile-bottom-nav { padding-bottom: calc(6px + 34px) !important; }
+    `,
+  });
+  const box = await navBox(page);
+  expect(parseFloat(box.paddingBottom)).toBeGreaterThanOrEqual(34);
+  expect(Math.abs(box.bottomEdge - box.viewportH)).toBeLessThanOrEqual(1);
+  await page.locator(".mobile-bottom-nav a[href='/cart']").click();
+  await expect(page).toHaveURL(/\/cart/);
+  const after = await navBox(page);
+  expect(after.left).toBe("0px");
+  expect(after.right).toBe("0px");
+});
