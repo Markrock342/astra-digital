@@ -311,7 +311,7 @@ test("8 menu: bottom sheet with user card, tiles, contact chips, sign out; focus
       ["เครดิตร้าน", "/credits"],
       ["ประวัติการซื้อ", "/orders"],
       ["บัญชีของฉัน", "/account"],
-      ["ข่าวสารและกิจกรรม", "/news"],
+      ["ข่าวสาร", "/news"],
       ["เกี่ยวกับเรา", "/about"],
     ])
       await expect(sheet.getByRole("link", { name, exact: true })).toHaveAttribute("href", href);

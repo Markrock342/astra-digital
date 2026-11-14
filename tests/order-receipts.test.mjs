@@ -243,3 +243,34 @@ test("HTTP routes: profiles + request + admin approve; foreign order 404", async
   );
   void admin;
 });
+
+test("ใบเสร็จของฉัน: paid orders newest first, one entry per checkout, same state as the order page", () => {
+  const { service, admin, make, reg } = (() => {
+    const adminPassword = "x".repeat(32);
+    const service = createCommerce({ adminPassword });
+    const admin = service.session(service.login({ email: "admin@astra.local", password: adminPassword }).token);
+    service.setPaymentChannel(admin, { provider: "sandbox", active: true });
+    const make = (name) => {
+      const p = service.saveProduct(admin, { name, description: name + " บัญชีสตรีมมิ่งรายเดือน", category: "streaming", price: 1000, active: true, firstLabel: "30 วัน" });
+      const variantId = service.adminProductVariants(admin, p.id).variants[0].id;
+      service.importCodes(admin, { variantId, items: [1, 2, 3].map((i) => ({ loginId: name + i + "@r.test", password: "Pw-" + i })) });
+      return variantId;
+    };
+    const reg = (email) => service.session(service.register({ name: "Receipt Buyer", email, password: "Buyer-Pass-12345" }).token);
+    return { service, admin, make, reg };
+  })();
+  void admin;
+  const a = make("RcptA");
+  const b = make("RcptB");
+  const user = reg("my-receipts@example.invalid");
+  const other = reg("other-receipts@example.invalid");
+  service.createCheckout(user, { requestKey: "my-rcpt-1", pay: "success", lines: [{ variantId: a, quantity: 1 }] });
+  service.createCheckout(user, { requestKey: "my-rcpt-2", pay: "success", lines: [{ variantId: a, quantity: 1 }, { variantId: b, quantity: 1 }] });
+  service.createCheckout(user, { requestKey: "my-rcpt-3", lines: [{ variantId: b, quantity: 1 }] }); // unpaid: not listed
+  const { receipts } = service.myOrderReceipts(user);
+  assert.equal(receipts.length, 2);
+  assert.equal(receipts[0].items.length, 2);
+  assert.equal(receipts[0].total, 2000);
+  assert.ok(receipts.every((r) => r.canRequest && r.status === null));
+  assert.equal(service.myOrderReceipts(other).receipts.length, 0);
+});

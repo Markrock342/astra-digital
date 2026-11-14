@@ -4015,6 +4015,7 @@ export function createCommerceCore({
     deleteReceiptProfile: orderReceipts.deleteReceiptProfile,
     orderReceiptState: orderReceipts.orderReceiptState,
     requestOrderReceipt: orderReceipts.requestOrderReceipt,
+    myOrderReceipts: orderReceipts.myOrderReceipts,
     adminOrderReceipts: orderReceipts.adminOrderReceipts,
     adminOrderReceiptRequest: orderReceipts.adminOrderReceiptRequest,
     adminApproveOrderReceipt: orderReceipts.adminApproveOrderReceipt,

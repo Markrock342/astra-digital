@@ -399,6 +399,44 @@ export function createOrderReceipts({
     };
   }
 
+  /**
+   * "ใบเสร็จของฉัน" (menu): paid orders, newest first, one entry per receipt (lines bought
+   * together share one), with the same state the order page shows.
+   */
+  function myOrderReceipts(user) {
+    requireUser(user);
+    const ids = all(
+      `SELECT id, created_at FROM orders WHERE user_id=? AND status='DELIVERED'
+       UNION ALL
+       SELECT id, created_at FROM reservations WHERE user_id=? AND status IN ('DELIVERED','PREORDER')
+       ORDER BY created_at DESC LIMIT 200`,
+      user.id,
+      user.id,
+    );
+    const seen = new Set();
+    const receipts = [];
+    for (const { id } of ids) {
+      const scope = receiptScope(id);
+      if (!scope || scope.anchor.user_id !== user.id) continue;
+      const key = scope.checkoutId || scope.anchor.id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const state = orderReceiptState(user, scope.anchor.id);
+      receipts.push({
+        orderId: scope.anchor.id,
+        number: key.slice(0, 8).toUpperCase(),
+        createdAt: scope.anchor.created_at,
+        items: scope.rows.map((r) => ({ product: r.product, option: r.option_label, quantity: r.quantity })),
+        total: scope.rows.reduce((n, r) => n + (r.total || 0), 0),
+        status: state.request?.status ?? null,
+        reason: state.request?.reason ?? null,
+        canRequest: state.canRequest,
+        expiresAt: state.window?.expiresAt ?? null,
+      });
+    }
+    return { receipts };
+  }
+
   function requestOrderReceipt(user, orderId, input = {}) {
     requireUser(user);
     if (user.role !== "CUSTOMER" && !isAdmin(user)) fail(403, "ใช้ได้เฉพาะเจ้าของออเดอร์");
@@ -610,6 +648,7 @@ export function createOrderReceipts({
     updateReceiptProfile: (user, id, input) => saveReceiptProfile(user, input, id),
     deleteReceiptProfile,
     orderReceiptState,
+    myOrderReceipts,
     requestOrderReceipt,
     assertCustomerDownload,
     adminOrderReceipts,
@@ -641,6 +680,7 @@ export function routeOrderReceipts(service, { method, path, user, input, url }) 
   let m;
   if (method === "GET") {
     if (path === "/api/account/receipt-profiles") return [200, service.listReceiptProfiles(user)];
+    if (path === "/api/account/order-receipts") return [200, service.myOrderReceipts(user)];
     if ((m = MY_ORDER.exec(path))) return [200, service.orderReceiptState(user, m[1])];
     if (path === ADMIN_LIST)
       return [

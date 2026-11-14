@@ -100,6 +100,7 @@ import { AboutPage, NewsDetailPage, NewsListPage } from "./News";
 import { CheckoutFields, DeliveredLinks, FulfilmentCard, checkoutFieldsReady } from "./Delivery";
 import { RebuyActions } from "./Rebuy";
 import { HistoryPage } from "./OrderList";
+import { MyReceiptsPage } from "./MyReceipts";
 import { CartPage, CheckoutGroupPage, CheckoutPage, loadCart, saveCart, withLine, type CartLine } from "./Cart";
 import { ManualOrderNote } from "./ManualOrderNote";
 import { DiscountBadge, PriceNote, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
@@ -2425,6 +2426,7 @@ function Router() {
     "/reset-password": t("ตั้งรหัสผ่านใหม่"),
     "/verify-email": t("ยืนยันอีเมล"),
     "/orders": t("ประวัติการซื้อ"),
+    "/receipts": t("ใบเสร็จของฉัน"),
     "/cart": t("ตะกร้าสินค้า"),
     "/checkout": t("ตรวจสอบคำสั่งซื้อ"),
     "/account": t("บัญชีของฉัน"),
@@ -2449,6 +2451,7 @@ function Router() {
     "/verify-email": t("ยืนยันอีเมลของบัญชีของคุณ"),
     "/checkout": t("ตรวจสอบข้อมูลให้ครบ ระบบจะบันทึกคำสั่งซื้อไว้ก่อน"),
     "/orders": t("ติดตามคำสั่งซื้อและเปิดดูโค้ดสินค้าของคุณ"),
+    "/receipts": t("ขอและดูใบเสร็จของคำสั่งซื้อที่ชำระแล้ว"),
     "/account": t("ข้อมูลและการตั้งค่าบัญชีของคุณ"),
     "/wallet": t("ช่องทางจ่ายยังไม่เปิด โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น"),
     "/top-up": t("ช่องทางจ่ายยังไม่เปิด โค้ดจะถูกส่งหลังยืนยันยอดแล้วเท่านั้น"),
@@ -2507,6 +2510,7 @@ function Router() {
       />
     );
   if (path === "/orders") return <HistoryPage />;
+  if (path === "/receipts") return <MyReceiptsPage />;
   if (path === "/wallet" || path === "/top-up")
     return testPayments ? <WalletPage /> : <NotFound />;
   if (path === "/reviews" || path === "/credits") return <ReferenceReviews />;
