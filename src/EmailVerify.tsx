@@ -51,6 +51,7 @@ const EN_VERIFY: Record<string, string> = {
   "ขอลิงก์ใหม่ในหน้าบัญชี": "Get a new link on your account page",
   "สมัครสมาชิกสำเร็จ ตรวจอีเมลเพื่อยืนยัน": "Signed up. Check your email to verify.",
   "ร้านจะส่งลิงก์ยืนยันไปที่อีเมลนี้": "We will send a verification link to this address",
+  "ต้องเป็นอีเมลที่ใช้งานได้จริง": "Use an email address you can open",
   "กรุณายืนยันอีเมลก่อนสั่งซื้อ": "Please verify your email before ordering",
   "กรุณายืนยันอีเมลก่อนชำระเงิน": "Please verify your email before paying",
   "ลิงก์ยืนยันอีเมลไม่ถูกต้อง กรุณาเปิดลิงก์จากอีเมลอีกครั้ง":

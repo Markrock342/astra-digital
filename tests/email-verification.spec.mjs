@@ -49,7 +49,7 @@ test("register → notice → blocked checkout → resend cooldown → link → 
   // Email is required while verification is on.
   const email = page.locator('input[name="email"]');
   await expect(email).toHaveAttribute("required", "");
-  await expect(page.getByText("ร้านจะส่งลิงก์ยืนยันไปที่อีเมลนี้")).toBeVisible();
+  await expect(page.getByText("ต้องเป็นอีเมลที่ใช้งานได้จริง")).toBeVisible();
   await page.locator('input[name="username"]').fill("verify_buyer");
   await email.fill("verify-buyer@mail.example.com");
   await page.locator('input[name="password"]').fill(PASSWORD);
