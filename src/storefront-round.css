@@ -334,3 +334,27 @@
     font-size: 13px;
   }
 }
+
+/* Desktop home: the title row holds "สินค้าทั้งหมด" on the right, so the search + filter sit
+   in their own column instead of floating on top of it. */
+@media (min-width: 701px) {
+  .storefront-shell .home-main .reference-catalog {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 12px;
+  }
+  .storefront-shell .home-main .reference-catalog > * {
+    grid-column: 1 / -1;
+  }
+  .storefront-shell .home-main .reference-catalog > .reference-catalog-title {
+    grid-column: 1;
+    margin-bottom: 24px;
+  }
+  .storefront-shell .home-main .reference-catalog > .reference-catalog-tools {
+    grid-column: 2;
+    grid-row: 1;
+    position: static;
+    margin-bottom: 24px;
+  }
+}
