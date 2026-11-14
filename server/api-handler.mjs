@@ -450,7 +450,15 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             limit: url.searchParams.get("limit") ?? undefined,
           }));
         if (path === "/api/orders")
-          return send(200, { orders: service.orders(user) });
+          return send(
+            200,
+            service.listOrders(user, {
+              page: url.searchParams.get("page") ?? undefined,
+              limit: url.searchParams.get("limit") ?? undefined,
+              q: url.searchParams.get("q") ?? undefined,
+              status: url.searchParams.get("status") ?? undefined,
+            }),
+          );
         if (/^\/api\/checkouts\/[^/]+$/.test(path))
           return send(200, service.checkout(user, path.split("/")[3]));
         if (/^\/api\/orders\/[^/]+$/.test(path))
@@ -891,6 +899,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           assertCouponRate(request, env, user);
           return send(200, service.checkCoupon(user, input));
         }
+        if (path === "/api/orders/copy")
+          return send(200, service.copyOrderLines(user, input?.ids));
         if (path === "/api/orders") {
           // A code sent with the order is a guess too: same budget as /coupons/check.
           if (user && typeof input.couponCode === "string" && input.couponCode.trim())

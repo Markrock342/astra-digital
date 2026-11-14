@@ -67,6 +67,7 @@ import { ensureCannedReplies } from "../server/ensure-admin-fr.mjs";
 import { ensureBanners } from "../server/ensure-admin-fr.mjs";
 import { ensureTaxInvoices, ensureOrderReceipts } from "../server/ensure-admin-fr.mjs";
 import { ensureCheckouts } from "../server/checkouts.mjs";
+import { ensureOrderFulfillmentSearch } from "../server/orders-list.mjs";
 import { ensureNewsAbout } from "../server/ensure-admin-fr.mjs";
 import {
   createAPIHandler,
@@ -182,6 +183,7 @@ export class Commerce extends DurableObject {
       ensureDeliveryOptions(db);
       ensureNewsAbout(db);
       ensureCheckouts(db);
+      ensureOrderFulfillmentSearch(db);
     });
     this.db = db;
     const adminPassword =

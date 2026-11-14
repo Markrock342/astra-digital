@@ -83,6 +83,10 @@ import { createLaunchCleanupApis } from "./launch-cleanup.mjs";
 import { createRetention } from "./retention.mjs";
 import { createTaxInvoices } from "./tax-invoices.mjs";
 import { createOrderReceipts } from "./order-receipts.mjs";
+import {
+  createOrdersListApis,
+  inventoryPasswordSearchKey,
+} from "./orders-list.mjs";
 import { createPreorders } from "./preorder.mjs";
 import { createDeliveryApis } from "./delivery.mjs";
 import { createOptionGroupApis } from "./option-groups.mjs";
@@ -221,8 +225,8 @@ export function createCommerceCore({
   ) => {
     run(
       `INSERT INTO inventory(
-        id, variant_id, fingerprint, login_id_enc, password_enc, legacy_single_secret, login_key, cost, expires_at
-      ) VALUES(?,?,?,?,?,?,?,?,?)`,
+        id, variant_id, fingerprint, login_id_enc, password_enc, legacy_single_secret, login_key, cost, expires_at, password_search_key
+      ) VALUES(?,?,?,?,?,?,?,?,?,?)`,
       randomUUID(),
       variantId,
       inventoryFingerprint(loginId, password),
@@ -232,6 +236,7 @@ export function createCommerceCore({
       inventoryLoginKey(legacy, loginId),
       cost == null ? null : cost,
       expiresAt == null ? null : expiresAt,
+      legacy ? "" : inventoryPasswordSearchKey(key, password),
     );
   };
   /** Rows from before login_key existed (or written by migrations) get their key on first use. */
@@ -3755,6 +3760,17 @@ export function createCommerceCore({
     notify,
     clock,
   });
+  const ordersList = createOrdersListApis({
+    one,
+    all,
+    run,
+    fail,
+    requireUser,
+    key,
+    orderDetail,
+    inventoryLoginKey,
+    decrypt,
+  });
   const service = {
     db,
     reviews,
@@ -4113,6 +4129,28 @@ export function createCommerceCore({
         .map((o) => orderDetail(user, o.id))
         .sort((a, b) => b.created_at.localeCompare(a.created_at));
     },
+    listOrders: (user, query) => {
+      const paged = ordersList.listOrders(user, query || {});
+      if (paged == null) {
+        requireUser(user);
+        return {
+          orders: all(
+            "SELECT id FROM orders WHERE user_id=? ORDER BY created_at DESC,rowid DESC",
+            user.id,
+          )
+            .concat(
+              all(
+                "SELECT id FROM reservations WHERE user_id=? ORDER BY created_at DESC,rowid DESC",
+                user.id,
+              ),
+            )
+            .map((o) => orderDetail(user, o.id))
+            .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+        };
+      }
+      return paged;
+    },
+    copyOrderLines: (user, ids) => ordersList.copyOrderLines(user, ids),
     ledger: (user) => {
       requireUser(user);
       // Wallet rows only (money.mjs); `amount` is signed, with the balance after each row.
