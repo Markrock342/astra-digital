@@ -99,6 +99,7 @@ import { AdminFraud } from "./AdminFraud";
 import { AdminEmailTemplates } from "./AdminEmailTemplates";
 import { AdminDailyClose, AdminReconcile, AdminWithdrawals } from "./AdminFinanceBooks";
 import { AdminReceiptSettings, AdminTaxInvoices } from "./AdminTaxInvoices";
+import { AdminOrderReceipts } from "./AdminOrderReceipts";
 import { AdminLogoSetting } from "./AdminLogo";
 import type { AdminData, Features, Product, QueueItem } from "./types";
 /** Same shape as the editor's formValues state, for dirty checks. */
@@ -115,6 +116,8 @@ const orderTabs = [
   ["preorders", "คิวพรีออเดอร์"],
   // Paid orders of shop-fulfilled products (Delivery.tsx).
   ["fulfilment", "รอส่งมอบ"],
+  // ใบเสร็จคำสั่งซื้อ approvals (AdminOrderReceipts.tsx).
+  ["order-receipts", "ใบเสร็จคำสั่งซื้อ"],
   // Full tax invoice requests (AdminTaxInvoices.tsx); ADMIN only, hidden for staff below.
   ["tax-invoices", "ใบกำกับภาษี"],
 ];
@@ -365,7 +368,12 @@ export default function Admin() {
   if (user?.role === "STAFF")
     return (
       <>
-        {orderGroup && <Subnav items={orderTabs.filter(([key]) => key !== "tax-invoices")} current={tab} />}
+        {orderGroup && (
+          <Subnav
+            items={orderTabs.filter(([key]) => key !== "tax-invoices" && key !== "order-receipts")}
+            current={tab}
+          />
+        )}
         <main className="reference-admin-main">
           <StaffBackOffice tab={tab} sub={sub} detailId={detailId} />
         </main>
@@ -996,6 +1004,7 @@ export default function Admin() {
           ))}
         {tab === "preorders" && <PreorderQueue />}
         {tab === "fulfilment" && <FulfilmentQueue />}
+        {tab === "order-receipts" && <AdminOrderReceipts />}
         {tab === "tax-invoices" && <AdminTaxInvoices />}
         {tab === "coupons" && <AdminCoupons id={productId} />}
         {tab === "reviews" && <AdminReviews />}
@@ -1080,6 +1089,7 @@ export default function Admin() {
           "orders",
           "preorders",
           "fulfilment",
+          "order-receipts",
           "tax-invoices",
           "coupons",
           "categories",

@@ -82,6 +82,7 @@ import { createManualOrderApis } from "./manual-orders.mjs";
 import { createLaunchCleanupApis } from "./launch-cleanup.mjs";
 import { createRetention } from "./retention.mjs";
 import { createTaxInvoices } from "./tax-invoices.mjs";
+import { createOrderReceipts } from "./order-receipts.mjs";
 import { createPreorders } from "./preorder.mjs";
 import { createDeliveryApis } from "./delivery.mjs";
 import { createOptionGroupApis } from "./option-groups.mjs";
@@ -444,6 +445,18 @@ export function createCommerceCore({
     orderRefundState: (...a) => orderRefundState(...a),
     moneyScope: () => moneyScope,
   });
+  const orderReceipts = createOrderReceipts({
+    one,
+    all,
+    run,
+    fail,
+    clock,
+    requireUser: (u) => requireUser(u),
+    requireStaff: (u) => requireStaff(u),
+    requireAdmin: (u) => requireAdmin(u),
+    isAdmin,
+    notify,
+  });
   const orderExtras = createOrderExtras({
     one,
     all,
@@ -458,6 +471,7 @@ export function createCommerceCore({
     settings: () => settings(),
     orderRefundState: (...a) => orderRefundState(...a),
     taxInvoices,
+    orderReceipts,
   });
   const stockLowCooldown = new Map();
   const maybeNotifyStockLow = (variantId) => {
@@ -1790,6 +1804,10 @@ export function createCommerceCore({
         queueNumber: reservation.queue_number ?? null,
         // Mode, stage, deposit / balance, pay deadline (preorder.mjs).
         ...preorders.reservationView(reservation),
+        receiptApproved: !!one(
+          "SELECT 1 AS n FROM order_receipt_requests WHERE order_id=? AND status='APPROVED'",
+          orderId,
+        ),
       };
     }
     // admin_note is internal (FR-O7): never sent to the customer.
@@ -1808,6 +1826,10 @@ export function createCommerceCore({
       ...orderRefundState(orderId, false),
       discount: order.discount ?? 0,
       subtotal: order.total + (order.discount ?? 0),
+      receiptApproved: !!one(
+        "SELECT 1 AS n FROM order_receipt_requests WHERE order_id=? AND status='APPROVED'",
+        orderId,
+      ),
     };
   }
   function staffOrders(user, { limit = 50, cursor } = {}) {
@@ -3945,6 +3967,16 @@ export function createCommerceCore({
     adminVoidTaxInvoice: taxInvoices.adminVoidTaxInvoice,
     adminTaxInvoices: taxInvoices.adminTaxInvoices,
     adminTaxInvoiceDocument: taxInvoices.adminTaxInvoiceDocument,
+    listReceiptProfiles: orderReceipts.listReceiptProfiles,
+    createReceiptProfile: orderReceipts.createReceiptProfile,
+    updateReceiptProfile: orderReceipts.updateReceiptProfile,
+    deleteReceiptProfile: orderReceipts.deleteReceiptProfile,
+    orderReceiptState: orderReceipts.orderReceiptState,
+    requestOrderReceipt: orderReceipts.requestOrderReceipt,
+    adminOrderReceipts: orderReceipts.adminOrderReceipts,
+    adminOrderReceiptRequest: orderReceipts.adminOrderReceiptRequest,
+    adminApproveOrderReceipt: orderReceipts.adminApproveOrderReceipt,
+    adminRejectOrderReceipt: orderReceipts.adminRejectOrderReceipt,
     chatThreads,
     openChatThread,
     chatMessages,
@@ -4032,6 +4064,7 @@ export function createCommerceCore({
       financeClose: true,
       // Receipts in the shop's company name + full tax invoices (tax-invoices.mjs).
       taxInvoices: true,
+      orderReceipts: true,
       // Off until the provider / keys are configured (see server/email.mjs, turnstile.mjs).
       email: accountEmail.enabled,
       passwordReset: accountEmail.enabled,

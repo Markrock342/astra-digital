@@ -173,6 +173,8 @@ test("not VAT-registered: buyer details go on a ใบเสร็จรับ�
   assert.throws(() => s.adminIssueTaxInvoice(admin, order.id), status(409));
   assert.equal(s.db.prepare("SELECT COUNT(*) AS n FROM tax_invoices").get().n, 0);
   assert.equal(s.adminTaxInvoices(admin, { status: "PENDING" }).requests.length, 0, "no admin review in receipt mode");
+  s.requestOrderReceipt(user, order.id, BUYER);
+  s.adminApproveOrderReceipt(admin, order.id);
   const receipt = s.orderReceipt(user, order.id);
   assert.equal(receipt.buyer.name, BUYER.name);
   assert.equal(receipt.buyer.taxId, BUYER_TAX_ID);
@@ -249,6 +251,8 @@ test("issue: snapshot with VAT split, sequential numbers, one active per order, 
   assert.equal(doc.buyer.branchLabel, "สาขาที่ 00002");
   assert.ok(doc.issuedAt && doc.paidAt);
   assert.equal(s.myTaxInvoice(user, order.id).request.status, "ISSUED");
+  s.requestOrderReceipt(user, order.id, BUYER);
+  s.adminApproveOrderReceipt(admin, order.id);
   assert.equal(s.orderReceipt(user, order.id).taxInvoice.number, doc.number);
   // Customer notified, audited.
   assert.ok(s.db.prepare("SELECT 1 FROM notifications WHERE user_id=? AND title='ออกใบกำกับภาษีแล้ว' AND link=?").get(user.id, "/orders/" + order.id));

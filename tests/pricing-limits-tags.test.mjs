@@ -253,6 +253,13 @@ test("tag price: lowest of tag / sale / normal, shown to that customer only; cou
     s.db.prepare("SELECT SUM(amount) AS n FROM payments WHERE order_id=? AND status='SUCCEEDED'").get(order.id).n,
     14400,
   );
+  s.requestOrderReceipt(user, order.id, {
+    type: "PERSON",
+    name: "Tag Buyer",
+    taxId: "1234567890121",
+    address: "10 หมู่ 2 ต.บางพลี อ.บางพลี สมุทรปราการ 10540",
+  });
+  s.adminApproveOrderReceipt(admin, order.id);
   const receipt = s.orderReceipt(user, order.id);
   assert.deepEqual(
     [receipt.item.unitPrice, receipt.item.subtotal, receipt.item.discount, receipt.total],

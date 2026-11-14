@@ -106,9 +106,17 @@ test("admin creates an order for an off-site transfer (desktop), customer sees t
   await expect(page.locator(".delivered-codes")).toContainText("Pw-OFF-111");
   await page.goto(base + "/orders");
   await expect(page.locator(".history-card", { hasText: "Offsite Stream" }).first()).toContainText("฿120.00");
+  service.requestOrderReceipt(service.session(buyerToken), id, {
+    type: "PERSON",
+    name: "Offsite Buyer",
+    taxId: "1234567890121",
+    address: "10 หมู่ 2 ต.บางพลี อ.บางพลี สมุทรปราการ 10540",
+  });
+  service.adminApproveOrderReceipt(service.session(adminToken), id);
   await page.goto(base + "/orders/" + id + "/receipt");
   await expect(page.locator(".receipt-paper")).toContainText("โอนนอกเว็บ");
   await expect(page.locator(".receipt-paper")).toContainText("฿120.00");
+  await expect(page.getByRole("heading", { name: "ใบเสร็จคำสั่งซื้อ" })).toBeVisible();
 });
 
 test("same flow at 390px: no side scroll on the form, the order or the customer page", async ({ page }) => {

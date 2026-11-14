@@ -100,6 +100,17 @@ export function createPrivacyApis({
        FROM tax_invoices WHERE user_id=? ORDER BY issued_at DESC`,
       user.id,
     );
+    const receiptProfiles = all(
+      `SELECT id, label, buyer_type, buyer_name, buyer_tax_id, buyer_branch, buyer_address, created_at, updated_at
+       FROM receipt_profiles WHERE user_id=? ORDER BY updated_at DESC`,
+      user.id,
+    );
+    const orderReceiptRequests = all(
+      `SELECT order_id, status, buyer_type, buyer_name, buyer_tax_id, buyer_branch, buyer_address, reason,
+              requested_at, updated_at, resolved_at
+       FROM order_receipt_requests WHERE user_id=? ORDER BY updated_at DESC`,
+      user.id,
+    );
     return {
       exportedAt: new Date().toISOString(),
       subject: {
@@ -126,6 +137,8 @@ export function createPrivacyApis({
       sessions,
       taxInvoiceRequests,
       taxInvoices,
+      receiptProfiles,
+      orderReceiptRequests,
       // What the customer typed at checkout for shop-fulfilled products (delivery.mjs).
       deliveryInputs: typeof exportDeliveryInputs === "function" ? exportDeliveryInputs(user.id) : [],
     };
@@ -244,6 +257,18 @@ export function createPrivacyApis({
            buyer_type=NULL, buyer_name=NULL, buyer_tax_id=NULL, buyer_branch=NULL, buyer_address=NULL,
            status=CASE WHEN status IN ('PENDING','SAVED') THEN 'REJECTED' ELSE status END,
            reason=CASE WHEN status IN ('PENDING','SAVED') THEN 'บัญชีถูกลบตามคำขอ PDPA' ELSE reason END,
+           updated_at=?
+         WHERE user_id=?`,
+        now,
+        subject.id,
+      );
+      run("DELETE FROM receipt_profiles WHERE user_id=?", subject.id);
+      run(
+        `UPDATE order_receipt_requests SET
+           buyer_type='PERSON', buyer_name='[ลบตาม PDPA]', buyer_tax_id='0000000000000',
+           buyer_branch=NULL, buyer_address='[ลบตาม PDPA]', profile_id=NULL,
+           status=CASE WHEN status='PENDING' THEN 'REJECTED' ELSE status END,
+           reason=CASE WHEN status='PENDING' THEN 'บัญชีถูกลบตามคำขอ PDPA' ELSE reason END,
            updated_at=?
          WHERE user_id=?`,
         now,

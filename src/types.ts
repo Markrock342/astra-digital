@@ -130,6 +130,8 @@ export type Order = {
   paymentToken?: string | null;
   /** FR-F6: set once the shop refunded part or all of the order. */
   refundStatus?: "REFUNDED" | "PARTIALLY_REFUNDED" | null;
+  /** ใบเสร็จคำสั่งซื้อ approved — customer may open /orders/:id/receipt. */
+  receiptApproved?: boolean;
   refundedTotal?: number;
   /** Set when an unpaid order was cancelled because the payment window ran out. */
   expired_at?: string | null;

@@ -56,6 +56,7 @@ import { ensureAuthHardening } from "./auth-hardening.mjs";
 import { ensureCannedReplies } from "./ensure-admin-fr.mjs";
 import { ensureBanners } from "./ensure-admin-fr.mjs";
 import { ensureTaxInvoices } from "./ensure-admin-fr.mjs";
+import { ensureOrderReceipts } from "./ensure-admin-fr.mjs";
 import { ensureCheckouts } from "./checkouts.mjs";
 import { ensureNewsAbout } from "./ensure-admin-fr.mjs";
 import { createEmailSender } from "./email.mjs";
@@ -141,6 +142,7 @@ export function createCommerce(options = {}) {
   ensurePricing(db);
   ensureFinanceBooks(db);
   ensureTaxInvoices(db);
+  ensureOrderReceipts(db);
   ensurePreorderModes(db);
   ensureDeliveryOptions(db);
   ensureNewsAbout(db);

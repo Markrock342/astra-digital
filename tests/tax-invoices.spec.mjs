@@ -184,7 +184,17 @@ test("4. the customer opens the printable ใบกำกับภาษี with
   expect((await page.pdf({ format: "A4" })).length).toBeGreaterThan(1000);
   await page.emulateMedia({ media: "screen" });
 
-  // The short receipt now points at the issued invoice.
+  // The short receipt now points at the issued invoice (after order-receipt approval).
+  const buyer = service.session(buyerToken);
+  const admin = service.session(adminToken);
+  service.requestOrderReceipt(buyer, orderId, {
+    type: "COMPANY",
+    name: BUYER_NAME,
+    taxId: BUYER_TAX_ID,
+    branch: "2",
+    address: "1 ถนนพระราม 4 แขวงสีลม เขตบางรัก กรุงเทพฯ 10500",
+  });
+  service.adminApproveOrderReceipt(admin, orderId);
   await page.goto(base + "/orders/" + orderId + "/receipt");
   await expect(page.locator(".receipt-foot")).toContainText(invoiceNumber);
   await expect(page.locator(".receipt-shop")).toContainText(LEGAL);

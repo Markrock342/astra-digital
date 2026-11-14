@@ -27,6 +27,7 @@ import { getLang, t } from "./i18n";
 import { shopName } from "./Theme";
 import type { Order } from "./types";
 import { branchText, TaxInvoiceCard, TaxInvoicePage, taxInvoiceHref, type Buyer } from "./TaxInvoice";
+import { OrderReceiptCard } from "./OrderReceipts";
 import "./order-extras.css";
 
 // English storefront strings for this file, added to the shared table on load
@@ -46,6 +47,7 @@ const EN_EXTRAS: Record<string, string> = {
   "ใบเสร็จ": "Receipt",
   "ช่องทางชำระ": "Payment method",
   "ใบยืนยันการสั่งซื้อ / ใบเสร็จรับเงิน (อย่างย่อ)": "Order confirmation / Receipt (short form)",
+  "ใบเสร็จคำสั่งซื้อ": "Order receipt",
   "ดาวน์โหลด PDF / พิมพ์": "Download PDF / Print",
   "กลับไปที่ออเดอร์": "Back to order",
   "กำลังโหลดใบเสร็จ": "Loading receipt",
@@ -219,6 +221,7 @@ export function DeliveredExtras({ order }: { order: Order }) {
           {t("แจ้งปัญหาบัญชีนี้")}
         </button>
       </div>
+      <OrderReceiptCard orderId={order.id} />
       {/* Tax invoice request / buyer on the receipt (TaxInvoice.tsx); owner only, else nothing. */}
       <TaxInvoiceCard orderId={order.id} />
     </>
@@ -360,8 +363,12 @@ export function ReceiptLink({
 }
 
 /** Receipt links are offered once money was taken (or refunded). */
-export const hasReceipt = (order: Pick<Order, "status" | "refundStatus">) =>
-  order.status === "DELIVERED" || order.status === "PREORDER" || !!order.refundStatus;
+/** Printable receipt link — only after staff approved the ใบเสร็จคำสั่งซื้อ request. */
+export const hasReceipt = (
+  order: Pick<Order, "status" | "refundStatus"> & { receiptApproved?: boolean },
+) =>
+  !!order.receiptApproved &&
+  (order.status === "DELIVERED" || order.status === "PREORDER" || !!order.refundStatus);
 
 type Receipt = {
   id: string;
@@ -431,8 +438,7 @@ function ShortReceipt({ id, admin }: { id: string; admin: boolean }) {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [error, setError] = useState("");
   const tr = (text: string) => (admin ? text : t(text));
-  // With buyer details (not VAT-registered shop) it is a ใบเสร็จรับเงิน — never ใบกำกับภาษี.
-  const title = receipt?.buyer ? tr("ใบเสร็จรับเงิน") : tr("ใบยืนยันการสั่งซื้อ / ใบเสร็จรับเงิน (อย่างย่อ)");
+  const title = tr("ใบเสร็จคำสั่งซื้อ");
   useEffect(() => {
     if (!user) return;
     api<{ receipt: Receipt }>((admin ? "/admin" : "") + "/orders/" + encodeURIComponent(id) + "/receipt")

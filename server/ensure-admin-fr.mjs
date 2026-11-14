@@ -648,6 +648,49 @@ export function ensureTaxInvoices(db) {
 }
 
 /**
+ * Order receipt request workflow (ใบเสร็จคำสั่งซื้อ) — separate from tax invoices.
+ * - receipt_profiles: saved buyer blocks on the customer account (many per user).
+ * - order_receipt_requests: one row per order; PENDING → APPROVED | REJECTED.
+ * Download of the printable receipt is gated until APPROVED (server/order-receipts.mjs).
+ */
+export function ensureOrderReceipts(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS receipt_profiles (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    buyer_type TEXT NOT NULL CHECK (buyer_type IN ('PERSON','COMPANY')),
+    buyer_name TEXT NOT NULL,
+    buyer_tax_id TEXT NOT NULL,
+    buyer_branch TEXT,
+    buyer_address TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_receipt_profiles_user ON receipt_profiles(user_id, updated_at)");
+  db.exec(`CREATE TABLE IF NOT EXISTS order_receipt_requests (
+    order_id TEXT PRIMARY KEY,
+    preorder INTEGER NOT NULL DEFAULT 0 CHECK (preorder IN (0,1)),
+    user_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('PENDING','APPROVED','REJECTED')),
+    profile_id TEXT,
+    buyer_type TEXT NOT NULL CHECK (buyer_type IN ('PERSON','COMPANY')),
+    buyer_name TEXT NOT NULL,
+    buyer_tax_id TEXT NOT NULL,
+    buyer_branch TEXT,
+    buyer_address TEXT NOT NULL,
+    reason TEXT,
+    requested_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    resolved_at TEXT,
+    resolved_by TEXT
+  )`);
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_order_receipt_requests_status ON order_receipt_requests(status, requested_at)",
+  );
+  db.exec("CREATE INDEX IF NOT EXISTS idx_order_receipt_requests_user ON order_receipt_requests(user_id)");
+}
+
+/**
  * Email verification at sign-up (server/email-verification.mjs). Idempotent.
  * - users.email_verified_at: NULL = not verified yet. The first run marks every account that
  *   already exists as verified (its created_at), so nobody who registered before this feature
