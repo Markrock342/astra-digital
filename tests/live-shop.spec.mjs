@@ -161,9 +161,8 @@ test("customer sees a stock label, never a count or a code, and orders wait for 
   for (const code of codes) await expect(body).not.toContainText(code);
 
   await page.getByRole("button", { name: "ซื้อเลย", exact: true }).click();
-  const proceed = page.getByRole("button", { name: /^ไปบันทึกคำสั่งซื้อ/ });
-  if (await proceed.isVisible()) await proceed.click();
-  await page.getByRole("button", { name: /^บันทึกคำสั่งซื้อ/ }).click();
+  // Live shop, no gateway yet: the order is saved and waits for payment.
+  await page.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ }).click();
   await expect(page).toHaveURL(/\/(checkout|orders)\/[a-z0-9-]+$/);
   await expect(body).toContainText(/ชำระเงินเพื่อรับสินค้า|รอชำระเงิน/);
   await expect(page.locator(".code-row")).toHaveCount(0);

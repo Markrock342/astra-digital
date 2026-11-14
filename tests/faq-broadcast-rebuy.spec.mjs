@@ -243,14 +243,12 @@ test("buy again goes to checkout with the same option and quantity; renew and ou
   await expect(card.getByRole("button", { name: /^ซื้อซ้ำ/ })).toBeVisible();
   await card.getByRole("button", { name: /^ซื้อซ้ำ/ }).click();
   await expect(page).toHaveURL(base + "/checkout");
-  await expect(page.getByRole("heading", { name: "ตรวจสอบคำสั่งซื้อ" })).toBeVisible();
-  await expect(page.locator(".cart-info")).toContainText("Rebuy Stream Plus");
-  await expect(page.locator(".cart-info")).toContainText("1 เดือน");
-  await expect(page.locator(".order-summary")).toContainText("2");
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("astra-basket")))).toEqual({
-    variantId: streamVariant,
-    quantity: 2,
-  });
+  await expect(page.getByRole("heading", { name: "สรุปรายการ" })).toBeVisible();
+  await expect(page.locator(".cart-line")).toContainText("Rebuy Stream Plus");
+  await expect(page.locator(".cart-line")).toContainText("1 เดือน · × 2");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("astra-cart")))).toEqual([
+    { variantId: streamVariant, quantity: 2, selected: true },
+  ]);
 
   // Warranty (used as the subscription end) inside 5 days → "ใกล้หมดอายุ? ต่ออายุ".
   const soon = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 19).replace("T", " ");

@@ -159,10 +159,8 @@ test("customer: struck-through combos, price updates, list click, buy → seat +
 
   await page.getByRole("button", { name: "ซื้อเลย" }).click();
   await expect(page).toHaveURL(/\/checkout$/);
-  await expect(page.locator(".cart-info")).toContainText("7 วัน / Basic / ส่วนตัว");
-  await page.getByRole("button", { name: "บันทึกคำสั่งซื้อ" }).click();
-  await expect(page).toHaveURL(/\/checkout\/.+/);
-  await page.getByRole("button", { name: /^ชำระเงิน/ }).click();
+  await expect(page.locator(".cart-line")).toContainText("7 วัน / Basic / ส่วนตัว");
+  await page.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ }).click();
   await expect(page.getByRole("heading", { name: "สั่งซื้อสำเร็จ พร้อมรับสินค้า" })).toBeVisible();
   const reveal = page.getByRole("button", { name: "แสดงโค้ด" });
   if (await reveal.isVisible()) await reveal.click();
@@ -188,13 +186,12 @@ test("shop-fulfilled: customer fills the field, admin delivers, customer sees it
   await customer.goto(base + "/products/" + manualProduct);
   await expect(customer.locator(".reference-delivery-note")).toContainText("ร้านทำรายการให้หลังชำระ");
   await customer.getByRole("button", { name: "ซื้อเลย" }).click();
-  const save = customer.getByRole("button", { name: "บันทึกคำสั่งซื้อ" });
+  const save = customer.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ });
   await expect(save).toBeDisabled();
   await customer.getByLabel("อีเมล Gmail ที่จะให้เชิญ").fill("me@gmail");
   await expect(save).toBeDisabled();
   await customer.getByLabel("อีเมล Gmail ที่จะให้เชิญ").fill("me@gmail.com");
   await save.click();
-  await customer.getByRole("button", { name: /^ชำระเงิน/ }).click();
   await expect(customer.getByRole("heading", { name: "ชำระแล้ว รอร้านส่งมอบ" })).toBeVisible();
   await expect(customer.locator(".fulfilment-card")).toContainText("รอร้านส่งมอบ");
   await expect(customer.locator(".fulfilment-card")).toContainText("me@gmail.com");

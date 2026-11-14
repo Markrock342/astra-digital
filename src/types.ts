@@ -140,6 +140,9 @@ export type Order = {
   coupon_code?: string | null;
   /** The shop created this order in the back office (customer paid outside the site). */
   createdByAdmin?: boolean;
+  /** Bought together with other lines under one order number (server/checkouts.mjs). */
+  checkout_id?: string | null;
+  checkout_line?: number | null;
   paymentMethodLabel?: string;
   // Preorder modes (server/preorder.mjs reservationView).
   preorderMode?: PreorderMode;

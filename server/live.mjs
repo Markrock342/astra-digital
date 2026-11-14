@@ -9,6 +9,8 @@ export const LIVE_TOPICS = ["chat", "orders", "catalog", "notify", "customers", 
 const LIVE_METHODS = {
   createOrder: ["orders", "catalog"],
   pay: ["orders", "catalog", "notify"],
+  createCheckout: ["orders", "catalog"],
+  payCheckout: ["orders", "catalog", "notify"],
   retry: ["orders"],
   topup: ["customers"],
   importCodes: ["catalog", "notify"],

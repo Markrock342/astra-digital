@@ -31,7 +31,7 @@ async function as(context, token) {
 }
 async function basket(page, variantId, quantity = 1) {
   await page.goto(base + "/");
-  await page.evaluate((b) => localStorage.setItem("astra-basket", JSON.stringify(b)), { variantId, quantity });
+  await page.evaluate((b) => localStorage.setItem("astra-cart", JSON.stringify([b])), { variantId, quantity, selected: true });
 }
 const noSideScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
 
@@ -90,7 +90,7 @@ test("an invalid code shows its reason at checkout", async ({ page }) => {
   await field.fill("big-spend");
   await page.getByRole("button", { name: "ใช้โค้ด" }).click();
   await expect(page.locator(".coupon-box").getByRole("alert")).toHaveText("ยอดสั่งซื้อขั้นต่ำ ฿500 (ขาดอีก ฿400)");
-  await expect(page.locator(".summary-total")).toContainText("฿100.00");
+  await expect(page.locator(".cart-summary-total")).toContainText("฿100.00");
 });
 
 test("customer applies the code, pays with test credit and sees the discount", async ({ page }) => {
@@ -100,21 +100,18 @@ test("customer applies the code, pays with test credit and sees the discount", a
   await page.locator("#coupon-code").fill("save20");
   await page.getByRole("button", { name: "ใช้โค้ด" }).click();
   // 20% of ฿220 = ฿44 (under the ฿50 cap) → ฿176.
-  await expect(page.locator(".summary-discount")).toContainText("ส่วนลด (SAVE20)");
+  await expect(page.locator(".coupon-applied")).toContainText("SAVE20");
   await expect(page.locator(".summary-discount")).toContainText("−฿44.00");
-  await expect(page.locator(".summary-total")).toContainText("฿176.00");
+  await expect(page.locator(".cart-summary-total")).toContainText("฿176.00");
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await noSideScroll(page)).toBe(true);
   await page.setViewportSize({ width: 1440, height: 1000 });
 
   const before = service.publicUser(buyer).balance;
-  await page.getByRole("button", { name: /^บันทึกคำสั่งซื้อ/ }).click();
-  await expect(page).toHaveURL(/\/checkout\/[a-z0-9-]+$/);
+  // Summary → pay in one step.
+  await page.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ }).click();
+  await expect(page).toHaveURL(/\/orders\/[a-z0-9-]+$/);
   const orderId = page.url().split("/").pop();
-  await expect(page.locator(".order-price-breakdown")).toContainText("฿220.00");
-  await expect(page.locator(".order-price-breakdown")).toContainText("−฿44.00");
-  await page.getByRole("button", { name: /^ชำระเงิน/ }).click();
-  await expect(page).toHaveURL(new RegExp("/orders/" + orderId + "$"));
   await expect(page.getByRole("heading", { name: "สั่งซื้อสำเร็จ พร้อมรับสินค้า" })).toBeVisible();
   const breakdown = page.locator(".order-price-breakdown");
   await expect(breakdown).toContainText("ราคาสินค้า");

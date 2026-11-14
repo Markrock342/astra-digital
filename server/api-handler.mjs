@@ -447,6 +447,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           }));
         if (path === "/api/orders")
           return send(200, { orders: service.orders(user) });
+        if (/^\/api\/checkouts\/[^/]+$/.test(path))
+          return send(200, service.checkout(user, path.split("/")[3]));
         if (/^\/api\/orders\/[^/]+$/.test(path))
           return send(200, service.orderDetail(user, path.split("/")[3]));
         if (/^\/api\/orders\/[^/]+\/receipt$/.test(path))
@@ -920,6 +922,18 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminDisableCoupon(user, path.split("/")[4]));
         if (/^\/api\/admin\/coupons\/[^/]+\/duplicate$/.test(path))
           return send(201, service.adminDuplicateCoupon(user, path.split("/")[4]));
+        if (path === "/api/checkouts") {
+          if (user && typeof input.couponCode === "string" && input.couponCode.trim())
+            assertCouponRate(request, env, user);
+          return send(201, service.createCheckout(user, input, { origin: url.origin }));
+        }
+        if (path === "/api/checkouts/coupon") {
+          if (!user) throw new ApiError(401, "กรุณาเข้าสู่ระบบเพื่อใช้โค้ดส่วนลด");
+          assertCouponRate(request, env, user);
+          return send(200, service.checkoutCoupon(user, input));
+        }
+        if (/^\/api\/checkouts\/[^/]+\/pay$/.test(path))
+          return send(200, service.payCheckout(user, path.split("/")[3], input, { origin: url.origin }));
         if (/^\/api\/orders\/[^/]+\/pay$/.test(path))
           return send(
             200,

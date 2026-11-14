@@ -23,6 +23,7 @@ import { EN_STRINGS } from "./i18n-en";
 import { useLive } from "./live";
 import { hasReceipt, ReceiptLink } from "./OrderExtras";
 import { RebuyActions } from "./Rebuy";
+import { groupStatus } from "./Cart";
 import { BottomSheet } from "./Sheet";
 import { ManualOrderNote } from "./ManualOrderNote";
 import type { Order, Product } from "./types";
@@ -52,6 +53,7 @@ const EN: Record<string, string> = {
   "ไม่พบคำสั่งซื้อที่ตรงกับการค้นหา": "No orders match your search",
   "ลองค้นด้วยคำอื่น หรือเปลี่ยนสถานะ": "Try another word or status",
   "เลือก": "Select",
+  "+ อีก {n} รายการ": "+ {n} more",
 };
 for (const [th, en] of Object.entries(EN)) if (!(th in EN_STRINGS)) EN_STRINGS[th] = en;
 
@@ -99,6 +101,44 @@ function haystack(o: Order) {
     .join("\n")
     .toLowerCase();
 }
+type Entry = Order & { href?: string; lines?: Order[] };
+/** One row per checkout: lines bought together show as one order (Cart.tsx). */
+export function mergeCheckouts(orders: Order[]): Entry[] {
+  const groups = new Map<string, Order[]>();
+  for (const o of orders) if (o.checkout_id) groups.set(o.checkout_id, [...(groups.get(o.checkout_id) ?? []), o]);
+  const out: Entry[] = [];
+  const done = new Set<string>();
+  for (const o of orders) {
+    if (!o.checkout_id) {
+      out.push(o);
+      continue;
+    }
+    if (done.has(o.checkout_id)) continue;
+    done.add(o.checkout_id);
+    const lines = [...groups.get(o.checkout_id)!].sort((a, b) => (a.checkout_line ?? 0) - (b.checkout_line ?? 0));
+    const first = lines[0];
+    out.push({
+      ...first,
+      id: o.checkout_id,
+      name: lines.length > 1 ? first.name + " " + t("+ อีก {n} รายการ", { n: lines.length - 1 }) : first.name,
+      label: lines.map((l) => l.label).join(", "),
+      quantity: lines.reduce((n, l) => n + l.quantity, 0),
+      total: lines.reduce((n, l) => n + l.total, 0),
+      status: groupStatus(lines),
+      refundStatus: null,
+      stage: null,
+      expired_at: null,
+      fulfilment: null,
+      createdByAdmin: false,
+      codes: lines.flatMap((l) => l.codes ?? []),
+      credentials: lines.flatMap((l) => l.credentials ?? []),
+      links: lines.flatMap((l) => l.links ?? []),
+      href: "/checkouts/" + o.checkout_id,
+      lines,
+    });
+  }
+  return out;
+}
 function coverFor(products: Product[], variantId?: string) {
   if (!variantId) return null;
   const p = products.find((x) => x.variants?.some((v) => v.id === variantId));
@@ -123,15 +163,19 @@ export function HistoryPage() {
   };
   useEffect(loadOrders, [user?.id]);
   useLive(["orders"], loadOrders);
-  const index = useMemo(() => new Map((orders ?? []).map((o) => [o.id, haystack(o)])), [orders]);
+  const entries = useMemo(() => mergeCheckouts(orders ?? []), [orders]);
+  const index = useMemo(
+    () => new Map(entries.map((o) => [o.id, (o.lines ?? [o]).map(haystack).join("\n") + "\n#" + o.id.slice(0, 8).toLowerCase()])),
+    [entries],
+  );
   const filtered = useMemo(() => {
     const words = query.trim().toLowerCase().replace(/^#/, "").split(/\s+/).filter(Boolean);
-    return (orders ?? []).filter(
+    return entries.filter(
       (o) =>
         (group === "all" || statusGroup(o) === group) &&
         words.every((w) => index.get(o.id)!.includes(w)),
     );
-  }, [orders, index, query, group]);
+  }, [entries, index, query, group]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   useEffect(() => setPage(0), [query, group]);
   useEffect(() => {
@@ -156,7 +200,7 @@ export function HistoryPage() {
   }
   async function copyPicked() {
     // Newest first, the order the list shows.
-    const lines = (orders ?? []).filter((o) => picked.has(o.id)).flatMap(copyLines);
+    const lines = entries.filter((o) => picked.has(o.id)).flatMap(copyLines);
     if (!lines.length) return;
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
@@ -267,7 +311,7 @@ export function HistoryPage() {
                 {shown.map((o) => {
                   const can = copyLines(o).length > 0;
                   const on = picked.has(o.id);
-                  const actions = !copyMode && (hasReceipt(o) || o.status === "DELIVERED");
+                  const actions = !copyMode && !o.lines && (hasReceipt(o) || o.status === "DELIVERED");
                   const row = (
                     <>
                           <span className="history-art">
@@ -306,7 +350,7 @@ export function HistoryPage() {
                             {row}
                           </button>
                         ) : (
-                          <Link to={"/orders/" + o.id} className="history-card">
+                          <Link to={o.href ?? "/orders/" + o.id} className="history-card">
                             {row}
                           </Link>
                         )}

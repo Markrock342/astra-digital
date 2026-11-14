@@ -19,7 +19,7 @@ test.beforeAll(async () => {
   const admin = service.session(service.login({ email: "admin@astra.local", password: adminPassword }).token);
   service.setPaymentChannel(admin, { provider: "sandbox", active: true });
   const make = (name) => {
-    const p = service.saveProduct(admin, { name, description: name, category: "streaming", price: 100, active: true, firstLabel: "30 วัน" });
+    const p = service.saveProduct(admin, { name, description: name + " บัญชีสตรีมมิ่งรายเดือน", category: "streaming", price: 100, active: true, firstLabel: "30 วัน" });
     return service.adminProductVariants(admin, p.id).variants[0].id;
   };
   const stream = make("List Stream");
