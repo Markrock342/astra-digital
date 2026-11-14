@@ -58,10 +58,9 @@ import {
 import { t, getLang, locale, setLang, setMerchantScope, type Lang } from "./i18n";
 import {
   BrandLogo,
-  LanguageToggle,
   Marquee,
+  PrefsPanel,
   ScrollProgress,
-  ThemePanel,
   shopName,
   ThemeSwitch,
   useCardTilt,
@@ -95,6 +94,7 @@ import { EmailVerifyNotice, useEmailVerifyNeeded, VerifyEmailPage } from "./Emai
 import { ResetPasswordPage } from "./AccountRecovery";
 import { FaqPage } from "./Faq";
 import { ContactPage } from "./Contact";
+import { AboutPage, NewsDetailPage, NewsListPage } from "./News";
 import { CheckoutFields, DeliveredLinks, FulfilmentCard, checkoutFieldsReady } from "./Delivery";
 import { RebuyActions } from "./Rebuy";
 import { ManualOrderNote } from "./ManualOrderNote";
@@ -109,7 +109,8 @@ import {
   ReferenceProduct,
 } from "./ReferenceStore";
 import { AppearanceEffects, ShopLink, text, useAppearance } from "./Appearance";
-import type { Appearance } from "../server/appearance-rules.mjs";
+import { heroTitleFallback, type Appearance } from "../server/appearance-rules.mjs";
+import { StorefrontMenu } from "./StorefrontMenu";
 const Admin = lazy(() => import("./Admin"));
 const LegalPage = lazy(() =>
   import("./Legal").then((m) => ({ default: m.LegalPage })),
@@ -307,7 +308,7 @@ export function ErrorMessage({ message }: { message: string }) {
 const AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 
-function UserAvatar({ user, large = false }: { user: User; large?: boolean }) {
+export function UserAvatar({ user, large = false }: { user: User; large?: boolean }) {
   const [brokenUrl, setBrokenUrl] = useState("");
   const photo = user.avatarUrl && brokenUrl !== user.avatarUrl ? user.avatarUrl : "";
   return (
@@ -322,8 +323,8 @@ function UserAvatar({ user, large = false }: { user: User; large?: boolean }) {
 }
 
 function Header() {
-  const { path, user, basket, go, refresh, toast, lang, changeLang } =
-    useStore();
+  const { path, user, basket, go, refresh, toast, lang, changeLang } = useStore();
+  const testPayments = useTestPayments();
   const [open, setOpen] = useState(false);
   const [account, setAccount] = useState(false);
   useEffect(() => {
@@ -343,10 +344,7 @@ function Header() {
           <Link to="/" className="brand" aria-label={t("หน้าแรก")}>
             <BrandLogo />
           </Link>
-          <nav
-            aria-label={t("เมนูหลัก")}
-            className={open ? "main-nav nav-open" : "main-nav"}
-          >
+          <nav aria-label={t("เมนูหลัก")} className="main-nav">
             {links.map(([to, label]) => (
               <Link
                 key={to}
@@ -366,24 +364,27 @@ function Header() {
               </Link>
             ))}
           </nav>
+          {/* Exactly: ภาษา + ธีม · bell · balance · profile (the cart lives in the bottom nav). */}
           <div className="header-actions">
-            <LanguageToggle lang={lang} onChange={changeLang} />
-            <ThemePanel />
+            <PrefsPanel lang={lang} onLangChange={changeLang} />
             <NotificationBell />
-            <Link
-              to="/cart"
-              className="icon-button cart-button"
-              aria-label={t("ตะกร้าสินค้า")}
-            >
-              <ShoppingBag size={21} />
-              {basket && <span className="cart-count">{basket.quantity}</span>}
-            </Link>
+            {user && (
+              <Link
+                to={testPayments ? "/wallet" : "/account"}
+                className="balance-pill"
+                aria-label={t("ยอดเงินคงเหลือ") + " " + money(user.balance)}
+              >
+                <Wallet size={15} aria-hidden="true" />
+                <span>{money(user.balance)}</span>
+              </Link>
+            )}
             {user ? (
               <div className="account-wrap">
                 <button
                   className="account-button"
                   onClick={() => setAccount(!account)}
                   aria-expanded={account}
+                  aria-label={t("บัญชีของฉัน")}
                 >
                   <UserAvatar user={user} />
                   <span className="account-name">{user.name}</span>
@@ -423,11 +424,12 @@ function Header() {
             )}
             <button
               className="icon-button mobile-menu"
-              aria-label={open ? t("ปิดเมนู") : t("เปิดเมนู")}
+              aria-label={t("เปิดเมนู")}
+              aria-haspopup="dialog"
               aria-expanded={open}
-              onClick={() => setOpen(!open)}
+              onClick={() => setOpen(true)}
             >
-              {open ? <X /> : <Menu />}
+              <Menu />
             </button>
           </div>
         </div>
@@ -437,8 +439,9 @@ function Header() {
           <HomeIcon size={21} />
           <span>{t("หน้าร้าน")}</span>
         </Link>
-        <Link to="/cart" className={path === "/cart" ? "active" : ""}>
+        <Link to="/cart" className={path === "/cart" ? "active cart-tab" : "cart-tab"}>
           <ShoppingBag size={21} />
+          {basket && <span className="cart-count">{basket.quantity}</span>}
           <span>{t("ตะกร้า")}</span>
         </Link>
         <Link
@@ -451,13 +454,16 @@ function Header() {
         <button
           className={open ? "active" : ""}
           aria-label={t("เมนูลัด")}
+          aria-haspopup="dialog"
           aria-expanded={open}
-          onClick={() => setOpen(!open)}
+          onClick={() => setOpen(true)}
         >
           <Menu size={21} />
           <span>{t("เมนู")}</span>
         </button>
       </nav>
+      {/* Outside the sticky header: its backdrop-filter would trap the fixed sheet. */}
+      <StorefrontMenu open={open} onClose={() => setOpen(false)} />
     </>
   );
 }
@@ -556,21 +562,28 @@ function Footer() {
 }
 export function ProductCard({ product }: { product: Product }) {
   const soldOut = product.variants.every((v) => v.stockStatus === "out");
+  const preorder = !!product.preorder;
   // Cheapest option for this viewer (sale / tag price already applied by the server).
   const cheapest = product.variants.reduce<Product["variants"][number] | undefined>(
     (best, v) => (!best || v.price < best.price ? v : best),
     undefined,
   );
+  // One clear action under the price: solid = ready stock, outlined = preorder. The whole card
+  // is the link (options are picked on the product page), so this is a styled label, not a
+  // nested button.
+  const choose = (product.optionGroups?.length ?? 0) > 0 || product.variants.length > 1;
+  const action = preorder
+    ? t("จองล่วงหน้า")
+    : soldOut
+      ? t("ดูรายละเอียด")
+      : choose
+        ? t("เลือกตัวเลือก")
+        : t("ซื้อเลย");
   return (
     <Link to={"/products/" + product.id} className="product-card">
       <div className="product-image">
         <Art type={product.art} name={product.name} image={product.imageUrl} />
-        {!!product.preorder ? (
-          <span className="stock-tag">{t("สั่งจอง")}</span>
-        ) : soldOut ? (
-          <span className="stock-tag">{t("สินค้าหมด")}</span>
-        ) : null}
-        <span className="card-hover-action">{t("เลือกตัวเลือก")}</span>
+        {!preorder && soldOut ? <span className="stock-tag">{t("สินค้าหมด")}</span> : null}
       </div>
       <div className="product-card-info">
         <div className="product-title">
@@ -599,12 +612,21 @@ export function ProductCard({ product }: { product: Product }) {
             {t("ขายแล้ว")}{" "}{product.sold} <span>{t("รายการ")}</span>
           </div>
         )}
+        <span
+          className={
+            "card-action " +
+            (preorder ? "card-action-preorder" : soldOut ? "card-action-muted" : "card-action-ready")
+          }
+          data-kind={preorder ? "preorder" : soldOut ? "soldout" : "ready"}
+        >
+          {action}
+        </span>
       </div>
     </Link>
   );
 }
 function Home() {
-  const { overview, products, loading } = useStore();
+  const { overview, loading, user } = useStore();
   const [activityIndex, setActivityIndex] = useState(0);
   useEffect(() => {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -630,38 +652,17 @@ function Home() {
   const appearance = useAppearance();
   const hero = appearance.hero;
   const subtext = text(hero.subtext);
-  const secondary = text(hero.secondary.label);
+  // Second button: reviews for signed-in customers, sign in for everyone else (both editable).
+  const second = user ? hero.secondary : hero.guest;
+  const secondLabel = text(second.label);
+  const heroTitle = text(hero.title) || heroTitleFallback(shopName(overview?.shop?.shopName));
   const blocks: Record<string, ReactNode> = {
     banners: <HomeBanners />,
     hero: (
-        <section className="home-hero">
-          <div className="hero-grid" aria-hidden="true">
-            <i className="grid-streak streak-y streak-y-one" />
-            <i className="grid-streak streak-y streak-y-two" />
-            <i className="grid-streak streak-y streak-y-three" />
-            <i className="grid-streak streak-x streak-x-one" />
-            <i className="grid-streak streak-x streak-x-two" />
-          </div>
-          <span className="service-pill">
-            <span className="service-dot" />
-            {overview?.shop?.shopOpen === false
-              ? t("ปิดให้บริการ")
-              : t("เปิดให้บริการ")}
-          </span>
-          <h1 className="hero-title">
-            <span className="sr-only">{shopName(overview?.shop?.shopName)}</span>
-            <span className="hero-logo" aria-hidden="true">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <img
-                  key={i}
-                  src={`/brand/l${i}.png`}
-                  alt=""
-                  draggable={false}
-                  className={i === 4 ? "hero-x" : ""}
-                  style={{ "--i": i } as CSSProperties}
-                />
-              ))}
-            </span>
+        <section className="home-hero" aria-labelledby="home-hero-title">
+          {/* Plain background; the shop name as a big display line (ตั้งค่า › หน้าตาร้าน › ส่วนหัว). */}
+          <h1 className="hero-title hero-display" id="home-hero-title">
+            {heroTitle}
           </h1>
           <p className="hero-tagline">
             {text(hero.headline) ||
@@ -672,17 +673,12 @@ function Home() {
           <div className="hero-actions">
             <ShopLink to={hero.primary.link} className="button primary hero-cta">
               {text(hero.primary.label)}
-              <ArrowRight size={18} />
             </ShopLink>
-            {secondary && hero.secondary.link && (
-              <ShopLink to={hero.secondary.link} className="button hero-ghost">
-                {secondary}
+            {secondLabel && second.link && (
+              <ShopLink to={second.link} className="button hero-ghost">
+                {secondLabel}
               </ShopLink>
             )}
-          </div>
-          <div className="hero-orbs" aria-hidden="true">
-            <i className="orb orb-blue" />
-            <i className="orb orb-yellow" />
           </div>
         </section>
     ),
@@ -1234,7 +1230,7 @@ function Auth({ register = false }: { register?: boolean }) {
 }
 /** Server test mode (ASTRA_TEST_PAYMENTS): sandbox pay + test credit until a real provider is live. */
 let testModeCache: Promise<boolean> | null = null;
-function useTestPayments() {
+export function useTestPayments() {
   const [on, setOn] = useState(false);
   useEffect(() => {
     testModeCache ??= api<{ mode?: string }>("/health")
@@ -2805,6 +2801,8 @@ function Router() {
     "/credits": t("เครดิตร้าน"),
     "/support": t("ติดต่อเรา"),
     "/faq": t("คำถามที่พบบ่อย"),
+    "/news": t("ข่าวสารและกิจกรรม"),
+    "/about": t("เกี่ยวกับเรา"),
     "/terms": t("ข้อกำหนดการใช้บริการ"),
     "/privacy": t("นโยบายความเป็นส่วนตัว"),
     "/stores": t("ร้านค้า"),
@@ -2825,6 +2823,8 @@ function Router() {
     "/credits": t("รีวิวจากคนที่ซื้อจริง ทุกรายการตรวจสอบจากออเดอร์"),
     "/support": t("เราพร้อมช่วยเหลือคุณ"),
     "/faq": t("คำตอบเรื่องการรับสินค้า การรับประกัน และการติดต่อร้าน"),
+    "/news": t("ข่าวสาร โปรโมชัน และกิจกรรมของร้าน"),
+    "/about": t("รู้จักร้านและช่องทางติดต่อ"),
     "/terms": t("ข้อกำหนดการใช้บริการ การสั่งซื้อ การรับประกัน และการคืนเงินของร้าน"),
     "/privacy": t("วิธีที่ร้านเก็บรวบรวม ใช้ และคุ้มครองข้อมูลส่วนบุคคลตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562"),
   };
@@ -2833,7 +2833,8 @@ function Router() {
     path === "/products" ||
     path.startsWith("/products/") ||
     path.startsWith("/orders/") ||
-    path.startsWith("/checkout/");
+    path.startsWith("/checkout/") ||
+    path.startsWith("/news/");
   const page = dynamic
     ? ""
     : walletHidden
@@ -2904,6 +2905,9 @@ function Router() {
     );
   if (path === "/support") return <InfoPage kind="support" />;
   if (path === "/faq") return <FaqPage />;
+  if (path === "/news") return <NewsListPage />;
+  if (path.startsWith("/news/")) return <NewsDetailPage key={path} id={path.slice(6).replace(/\/$/, "")} />;
+  if (path === "/about") return <AboutPage />;
   return <NotFound />;
 }
 export default function App() {

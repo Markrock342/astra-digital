@@ -14,7 +14,16 @@ export type AppearanceButton = { label: TextPair; link: string };
 export type TrustCard = { icon: string; title: TextPair; text: TextPair };
 export type FooterLink = { label: TextPair; link: string };
 export interface Appearance {
-  hero: { headline: TextPair; subtext: TextPair; primary: AppearanceButton; secondary: AppearanceButton };
+  hero: {
+    title: TextPair;
+    headline: TextPair;
+    subtext: TextPair;
+    primary: AppearanceButton;
+    /** Second button for signed-in customers. */
+    secondary: AppearanceButton;
+    /** Second button for visitors who are not signed in. */
+    guest: AppearanceButton;
+  };
   marquee: TextPair[];
   sections: { id: HomeSectionId; visible: boolean }[];
   colors: { primary: string | null; secondary: string | null; defaultAccent: Accent };
@@ -26,10 +35,12 @@ export type AppearancePart = keyof Appearance;
 export const APPEARANCE_PARTS: AppearancePart[];
 export const HOME_SECTIONS: HomeSectionId[];
 export const ALWAYS_VISIBLE_SECTIONS: HomeSectionId[];
+export const DEFAULT_HIDDEN_SECTIONS: HomeSectionId[];
 export const SECTION_LABELS: Record<HomeSectionId, string>;
 export const TRUST_ICONS: string[];
 export const ACCENTS: Accent[];
 export const LIMITS: {
+  heroTitle: number;
   heroHeadline: number;
   heroSubtext: number;
   buttonLabel: number;
@@ -69,4 +80,7 @@ type Fail = (status: number, message: string) => never;
 export const NORMALIZERS: { [K in AppearancePart]: (input: unknown, fail: Fail) => Appearance[K] };
 export function normalizeAppearanceParts(input: unknown, fail: Fail): Partial<Appearance>;
 export function resolveAppearance(stored: unknown): Appearance;
+export const APPEARANCE_REV: number;
+export function migrateStoredAppearance(stored: unknown): Record<string, unknown>;
+export function heroTitleFallback(shopName: string): string;
 export function pick(value: TextPair | null | undefined, lang: string): string;

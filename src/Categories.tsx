@@ -110,10 +110,6 @@ export function HomeCategoryRow() {
     <section className="home-categories" aria-labelledby="home-categories-title">
       <div className="home-categories-head">
         <h2 id="home-categories-title">{t("เลือกตามหมวดหมู่")}</h2>
-        <Link to="/products" className="home-categories-all">
-          {t("ดูสินค้าทั้งหมด")}
-          <ArrowRight size={15} />
-        </Link>
       </div>
       <ul className="home-category-grid">
         {categories.map((c) => (

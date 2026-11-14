@@ -55,6 +55,7 @@ import { ensureAuthHardening } from "./auth-hardening.mjs";
 import { ensureCannedReplies } from "./ensure-admin-fr.mjs";
 import { ensureBanners } from "./ensure-admin-fr.mjs";
 import { ensureTaxInvoices } from "./ensure-admin-fr.mjs";
+import { ensureNewsAbout } from "./ensure-admin-fr.mjs";
 import { createEmailSender } from "./email.mjs";
 import { createTurnstile } from "./turnstile.mjs";
 export { ApiError } from "./domain.mjs";
@@ -139,6 +140,7 @@ export function createCommerce(options = {}) {
   ensureTaxInvoices(db);
   ensurePreorderModes(db);
   ensureDeliveryOptions(db);
+  ensureNewsAbout(db);
   return createCommerceCore({ ...options, db, key });
 }
 export function openLocalCommerce({

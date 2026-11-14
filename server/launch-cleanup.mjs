@@ -220,6 +220,9 @@ export function createLaunchCleanupApis({
       audit: n("SELECT COUNT(*) AS n FROM audit"),
       categories: tableExists(one, "categories") ? n("SELECT COUNT(*) AS n FROM categories") : 0,
       banners: tableExists(one, "banners") ? n("SELECT COUNT(*) AS n FROM banners") : 0,
+      // Shop content: ข่าวสารและกิจกรรม posts (+ their covers) and เกี่ยวกับเรา (runtime_flags).
+      newsPosts: tableExists(one, "news_posts") ? n("SELECT COUNT(*) AS n FROM news_posts") : 0,
+      aboutPage: n("SELECT COUNT(*) AS n FROM runtime_flags WHERE key='about-page'"),
     };
 
     return { remove, keep, customerIds: customers, orderIds, reservationIds };

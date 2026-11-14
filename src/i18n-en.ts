@@ -598,6 +598,10 @@ export const EN_STRINGS: Record<string, string> = {
   "จำกัด {n} ชิ้นต่อบัญชี": "Limit {n} per account",
   "คุณซื้อครบจำนวนแล้ว": "You have reached the limit",
   "สั่งได้อีก {n} ชิ้น": "{n} more allowed",
+  // Storefront round (header language + theme button, balance, product card action)
+  "ภาษาและธีม": "Language & theme",
+  "ยอดเงินคงเหลือ": "Balance",
+  "จองล่วงหน้า": "Preorder",
   // Contact page (/support)
   "โทรศัพท์": "Phone",
   "ที่อยู่": "Address",

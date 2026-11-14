@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 
-export type LiveTopic = "chat" | "orders" | "catalog" | "notify" | "customers" | "team";
+export type LiveTopic = "chat" | "orders" | "catalog" | "notify" | "customers" | "team" | "content";
 type Listener = (topics: LiveTopic[]) => void;
 
 const listeners = new Set<Listener>();

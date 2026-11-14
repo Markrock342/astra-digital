@@ -1,7 +1,7 @@
 // Optional short pages.dev frontend. The existing Worker remains the only API/database owner.
 // Besides forwarding /api/* it serves /robots.txt and /sitemap.xml and rewrites the <head>
-// of "/", "/products/<id>" and "/products?category=<id>" so link previews show the shop /
-// product / category (HTMLRewriter).
+// of "/", "/products/<id>", "/products?category=<id>", "/news", "/news/<id>" and "/about" so
+// link previews show the shop / product / category / news post / about page (HTMLRewriter).
 // Bundled to dist-pages/_worker.js by scripts/build-pages.mjs.
 import {
   ICON_HEAD_SELECTORS,
@@ -11,6 +11,9 @@ import {
   homeMeta,
   isListedCategory,
   metaTags,
+  newsIdFromPath,
+  newsMeta,
+  pageMeta as simplePageMeta,
   productIdFromPath,
   productMeta,
   robotsTxt,
@@ -81,6 +84,23 @@ async function pageMeta(env, origin, pathname, search) {
     const category = id && (overview?.categories ?? []).find((c) => c.id === id);
     return category && isListedCategory(category) ? categoryMeta(origin, category, shop, appearance) : null;
   }
+  if (pathname === "/news")
+    return simplePageMeta(origin, { path: "/news", title: "ข่าวสารและกิจกรรม", description: "ข่าวสาร โปรโมชัน และกิจกรรมของร้าน" }, shop, appearance);
+  const newsId = newsIdFromPath(pathname);
+  if (newsId) {
+    const data = await publicApi(env, origin, "/api/news/" + newsId);
+    return data?.post ? newsMeta(origin, data.post, shop, appearance) : null;
+  }
+  if (pathname === "/about") {
+    const data = await publicApi(env, origin, "/api/about").catch(() => null);
+    const about = data?.about;
+    return simplePageMeta(
+      origin,
+      { path: "/about", title: about?.heading?.th || "เกี่ยวกับเรา", description: about?.body?.th ?? "", image: about?.coverUrl ?? null },
+      shop,
+      appearance,
+    );
+  }
   const id = productIdFromPath(pathname);
   if (!id) return null;
   const data = await publicApi(env, origin, "/api/products/" + encodeURIComponent(id));
@@ -102,19 +122,22 @@ export default {
     if (read && url.pathname === "/sitemap.xml") {
       let products = [];
       let categories = [];
+      let news = [];
       let maxAge = 600;
       try {
-        const [list, overview] = await Promise.all([
+        const [list, overview, feed] = await Promise.all([
           publicApi(env, url.origin, "/api/products"),
           publicApi(env, url.origin, "/api/overview"),
+          publicApi(env, url.origin, "/api/news").catch(() => null),
         ]);
         products = list.products ?? [];
         categories = overview?.categories ?? [];
+        news = feed?.posts ?? [];
       } catch {
         maxAge = 60; // list the static pages now, retry products soon
       }
       return textResponse(
-        sitemapXml(url.origin, products, categories),
+        sitemapXml(url.origin, products, categories, news),
         "application/xml; charset=utf-8",
         request,
         maxAge,
@@ -125,6 +148,9 @@ export default {
       read &&
       (url.pathname === "/" ||
         productIdFromPath(url.pathname) !== null ||
+        url.pathname === "/news" ||
+        url.pathname === "/about" ||
+        newsIdFromPath(url.pathname) !== null ||
         (url.pathname === "/products" && url.searchParams.has("category")));
     if (
       !wantsMeta ||

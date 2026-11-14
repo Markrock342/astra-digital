@@ -107,12 +107,16 @@ test("admin saves contact details → /support shows them with the right links",
   await expect(footer.locator(".contact-card", { hasText: "support@shop.example" })).toHaveAttribute("href", "/support#email");
 
   // English storefront translates the labels; admin text stays as typed.
+  await page.getByRole("button", { name: "ภาษาและธีม" }).click();
   await page.getByRole("button", { name: "EN", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { level: 1, name: "Contact us" })).toBeVisible();
   await expect(card("phone")).toContainText("Phone");
   await expect(card("address")).toContainText("Address");
   await expect(card("address")).toContainText("Open in Maps");
+  await page.getByRole("button", { name: "Language & theme" }).click();
   await page.getByRole("button", { name: "TH", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { level: 1, name: "ติดต่อเรา" })).toBeVisible();
   await shot(page, "contact-desktop-light");
 });

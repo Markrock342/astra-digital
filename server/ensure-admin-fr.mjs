@@ -745,3 +745,36 @@ export function ensureDeliveryOptions(db) {
   )`);
   db.exec("CREATE INDEX IF NOT EXISTS variant_options_value ON variant_options(value_id)");
 }
+
+/**
+ * ข่าวสารและกิจกรรม (server/news.mjs). Idempotent. One row per post; Thai is required, the
+ * English columns are optional (the storefront falls back to Thai). Times are UTC
+ * "YYYY-MM-DD HH:MM:SS" like every other table; event_starts / event_ends are Bangkok calendar
+ * dates "YYYY-MM-DD". The cover image lives in the file store (cover_key, public /api/files).
+ * เกี่ยวกับเรา (server/about.mjs) is one JSON value in runtime_flags, no table.
+ */
+export function ensureNewsAbout(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS news_posts (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    title_en TEXT,
+    summary TEXT,
+    summary_en TEXT,
+    body TEXT,
+    body_en TEXT,
+    cover_key TEXT,
+    event_starts TEXT,
+    event_ends TEXT,
+    link_url TEXT,
+    link_label TEXT,
+    link_label_en TEXT,
+    pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0,1)),
+    published INTEGER NOT NULL DEFAULT 0 CHECK (published IN (0,1)),
+    publish_at TEXT,
+    published_at TEXT,
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_news_posts_feed ON news_posts(published, pinned, publish_at)");
+}
