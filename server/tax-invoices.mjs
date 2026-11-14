@@ -297,23 +297,60 @@ export function createTaxInvoices({
   };
   const paymentColumn = (row) => (row.preorder ? "reservation_id" : "order_id");
 
+  function loadCheckoutDelivered(checkoutId) {
+    const selectLine = (alias) =>
+      `${alias}.id, ${alias}.user_id, ${alias}.variant_id, ${alias}.quantity, ${alias}.total, ${alias}.status,
+       ${alias}.created_at, ${alias}.discount, ${alias}.coupon_code, ${alias}.checkout_id, ${alias}.checkout_line,
+       ${alias}.warranty_days, p.name AS product, v.label AS option_label`;
+    return all(
+      `SELECT * FROM (
+         SELECT ${selectLine("o")}, 0 AS preorder, COALESCE(o.checkout_line, 0) AS line_no
+         FROM orders o JOIN variants v ON v.id=o.variant_id JOIN products p ON p.id=v.product_id
+         WHERE o.checkout_id=? AND o.status='DELIVERED'
+         UNION ALL
+         SELECT ${selectLine("r")}, 1 AS preorder, COALESCE(r.checkout_line, 0) AS line_no
+         FROM reservations r JOIN variants v ON v.id=r.variant_id JOIN products p ON p.id=v.product_id
+         WHERE r.checkout_id=? AND r.status='DELIVERED'
+       ) ORDER BY line_no, id`,
+      checkoutId,
+      checkoutId,
+    ).map((r) => ({ ...r, preorder: !!r.preorder }));
+  }
+
+  /** Multi-line delivered checkout → one tax invoice; else per-order (legacy). */
+  function taxScope(row) {
+    if (!row?.checkout_id) return { kind: "order", rows: [row], anchor: row, checkoutId: null };
+    const lines = loadCheckoutDelivered(row.checkout_id);
+    if (lines.length <= 1) return { kind: "order", rows: [row], anchor: row, checkoutId: null };
+    return { kind: "checkout", rows: lines, anchor: lines[0], checkoutId: row.checkout_id };
+  }
+
   /** Why this order cannot get a tax invoice / buyer details now (null = it can). */
   function blockedReason(row, mode) {
-    if (row.status !== "DELIVERED") return "ขอได้เฉพาะคำสั่งซื้อที่ชำระเงินและได้รับสินค้าแล้ว";
-    if (orderRefundState(row.id, row.preorder)?.refundStatus)
-      return "คำสั่งซื้อที่คืนเงินแล้วขอใบกำกับภาษีไม่ได้";
-    if (mode === "TAX_INVOICE" && scope() === "live") {
-      const paid = one(
-        `SELECT SUM(CASE WHEN provider='sandbox' THEN 1 ELSE 0 END) AS test, COUNT(*) AS n
-         FROM payments WHERE ${paymentColumn(row)}=? AND status='SUCCEEDED'`,
-        row.id,
-      );
-      if (paid?.n > 0 && paid.test === paid.n) return "คำสั่งซื้อทดสอบออกใบกำกับภาษีไม่ได้";
+    const scopeInfo = taxScope(row);
+    for (const line of scopeInfo.rows) {
+      if (line.status !== "DELIVERED") return "ขอได้เฉพาะคำสั่งซื้อที่ชำระเงินและได้รับสินค้าแล้ว";
+      if (orderRefundState(line.id, line.preorder)?.refundStatus)
+        return "คำสั่งซื้อที่คืนเงินแล้วขอใบกำกับภาษีไม่ได้";
+      if (mode === "TAX_INVOICE" && scope() === "live") {
+        const paid = one(
+          `SELECT SUM(CASE WHEN provider='sandbox' THEN 1 ELSE 0 END) AS test, COUNT(*) AS n
+           FROM payments WHERE ${paymentColumn(line)}=? AND status='SUCCEEDED'`,
+          line.id,
+        );
+        if (paid?.n > 0 && paid.test === paid.n) return "คำสั่งซื้อทดสอบออกใบกำกับภาษีไม่ได้";
+      }
     }
     return null;
   }
 
-  const requestRow = (orderId) => one("SELECT * FROM tax_invoice_requests WHERE order_id=?", orderId);
+  const requestRow = (orderId, checkoutId = null) => {
+    if (checkoutId) {
+      const byCheckout = one("SELECT * FROM tax_invoice_requests WHERE checkout_id=?", checkoutId);
+      if (byCheckout) return byCheckout;
+    }
+    return one("SELECT * FROM tax_invoice_requests WHERE order_id=?", orderId);
+  };
   const buyerOf = (r) =>
     r && r.buyer_type && r.buyer_name
       ? {
@@ -336,12 +373,15 @@ export function createTaxInvoices({
           resolvedAt: r.resolved_at ?? null,
         }
       : null;
-  const invoiceList = (orderId) =>
+  const invoiceList = (orderId, checkoutId = null) =>
     all(
-      `SELECT i.id,i.number,i.issued_at,i.total,i.vat,i.scope,v.reason AS void_reason,v.created_at AS voided_at
+      `SELECT i.id,i.number,i.issued_at,i.total,i.vat,i.scope,i.checkout_id,v.reason AS void_reason,v.created_at AS voided_at
        FROM tax_invoices i LEFT JOIN tax_invoice_voids v ON v.invoice_id=i.id
-       WHERE i.order_id=? ORDER BY i.issued_at DESC, i.seq DESC`,
+       WHERE i.order_id=? OR (? IS NOT NULL AND i.checkout_id=?)
+       ORDER BY i.issued_at DESC, i.seq DESC`,
       orderId,
+      checkoutId,
+      checkoutId,
     ).map((i) => ({
       id: i.id,
       number: i.number,
@@ -349,26 +389,33 @@ export function createTaxInvoices({
       total: i.total,
       vat: i.vat,
       testMode: i.scope === "sandbox",
+      checkoutId: i.checkout_id ?? null,
       voided: i.voided_at ? { reason: i.void_reason, at: i.voided_at } : null,
     }));
-  const activeInvoice = (orderId) =>
+  const activeInvoice = (orderId, checkoutId = null) =>
     one(
       `SELECT i.* FROM tax_invoices i
-       WHERE i.order_id=? AND NOT EXISTS (SELECT 1 FROM tax_invoice_voids v WHERE v.invoice_id=i.id)
+       WHERE (i.order_id=? OR (? IS NOT NULL AND i.checkout_id=?))
+         AND NOT EXISTS (SELECT 1 FROM tax_invoice_voids v WHERE v.invoice_id=i.id)
        ORDER BY i.issued_at DESC, i.seq DESC LIMIT 1`,
       orderId,
+      checkoutId,
+      checkoutId,
     );
 
   function stateFor(row) {
     const mode = modeOf();
-    const request = requestRow(row.id);
-    const invoices = invoiceList(row.id);
+    const scopeInfo = taxScope(row);
+    const request = requestRow(scopeInfo.anchor.id, scopeInfo.checkoutId);
+    const invoices = invoiceList(scopeInfo.anchor.id, scopeInfo.checkoutId);
     const active = invoices.find((i) => !i.voided) ?? null;
     const blocked = mode === "OFF" ? "ร้านยังไม่เปิดให้ขอใบกำกับภาษี" : blockedReason(row, mode);
     return {
       mode,
       eligible: !blocked && !active,
       blockedReason: blocked,
+      checkoutId: scopeInfo.checkoutId,
+      lineCount: scopeInfo.rows.length,
       request: requestView(request),
       invoices,
       activeInvoice: active,
@@ -380,20 +427,30 @@ export function createTaxInvoices({
     return stateFor(ownOrder(user, id));
   }
 
-  const upsertBuyer = (row, buyer, status, actorId, { requested = false, keepRequested = false } = {}) => {
+  const upsertBuyer = (
+    row,
+    buyer,
+    status,
+    actorId,
+    { requested = false, keepRequested = false, checkoutId = null } = {},
+  ) => {
     const now = dbTime(clock());
+    const scopeInfo = taxScope(row);
+    const anchorId = scopeInfo.anchor.id;
+    const cid = checkoutId ?? scopeInfo.checkoutId;
     run(
       `INSERT INTO tax_invoice_requests(order_id,preorder,user_id,buyer_type,buyer_name,buyer_tax_id,buyer_branch,buyer_address,
-         status,reason,invoice_id,requested_at,updated_at,updated_by)
-       VALUES(?,?,?,?,?,?,?,?,?,NULL,NULL,?,?,?)
+         status,reason,invoice_id,requested_at,updated_at,updated_by,checkout_id)
+       VALUES(?,?,?,?,?,?,?,?,?,NULL,NULL,?,?,?,?)
        ON CONFLICT(order_id) DO UPDATE SET
          buyer_type=excluded.buyer_type, buyer_name=excluded.buyer_name, buyer_tax_id=excluded.buyer_tax_id,
          buyer_branch=excluded.buyer_branch, buyer_address=excluded.buyer_address, status=excluded.status,
          reason=CASE WHEN excluded.status=tax_invoice_requests.status THEN tax_invoice_requests.reason ELSE NULL END,
          requested_at=CASE WHEN ? THEN tax_invoice_requests.requested_at ELSE COALESCE(excluded.requested_at, tax_invoice_requests.requested_at) END,
-         updated_at=excluded.updated_at, updated_by=excluded.updated_by`,
-      row.id,
-      row.preorder ? 1 : 0,
+         updated_at=excluded.updated_at, updated_by=excluded.updated_by,
+         checkout_id=COALESCE(excluded.checkout_id, tax_invoice_requests.checkout_id)`,
+      anchorId,
+      scopeInfo.anchor.preorder ? 1 : 0,
       row.user_id,
       buyer.type,
       buyer.name,
@@ -404,6 +461,7 @@ export function createTaxInvoices({
       requested ? now : null,
       now,
       actorId,
+      cid,
       keepRequested ? 1 : 0,
     );
   };
@@ -419,23 +477,36 @@ export function createTaxInvoices({
     const blocked = blockedReason(row, mode);
     if (blocked) fail(409, blocked);
     const buyer = normalizeBuyer(input, fail);
+    const scopeInfo = taxScope(row);
     tx(() => {
-      const existing = requestRow(row.id);
-      if (existing?.status === "ISSUED" || activeInvoice(row.id))
+      const existing = requestRow(scopeInfo.anchor.id, scopeInfo.checkoutId);
+      if (existing?.status === "ISSUED" || activeInvoice(scopeInfo.anchor.id, scopeInfo.checkoutId))
         fail(409, "ออกใบกำกับภาษีให้คำสั่งซื้อนี้แล้ว หากข้อมูลผิดกรุณาติดต่อร้าน");
       if (mode === "RECEIPT") {
-        upsertBuyer(row, buyer, "SAVED", user.id);
-        auditDetail(user.id, "RECEIPT_BUYER_SAVE", row.id, null);
+        upsertBuyer(row, buyer, "SAVED", user.id, { checkoutId: scopeInfo.checkoutId });
+        auditDetail(user.id, "RECEIPT_BUYER_SAVE", scopeInfo.anchor.id, {
+          checkoutId: scopeInfo.checkoutId,
+        });
         return;
       }
       const wasPending = existing?.status === "PENDING";
-      upsertBuyer(row, buyer, "PENDING", user.id, { requested: !wasPending, keepRequested: wasPending });
-      auditDetail(user.id, wasPending ? "TAX_INVOICE_REQUEST_UPDATE" : "TAX_INVOICE_REQUEST", row.id, null);
+      upsertBuyer(row, buyer, "PENDING", user.id, {
+        requested: !wasPending,
+        keepRequested: wasPending,
+        checkoutId: scopeInfo.checkoutId,
+      });
+      auditDetail(user.id, wasPending ? "TAX_INVOICE_REQUEST_UPDATE" : "TAX_INVOICE_REQUEST", scopeInfo.anchor.id, {
+        checkoutId: scopeInfo.checkoutId,
+      });
       if (!wasPending)
         notifyAdmins(
           "คำขอใบกำกับภาษี",
-          "ออเดอร์ #" + row.id.slice(0, 8).toUpperCase() + " · " + buyer.name,
-          "/admin/orders/" + row.id,
+          "ออเดอร์ #" +
+            (scopeInfo.checkoutId || scopeInfo.anchor.id).slice(0, 8).toUpperCase() +
+            (scopeInfo.kind === "checkout" ? " (" + scopeInfo.rows.length + " รายการ)" : "") +
+            " · " +
+            buyer.name,
+          "/admin/orders/" + scopeInfo.anchor.id,
         );
     });
     return stateFor(row);
@@ -496,29 +567,45 @@ export function createTaxInvoices({
     const blocked = blockedReason(row, mode);
     if (blocked) fail(409, blocked);
     const given = input.buyer ? normalizeBuyer(input.buyer, fail) : null;
+    const scopeInfo = taxScope(row);
     const invoice = tx(() => {
-      const existing = requestRow(row.id);
-      if (activeInvoice(row.id)) fail(409, "ออเดอร์นี้มีใบกำกับภาษีที่ใช้งานอยู่แล้ว");
-      if (given) upsertBuyer(row, given, existing?.status ?? "SAVED", user.id, { keepRequested: true });
-      const buyer = buyerOf(requestRow(row.id));
-      if (!buyer || !isValidThaiTaxId(buyer.taxId) || !buyer.address) fail(400, "กรอกข้อมูลผู้ซื้อให้ครบก่อนออกใบกำกับภาษี");
+      const existing = requestRow(scopeInfo.anchor.id, scopeInfo.checkoutId);
+      if (activeInvoice(scopeInfo.anchor.id, scopeInfo.checkoutId))
+        fail(409, "ออเดอร์นี้มีใบกำกับภาษีที่ใช้งานอยู่แล้ว");
+      if (given)
+        upsertBuyer(row, given, existing?.status ?? "SAVED", user.id, {
+          keepRequested: true,
+          checkoutId: scopeInfo.checkoutId,
+        });
+      const buyer = buyerOf(requestRow(scopeInfo.anchor.id, scopeInfo.checkoutId));
+      if (!buyer || !isValidThaiTaxId(buyer.taxId) || !buyer.address)
+        fail(400, "กรอกข้อมูลผู้ซื้อให้ครบก่อนออกใบกำกับภาษี");
       const now = clock();
       const year = bangkokYear(now);
       const sc = scope();
       const seq = one("SELECT COALESCE(MAX(seq),0)+1 AS n FROM tax_invoices WHERE scope=? AND year=?", sc, year).n;
       const number = formatNumber(settings.invoicePrefix, year, seq);
-      const discount = Number.isSafeInteger(row.discount) && row.discount > 0 ? row.discount : 0;
-      const subtotal = row.total + discount;
-      const { vat, net } = vatSplit(row.total);
-      const items = [
-        {
-          description: row.product,
-          option: row.option_label,
-          quantity: row.quantity,
-          unitPrice: Math.round(subtotal / row.quantity),
-          amount: subtotal,
-        },
-      ];
+      const items = scopeInfo.rows.map((line) => {
+        const lineDiscount = Number.isSafeInteger(line.discount) && line.discount > 0 ? line.discount : 0;
+        const lineSubtotal = line.total + lineDiscount;
+        const base = {
+          description: line.product,
+          option: line.option_label,
+          quantity: line.quantity,
+          unitPrice: Math.round(lineSubtotal / Math.max(1, line.quantity)),
+          amount: lineSubtotal,
+        };
+        return scopeInfo.kind === "checkout"
+          ? { ...base, orderId: line.id, discount: lineDiscount, total: line.total }
+          : base;
+      });
+      const discount = scopeInfo.rows.reduce(
+        (n, line) => n + (Number.isSafeInteger(line.discount) && line.discount > 0 ? line.discount : 0),
+        0,
+      );
+      const subtotal = items.reduce((n, i) => n + i.amount, 0);
+      const total = scopeInfo.rows.reduce((n, line) => n + line.total, 0);
+      const { vat, net } = vatSplit(total);
       const shop = shopSettings() ?? {};
       const seller = {
         shopName: typeof shop.shopName === "string" && shop.shopName !== "ร้านค้า" ? shop.shopName : "ASIA EXTRA",
@@ -533,21 +620,21 @@ export function createTaxInvoices({
       };
       const paidAt =
         one(
-          `SELECT MIN(COALESCE(finalized_at,created_at)) AS at FROM payments WHERE ${paymentColumn(row)}=? AND status='SUCCEEDED'`,
-          row.id,
+          `SELECT MIN(COALESCE(finalized_at,created_at)) AS at FROM payments WHERE ${paymentColumn(scopeInfo.anchor)}=? AND status='SUCCEEDED'`,
+          scopeInfo.anchor.id,
         )?.at ?? null;
       const invoiceId = randomUUID();
       run(
         `INSERT INTO tax_invoices(id,number,scope,year,seq,order_id,preorder,user_id,seller,buyer_type,buyer_name,buyer_tax_id,
-           buyer_branch,buyer_address,items,subtotal,discount,total,vat_rate,vat,net,paid_at,issued_at,issued_by)
-         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           buyer_branch,buyer_address,items,subtotal,discount,total,vat_rate,vat,net,paid_at,issued_at,issued_by,checkout_id)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         invoiceId,
         number,
         sc,
         year,
         seq,
-        row.id,
-        row.preorder ? 1 : 0,
+        scopeInfo.anchor.id,
+        scopeInfo.anchor.preorder ? 1 : 0,
         row.user_id,
         JSON.stringify(seller),
         buyer.type,
@@ -558,28 +645,37 @@ export function createTaxInvoices({
         JSON.stringify(items),
         subtotal,
         discount,
-        row.total,
+        total,
         VAT_RATE_BP,
         vat,
         net,
         paidAt,
         dbTime(now),
         user.id,
+        scopeInfo.checkoutId,
       );
       run(
         `UPDATE tax_invoice_requests SET status='ISSUED',reason=NULL,invoice_id=?,resolved_at=?,resolved_by=? WHERE order_id=?`,
         invoiceId,
         dbTime(now),
         user.id,
-        row.id,
+        scopeInfo.anchor.id,
       );
-      auditDetail(user.id, "TAX_INVOICE_ISSUE", row.id, { number });
+      auditDetail(user.id, "TAX_INVOICE_ISSUE", scopeInfo.anchor.id, {
+        number,
+        checkoutId: scopeInfo.checkoutId,
+        lineCount: scopeInfo.rows.length,
+      });
       notify(
         row.user_id,
         "order",
         "ออกใบกำกับภาษีแล้ว",
-        "ใบกำกับภาษีเลขที่ " + number + " สำหรับคำสั่งซื้อ #" + row.id.slice(0, 8).toUpperCase() + " ดูและพิมพ์ได้ที่หน้าคำสั่งซื้อ",
-        "/orders/" + row.id,
+        "ใบกำกับภาษีเลขที่ " +
+          number +
+          " สำหรับคำสั่งซื้อ #" +
+          (scopeInfo.checkoutId || scopeInfo.anchor.id).slice(0, 8).toUpperCase() +
+          " ดูและพิมพ์ได้ที่หน้าคำสั่งซื้อ",
+        "/orders/" + scopeInfo.anchor.id,
       );
       return { id: invoiceId, number };
     });
