@@ -98,6 +98,8 @@
   position: absolute;
   top: 4px;
   left: calc(50% + 6px);
+  /* The base .cart-count also sets right; with width:auto both edges stretched it into a bar. */
+  right: auto;
   min-width: 18px;
   width: auto;
   height: 18px;
