@@ -642,6 +642,18 @@ export function ensureTaxInvoices(db) {
     voided_by TEXT,
     created_at TEXT NOT NULL
   )`);
+  const hasTaxCol = (table, column) =>
+    db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  if (!hasTaxCol("tax_invoice_requests", "checkout_id"))
+    db.exec(`ALTER TABLE tax_invoice_requests ADD COLUMN checkout_id TEXT`);
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_tax_invoice_requests_checkout ON tax_invoice_requests(checkout_id) WHERE checkout_id IS NOT NULL",
+  );
+  if (!hasTaxCol("tax_invoices", "checkout_id"))
+    db.exec(`ALTER TABLE tax_invoices ADD COLUMN checkout_id TEXT`);
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_tax_invoices_checkout ON tax_invoices(checkout_id) WHERE checkout_id IS NOT NULL",
+  );
   for (const table of TAX_INVOICE_APPEND_ONLY_TABLES) {
     db.exec(
       `CREATE TRIGGER IF NOT EXISTS ${table}_append_only_update BEFORE UPDATE ON ${table} BEGIN SELECT RAISE(ABORT, '${table} rows are append-only'); END`,
@@ -693,6 +705,13 @@ export function ensureOrderReceipts(db) {
     "CREATE INDEX IF NOT EXISTS idx_order_receipt_requests_status ON order_receipt_requests(status, requested_at)",
   );
   db.exec("CREATE INDEX IF NOT EXISTS idx_order_receipt_requests_user ON order_receipt_requests(user_id)");
+  const hasReceiptCol = (column) =>
+    db.prepare(`PRAGMA table_info(order_receipt_requests)`).all().some((c) => c.name === column);
+  if (!hasReceiptCol("checkout_id"))
+    db.exec(`ALTER TABLE order_receipt_requests ADD COLUMN checkout_id TEXT`);
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_order_receipt_requests_checkout ON order_receipt_requests(checkout_id) WHERE checkout_id IS NOT NULL",
+  );
 }
 
 /**
