@@ -408,6 +408,8 @@ type Receipt = {
     discount: number;
     couponCode: string | null;
   };
+  /** One row per product when several were bought together (server/order-extras.mjs). */
+  items?: { orderId: string; product: string; option: string; quantity: number; unitPrice: number; subtotal: number }[];
   total: number;
   paymentStatus: "PAID" | "PENDING" | "CANCELLED" | "UNPAID";
   refundStatus: "REFUNDED" | "PARTIALLY_REFUNDED" | null;
@@ -595,21 +597,23 @@ function ShortReceipt({ id, admin }: { id: string; admin: boolean }) {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>
-                  <strong>{receipt.item.product}</strong>
-                  <small>{receipt.item.option}</small>
-                </td>
-                <td className="num" data-label={tr("จำนวน")}>
-                  {receipt.item.quantity}
-                </td>
-                <td className="num" data-label={tr("ราคาต่อหน่วย")}>
-                  {money(receipt.item.unitPrice)}
-                </td>
-                <td className="num" data-label={tr("จำนวนเงิน")}>
-                  {money(receipt.item.subtotal)}
-                </td>
-              </tr>
+              {(receipt.items?.length ? receipt.items : [receipt.item]).map((item, i) => (
+                <tr key={i}>
+                  <td>
+                    <strong>{item.product}</strong>
+                    <small>{item.option}</small>
+                  </td>
+                  <td className="num" data-label={tr("จำนวน")}>
+                    {item.quantity}
+                  </td>
+                  <td className="num" data-label={tr("ราคาต่อหน่วย")}>
+                    {money(item.unitPrice)}
+                  </td>
+                  <td className="num" data-label={tr("จำนวนเงิน")}>
+                    {money(item.subtotal)}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
           <dl className="receipt-totals">

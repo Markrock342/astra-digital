@@ -113,8 +113,9 @@ test("copy mode copies the picked orders' accounts", async ({ page }) => {
   expect(lines).toHaveLength(3);
   expect(lines).toContain("tune@music.test | Tune-pass");
   expect(lines.filter((l) => /^list-\d+@stream\.test \| Pw-\d+$/.test(l))).toHaveLength(2);
-  await bar.getByRole("button", { name: "เลือกทั้งหมด" }).click();
-  await expect(bar).toContainText("เลือก 22 รายการ");
+  // Page 1: the pending order + 19 delivered; picks from page 2 stay picked.
+  await bar.getByRole("button", { name: "เลือกทั้งหน้า" }).click();
+  await expect(bar).toContainText("เลือก 21 รายการ");
   await bar.getByRole("button", { name: "ปิดโหมดคัดลอก" }).click();
   await expect(bar).toHaveCount(0);
   await page.getByRole("searchbox").fill("List Music");

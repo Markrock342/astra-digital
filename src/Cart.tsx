@@ -42,6 +42,7 @@ import { EN_STRINGS } from "./i18n-en";
 import { useLive } from "./live";
 import { copyLines } from "./OrderList";
 import { PriceNote, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
+import { OrderReceiptCard } from "./OrderReceipts";
 import { ShopClosedNote, useShopOpen } from "./ShopClosed";
 import type { Order, Product, Variant } from "./types";
 import "./cart.css";
@@ -280,7 +281,10 @@ export function CartPage() {
   );
 }
 
-type CouponResult = { valid: true; code: string; discount: number; variantId: string } | { valid: false; reason: string };
+/** Basket coupon (server/checkouts.mjs): one code over every eligible line, split per line. */
+type CouponResult =
+  | { valid: true; code: string; discount: number; lines: { variantId: string; discount: number }[] }
+  | { valid: false; reason: string };
 
 /**
  * /checkout: summary → payment method + discount code → pay, in one step (no "save the order
@@ -305,8 +309,10 @@ export function CheckoutPage() {
   const count = lines.reduce((n, l) => n + l.quantity, 0);
   const discount = coupon?.valid ? coupon.discount : 0;
   // Charged now: deposits / free queues count what they take today; the code's saving comes off its line.
+  const lineDiscount = (variantId: string) =>
+    coupon?.valid ? (coupon.lines.find((l) => l.variantId === variantId)?.discount ?? 0) : 0;
   const total = rows.reduce((n, r, i) => {
-    const line = r.variant.price * lines[i].quantity - (coupon?.valid && coupon.variantId === r.variant.id ? coupon.discount : 0);
+    const line = r.variant.price * lines[i].quantity - lineDiscount(r.variant.id);
     return n + payNowFor(r.product, line, lines[i].quantity);
   }, 0);
   const ready = rows.every((r) => checkoutFieldsReady(r.product.checkoutFields ?? [], values[r.variant.id] ?? {}));
@@ -387,8 +393,8 @@ export function CheckoutPage() {
                   {r.variant.label} · × {lines[i].quantity}
                 </span>
                 {r.product.preorder ? <span className="cart-pill">{t("สั่งจอง")}</span> : null}
-                {coupon?.valid && coupon.variantId === r.variant.id && (
-                  <span className="cart-pill is-deal">−{money(coupon.discount)}</span>
+                {lineDiscount(r.variant.id) > 0 && (
+                  <span className="cart-pill is-deal">−{money(lineDiscount(r.variant.id))}</span>
                 )}
               </p>
               <span className="cart-price-extra">
@@ -581,6 +587,7 @@ export function CheckoutGroupPage({ id }: { id: string }) {
   const amount = group.orders.reduce((n, o) => n + due(o), 0);
   const unpaid = group.orders.filter((o) => o.status === "PENDING_PAYMENT");
   const total = group.orders.reduce((n, o) => n + o.total, 0);
+  const receiptLine = group.orders.find((o) => o.status === "DELIVERED" || o.status === "PREORDER");
   async function pay(outcome: "success" | "failure") {
     setBusy(true);
     setError("");
@@ -668,6 +675,8 @@ export function CheckoutGroupPage({ id }: { id: string }) {
         </section>
       )}
       {unpaid.length > 0 && !testPayments && <PayShell total={amount} />}
+      {/* One receipt for the whole order (server/order-receipts.mjs scopes by checkout). */}
+      {receiptLine && <OrderReceiptCard orderId={receiptLine.id} />}
       {unpaid.length === 0 && <ErrorMessage message={error} />}
     </main>
   );
