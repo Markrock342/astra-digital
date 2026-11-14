@@ -320,6 +320,12 @@ test("about: defaults with the shop name, save, validation, cover, reset", async
   assert.equal(pub.highlights.length, 1);
   assert.equal(pub.showContact, false);
 
+  // Thai rewritten, English left at the built-in default → English cleared (falls back to Thai).
+  const defaults = s.adminAbout(admin).defaults;
+  const kept = s.saveAbout(admin, { ...defaults, body: { th: "ข้อความใหม่", en: defaults.body.en } }).about;
+  assert.equal(kept.body.en, "");
+  assert.equal(kept.heading.en, defaults.heading.en, "untouched default pair keeps its English");
+
   const startFiles = fileCount(s);
   await s.setAboutCover(admin, { bytes: png(), contentType: "image/png" });
   assert.match(s.publicAbout().about.coverUrl, /^\/api\/files\//);
@@ -331,7 +337,7 @@ test("about: defaults with the shop name, save, validation, cover, reset", async
   assert.equal(s.publicAbout().about.heading.th, "เกี่ยวกับเรา");
   assert.equal(s.publicAbout().about.coverUrl, null);
   const rows = s.db.prepare("SELECT action FROM audit WHERE entity_id='about' ORDER BY id").all().map((r) => r.action);
-  assert.deepEqual(rows, ["ABOUT_SAVE", "ABOUT_COVER_SET", "ABOUT_COVER_SET", "ABOUT_RESET"]);
+  assert.deepEqual(rows, ["ABOUT_SAVE", "ABOUT_SAVE", "ABOUT_COVER_SET", "ABOUT_COVER_SET", "ABOUT_RESET"]);
   // A broken stored value falls back to the defaults instead of breaking the page.
   s.db.prepare("UPDATE runtime_flags SET value=? WHERE key='about-page'").run('{"content":{"heading":5}}');
   assert.equal(s.publicAbout().about.heading.th, "เกี่ยวกับเรา");

@@ -128,6 +128,18 @@ export function createAboutApis({ requireAdmin, one, run, fail, randomUUID, file
   function saveAbout(user, input = {}) {
     requireAdmin(user);
     const content = normalizeAbout(input, fail);
+    // Thai rewritten but the English still the built-in default text → that English no longer
+    // matches; drop it so English visitors see the new Thai instead of the old default.
+    const base = defaults();
+    const stale = (pair, original) => {
+      if (original && pair.th !== original.th && pair.en === original.en) pair.en = "";
+    };
+    stale(content.heading, base.heading);
+    stale(content.body, base.body);
+    content.highlights.forEach((item, i) => {
+      stale(item.title, base.highlights[i]?.title);
+      stale(item.text, base.highlights[i]?.text);
+    });
     const stored = readStored();
     const before = current(stored);
     const changed = ["heading", "body", "highlights", "showContact"].filter(
