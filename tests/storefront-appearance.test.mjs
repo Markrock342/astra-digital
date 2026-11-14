@@ -448,6 +448,14 @@ test("rows saved before the client round keep working: missing fields default, o
   assert.equal(stored(s).rev, APPEARANCE_REV);
   assert.equal(stored(s).hero.primary.label.th, "สินค้าทั้งหมด");
   assert.equal(s.overview().appearance.sections.find((x) => x.id === "categories").visible, true, "switched back on sticks");
+  // A fresh shop (no row yet) that switches the category block on keeps it on.
+  {
+    const fresh = fixture(t);
+    const secs = fresh.s.adminAppearance(fresh.admin).appearance.sections;
+    fresh.s.saveAppearance(fresh.admin, { sections: secs.map((x) => (x.id === "categories" ? { ...x, visible: true } : x)) });
+    assert.equal(stored(fresh.s).rev, APPEARANCE_REV);
+    assert.equal(fresh.s.overview().appearance.sections.find((x) => x.id === "categories").visible, true);
+  }
   // Pure helper: current rows pass through untouched; junk becomes {}.
   const current = { rev: APPEARANCE_REV, sections: [{ id: "categories", visible: true }] };
   assert.deepEqual(migrateStoredAppearance(current), current);

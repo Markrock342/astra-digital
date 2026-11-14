@@ -17,6 +17,7 @@
 import { assertAllowedImage } from "./file-store.mjs";
 import {
   APPEARANCE_PARTS,
+  APPEARANCE_REV,
   DEFAULT_APPEARANCE,
   LIMITS,
   migrateStoredAppearance,
@@ -45,6 +46,8 @@ export function createAppearanceApis({ requireAdmin, one, run, fail, randomUUID,
     }
   }
   function writeStored(stored) {
+    // Always written at the current rev, so an older-version migration never reapplies.
+    stored.rev = APPEARANCE_REV;
     run(
       "INSERT INTO runtime_flags(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
       APPEARANCE_KEY,
