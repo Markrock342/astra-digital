@@ -80,8 +80,8 @@ async function testImage(page, width, height, label, hue) {
 test("admin writes and publishes a news post with a cover; live preview follows the form", async ({ page }) => {
   await as(page, adminToken);
   await ready(page, "/admin/settings/news");
-  await expect(page.getByRole("heading", { name: "ข่าวสารและกิจกรรม", level: 1 })).toBeVisible();
-  await expect(page.getByRole("link", { name: "ข่าวสารและกิจกรรม" })).toHaveClass(/active/);
+  await expect(page.getByRole("heading", { name: "ข่าวสาร", level: 1 })).toBeVisible();
+  await expect(page.getByRole("link", { name: "ข่าวสาร" })).toHaveClass(/active/);
   await expect(page.locator(".news-admin-empty")).toBeVisible();
 
   await page.getByRole("button", { name: "เขียนข่าว" }).click();
@@ -137,8 +137,8 @@ test("admin writes and publishes a news post with a cover; live preview follows 
 test("storefront /news list + detail in Thai and English", async ({ page }) => {
   await as(page, null);
   await ready(page, "/news");
-  await expect(page.getByRole("heading", { name: "ข่าวสารและกิจกรรม", level: 1 })).toBeVisible();
-  await expect(page).toHaveTitle(/ข่าวสารและกิจกรรม — ร้านทดสอบข่าว/);
+  await expect(page.getByRole("heading", { name: "ข่าวสาร", level: 1 })).toBeVisible();
+  await expect(page).toHaveTitle(/ข่าวสาร — ร้านทดสอบข่าว/);
   const card = page.locator(".news-card").first();
   await expect(card.locator(".news-card-title")).toHaveText("เปิดตัวโปรสิ้นปี");
   await expect(card.locator(".news-card-summary")).toHaveText("ลดทั้งร้านถึงสิ้นเดือน");
@@ -160,7 +160,7 @@ test("storefront /news list + detail in Thai and English", async ({ page }) => {
   // English: admin's English fields, fallback to Thai where empty, English UI strings.
   await page.evaluate(() => localStorage.setItem("asiax-lang", "en"));
   await ready(page, "/news");
-  await expect(page.getByRole("heading", { name: "News & events", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "News", level: 1 })).toBeVisible();
   await expect(page.locator(".news-card-title").first()).toHaveText("Year-end sale launch");
   await expect(page.locator(".news-badge.is-event").first()).toHaveText("Event");
   await expect(page.locator(".news-badge.is-ongoing").first()).toHaveText("Ongoing");

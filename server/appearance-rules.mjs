@@ -152,7 +152,7 @@ export const DEFAULT_APPEARANCE = Object.freeze({
       { label: pair("สินค้าทั้งหมด", "All products"), link: "/products" },
       { label: pair("เครดิตร้าน", "Store credit"), link: "/reviews" },
       { label: pair("ประวัติการซื้อ", "Purchase history"), link: "/orders" },
-      { label: pair("ข่าวสารและกิจกรรม", "News & events"), link: "/news" },
+      { label: pair("ข่าวสาร", "News"), link: "/news" },
       { label: pair("เกี่ยวกับเรา", "About us"), link: "/about" },
       { label: pair("คำถามที่พบบ่อย", "FAQ"), link: "/faq" },
       { label: pair("ติดต่อเรา", "Contact us"), link: "/support" },
@@ -406,7 +406,7 @@ export function normalizeAppearanceParts(input, fail) {
 }
 
 /** Version of the stored JSON. Bumped when defaults change in a way saved rows must follow. */
-export const APPEARANCE_REV = 3;
+export const APPEARANCE_REV = 4;
 /** Hero button labels that were the defaults before rev 2 (replaced by the new defaults). */
 const LEGACY_HERO_LABELS = {
   primary: ["เลือกซื้อสินค้า", ["", "Shop now"]],
@@ -431,6 +431,15 @@ export function migrateStoredAppearance(stored) {
       out.footer.links.push(JSON.parse(JSON.stringify(def)));
     }
   }
+  // rev 4 (client, 14 Nov): the /news link still carrying the old default name is now "ข่าวสาร".
+  if (rev < 4 && isObject(out.footer) && Array.isArray(out.footer.links))
+    out.footer.links = out.footer.links.map((l) => {
+      if (!isObject(l) || l.link !== "/news") return l;
+      const label = typeof l.label === "string" ? { th: l.label, en: "" } : l.label;
+      if (!isObject(label) || label.th !== "ข่าวสารและกิจกรรม") return l;
+      if (label.en && label.en !== "News & events") return { ...l, label: { ...label, th: "ข่าวสาร" } };
+      return { ...l, label: { th: "ข่าวสาร", en: "News" } };
+    });
   if (rev >= 2) {
     out.rev = APPEARANCE_REV;
     return out;

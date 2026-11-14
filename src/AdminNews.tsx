@@ -319,7 +319,7 @@ export function AdminNews() {
     <section className="news-admin" aria-labelledby="news-admin-title">
       <div className="reference-admin-heading">
         <div>
-          <h1 id="news-admin-title">ข่าวสารและกิจกรรม</h1>
+          <h1 id="news-admin-title">ข่าวสาร</h1>
           <p>ประกาศข่าว โปรโมชัน และกิจกรรมที่หน้า /news ข่าวที่ปักหมุดอยู่บนสุด ที่เหลือเรียงจากใหม่ไปเก่า</p>
         </div>
         <button type="button" className="button primary" disabled={rows === null} onClick={() => setEditing("new")}>

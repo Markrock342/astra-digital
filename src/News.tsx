@@ -38,6 +38,7 @@ import "./news.css";
 // English strings for this file, added to the shared table on load (existing entries win).
 const EN_NEWS: Record<string, string> = {
   "ข่าวสารและกิจกรรม": "News & events",
+  "ข่าวสาร": "News",
   "ข่าวสาร โปรโมชัน และกิจกรรมของร้าน": "Shop news, promotions and events",
   "ยังไม่มีข่าว": "No news yet",
   "ข่าวและกิจกรรมของร้านจะแสดงที่นี่": "Shop news and events will show up here",
@@ -328,9 +329,9 @@ export function NewsListPage() {
       <div className="page-heading">
         <span className="eyebrow">
           <Megaphone size={14} aria-hidden="true" />
-          {t("ข่าวสารและกิจกรรม")}
+          {t("ข่าวสาร")}
         </span>
-        <h1>{t("ข่าวสารและกิจกรรม")}</h1>
+        <h1>{t("ข่าวสาร")}</h1>
         <p>{t("ข่าวสาร โปรโมชัน และกิจกรรมของร้าน")}</p>
       </div>
       {failed && !posts ? (
@@ -366,7 +367,7 @@ export function NewsDetailPage({ id }: { id: string }) {
   useLive(["content"], () => void load());
   const ready = post && post !== "missing" ? post : null;
   usePageTitle(
-    ready ? pickText(ready.title, ready.titleEn, lang) : post === "missing" ? t("ไม่พบข่าวนี้") : t("ข่าวสารและกิจกรรม"),
+    ready ? pickText(ready.title, ready.titleEn, lang) : post === "missing" ? t("ไม่พบข่าวนี้") : t("ข่าวสาร"),
     ready ? pickText(ready.summary, ready.summaryEn, lang) : "",
   );
   // Share preview: the cover, when the post has one (usePageTitle wrote the site image first).
