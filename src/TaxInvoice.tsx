@@ -366,6 +366,9 @@ export function TaxInvoiceCard({ orderId }: { orderId: string }) {
   if (mode === "OFF" && !state.invoices.length) return null;
   if (!state.eligible && !request && !state.invoices.length) return null;
   const receiptMode = mode === "RECEIPT";
+  // "ชื่อผู้ซื้อในใบเสร็จ" duplicates the ใบเสร็จคำสั่งซื้อ request (OrderReceipts.tsx); only a
+  // full tax invoice keeps its own box here (a past request still shows).
+  if (receiptMode && !request && !state.invoices.length) return null;
   const open = () => {
     setDraft(draftFrom(request?.buyer));
     setError("");

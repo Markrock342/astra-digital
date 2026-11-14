@@ -128,3 +128,60 @@ button.linkish {
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
+
+/* Order page: one tidy row; the request form opens below it on demand. */
+.storefront-shell .order-receipt-card {
+  margin-top: 12px;
+  padding: 14px 16px;
+  gap: 12px;
+}
+.storefront-shell .order-receipt-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.storefront-shell .order-receipt-row > svg {
+  flex-shrink: 0;
+  color: var(--accent-text);
+}
+.storefront-shell .order-receipt-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.storefront-shell .order-receipt-row h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.storefront-shell .order-receipt-line {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.storefront-shell .order-receipt-line.is-ok {
+  color: var(--success-text, #067647);
+}
+.storefront-shell .order-receipt-line.is-fail {
+  color: var(--danger, #b42318);
+}
+.storefront-shell .order-receipt-line.is-pending {
+  color: var(--accent-text);
+}
+.storefront-shell .order-receipt-row .button {
+  flex-shrink: 0;
+  min-height: 40px;
+  white-space: nowrap;
+}
+.storefront-shell .order-receipt-request-form {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.storefront-shell .order-receipt-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.storefront-shell .order-help-row {
+  margin-top: 12px;
+}

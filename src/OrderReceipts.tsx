@@ -17,6 +17,9 @@ import "./tax-invoice.css";
 import "./order-receipts.css";
 
 const EN_OR: Record<string, string> = {
+  "ขอได้ภายใน 7 วันหลังชำระ": "Ask within 7 days of payment",
+  "ขอใบเสร็จ": "Request receipt",
+  "ขอใหม่": "Ask again",
   "ข้อมูลใบเสร็จคำสั่งซื้อ": "Order receipt details",
   "บันทึกข้อมูลสำหรับออกใบเสร็จได้หลายรายการ แล้วเลือกใช้ตอนส่งคำขอในแต่ละออเดอร์":
     "Save multiple receipt profiles, then pick one when you request a receipt on an order.",
@@ -169,6 +172,8 @@ export function OrderReceiptCard({ orderId }: { orderId: string }) {
   const [useNew, setUseNew] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Closed until the customer asks: most orders never need a receipt.
+  const [open, setOpen] = useState(false);
   const load = () =>
     Promise.all([
       api<ReceiptState>("/orders/" + encodeURIComponent(orderId) + "/order-receipt"),
@@ -192,6 +197,7 @@ export function OrderReceiptCard({ orderId }: { orderId: string }) {
       const body = useNew || !profileId ? buyerPayload(draft) : { profileId };
       const next = await api<ReceiptState>("/orders/" + encodeURIComponent(orderId) + "/order-receipt", body);
       setState(next);
+      setOpen(false);
       toast(t("ส่งคำขอใบเสร็จแล้ว"));
     } catch (err) {
       setError((err as Error).message);
@@ -203,32 +209,44 @@ export function OrderReceiptCard({ orderId }: { orderId: string }) {
     return error ? <ErrorMessage message={error} /> : null;
   }
   const status = state.request?.status;
+  // One line: what the receipt is doing now, and the one action that fits.
+  const line =
+    status === "PENDING"
+      ? t("รอทีมงานอนุมัติ")
+      : status === "APPROVED"
+        ? t("อนุมัติแล้ว")
+        : status === "REJECTED"
+          ? t("ไม่อนุมัติ") + (state.request?.reason ? " — " + state.request.reason : "")
+          : state.canRequest
+            ? t("ขอได้ภายใน 7 วันหลังชำระ")
+            : state.window.reason || state.downloadBlockedReason || t("หมดเวลายื่นคำขอแล้ว");
   return (
     <section className="panel order-receipt-card" aria-labelledby={"order-receipt-" + orderId}>
-      <h3 id={"order-receipt-" + orderId}>
-        <FileText size={17} aria-hidden="true" />
-        {t("ใบเสร็จคำสั่งซื้อ")}
-      </h3>
-      <ErrorMessage message={error} />
-      {status === "PENDING" && <p className="order-receipt-status is-pending">{t("รอทีมงานอนุมัติ")}</p>}
-      {status === "APPROVED" && (
-        <div className="order-receipt-status is-ok">
-          <p>{t("อนุมัติแล้ว")}</p>
-          <Link to={"/orders/" + orderId + "/receipt"} className="button primary">
+      <div className="order-receipt-row">
+        <FileText size={18} aria-hidden="true" />
+        <div>
+          <h3 id={"order-receipt-" + orderId}>{t("ใบเสร็จคำสั่งซื้อ")}</h3>
+          <p
+            className={
+              "order-receipt-line" +
+              (status === "APPROVED" ? " is-ok" : status === "REJECTED" ? " is-fail" : status === "PENDING" ? " is-pending" : "")
+            }
+          >
+            {line}
+          </p>
+        </div>
+        {status === "APPROVED" ? (
+          <Link to={"/orders/" + orderId + "/receipt"} className="button secondary small">
             {t("ดู / พิมพ์ใบเสร็จ")}
           </Link>
-        </div>
-      )}
-      {status === "REJECTED" && (
-        <p className="order-receipt-status is-fail">
-          {t("ไม่อนุมัติ")}
-          {state.request?.reason ? " — " + state.request.reason : ""}
-        </p>
-      )}
-      {!status && !state.canRequest && (
-        <p className="muted">{state.window.reason || t("หมดเวลายื่นคำขอแล้ว")}</p>
-      )}
-      {state.canRequest && (
+        ) : state.canRequest && !open ? (
+          <button type="button" className="button secondary small" onClick={() => setOpen(true)}>
+            {status === "REJECTED" ? t("ขอใหม่") : t("ขอใบเสร็จ")}
+          </button>
+        ) : null}
+      </div>
+      <ErrorMessage message={error} />
+      {state.canRequest && open && (
         <form onSubmit={submit} className="order-receipt-request-form">
           {profiles.length > 0 && !useNew && (
             <label className="field">
@@ -250,15 +268,17 @@ export function OrderReceiptCard({ orderId }: { orderId: string }) {
               {useNew ? t("เลือกโปรไฟล์ใบเสร็จ") : t("หรือกรอกข้อมูลใหม่")}
             </button>
           )}
-          <button type="submit" className="button primary" disabled={busy}>
-            {busy ? <LoaderCircle className="spin" size={16} /> : null}
-            {t("ส่งคำขอ")}
-          </button>
+          <div className="order-receipt-form-actions">
+            <button type="button" className="button ghost" onClick={() => setOpen(false)}>
+              {t("ยกเลิก")}
+            </button>
+            <button type="submit" className="button primary" disabled={busy}>
+              {busy ? <LoaderCircle className="spin" size={16} /> : null}
+              {t("ส่งคำขอ")}
+            </button>
+          </div>
         </form>
       )}
-      {state.downloadBlockedReason && status !== "APPROVED" && status !== "PENDING" && !state.canRequest ? (
-        <p className="muted">{state.downloadBlockedReason}</p>
-      ) : null}
     </section>
   );
 }
