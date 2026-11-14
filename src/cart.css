@@ -435,3 +435,11 @@
   margin: 0;
   font-size: 12px;
 }
+
+/* Desktop: basket, summary and the one-number order page read as one narrow column, centred
+   (the sticky total bar is 720px too). */
+.storefront-shell .cart-v2,
+.storefront-shell .checkout-group-page {
+  max-width: 720px;
+  margin-inline: auto;
+}
