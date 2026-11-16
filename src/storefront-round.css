@@ -293,9 +293,14 @@
   border-radius: var(--radius-sm, 8px);
   box-sizing: border-box;
 }
-.storefront-shell .product-card.is-sold-out .product-image .art,
+.storefront-shell .product-card.is-sold-out .product-image,
+.storefront-shell .product-card.is-sold-out .product-image .product-art,
 .storefront-shell .product-card.is-sold-out .product-image img {
   filter: grayscale(1);
+}
+/* Keep the OOS badge full-color on top of the greyscale image. */
+.storefront-shell .product-card.is-sold-out .product-image .stock-tag-center {
+  filter: none;
 }
 .storefront-shell .product-card.is-sold-out .stock-tag-center {
   top: 50%;
