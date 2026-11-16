@@ -389,7 +389,7 @@ test("8 menu: bottom sheet with user card, tiles, contact chips, sign out; focus
   await guest.context.close();
 });
 
-test("9 home: no category block, bordered 'สินค้าทั้งหมด' button at the list heading", async ({ browser }) => {
+test("9 home: no category block, bordered 'ดูเพิ่มเติม' button at the list heading", async ({ browser }) => {
   const { context, page } = await open(browser);
   await ready(page);
   await expect(page.locator(".home-categories")).toHaveCount(0);
@@ -397,7 +397,7 @@ test("9 home: no category block, bordered 'สินค้าทั้งหม�
   await expect(page.getByText("ดูสินค้าทั้งหมด")).toHaveCount(0);
   const heading = page.locator(".home-main .reference-catalog-title");
   await expect(heading.getByRole("heading", { name: "สินค้าทั้งหมด" })).toBeVisible();
-  const button = heading.getByRole("link", { name: "สินค้าทั้งหมด" });
+  const button = heading.getByRole("link", { name: "ดูเพิ่มเติม" });
   await expect(button).toHaveAttribute("href", "/products");
   const [h, b] = await Promise.all([heading.getByRole("heading").boundingBox(), button.boundingBox()]);
   expect(b.x).toBeGreaterThan(h.x + h.width - 1);
@@ -409,62 +409,34 @@ test("9 home: no category block, bordered 'สินค้าทั้งหม�
   expect(look.border).toBe((await accentOf(page)).fill);
   expect(look.width).toBeGreaterThanOrEqual(1);
   expect(look.bg).toBe("rgba(0, 0, 0, 0)");
-  // Category chips stay on /products.
+  // No search/filter tools on home or /products; category chips stay on /products.
+  await expect(page.locator(".reference-catalog-tools")).toHaveCount(0);
   await ready(page, "/products");
+  await expect(page.locator(".reference-catalog-tools")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^ตัวกรอง/ })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "ค้นหาสินค้า" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "หมวดหมู่สินค้า" })).toBeVisible();
   await context.close();
 });
 
-test("10 ตัวกรอง: bottom sheet with six radio choices; the list re-sorts", async ({ browser }) => {
+test("10 catalog: search and filter tools removed on home and /products", async ({ browser }) => {
   for (const mode of ["light", "dark"]) {
     const { context, page, errors } = await open(browser, { mode });
+    await ready(page);
+    await expect(page.getByRole("button", { name: /^ตัวกรอง/ })).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "ค้นหาสินค้า" })).toHaveCount(0);
     await ready(page, "/products");
     await expect(page.locator("select")).toHaveCount(0);
-    const filter = page.getByRole("button", { name: /^ตัวกรอง/ });
-    await expect(filter).toHaveText("แนะนำ");
-    await filter.click();
-    const sheet = page.getByRole("dialog", { name: "ตัวกรอง" });
-    await expect(sheet).toBeVisible();
-    const radios = sheet.getByRole("radio");
-    await expect(radios).toHaveText(["แนะนำ", "ขายดีที่สุด", "ใหม่ล่าสุด", "รีวิวดีที่สุด", "ราคาต่ำ → สูง", "ราคาสูง → ต่ำ"]);
-    await expect(sheet.getByRole("radio", { name: "แนะนำ" })).toHaveAttribute("aria-checked", "true");
-    await expect(sheet.getByRole("radio", { checked: true }).locator("svg")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /^ตัวกรอง/ })).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "ค้นหาสินค้า" })).toHaveCount(0);
+    await expect(page.locator(".product-card").first()).toBeVisible();
     expect(await noSideScroll(page)).toBe(true);
-    await shot(page, "filter-390-" + mode);
-    const prices = () =>
-      page.locator(".product-card .product-card-price strong").evaluateAll((els) =>
-        els.map((e) => Number(e.textContent.replace(/[^\d.]/g, ""))),
-      );
-    await sheet.getByRole("radio", { name: "ราคาสูง → ต่ำ" }).click();
-    await expect(sheet).toBeHidden();
-    await expect(filter).toHaveText("ราคาสูง → ต่ำ");
-    let list = await prices();
-    expect(list).toEqual([...list].sort((a, b) => b - a));
-    await filter.click();
-    await sheet.getByRole("radio", { name: "ราคาต่ำ → สูง" }).click();
-    list = await prices();
-    expect(list).toEqual([...list].sort((a, b) => a - b));
-    // Best selling: the seed DISNEY+ (sold 2) first; newest: the last product added first.
-    await filter.click();
-    await sheet.getByRole("radio", { name: "ขายดีที่สุด" }).click();
-    await expect(page.locator(".product-card h3").first()).toHaveText("DISNEY+");
-    await filter.click();
-    await sheet.getByRole("radio", { name: "ใหม่ล่าสุด" }).click();
-    await expect(page.locator(".product-card h3").first()).toHaveText("Round Option Pack");
-    await filter.click();
-    await sheet.getByRole("radio", { name: "รีวิวดีที่สุด" }).click();
-    await expect(page.locator(".product-card h3").first()).toHaveText("DISNEY+");
-    // Esc closes without changing the choice.
-    await filter.click();
-    await page.keyboard.press("Escape");
-    await expect(sheet).toBeHidden();
-    await expect(filter).toHaveText("รีวิวดีที่สุด");
     expect(errors).toEqual([]);
     await context.close();
   }
   const en = await open(browser, { lang: "en" });
   await ready(en.page);
-  await expect(en.page.getByRole("button", { name: /^Filter/ })).toHaveText("Featured");
+  await expect(en.page.getByRole("link", { name: "See more" })).toBeVisible();
   await en.context.close();
 });
 
@@ -491,14 +463,16 @@ test("11 product cards: no preorder badge, action under the price, ready vs preo
       expect(action.y).toBeGreaterThanOrEqual(price.y + price.height);
       expect(Math.round(action.height)).toBeGreaterThanOrEqual(44);
     }
-    // Solid brand fill vs outlined.
+    // Ready and preorder share the same outlined accent frame (customer UX).
     const { fill } = await accentOf(page);
     const paint = (loc) =>
       loc.evaluate((el) => {
         const s = getComputedStyle(el);
         return { bg: s.backgroundColor, border: s.borderTopColor };
       });
-    expect((await paint(ready_)).bg).toBe(fill);
+    const readyPaint = await paint(ready_);
+    expect(readyPaint.bg).toBe("rgba(0, 0, 0, 0)");
+    expect(readyPaint.border).toBe(fill);
     const outlined = await paint(preorder);
     expect(outlined.bg).toBe("rgba(0, 0, 0, 0)");
     expect(outlined.border).toBe(fill);
@@ -528,7 +502,6 @@ test("390 px light / dark, every accent: no sideways scroll with sheets open; fo
       expect(await noSideScroll(page)).toBe(true);
       await page.keyboard.press("Escape");
       await ready(page, "/products");
-      await page.getByRole("button", { name: /^ตัวกรอง/ }).click();
       expect(await noSideScroll(page)).toBe(true);
       await context.close();
     }

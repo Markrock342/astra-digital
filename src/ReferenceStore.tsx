@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
-  Check,
   ChevronRight,
   Clock,
   Eye,
@@ -16,12 +15,8 @@ import {
   Search,
   ShieldCheck,
   ShoppingBag,
-  SlidersHorizontal,
   Star,
-  X,
 } from "lucide-react";
-import { BottomSheet } from "./Sheet";
-import { EN_STRINGS } from "./i18n-en";
 import {
   Art,
   Empty,
@@ -48,27 +43,8 @@ import { ReviewReply } from "./ReviewReply";
 import { PriceDisplay, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
 import { buyLabel, PreorderRules } from "./Preorder";
 import { TrustBlock } from "./Appearance";
-/** Sort choices of the "ตัวกรอง" sheet (value → Thai label, translated with t()). */
-const SORTS: [string, string][] = [
-  ["featured", "แนะนำ"],
-  ["bestselling", "ขายดีที่สุด"],
-  ["newest", "ใหม่ล่าสุด"],
-  ["rating", "รีวิวดีที่สุด"],
-  ["low", "ราคาต่ำ → สูง"],
-  ["high", "ราคาสูง → ต่ำ"],
-];
-const EN_SORT: Record<string, string> = {
-  "ตัวกรอง": "Filter",
-  "ขายดีที่สุด": "Best selling",
-  "ใหม่ล่าสุด": "Newest",
-  "รีวิวดีที่สุด": "Top rated",
-  "ราคาต่ำ → สูง": "Price: low → high",
-  "ราคาสูง → ต่ำ": "Price: high → low",
-  "เรียงตาม": "Sort by",
-};
-for (const [th, en] of Object.entries(EN_SORT)) if (!(th in EN_STRINGS)) EN_STRINGS[th] = en;
 const lowest = (p: Product) => Math.min(...p.variants.map((v) => v.price));
-/** Sorted copy. "ใหม่ล่าสุด" = products.created_at, newest first (catalog order breaks ties). */
+/** Sorted copy. Kept for callers/tests; catalog UI no longer exposes search/sort. */
 export function sortProducts(list: Product[], sort: string) {
   const order = new Map(list.map((p, i) => [p.id, i]));
   const rating = (p: Product) => (p.rating?.count ? (p.rating.average ?? 0) : -1);
@@ -83,71 +59,17 @@ export function sortProducts(list: Product[], sort: string) {
   });
 }
 
-/** "ตัวกรอง" button + bottom sheet with the sort choices (shadcn/ui RadioGroup + Sheet, MIT). */
-function SortSheet({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const current = t(SORTS.find(([v]) => v === value)?.[1] ?? "แนะนำ");
-  return (
-    <>
-      <button
-        type="button"
-        className="filter-button"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label={t("ตัวกรอง") + ": " + current}
-        onClick={() => setOpen(true)}
-      >
-        <SlidersHorizontal size={16} aria-hidden="true" />
-        <span>{current}</span>
-      </button>
-      <BottomSheet id="catalog-sort-sheet" open={open} onClose={() => setOpen(false)} title={t("ตัวกรอง")}>
-        <div role="radiogroup" aria-label={t("เรียงตาม")} className="sort-options">
-          {SORTS.map(([v, label]) => (
-            <button
-              key={v}
-              type="button"
-              role="radio"
-              aria-checked={value === v}
-              className="sort-option"
-              onClick={() => {
-                onChange(v);
-                setOpen(false);
-              }}
-            >
-              <span>{t(label)}</span>
-              <span className="sort-check" aria-hidden="true">
-                {value === v && <Check size={16} strokeWidth={3} />}
-              </span>
-            </button>
-          ))}
-        </div>
-      </BottomSheet>
-    </>
-  );
-}
-
 /**
- * Product list with search + sort. On /products (`routed`) it also shows the category chips
- * and filters by ?category=<id>; the URL loads filtered and works with search and sort.
- * An unknown or hidden category id falls back to all products.
+ * Product list. On /products (`routed`) also shows category chips and filters by ?category=<id>.
+ * Search/sort tools removed per customer UX (home + all products).
  */
 export function ReferenceCatalog({ routed = false }: { routed?: boolean }) {
   const { products, loading, overview } = useStore();
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState("featured");
   const param = useCategoryParam();
   const categories = routed ? (overview?.categories ?? []) : [];
   const category = categories.find((c) => c.id === param) ?? null;
-  const filtered = products
-    .filter(
-      (p) =>
-        (!category || p.category === category.id) &&
-        // Option labels count too (e.g. "Premium", "30 วัน").
-        (p.name + " " + p.description + " " + p.variants.map((v) => v.label).join(" "))
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-    )
-  const shown = sortProducts(filtered, sort);
+  const filtered = products.filter((p) => !category || p.category === category.id);
+  const shown = sortProducts(filtered, "featured");
   return (
     <section className="reference-catalog">
       <div className="reference-catalog-title">
@@ -156,30 +78,9 @@ export function ReferenceCatalog({ routed = false }: { routed?: boolean }) {
           <p>{filtered.length}{" "}{t("รายการ")}</p>
         ) : (
           <Link to="/products" className="catalog-all-button">
-            {t("สินค้าทั้งหมด")}
+            {t("ดูเพิ่มเติม")}
           </Link>
         )}
-      </div>
-      <div className="reference-catalog-tools">
-        <label className="search-field">
-          <Search size={17} />
-          <input
-            aria-label={t("ค้นหาสินค้า")}
-            placeholder={t("ค้นหา")}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {query && (
-            <button
-              className="icon-button"
-              aria-label={t("ล้างการค้นหา")}
-              onClick={() => setQuery("")}
-            >
-              <X size={14} />
-            </button>
-          )}
-        </label>
-        <SortSheet value={sort} onChange={setSort} />
       </div>
       {routed && (
         <CategoryChips categories={categories} selected={category?.id ?? ""} total={products.length} />
@@ -199,19 +100,8 @@ export function ReferenceCatalog({ routed = false }: { routed?: boolean }) {
       ) : (
         <Empty
           icon={<Search />}
-          heading={query ? t("ไม่พบสินค้าที่ค้นหา") : t("ยังไม่มีสินค้า")}
-          description={
-            query
-              ? t("ลองค้นหาด้วยคำอื่น")
-              : t("สินค้ากำลังมาเร็วๆ นี้")
-          }
-          action={
-            query ? (
-              <button className="button secondary" onClick={() => setQuery("")}>
-                {t("ล้างตัวกรอง")}
-              </button>
-            ) : undefined
-          }
+          heading={t("ยังไม่มีสินค้า")}
+          description={t("สินค้ากำลังมาเร็วๆ นี้")}
         />
       )}
     </section>

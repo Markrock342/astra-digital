@@ -108,6 +108,7 @@ export const EN_STRINGS: Record<string, string> = {
   "ซ่อนโค้ด": "Hide code",
   "ดาว": "stars",
   "ดูย้อนหลังได้": "View anytime",
+  "ดูเพิ่มเติม": "See more",
   "ดูรายละเอียด": "View details",
   "ดูโค้ดสินค้า": "View product code",
   "ตรวจสอบข้อมูลให้ครบ ระบบจะบันทึกคำสั่งซื้อไว้ก่อน": "Review your details. The order is saved first.",

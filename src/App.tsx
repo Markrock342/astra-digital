@@ -574,15 +574,20 @@ export function ProductCard({ product }: { product: Product }) {
   const action = preorder
     ? t("จองล่วงหน้า")
     : soldOut
-      ? t("ดูรายละเอียด")
+      ? t("สินค้าหมด")
       : choose
         ? t("เลือกตัวเลือก")
         : t("ซื้อเลย");
   return (
-    <Link to={"/products/" + product.id} className="product-card">
+    <Link
+      to={"/products/" + product.id}
+      className={"product-card" + (!preorder && soldOut ? " is-sold-out" : "")}
+    >
       <div className="product-image">
         <Art type={product.art} name={product.name} image={product.imageUrl} />
-        {!preorder && soldOut ? <span className="stock-tag">{t("สินค้าหมด")}</span> : null}
+        {!preorder && soldOut ? (
+          <span className="stock-tag stock-tag-center">{t("สินค้าหมด")}</span>
+        ) : null}
       </div>
       <div className="product-card-info">
         <div className="product-title">
@@ -591,7 +596,6 @@ export function ProductCard({ product }: { product: Product }) {
         </div>
         <p className="product-card-price">
           <span>
-            {t("เริ่ม")}{" "}
             <strong>
               {money(Math.min(...product.variants.map((v) => v.price)))}
             </strong>

@@ -132,19 +132,13 @@ test("admin: create with a library icon, reorder, bulk-move a product; storefron
   await expect(page).toHaveTitle(new RegExp("^" + CAT.th + " — "));
   await shot(page, "storefront-chip-filtered");
 
-  // The URL loads filtered and works with search + sort.
+  // The URL loads filtered by category (search/sort tools removed — customer UX).
   await ready(page, "/products?category=" + CAT.id);
   await expect(page.locator(".product-card")).toHaveCount(1);
-  await page.getByLabel("ค้นหาสินค้า").fill("zzz-nothing");
-  await expect(page.locator(".product-card")).toHaveCount(0);
-  await page.getByLabel("ค้นหาสินค้า").fill("tune");
-  await expect(page.locator(".product-card")).toHaveCount(1);
-  await page.getByRole("button", { name: /^ตัวกรอง/ }).click();
-  await page.getByRole("dialog", { name: "ตัวกรอง" }).getByRole("radio", { name: "ราคาสูง → ต่ำ" }).click();
-  await expect(page.locator(".product-card")).toHaveCount(1);
+  await expect(page.getByLabel("ค้นหาสินค้า")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^ตัวกรอง/ })).toHaveCount(0);
   await expect(page).toHaveURL(base + "/products?category=" + CAT.id);
-  // "ทั้งหมด" clears the filter; back returns to the category.
-  await page.getByLabel("ค้นหาสินค้า").fill("");
+  // "ทั้งหมด" clears the category; back returns to the category.
   await chips.getByRole("link", { name: /ทั้งหมด/ }).click();
   await expect(page).toHaveURL(base + "/products");
   await expect(page.locator(".product-card", { hasText: "E2E Office Pack" })).toBeVisible();
