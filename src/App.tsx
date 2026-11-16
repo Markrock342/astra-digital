@@ -420,16 +420,7 @@ function Header() {
                   </div>
                 )}
               </div>
-            ) : (
-              <>
-                <Link to="/login" className="login-link">
-                  {t("เข้าสู่ระบบ")}
-                </Link>
-                <Link to="/register" className="register-link">
-                  {t("สมัครสมาชิก")}
-                </Link>
-              </>
-            )}
+            ) : null}
             <button
               className="icon-button mobile-menu"
               aria-label={t("เปิดเมนู")}

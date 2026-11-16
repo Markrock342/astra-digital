@@ -46,10 +46,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
   height: 36px;
   min-width: 36px;
-  padding: 0 10px;
+  padding: 0 11px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
@@ -58,6 +58,9 @@
   letter-spacing: 0.02em;
   cursor: pointer;
   flex-shrink: 0;
+}
+.storefront-shell .prefs-trigger svg:last-of-type {
+  opacity: 0.85;
 }
 .storefront-shell .prefs-trigger:hover,
 .storefront-shell .prefs-trigger[aria-expanded="true"] {

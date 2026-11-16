@@ -1,7 +1,7 @@
 // ASIA EXTRA brand pieces: logo, theme preferences, language toggle,
 // scroll progress and the marquee strip. Preferences are per-browser only.
 import { useEffect, useRef, useState } from "react";
-import { Languages, Monitor, Moon, Sun, X } from "lucide-react";
+import { Globe, Monitor, Moon, Palette, Sun, X } from "lucide-react";
 import { getLang, t, type Lang } from "./i18n";
 import { colorTokens } from "../server/appearance-rules.mjs";
 
@@ -318,8 +318,10 @@ export function PrefsPanel({
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        <Languages size={17} aria-hidden="true" />
-        <span aria-hidden="true">{lang === "th" ? "TH" : "EN"}</span>
+        {/* Icon pair (globe + palette) replaces Languages+TH chip — customer UX header. */}
+        <Globe size={17} aria-hidden="true" />
+        <Palette size={15} aria-hidden="true" />
+        <span className="sr-only">{lang === "th" ? "TH" : "EN"}</span>
       </button>
       <div
         ref={panel}
