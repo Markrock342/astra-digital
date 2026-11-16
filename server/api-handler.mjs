@@ -739,6 +739,9 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         // Delivery type + checkout fields of one product (delivery.mjs).
         if (/^\/api\/admin\/products\/[^/]+\/delivery$/.test(path))
           return send(200, service.adminDelivery(user, path.split("/")[4]));
+        // Preorder questionnaire fields (customer fills before ordering).
+        if (/^\/api\/admin\/products\/[^/]+\/order-questions$/.test(path))
+          return send(200, service.adminOrderQuestions(user, path.split("/")[4]));
         // Option groups + variant mapping (option-groups.mjs).
         if (/^\/api\/admin\/products\/[^/]+\/options$/.test(path))
           return send(200, service.adminOptionGroups(user, path.split("/")[4]));
@@ -797,6 +800,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
           return send(200, service.adminSavePreorderSettings(user, path.split("/")[4], input));
         if (/^\/api\/admin\/products\/[^/]+\/delivery$/.test(path))
           return send(200, service.adminSetDelivery(user, path.split("/")[4], input));
+        if (/^\/api\/admin\/products\/[^/]+\/order-questions$/.test(path))
+          return send(200, service.adminSetOrderQuestions(user, path.split("/")[4], input));
         if (/^\/api\/admin\/products\/[^/]+\/options$/.test(path))
           return send(200, service.adminSaveOptionGroups(user, path.split("/")[4], input));
         if (/^\/api\/admin\/products\/[^/]+\/variants\/bulk$/.test(path))

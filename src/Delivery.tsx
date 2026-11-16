@@ -72,17 +72,21 @@ export function CheckoutFields({
   fields,
   values,
   onChange,
+  legend,
+  note,
 }: {
   fields: CheckoutField[];
   values: Record<string, string>;
   onChange: (values: Record<string, string>) => void;
+  legend?: string;
+  note?: string;
 }) {
   if (!fields.length) return null;
   return (
     <fieldset className="checkout-fields">
       <legend>
         <Wrench size={16} />
-        {t("ข้อมูลสำหรับร้าน")}
+        {legend ?? t("ข้อมูลสำหรับร้าน")}
       </legend>
       {fields.map((f) => (
         <label className="field" key={f.id}>
@@ -102,7 +106,7 @@ export function CheckoutFields({
           />
         </label>
       ))}
-      <p className="checkout-fields-note">{t("ร้านใช้ข้อมูลนี้ทำรายการให้คุณ")}</p>
+      <p className="checkout-fields-note">{note ?? t("ร้านใช้ข้อมูลนี้ทำรายการให้คุณ")}</p>
     </fieldset>
   );
 }
@@ -364,6 +368,123 @@ export function DeliveryTypeCard({ productId, onChanged }: { productId: string; 
           <button className="button primary" disabled={busy || !info || !dirty}>
             {busy ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}
             บันทึกวิธีส่งมอบ
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+/** Product editor: preorder questionnaire (ADMIN). Same field shape as manual delivery fields. */
+export function PreorderQuestionsCard({ productId }: { productId: string }) {
+  const { user, toast } = useStore();
+  const admin = user?.role === "ADMIN";
+  type Info = { productId: string; preorder: boolean; fields: FieldDraft[] };
+  const [info, setInfo] = useState<Info | null>(null);
+  const [fields, setFields] = useState<FieldDraft[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!admin) return;
+    api<Info>("/admin/products/" + encodeURIComponent(productId) + "/order-questions")
+      .then((r) => {
+        setInfo(r);
+        setFields(r.fields.length ? r.fields : [{ label: "", type: "text", required: true }]);
+      })
+      .catch((e) => setError((e as Error).message));
+  }, [productId, admin]);
+  if (!admin) return null;
+  const saved = JSON.stringify(info?.fields ?? []);
+  const cleanFields = fields.filter((f) => f.label.trim());
+  const dirty = !!info && JSON.stringify(cleanFields) !== saved;
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const r = await api<Info>(
+        "/admin/products/" + encodeURIComponent(productId) + "/order-questions",
+        { fields: cleanFields.map((f) => ({ ...f, label: f.label.trim() })) },
+        "PATCH",
+      );
+      setInfo(r);
+      setFields(r.fields.length ? r.fields : [{ label: "", type: "text", required: true }]);
+      toast("บันทึกคำถามก่อนสั่งแล้ว");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const setField = (i: number, patch: Partial<FieldDraft>) =>
+    setFields((list) => list.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+  return (
+    <section className="reference-admin-card editor-panel delivery-type-card" aria-busy={!info && !error}>
+      <div className="delivery-type-head">
+        <h2>คำถามก่อนสั่ง</h2>
+      </div>
+      <p className="field-help">ลูกค้าต้องกรอกตอนเช็คเอาต์ก่อนจองพรีออเดอร์ · แก้ข้อความได้ และเพิ่มได้มากกว่า 1 ข้อ</p>
+      <form onSubmit={save}>
+        <div className="delivery-fields">
+          {fields.map((f, i) => (
+            <div className="delivery-field-row" key={i}>
+              <input
+                aria-label={"คำถามที่ " + (i + 1)}
+                placeholder="เช่น วันที่ต้องการรับสินค้า / รหัสผ่านที่ต้องการ"
+                maxLength={60}
+                value={f.label}
+                onChange={(e) => setField(i, { label: e.target.value })}
+              />
+              <div className="segmented-control delivery-field-type" role="group" aria-label="ชนิดข้อมูล">
+                <button
+                  type="button"
+                  className={f.type === "email" ? "active" : ""}
+                  aria-pressed={f.type === "email"}
+                  onClick={() => setField(i, { type: "email" })}
+                >
+                  <Mail size={14} />
+                  อีเมล
+                </button>
+                <button
+                  type="button"
+                  className={f.type === "text" ? "active" : ""}
+                  aria-pressed={f.type === "text"}
+                  onClick={() => setField(i, { type: "text" })}
+                >
+                  <Type size={14} />
+                  ข้อความ
+                </button>
+              </div>
+              <label className="delivery-field-required">
+                <input type="checkbox" checked={f.required} onChange={(e) => setField(i, { required: e.target.checked })} />
+                บังคับ
+              </label>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={"ลบคำถามที่ " + (i + 1)}
+                onClick={() => setFields((list) => list.filter((_, j) => j !== i))}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+          {fields.length < 5 && (
+            <button
+              type="button"
+              className="button ghost"
+              onClick={() => setFields((list) => [...list, { label: "", type: "text", required: true }])}
+            >
+              <Plus size={15} />
+              เพิ่มคำถาม
+            </button>
+          )}
+        </div>
+        <ErrorMessage message={error} />
+        <div className="delivery-type-actions">
+          <button className="button primary" disabled={busy || !info || !dirty}>
+            {busy ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}
+            บันทึกคำถาม
           </button>
         </div>
       </form>

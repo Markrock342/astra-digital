@@ -408,6 +408,8 @@ export function CheckoutPage() {
                 fields={r.product.checkoutFields ?? []}
                 values={values[r.variant.id] ?? {}}
                 onChange={(v) => setValues({ ...values, [r.variant.id]: v })}
+                legend={r.product.preorder ? t("คำถามก่อนสั่ง") : undefined}
+                note={r.product.preorder ? t("กรอกก่อนยืนยันคำสั่งซื้อ พรีออเดอร์") : undefined}
               />
             </div>
             <strong className="cart-line-price">{money(r.variant.price * lines[i].quantity)}</strong>

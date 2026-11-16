@@ -109,6 +109,8 @@ export const EN_STRINGS: Record<string, string> = {
   "ดาว": "stars",
   "ดูย้อนหลังได้": "View anytime",
   "ดูเพิ่มเติม": "See more",
+  "คำถามก่อนสั่ง": "Questions before ordering",
+  "กรอกก่อนยืนยันคำสั่งซื้อ พรีออเดอร์": "Fill these in before confirming your preorder",
   "ดูรายละเอียด": "View details",
   "ดูโค้ดสินค้า": "View product code",
   "ตรวจสอบข้อมูลให้ครบ ระบบจะบันทึกคำสั่งซื้อไว้ก่อน": "Review your details. The order is saved first.",

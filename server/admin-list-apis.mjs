@@ -407,7 +407,8 @@ export function createAdminListApis({
       links: (delivered.links ?? []).map(maskLink),
       credentialsMasked: true,
       // Shop-fulfilled product: what the customer typed + queue state (delivery.mjs).
-      fulfilment: row.preorder ? null : delivery.adminOrderFulfilment(orderId),
+      // Preorder questionnaire answers share order_fulfilment with manual checkout.
+      fulfilment: delivery.adminOrderFulfilment(orderId),
       deliveryType: one("SELECT delivery_type FROM products WHERE id=?", row.product_id)?.delivery_type ?? null,
     };
   }

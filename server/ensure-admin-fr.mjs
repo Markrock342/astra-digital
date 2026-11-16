@@ -753,6 +753,7 @@ export function ensureEmailVerification(db) {
  * - products.delivery_type: NULL = current behaviour (ID+password or code, decided per unit),
  *   'account' | 'shared' | 'code' | 'invite' | 'manual'. products.delivery_fields: JSON list of
  *   checkout fields for 'manual' ([{id,label,type,required}]).
+ *   products.order_questions: JSON list of the same shape for preorder products (customer UX).
  * - inventory.unit_kind: NULL (plain unit) | 'seat' (one seat of a shared account) | 'invite'
  *   (one use of an invite link). Seats / uses of one account or link share inventory.group_id
  *   and are numbered by seat_no, so one row is still one sellable unit (stock counts, preorder
@@ -772,6 +773,7 @@ export function ensureDeliveryOptions(db) {
   };
   add("products", "delivery_type", "TEXT");
   add("products", "delivery_fields", "TEXT");
+  add("products", "order_questions", "TEXT");
   add("inventory", "unit_kind", "TEXT");
   add("inventory", "group_id", "TEXT");
   add("inventory", "seat_no", "INTEGER");

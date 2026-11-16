@@ -1341,6 +1341,7 @@ export function createCommerceCore({
       max_per_customer: productLimit,
       delivery_type: _deliveryType,
       delivery_fields: _deliveryFields,
+      order_questions: _orderQuestions,
       ...p
     } = row;
     const lowAt = getLowStockAt();
@@ -1701,8 +1702,9 @@ export function createCommerceCore({
       // Per-account limit, counted in this transaction so the last unit is sold once.
       pricing.assertPurchaseLimit(user, variant, quantity);
       // Shop-fulfilled product: what the customer typed for the shop (delivery.mjs); no stock.
+      // Preorder order_questions also flow through checkoutInputs (customer UX questionnaire).
       const manual = variant.delivery_type === "manual" && !variant.preorder;
-      const deliveryInputs = manual ? delivery.checkoutInputs(variantId, input.deliveryInputs) : null;
+      const deliveryInputs = delivery.checkoutInputs(variantId, input.deliveryInputs);
       if (
         !variant.preorder &&
         !manual &&
@@ -1815,6 +1817,8 @@ export function createCommerceCore({
         preorder: true,
         reviewed: true,
         ...delivered,
+        // Preorder questionnaire answers (same order_fulfilment row as manual checkout).
+        fulfilment: delivery.orderFulfilment(orderId, ownerView || isStaff(user)),
         ...orderExtras.customerOrderExtras(orderId, ownerView),
         ...orderRefundState(orderId, true),
         discount: reservation.discount ?? 0,
@@ -3905,6 +3909,8 @@ export function createCommerceCore({
     // Delivery type per product, shared seats, invite links, fulfilment queue (delivery.mjs).
     adminDelivery: delivery.adminDelivery,
     adminSetDelivery: delivery.adminSetDelivery,
+    adminOrderQuestions: delivery.adminOrderQuestions,
+    adminSetOrderQuestions: delivery.adminSetOrderQuestions,
     adminSeatGroup: delivery.adminSeatGroup,
     adminSetSeatCount: delivery.adminSetSeatCount,
     adminUpdateSeat: delivery.adminUpdateSeat,

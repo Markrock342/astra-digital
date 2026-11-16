@@ -44,9 +44,11 @@ Phase 8: Variant stack - รายการ 8 / รูป 2,4
 
 Phase 9: Preorder Q&A - ข้อความลูกค้า
  Milestone 9.1: Admin แก้/เพิ่มคำถามได้ >1 บนสินค้าพรีออเดอร์
+  Task 9.1.1: products.order_questions + PreorderQuestionsCard + API
  Milestone 9.2: ลูกค้ากรอกก่อนสั่ง · เก็บกับออเดอร์
-  Tech Note: ปัจจุบัน delivery_fields ผูก manual และบล็อก preorder — ต้องแยกช่องถามพรีออเดอร์
-  Prove: สร้าง 2 คำถาม · สั่งพรีออเดอร์ · แอดมินเห็นคำตอบ · ว่างแล้วบล็อก
+  Tech Note: แยกจาก manual delivery_fields · checkoutInputs รวมทั้งสอง · เก็บใน order_fulfilment
+  Prove: unit tests/preorder-questions.test.mjs
+  Branch: feat/ux-preorder-questions
 
 Phase 10: Ladder QC + Mark
  Milestone 10.1: เทสโค้ด + Local + มือถือ 320/390/430 · รายงาน Mark
