@@ -4,7 +4,7 @@
 import "./admin-shell.css";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { PreorderModeCard } from "./AdminPreorder";
-import { DeliveryTypeCard, FulfilmentQueue } from "./Delivery";
+import { DeliveryTypeCard, FulfilmentQueue, PreorderQuestionsCard } from "./Delivery";
 import {
   ArrowLeft,
   ArrowRight,
@@ -883,6 +883,9 @@ export default function Admin() {
             )}
             {editingProduct && !newProduct && !!editingProduct.preorder && (
               <PreorderModeCard productId={editingProduct.id} />
+            )}
+            {editingProduct && !newProduct && !!editingProduct.preorder && (
+              <PreorderQuestionsCard productId={editingProduct.id} />
             )}
             {editingProduct && !newProduct && (
               <DeliveryTypeCard productId={editingProduct.id} onChanged={() => void load()} />

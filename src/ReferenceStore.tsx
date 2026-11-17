@@ -156,10 +156,12 @@ export function ReferenceCatalog({ routed = false }: { routed?: boolean }) {
           <p>{filtered.length}{" "}{t("รายการ")}</p>
         ) : (
           <Link to="/products" className="catalog-all-button">
-            {t("สินค้าทั้งหมด")}
+            {t("ดูเพิ่มเติม")}
           </Link>
         )}
       </div>
+      {/* Client, 16 Nov: no search / filter on the home list; /products keeps them. */}
+      {routed && (
       <div className="reference-catalog-tools">
         <label className="search-field">
           <Search size={17} />
@@ -181,6 +183,7 @@ export function ReferenceCatalog({ routed = false }: { routed?: boolean }) {
         </label>
         <SortSheet value={sort} onChange={setSort} />
       </div>
+      )}
       {routed && (
         <CategoryChips categories={categories} selected={category?.id ?? ""} total={products.length} />
       )}

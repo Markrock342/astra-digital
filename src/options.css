@@ -31,14 +31,17 @@
 }
 .option-chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  flex-wrap: nowrap;
   gap: 8px;
 }
 .option-chip {
-  min-height: 44px;
+  min-height: 48px;
+  width: 100%;
   max-width: 100%;
   display: inline-flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   padding: 0 14px;
   border: 1px solid var(--border);

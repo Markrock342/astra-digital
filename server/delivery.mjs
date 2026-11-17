@@ -234,20 +234,25 @@ export function createDeliveryApis({
     return Number(row?.codes ?? 0) > 0 && !Number(row?.pairs ?? 0) ? "code" : "account";
   }
 
-  /** Storefront fields of one product row. */
+  /** Storefront fields of one product row (manual delivery_fields + preorder order_questions). */
   function publicDelivery(productRow) {
     const type = productRow.delivery_type ?? null;
+    const pub = (list) =>
+      list.map(({ id, label, type: t, required }) => ({ id, label, type: t, required }));
+    const fields = [];
+    const seen = new Set();
+    const push = (list) => {
+      for (const f of pub(list)) {
+        if (seen.has(f.id)) continue;
+        seen.add(f.id);
+        fields.push(f);
+      }
+    };
+    if (type === "manual") push(parseFields(productRow.delivery_fields));
+    if (productRow.preorder) push(parseFields(productRow.order_questions));
     return {
       deliveryType: type ?? "account",
-      checkoutFields:
-        type === "manual"
-          ? parseFields(productRow.delivery_fields).map(({ id, label, type: t, required }) => ({
-              id,
-              label,
-              type: t,
-              required,
-            }))
-          : [],
+      checkoutFields: fields,
     };
   }
 
@@ -314,14 +319,25 @@ export function createDeliveryApis({
 
   // ------------------------------------------------------------------ checkout inputs
 
-  /** Validated customer answers for a manual product, or null for other types. */
+  /** Validated customer answers for manual and/or preorder question fields, or null. */
   function checkoutInputs(variantId, raw) {
     const p = one(
-      "SELECT p.id,p.delivery_type,p.delivery_fields FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=?",
+      "SELECT p.id,p.preorder,p.delivery_type,p.delivery_fields,p.order_questions FROM variants v JOIN products p ON p.id=v.product_id WHERE v.id=?",
       variantId,
     );
-    if (!p || p.delivery_type !== "manual") return null;
-    const fields = parseFields(p.delivery_fields);
+    if (!p) return null;
+    const fields = [];
+    const seen = new Set();
+    const push = (list) => {
+      for (const f of list) {
+        if (seen.has(f.id)) continue;
+        seen.add(f.id);
+        fields.push(f);
+      }
+    };
+    if (p.delivery_type === "manual") push(parseFields(p.delivery_fields));
+    if (p.preorder) push(parseFields(p.order_questions));
+    if (!fields.length) return null;
     const given = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
     const answers = [];
     for (const f of fields) {
@@ -335,6 +351,36 @@ export function createDeliveryApis({
       answers.push({ id: f.id, label: f.label, value });
     }
     return { productId: p.id, answers };
+  }
+
+  function adminOrderQuestions(user, productIdRaw) {
+    requireStaff(user);
+    const productId = clean(productIdRaw, 1, 80, "สินค้า");
+    const p = one("SELECT id,preorder,order_questions FROM products WHERE id=?", productId);
+    if (!p) fail(404, "ไม่พบสินค้า");
+    return {
+      productId,
+      preorder: !!p.preorder,
+      fields: parseFields(p.order_questions),
+    };
+  }
+
+  function adminSetOrderQuestions(user, productIdRaw, input = {}) {
+    requireAdmin(user);
+    const productId = clean(productIdRaw, 1, 80, "สินค้า");
+    return tx(() => {
+      const p = one("SELECT id,preorder FROM products WHERE id=?", productId);
+      if (!p) fail(404, "ไม่พบสินค้า");
+      if (!p.preorder) fail(409, "ใช้คำถามก่อนสั่งได้เฉพาะสินค้าพรีออเดอร์");
+      const fields = normalizeDeliveryFields(input.fields ?? [], fail);
+      run(
+        "UPDATE products SET order_questions=? WHERE id=?",
+        fields.length ? JSON.stringify(fields) : null,
+        productId,
+      );
+      auditDetail(user, "SET_ORDER_QUESTIONS", productId, { fields: fields.length });
+      return adminOrderQuestions(user, productId);
+    });
   }
   /** Inside createOrder's transaction. */
   function recordInputs(orderId, inputs) {
@@ -805,6 +851,8 @@ export function createDeliveryApis({
     publicDelivery,
     adminDelivery,
     adminSetDelivery,
+    adminOrderQuestions,
+    adminSetOrderQuestions,
     checkoutInputs,
     recordInputs,
     markWaiting,

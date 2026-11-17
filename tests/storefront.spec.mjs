@@ -43,6 +43,7 @@ test("reference composition, catalog search, categories, theme and responsive la
   await expect(
     page.getByRole("heading", { name: "สินค้าทั้งหมด" }),
   ).toBeVisible();
+  // /products keeps search (home has none since the client round of 16 Nov).
   await page.getByRole("textbox", { name: "ค้นหาสินค้า" }).fill("DISNEY+");
   await expect(page.locator(".product-card")).toHaveCount(1);
   await page
