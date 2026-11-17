@@ -105,7 +105,7 @@ test("1 header guest: no login/register; prefs icon changed (mobile+desktop)", a
     await ready(page);
     await expect(page.locator("header .login-link, header .register-link")).toHaveCount(0);
     await expect(page.locator("header .prefs-trigger")).toBeVisible();
-    // Visible chip is icon-only (Globe+Palette); TH/EN stays in .sr-only for a11y.
+    // Flag of the current language + TH/EN (client turned down the globe and 文A).
     const visibleChip = await page.locator("header .prefs-trigger").evaluate((el) => {
       const visible = [...el.childNodes].filter((n) => {
         if (n.nodeType === 3) return n.textContent.trim().length > 0;
@@ -118,8 +118,9 @@ test("1 header guest: no login/register; prefs icon changed (mobile+desktop)", a
         visibleText: visible.map((n) => (n.textContent || "").trim()).join(""),
       };
     });
-    expect(visibleChip.icons).toBeGreaterThanOrEqual(2);
-    expect(visibleChip.visibleText).not.toMatch(/TH|EN/);
+    expect(visibleChip.icons).toBe(1);
+    await expect(page.locator("header .prefs-trigger .lang-flag")).toBeVisible();
+    expect(visibleChip.visibleText).toBe("TH");
     await shot(page, "1-header-guest-" + vp.width);
     await context.close();
   }
@@ -163,7 +164,7 @@ test("4 footer mobile: menu block hidden", async ({ browser }) => {
   await context.close();
 });
 
-test("5 home+products: no search/filter; ดูเพิ่มเติม", async ({ browser }) => {
+test("5 home: no search/filter; ดูเพิ่มเติม (/products keeps them)", async ({ browser }) => {
   for (const vp of [PHONE, DESK]) {
     const { context, page } = await open(browser, vp);
     await ready(page);
@@ -173,9 +174,10 @@ test("5 home+products: no search/filter; ดูเพิ่มเติม", asy
     await expect(more).toBeVisible();
     await expect(more).toHaveAttribute("href", "/products");
     await shot(page, "5-home-catalog-" + vp.width);
+    // The client's note says "หน้าแรก": the full product page keeps search and the filter sheet.
     await ready(page, "/products");
-    await expect(page.getByRole("textbox", { name: "ค้นหาสินค้า" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^ตัวกรอง/ })).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "ค้นหาสินค้า" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^ตัวกรอง/ })).toBeVisible();
     await shot(page, "5-products-" + vp.width);
     await context.close();
   }

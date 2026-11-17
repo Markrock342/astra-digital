@@ -132,11 +132,11 @@ test("admin: create with a library icon, reorder, bulk-move a product; storefron
   await expect(page).toHaveTitle(new RegExp("^" + CAT.th + " — "));
   await shot(page, "storefront-chip-filtered");
 
-  // The URL loads filtered by category (search/sort tools removed — customer UX).
+  // The URL loads filtered by category; /products keeps search + filter (home has none).
   await ready(page, "/products?category=" + CAT.id);
   await expect(page.locator(".product-card")).toHaveCount(1);
-  await expect(page.getByLabel("ค้นหาสินค้า")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^ตัวกรอง/ })).toHaveCount(0);
+  await expect(page.getByLabel("ค้นหาสินค้า")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^ตัวกรอง/ })).toBeVisible();
   await expect(page).toHaveURL(base + "/products?category=" + CAT.id);
   // "ทั้งหมด" clears the category; back returns to the category.
   await chips.getByRole("link", { name: /ทั้งหมด/ }).click();

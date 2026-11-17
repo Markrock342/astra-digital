@@ -189,9 +189,8 @@ test("customer sees a stock label, never a count or a code, and orders wait for 
   await ready(page, "/account");
   await page.locator(".account-button").click();
   await page.getByRole("button", { name: "ออกจากระบบ", exact: true }).click();
-  await expect(
-    page.getByRole("link", { name: "สมัครสมาชิก", exact: true }),
-  ).toBeVisible();
+  // Signed out: the account button goes (the header has no sign-in links since #124).
+  await expect(page.locator(".account-button")).toHaveCount(0);
   await ready(page, "/orders");
   await expect(
     page.getByRole("heading", { name: "เข้าสู่ระบบเพื่อดูข้อมูลของคุณ" }),

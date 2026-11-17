@@ -43,9 +43,17 @@ test("reference composition, catalog search, categories, theme and responsive la
   await expect(
     page.getByRole("heading", { name: "สินค้าทั้งหมด" }),
   ).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "ค้นหาสินค้า" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^ตัวกรอง/ })).toHaveCount(0);
-  await expect(page.locator(".product-card").first()).toBeVisible();
+  // /products keeps search (home has none since the client round of 16 Nov).
+  await page.getByRole("textbox", { name: "ค้นหาสินค้า" }).fill("DISNEY+");
+  await expect(page.locator(".product-card")).toHaveCount(1);
+  await page
+    .getByRole("textbox", { name: "ค้นหาสินค้า" })
+    .fill("ไม่มีสินค้านี้");
+  await expect(
+    page.getByRole("heading", { name: "ไม่พบสินค้าที่ค้นหา" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "ล้างตัวกรอง" }).click();
+  await expect(page.locator(".product-card")).toHaveCount(2);
   await screenshot(page, "desktop-products");
   // Light/dark follows the device setting (reload so Theme.tsx re-reads matchMedia).
   await page.emulateMedia({ colorScheme: "light" });

@@ -383,9 +383,6 @@
 }
 
 /* Hide leftover catalog search/filter chrome if any theme still paints it. */
-.storefront-shell .reference-catalog-tools {
-  display: none !important;
-}
 
 /* Desktop: every footer-menu link sits in the top menu (client, 14 Nov). Logo + actions on the
    first row, the menu on its own row so 7–8 links never squeeze the balance / profile. */
@@ -639,4 +636,22 @@
   .storefront-shell .reference-account-page :is(.stock-watch-list, .order-receipt-profiles, .privacy-panel) {
     padding: 18px;
   }
+}
+
+/* ภาษาและธีม button: flag + TH/EN. */
+.storefront-shell .prefs-trigger .lang-flag {
+  flex-shrink: 0;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+
+/* "รูปภาพสินค้า เพิ่มกรอบอีกชั้นนึง" (client sample: VIU card): the picture sits inside the
+   card with its own margin and rounded corners — card frame + picture frame. */
+.storefront-shell .product-card .product-image {
+  margin: 10px 10px 0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.storefront-shell .product-card .product-image :is(.product-art, img) {
+  border-radius: 0;
 }

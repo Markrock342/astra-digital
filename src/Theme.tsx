@@ -1,7 +1,7 @@
 // ASIA EXTRA brand pieces: logo, theme preferences, language toggle,
 // scroll progress and the marquee strip. Preferences are per-browser only.
 import { useEffect, useRef, useState } from "react";
-import { Globe, Monitor, Moon, Palette, Sun, X } from "lucide-react";
+import { Monitor, Moon, Sun, X } from "lucide-react";
 import { getLang, t, type Lang } from "./i18n";
 import { colorTokens } from "../server/appearance-rules.mjs";
 
@@ -318,10 +318,10 @@ export function PrefsPanel({
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        {/* Icon pair (globe + palette) replaces Languages+TH chip — customer UX header. */}
-        <Globe size={17} aria-hidden="true" />
-        <Palette size={15} aria-hidden="true" />
-        <span className="sr-only">{lang === "th" ? "TH" : "EN"}</span>
+        {/* Client, 17 Nov: the flag of the current language + TH/EN (globe and 文A were turned down).
+            Drawn as SVG: emoji flags show as letters on Windows. */}
+        <LangFlag lang={lang} />
+        <span aria-hidden="true">{lang === "th" ? "TH" : "EN"}</span>
       </button>
       <div
         ref={panel}
@@ -391,6 +391,28 @@ export function PrefsPanel({
         </fieldset>
       </div>
     </>
+  );
+}
+
+/** Thai / UK flag for the language button (3:2, rounded, thin outline so white edges show). */
+export function LangFlag({ lang }: { lang: Lang }) {
+  return lang === "th" ? (
+    <svg className="lang-flag" viewBox="0 0 30 20" width="21" height="14" aria-hidden="true">
+      <rect width="30" height="20" fill="#A51931" />
+      <rect y="3.33" width="30" height="13.34" fill="#F4F5F8" />
+      <rect y="6.67" width="30" height="6.66" fill="#2D2A4A" />
+    </svg>
+  ) : (
+    <svg className="lang-flag" viewBox="0 0 60 30" width="21" height="14" aria-hidden="true" preserveAspectRatio="none">
+      <clipPath id="lang-flag-uk">
+        <path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z" />
+      </clipPath>
+      <path d="M0,0 v30 h60 v-30 z" fill="#012169" />
+      <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" strokeWidth="6" />
+      <path d="M0,0 L60,30 M60,0 L0,30" clipPath="url(#lang-flag-uk)" stroke="#C8102E" strokeWidth="4" />
+      <path d="M30,0 v30 M0,15 h60" stroke="#fff" strokeWidth="10" />
+      <path d="M30,0 v30 M0,15 h60" stroke="#C8102E" strokeWidth="6" />
+    </svg>
   );
 }
 

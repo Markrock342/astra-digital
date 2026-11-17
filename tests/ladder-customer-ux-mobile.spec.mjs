@@ -161,7 +161,8 @@ for (const vp of VIEWPORTS) {
     await shot(page, vp.name + "-05-home-catalog");
     await tap(page, more);
     await expect(page).toHaveURL(/\/products/);
-    await expect(page.getByRole("textbox", { name: "ค้นหาสินค้า" })).toHaveCount(0);
+    // The full product page keeps search (only the home list dropped it).
+    await expect(page.getByRole("textbox", { name: "ค้นหาสินค้า" })).toBeVisible();
     expect(await noSideScroll(page)).toBe(true);
     row.checks.item5_catalog = true;
 
