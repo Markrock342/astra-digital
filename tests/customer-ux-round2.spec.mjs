@@ -20,12 +20,15 @@ test.beforeAll(async () => {
   const first = service.adminProductVariants(admin, product.id).variants[0].id;
   service.db.prepare("INSERT INTO variants(id,product_id,label,price,active,sort_order,warranty_days) VALUES(?,?,?,?,1,1,0)").run(product.id + "-pro", product.id, "Pro", 39900);
   service.db.prepare("INSERT INTO variants(id,product_id,label,price,active,sort_order,warranty_days) VALUES(?,?,?,?,1,2,0)").run(product.id + "-out", product.id, "Out of stock", 19900);
-  service.importCodes(admin, { variantId: first, codes: "R2-E2E-1\nR2-E2E-2\nR2-E2E-3" });
+  service.importCodes(admin, { variantId: first, codes: "R2-E2E-1\nR2-E2E-2\nR2-E2E-3\nR2-E2E-4" });
   service.importCodes(admin, { variantId: product.id + "-pro", codes: "R2-PRO-1" });
   pre = service.saveProduct(admin, { name: "Round2 Preorder", description: "Questions before checkout", category: "r2-uploaded", price: 9900, active: true, preorder: true });
   service.adminSetOrderQuestions(admin, pre.id, { fields: [{ label: "วันที่ต้องการ", type: "text", required: true }, { label: "อีเมลติดต่อ", type: "email", required: true }] });
   const auth = service.register({ name: "Round2 UI Buyer", email: "r2-ui@example.invalid", password: randomUUID() });
   buyerToken = auth.token;
+  const buyerSession = service.session(buyerToken);
+  const seedOrder = service.createOrder(buyerSession, { variantId: first, quantity: 1, requestKey: randomUUID() });
+  service.pay(buyerSession, seedOrder.id, { paymentToken: seedOrder.paymentToken, outcome: "success" });
   server = createApp(service, { production: true });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   base = "http://127.0.0.1:" + server.address().port;
@@ -50,7 +53,7 @@ for (const width of [320, 390, 430, 1440]) {
     await expect(card.locator(".product-card-price")).toHaveText(/99\.00.*-.*399\.00/);
     const cardPriceFont = await card.locator(".product-card-price strong").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     expect(cardPriceFont).toBeLessThanOrEqual(15);
-    await expect(card.locator(".product-sold")).toContainText("เหลือ 4 ชิ้น • ขายแล้ว 0 ชิ้น");
+    await expect(card.locator(".product-sold")).toContainText("เหลือ 4 ชิ้น • ขายแล้ว 1 ชิ้น");
     const soldColors = await card.locator(".product-sold").evaluate((el) => {
       const baseColor = getComputedStyle(el).color;
       return [...el.querySelectorAll("span")].every((s) => getComputedStyle(s).color === baseColor);
@@ -76,7 +79,7 @@ for (const width of [320, 390, 430, 1440]) {
     const basicPill = basic.locator(".variant-stock-pill.variant-stock-in");
     await expect(basicPill).toHaveText("เหลือ 3 ชิ้น");
     expect(parseFloat(await basicPill.evaluate((el) => getComputedStyle(el).borderTopWidth))).toBeGreaterThanOrEqual(1);
-    await expect(basic).toContainText("ขายแล้ว 0 ชิ้น");
+    await expect(basic).toContainText("ขายแล้ว 1 ชิ้น");
     await expect(out).not.toHaveClass(/variant-stock-out/);
     const outPill = out.locator(".variant-stock-pill.variant-stock-out");
     await expect(outPill).toHaveText("สินค้าหมด");
@@ -122,6 +125,13 @@ for (const width of [320, 390, 430, 1440]) {
       await expect(page.locator(".mobile-activity-ticker")).toBeHidden();
       await expect(page.locator(".activity-row").first()).toBeVisible();
     }
+    await expect(page.locator(".activity-panel .activity-art")).toHaveCount(0);
+    expect(await page.locator(".activity-panel > .panel-heading h2").evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+    expect(await page.locator(".activity-row .activity-text").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(14);
+    expect(await page.locator(".activity-row time").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(12);
+    const activityBg = await page.locator(".activity-row .activity-avatar").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+    const themeAccentBg = await page.locator(".card-action-ready").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(activityBg).toBe(themeAccentBg);
     expect(errors).toEqual([]);
     await context.close();
   });

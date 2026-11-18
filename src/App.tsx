@@ -724,19 +724,9 @@ function Home() {
                 {t("สด")}
               </span>
               <div key={activityIndex} className="ticker-event">
-                {latestActivity.kind === "register" ? (
-                  <span className="activity-avatar">
-                    <UserPlus size={20} />
-                  </span>
-                ) : (
-                  <div className="activity-art">
-                    <Art
-                      small
-                      type={latestActivity.art!}
-                      name={latestActivity.product!}
-                    />
-                  </div>
-                )}
+                <span className="activity-avatar">
+                  {latestActivity.kind === "register" ? <UserPlus size={20} /> : <ShoppingBag size={20} />}
+                </span>
                 <div>
                   <p>
                     <strong>{latestActivity.name}</strong>{" "}
@@ -762,15 +752,9 @@ function Home() {
           </div>
           {overview?.activity.slice(0, 3).map((activity, i) => (
             <div className="activity-row" key={i}>
-              {activity.kind === "register" ? (
-                <span className="activity-avatar">
-                  <UserPlus size={22} />
-                </span>
-              ) : (
-                <div className="activity-art">
-                  <Art small type={activity.art!} name={activity.product!} />
-                </div>
-              )}
+              <span className="activity-avatar">
+                {activity.kind === "register" ? <UserPlus size={22} /> : <ShoppingBag size={22} />}
+              </span>
               <div className="activity-text">
                 <p>
                   <strong>{activity.name}</strong>{" "}

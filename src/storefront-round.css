@@ -831,11 +831,72 @@
 .storefront-shell .reference-buy-row .quantity-control,
 .storefront-shell .reference-buy-row .button { height: 52px; min-height: 52px; font-size: 16px; }
 .storefront-shell .reference-buy-row .quantity-control button { height: 50px; min-width: 44px; }
+.storefront-shell .activity-panel > .panel-heading {
+  height: auto;
+  min-height: 54px;
+  padding: 14px 20px;
+}
+.storefront-shell .activity-panel > .panel-heading h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+.storefront-shell .activity-panel .live-pill {
+  font-size: 13px;
+  padding: 4px 12px;
+}
+.storefront-shell .activity-panel > .activity-row {
+  height: auto;
+  min-height: 76px;
+  padding: 14px 20px;
+  gap: 14px;
+}
+.storefront-shell .activity-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.storefront-shell .activity-text {
+  min-width: 0;
+  font-size: 15.5px;
+  line-height: 1.45;
+}
+.storefront-shell .activity-text small {
+  font-size: 13.5px;
+  margin-top: 3px;
+}
+.storefront-shell .activity-row time {
+  flex-shrink: 0;
+  font-size: 13.5px;
+}
 @media (max-width: 700px) {
   .storefront-shell .activity-panel > .mobile-activity-ticker { display: none; }
-  .storefront-shell .activity-panel > .panel-heading { display: flex; }
-  .storefront-shell .activity-panel > .activity-row { display: flex; height: auto; min-height: 68px; }
-  .storefront-shell .activity-text { min-width: 0; }
+  .storefront-shell .activity-panel > .panel-heading {
+    display: flex;
+    min-height: 50px;
+    padding: 12px 16px;
+  }
+  .storefront-shell .activity-panel > .panel-heading h2 { font-size: 16px; }
+  .storefront-shell .activity-panel .live-pill { font-size: 12px; }
+  .storefront-shell .activity-panel > .activity-row {
+    display: flex;
+    height: auto;
+    min-height: 72px;
+    padding: 12px 16px;
+    gap: 12px;
+  }
+  .storefront-shell .activity-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 9px;
+  }
+  .storefront-shell .activity-text { font-size: 14.5px; }
   .storefront-shell .activity-text p { white-space: normal; overflow-wrap: anywhere; }
-  .storefront-shell .activity-row time { flex-shrink: 0; }
+  .storefront-shell .activity-text small { font-size: 13px; margin-top: 2px; }
+  .storefront-shell .activity-row time {
+    font-size: 12.5px;
+    align-self: center;
+    padding-top: 0;
+  }
 }
