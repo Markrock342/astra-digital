@@ -834,11 +834,16 @@ export function createDeliveryApis({
     });
   }
 
-  /** PDPA export: every answer this customer typed at checkout. */
+  /** PDPA export: every answer this customer typed at checkout (including preorder questionnaires). */
   const exportInputs = (userId) =>
     all(
       `SELECT f.order_id,f.state,f.created_at,f.inputs_enc FROM order_fulfilment f
-       JOIN orders o ON o.id=f.order_id WHERE o.user_id=? ORDER BY f.created_at DESC`,
+       WHERE f.order_id IN (
+         SELECT id FROM orders WHERE user_id=?
+         UNION ALL
+         SELECT id FROM reservations WHERE user_id=?
+       ) ORDER BY f.created_at DESC`,
+      userId,
       userId,
     ).map(({ inputs_enc, ...r }) => ({ ...r, inputs: readInputs({ inputs_enc }) }));
 

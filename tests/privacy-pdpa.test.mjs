@@ -219,6 +219,8 @@ test("approved deletion clears preorder questionnaire answers as well as ordinar
   const f = s.adminSetOrderQuestions(admin, p.id, { fields: [{ label: "Contact email", type: "email", required: true }] }).fields[0];
   const order = s.createOrder(user, { variantId: v, quantity: 1, requestKey: "privacy-preorder-questions", deliveryInputs: { [f.id]: "private@example.invalid" } });
   assert.equal(s.adminOrderDetail(admin, order.id).fulfilment.inputs.length, 1);
+  const exported = s.exportMyData(user);
+  assert.equal(exported.deliveryInputs.some((row) => row.order_id === order.id && row.inputs[0]?.value === "private@example.invalid"), true);
   const request = s.requestAccountDeletion(user, {});
   s.approvePrivacyDeletion(admin, request.id, { currentPassword: BOSS_PW });
   assert.deepEqual(s.adminOrderDetail(admin, order.id).fulfilment.inputs, []);

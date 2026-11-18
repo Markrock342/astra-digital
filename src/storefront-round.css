@@ -657,7 +657,12 @@
 }
 
 /* Customer acceptance round 2: compact cards, finite stock and touch-friendly product detail. */
+.storefront-shell .product-card {
+  display: flex;
+  flex-direction: column;
+}
 .storefront-shell .product-card-info {
+  flex: 1;
   border-top: 0;
   min-width: 0;
 }
@@ -669,8 +674,24 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.storefront-shell .product-card-price strong { font-size: clamp(14px, 3.5vw, 18px); }
-.storefront-shell .product-sold { flex-wrap: wrap; font-size: 12px; }
+.storefront-shell .product-card-price,
+.storefront-shell .product-card-info > p {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.storefront-shell .product-card-price strong,
+.storefront-shell .product-card-info > p strong {
+  font-size: clamp(13px, 3vw, 14.5px);
+  font-weight: 700;
+}
+.storefront-shell .product-sold,
+.storefront-shell .product-sold span {
+  color: var(--text);
+}
+.storefront-shell .product-sold {
+  flex-wrap: wrap;
+  font-size: 12px;
+}
 .storefront-shell .card-action-ready,
 .storefront-shell .card-action-preorder {
   background: var(--accent);
@@ -767,13 +788,45 @@
   color: inherit; background: var(--raised); cursor: pointer;
 }
 .storefront-shell .variant-option-name { display: block; font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
-.storefront-shell .variant-stock-detail { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 5px; font-size: 13px; font-weight: 400; color: var(--muted); }
-.storefront-shell .reference-variants button.variant-stock-in,
-.storefront-shell .all-options-row.variant-stock-in { border: 2px solid #22864b; }
-.storefront-shell .reference-variants button.variant-stock-out,
-.storefront-shell .all-options-row.variant-stock-out { border: 2px solid #d64242; }
-.storefront-shell .reference-variants button.selected,
-.storefront-shell .all-options-row.selected { box-shadow: inset 0 0 0 2px var(--accent); }
+.storefront-shell .variant-stock-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.storefront-shell .variant-stock-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.storefront-shell .variant-stock-pill.variant-stock-in {
+  border: 1.5px solid #22864b;
+  color: #15803d;
+  background: rgb(34 134 75 / 0.06);
+}
+.storefront-shell .variant-stock-pill.variant-stock-out {
+  border: 1.5px solid #d64242;
+  color: #c81e1e;
+  background: rgb(214 66 66 / 0.06);
+}
+:root[data-mode="dark"] .storefront-shell .variant-stock-pill.variant-stock-in {
+  border-color: #34d399;
+  color: #6ee7b7;
+  background: rgb(52 211 153 / 0.12);
+}
+:root[data-mode="dark"] .storefront-shell .variant-stock-pill.variant-stock-out {
+  border-color: #f87171;
+  color: #fca5a5;
+  background: rgb(248 113 113 / 0.12);
+}
 .storefront-shell .option-picker-title { font-size: 16px; margin: 20px 0 12px; }
 .storefront-shell .reference-buy-row .quantity-control,
 .storefront-shell .reference-buy-row .button { height: 52px; min-height: 52px; font-size: 16px; }

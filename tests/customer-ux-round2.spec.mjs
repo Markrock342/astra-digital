@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { createCommerce } from "../server/commerce.mjs";
 import { createApp } from "../server/http.mjs";
 
@@ -10,6 +10,11 @@ test.beforeAll(async () => {
   const password = randomUUID();
   service = createCommerce({ adminPassword: password });
   const admin = service.session(service.login({ email: "admin@astra.local", password }).token);
+  const uploadedCat = await service.adminUploadCategoryImage(admin, {
+    bytes: readFileSync(new URL("../public/library/spotify.webp", import.meta.url)),
+    contentType: "image/webp",
+  });
+  service.adminCreateCategory(admin, { id: "r2-uploaded", name_th: "หมวดอัปโหลด", icon: uploadedCat.icon });
   product = service.saveProduct(admin, { name, description: "Round 2 acceptance product", category: "software", price: 9900, firstLabel: "Basic", active: true });
   service.db.prepare("UPDATE products SET art='stream' WHERE id=?").run(product.id);
   const first = service.adminProductVariants(admin, product.id).variants[0].id;
@@ -17,7 +22,7 @@ test.beforeAll(async () => {
   service.db.prepare("INSERT INTO variants(id,product_id,label,price,active,sort_order,warranty_days) VALUES(?,?,?,?,1,2,0)").run(product.id + "-out", product.id, "Out of stock", 19900);
   service.importCodes(admin, { variantId: first, codes: "R2-E2E-1\nR2-E2E-2\nR2-E2E-3" });
   service.importCodes(admin, { variantId: product.id + "-pro", codes: "R2-PRO-1" });
-  pre = service.saveProduct(admin, { name: "Round2 Preorder", description: "Questions before checkout", category: "software", price: 9900, active: true, preorder: true });
+  pre = service.saveProduct(admin, { name: "Round2 Preorder", description: "Questions before checkout", category: "r2-uploaded", price: 9900, active: true, preorder: true });
   service.adminSetOrderQuestions(admin, pre.id, { fields: [{ label: "วันที่ต้องการ", type: "text", required: true }, { label: "อีเมลติดต่อ", type: "email", required: true }] });
   const auth = service.register({ name: "Round2 UI Buyer", email: "r2-ui@example.invalid", password: randomUUID() });
   buyerToken = auth.token;
@@ -43,25 +48,40 @@ for (const width of [320, 390, 430, 1440]) {
     expect(heading.overflow).toBe(true);
     await expect(card.locator(".product-title svg")).toHaveCount(0);
     await expect(card.locator(".product-card-price")).toHaveText(/99\.00.*-.*399\.00/);
-    await expect(card.locator(".product-sold")).toContainText("เหลือ 4");
-    await expect(card.locator(".product-sold")).toContainText("ขายแล้ว 0");
+    const cardPriceFont = await card.locator(".product-card-price strong").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    expect(cardPriceFont).toBeLessThanOrEqual(15);
+    await expect(card.locator(".product-sold")).toContainText("เหลือ 4 ชิ้น • ขายแล้ว 0 ชิ้น");
+    const soldColors = await card.locator(".product-sold").evaluate((el) => {
+      const baseColor = getComputedStyle(el).color;
+      return [...el.querySelectorAll("span")].every((s) => getComputedStyle(s).color === baseColor);
+    });
+    expect(soldColors).toBe(true);
     await expect(card.locator(".card-action")).toHaveText("ซื้อเลย");
     expect(await card.locator(".card-action").evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
     expect(await card.locator(".product-card-info").evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("0px");
     const preorder = page.locator(".product-card").filter({ hasText: "Round2 Preorder" });
     await expect(preorder.locator(".card-action")).toHaveText("พรีออเดอร์");
+    await expect(preorder.locator(".product-sold")).toContainText("ขายแล้ว 0 ชิ้น");
     await expect(preorder.locator(".product-sold")).not.toContainText("เหลือ");
     const icon = page.locator(".storefront-category-chip .category-icon").first();
     expect(parseFloat(await icon.evaluate((el) => getComputedStyle(el).borderRadius))).toBeLessThanOrEqual(6);
+    const uploadedChipImg = page.locator(".storefront-category-chip .category-icon-upload img").first();
+    await expect(uploadedChipImg).toBeVisible();
+    expect(await uploadedChipImg.evaluate((el) => getComputedStyle(el).transform)).toBe("none");
     await card.click();
     await expect(page.locator(".reference-variants legend")).toHaveText("ตัวเลือกสินค้า");
     const basic = page.locator(".reference-variants button").filter({ hasText: "Basic" });
     const out = page.locator(".reference-variants button").filter({ hasText: "Out of stock" });
-    await expect(basic).toHaveClass(/variant-stock-in/);
-    await expect(basic).toContainText("เหลือ 3");
-    await expect(out).toHaveClass(/variant-stock-out/);
-    await expect(out).toContainText("สินค้าหมด");
-    await expect(out).toContainText("ขายแล้ว 0");
+    await expect(basic).not.toHaveClass(/variant-stock-in/);
+    const basicPill = basic.locator(".variant-stock-pill.variant-stock-in");
+    await expect(basicPill).toHaveText("เหลือ 3 ชิ้น");
+    expect(parseFloat(await basicPill.evaluate((el) => getComputedStyle(el).borderTopWidth))).toBeGreaterThanOrEqual(1);
+    await expect(basic).toContainText("ขายแล้ว 0 ชิ้น");
+    await expect(out).not.toHaveClass(/variant-stock-out/);
+    const outPill = out.locator(".variant-stock-pill.variant-stock-out");
+    await expect(outPill).toHaveText("สินค้าหมด");
+    expect(parseFloat(await outPill.evaluate((el) => getComputedStyle(el).borderTopWidth))).toBeGreaterThanOrEqual(1);
+    await expect(out).toContainText("ขายแล้ว 0 ชิ้น");
     await out.click();
     await expect(page.locator(".reference-buy-row")).toHaveCount(0);
     await basic.click();
@@ -90,6 +110,8 @@ for (const width of [320, 390, 430, 1440]) {
     await expect(modal).toBeVisible();
     await modal.getByRole("button", { name: "ปิดรูปขยาย" }).tap();
     await expect(modal).not.toBeVisible();
+    // Closing the zoom modal must not focus the hidden skip-to-content pill onto the viewport.
+    expect(await page.locator(".skip-link").evaluate((el) => el.getBoundingClientRect().bottom)).toBeLessThanOrEqual(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     if (process.env.SHOTS) {
       mkdirSync(process.env.SHOTS, { recursive: true });

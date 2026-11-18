@@ -206,10 +206,11 @@ export function createLaunchCleanupApis({
       soldInventory,
       // Not deleted: returned to stock as free seats.
       seatsReleased,
-      fulfilment: tableExists(one, "order_fulfilment") && orderIds.length
+      fulfilment: tableExists(one, "order_fulfilment") && (orderIds.length || reservationIds.length)
         ? n(
-            `SELECT COUNT(*) AS n FROM order_fulfilment WHERE order_id IN (${orderIds.map(() => "?").join(",")})`,
+            `SELECT COUNT(*) AS n FROM order_fulfilment WHERE order_id IN (${[...orderIds, ...reservationIds].map(() => "?").join(",")})`,
             ...orderIds,
+            ...reservationIds,
           )
         : 0,
       financeSandbox: tableExists(one, "finance_day_closes")
@@ -307,14 +308,15 @@ export function createLaunchCleanupApis({
           if (tableExists(one, "chat_uploads"))
             run(`DELETE FROM chat_uploads WHERE user_id IN (${marks})`, ...customerIds);
 
-          if (orderIds.length) {
-            const om = orderIds.map(() => "?").join(",");
+          const allOrderIds = [...orderIds, ...reservationIds];
+          if (allOrderIds.length) {
+            const om = allOrderIds.map(() => "?").join(",");
             if (tableExists(one, "order_notes"))
-              run(`DELETE FROM order_notes WHERE order_id IN (${om})`, ...orderIds);
+              run(`DELETE FROM order_notes WHERE order_id IN (${om})`, ...allOrderIds);
             if (tableExists(one, "order_replacements"))
-              run(`DELETE FROM order_replacements WHERE order_id IN (${om})`, ...orderIds);
+              run(`DELETE FROM order_replacements WHERE order_id IN (${om})`, ...allOrderIds);
             if (tableExists(one, "order_fulfilment"))
-              run(`DELETE FROM order_fulfilment WHERE order_id IN (${om})`, ...orderIds);
+              run(`DELETE FROM order_fulfilment WHERE order_id IN (${om})`, ...allOrderIds);
           }
           // Seats sold to test customers go back to stock (see planCounts).
           run(

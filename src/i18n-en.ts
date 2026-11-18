@@ -2,6 +2,8 @@
 export const EN_STRINGS: Record<string, string> = {
   "พรีออเดอร์": "Preorder",
   "เหลือ {n}": "{n} left",
+  "เหลือ {n} ชิ้น": "{n} left",
+  "ขายแล้ว {n} ชิ้น": "Sold {n}",
   "พร้อมส่ง": "Ready to ship",
   "ตัวเลือกสินค้า": "Product options",
   "รูปสินค้า": "Product images",

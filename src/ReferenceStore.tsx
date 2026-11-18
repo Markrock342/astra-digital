@@ -42,7 +42,7 @@ import { CategoryChips, categoryName, useCategoryParam } from "./Categories";
 import { ForgotPassword, TURNSTILE_WAIT, TurnstileBox, useAuthConfig } from "./AccountRecovery";
 import { StockWatchButton } from "./StockWatch";
 import { ProductGallery } from "./ProductGallery";
-import { VariantStock, variantStockClass } from "./VariantStock";
+import { VariantStock } from "./VariantStock";
 import { ShopClosedNote } from "./ShopClosed";
 import { EmailVerifyNotice, needsEmailVerification } from "./EmailVerify";
 import { ReviewReply } from "./ReviewReply";
@@ -643,7 +643,7 @@ export function ReferenceProduct({ id }: { id: string }) {
             {product.variants.map((v) => (
               <button
                 key={v.id}
-                className={(variant?.id === v.id ? "selected" : "") + variantStockClass(product, v)}
+                className={variant?.id === v.id ? "selected" : ""}
                 aria-pressed={variant?.id === v.id}
                 onClick={() => {
                   setSelected(v.id);

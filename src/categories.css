@@ -68,7 +68,11 @@
   border-radius: 4px;
 }
 .storefront-category-chip .category-icon img {
-  transform: scale(1.7);
+  transform: scale(1.12);
+}
+.storefront-category-chip .category-icon.category-icon-upload img {
+  transform: none;
+  object-fit: contain;
 }
 .storefront-category-chip .chip-count {
   min-width: 22px;
@@ -174,8 +178,16 @@
   outline-offset: 2px;
 }
 .home-category-card .category-icon {
-  border-radius: var(--radius-sm, 10px);
+  border-radius: 6px;
   box-shadow: inset 0 0 0 1px var(--border);
+}
+.home-category-card .category-icon img {
+  transform: scale(1.12);
+}
+.home-category-card .category-icon.category-icon-upload img,
+.category-icon-upload img {
+  transform: none;
+  object-fit: contain;
 }
 .home-category-text {
   display: grid;

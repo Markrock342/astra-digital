@@ -16,6 +16,7 @@ export function ProductGallery({ product }: { product: Product }) {
   const [zoomed, setZoomed] = useState(false);
   const slider = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
+  const trigger = useRef<HTMLButtonElement | null>(null);
   const index = Math.min(current, sources.length - 1);
   const art = (i: number) => sources[i] ? <img src={sources[i]!} alt={product.name} draggable={false} />
     : <Art type={product.art} name={product.name} />;
@@ -26,12 +27,14 @@ export function ProductGallery({ product }: { product: Product }) {
   useEffect(() => {
     if (!zoomed || !dialog.current) return;
     const el = dialog.current;
+    const opener = trigger.current ?? slider.current?.querySelectorAll<HTMLButtonElement>(".gallery-slide")[index] ?? null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     el.showModal();
     return () => {
-      el.close();
+      if (el.open) el.close();
       document.body.style.overflow = previousOverflow;
+      opener?.focus({ preventScroll: true });
     };
   }, [zoomed]);
   return (
@@ -44,7 +47,7 @@ export function ProductGallery({ product }: { product: Product }) {
         {sources.map((src, i) => (
           <button key={src ?? i} type="button" className="reference-main-image gallery-slide"
             aria-label={t("ขยายรูปสินค้า {n}", { n: i + 1 })}
-            onClick={() => { setCurrent(i); setZoomed(true); }}>
+            onClick={(e) => { trigger.current = e.currentTarget; setCurrent(i); setZoomed(true); }}>
             {art(i)}
             <span className="gallery-zoom-hint" aria-hidden="true"><ZoomIn size={18} /></span>
           </button>

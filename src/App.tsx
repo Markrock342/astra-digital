@@ -606,11 +606,16 @@ export function ProductCard({ product }: { product: Product }) {
               <>
                 <Star size={13} className="rating-star" />
                 {product.rating.average?.toFixed(1)}
-                <span> · </span>
+                <span> • </span>
               </>
             )}
-            {!preorder && finiteStock && <span>{t("เหลือ {n}", { n: remaining })} · </span>}
-            {t("ขายแล้ว")}{" "}{product.sold} <span>{t("รายการ")}</span>
+            {!preorder && finiteStock && (
+              <>
+                <span>{t("เหลือ {n} ชิ้น", { n: remaining })}</span>
+                <span> • </span>
+              </>
+            )}
+            <span>{t("ขายแล้ว {n} ชิ้น", { n: product.sold })}</span>
           </div>
         <span
           className={

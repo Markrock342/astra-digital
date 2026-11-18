@@ -10,7 +10,7 @@ import { EN_STRINGS } from "./i18n-en";
 import { WasPrice } from "./Pricing";
 import type { OptionGroup, Product, Variant } from "./types";
 import "./options.css";
-import { VariantStock, variantStockClass } from "./VariantStock";
+import { VariantStock } from "./VariantStock";
 
 const EN_OPTIONS: Record<string, string> = {
   "ล้าง": "Clear",
@@ -234,7 +234,7 @@ export function AllOptionsList({
           <li key={v.id}>
             <button
               type="button"
-              className={"all-options-row" + (v.id === selectedId ? " selected" : "") + (v.available ? "" : " is-out") + variantStockClass(product, v)}
+              className={"all-options-row" + (v.id === selectedId ? " selected" : "") + (v.available ? "" : " is-out")}
               aria-pressed={v.id === selectedId}
               onClick={() => onSelect(v)}
             >
