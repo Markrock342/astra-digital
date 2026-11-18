@@ -604,7 +604,6 @@ export function ReferenceProduct({ id }: { id: string }) {
       <div className="reference-product-grid">
         <ProductGallery key={product.id} product={product} />
         <div className="reference-product-info">
-          {!!product.preorder && <span className="preorder-pill">{t("สั่งจอง")}</span>}
           <h1>{product.name}</h1>
           {product.rating?.count > 0 && (
             <div className="reference-product-rating">
@@ -622,11 +621,6 @@ export function ReferenceProduct({ id }: { id: string }) {
             <PriceDisplay variant={variant} className="reference-price" />
           ) : (
             <FromPrice product={product} selection={selection} />
-          )}
-          {!!product.preorder && (product.preorderTerms?.mode ?? "full") === "full" && (
-            <p className="preorder-how">
-              {t("สินค้าพรีออเดอร์: ชำระแล้วได้เลขคิวทันที ร้านส่ง ID และรหัสผ่านตามลำดับคิว และแจ้งเตือนในเว็บเมื่อส่งแล้ว")}
-            </p>
           )}
           {grouped && (
             <OptionPicker
@@ -695,16 +689,12 @@ export function ReferenceProduct({ id }: { id: string }) {
           )}
           {variant && <PreorderRules product={product} total={variant.price * quantity} quantity={quantity} />}
           {variant && <PurchaseLimitNote variant={variant} />}
-          <p className="reference-delivery-note">
-            <KeyRound size={15} />
-            {!product.preorder && deliveryNote(product.deliveryType)
-              ? deliveryNote(product.deliveryType)
-              : product.preorder && product.preorderTerms?.mode === "free"
-              ? t("จองฟรี ไม่ต้องจ่ายตอนนี้ ได้เลขคิวทันที")
-              : product.preorder
-              ? t("ชำระตอนจอง ได้เลขคิว รับของในประวัติการซื้อ")
-              : t("สินค้าดิจิทัล ได้รับทันทีหลังชำระเงินในหน้าประวัติการซื้อ")}
-          </p>
+          {!product.preorder && deliveryNote(product.deliveryType) && (
+            <p className="reference-delivery-note">
+              <KeyRound size={15} />
+              {deliveryNote(product.deliveryType)}
+            </p>
+          )}
           {grouped && (
             <AllOptionsList
               product={product}
@@ -716,7 +706,7 @@ export function ReferenceProduct({ id }: { id: string }) {
             />
           )}
           <section className="reference-product-description">
-            <h2>{t("รายละเอียด")}</h2>
+            <h2>{t("รายละเอียดสินค้า")}</h2>
             <p>{product.description}</p>
           </section>
         </div>

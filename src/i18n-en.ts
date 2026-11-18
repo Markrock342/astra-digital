@@ -6,6 +6,7 @@ export const EN_STRINGS: Record<string, string> = {
   "ขายแล้ว {n} ชิ้น": "Sold {n}",
   "พร้อมส่ง": "Ready to ship",
   "ตัวเลือกสินค้า": "Product options",
+  "รายละเอียดสินค้า": "Product description",
   "รูปสินค้า": "Product images",
   "ขยายรูปสินค้า {n}": "Enlarge product image {n}",
   "รูปสินค้าขยาย": "Enlarged product image",

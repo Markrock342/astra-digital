@@ -139,7 +139,7 @@ test("1–5 hero: plain background, shop name display title, login-aware buttons
     expect(style.weight).toBeGreaterThanOrEqual(800);
     expect(style.size).toBeGreaterThanOrEqual(36);
     expect(style.align).toBe("center");
-    expect(style.color).toBe((await accentOf(page)).text);
+    expect(style.color).toBe((await accentOf(page)).fill);
     // The small header logo stays.
     await expect(page.locator("header .brand-logo img")).toBeVisible();
     // 3–5. Logged out: "สินค้าทั้งหมด" (no arrow) + "เข้าสู่ระบบ".

@@ -23,7 +23,7 @@
   line-height: 1;
   letter-spacing: -0.035em;
   text-transform: uppercase;
-  color: var(--accent-text);
+  color: var(--accent);
   text-wrap: balance;
   overflow-wrap: anywhere;
   animation: rise 0.7s var(--ease-out-expo) both;

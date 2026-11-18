@@ -95,6 +95,10 @@ for (const width of [320, 390, 430, 1440]) {
     await expect(page.getByRole("button", { name: "สอบถามสินค้านี้ในแชท" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "แชทกับร้าน", exact: true })).toBeVisible();
     await expect(page.locator(".back-link-lg")).toBeVisible();
+    await expect(page.locator(".preorder-pill")).toHaveCount(0);
+    await expect(page.locator(".preorder-how")).toHaveCount(0);
+    await expect(page.locator(".reference-delivery-note")).toHaveCount(0);
+    await expect(page.locator(".reference-product-description h2")).toHaveText("รายละเอียดสินค้า");
     const slider = page.locator(".product-gallery-slider");
     const bounds = await slider.boundingBox();
     expect(bounds.height).toBeGreaterThanOrEqual(240);
@@ -132,6 +136,9 @@ for (const width of [320, 390, 430, 1440]) {
     const activityBg = await page.locator(".activity-row .activity-avatar").first().evaluate((el) => getComputedStyle(el).backgroundColor);
     const themeAccentBg = await page.locator(".card-action-ready").first().evaluate((el) => getComputedStyle(el).backgroundColor);
     expect(activityBg).toBe(themeAccentBg);
+    const heroColor = await page.locator(".hero-display").evaluate((el) => getComputedStyle(el).color);
+    const heroCtaBg = await page.locator(".hero-cta").evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(heroColor).toBe(heroCtaBg);
     expect(errors).toEqual([]);
     await context.close();
   });
@@ -140,6 +147,10 @@ for (const width of [320, 390, 430, 1440]) {
 test("preorder answers are filled in the browser and saved with the checkout order", async ({ page }) => {
   await page.context().addCookies([{ name: "astra_session", value: buyerToken, url: base }]);
   await page.goto(base + "/products/" + pre.id);
+  await expect(page.locator(".preorder-pill")).toHaveCount(0);
+  await expect(page.locator(".preorder-how")).toHaveCount(0);
+  await expect(page.locator(".reference-delivery-note")).toHaveCount(0);
+  await expect(page.locator(".reference-product-description h2")).toHaveText("รายละเอียดสินค้า");
   await page.locator(".reference-buy-row .button.primary").click();
   await expect(page).toHaveURL(/\/checkout/);
   const pay = page.locator(".cart-bar .button.primary");
