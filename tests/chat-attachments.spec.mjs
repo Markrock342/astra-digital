@@ -58,9 +58,13 @@ const number = () => orderId.slice(0, 8).toUpperCase();
 test("customer: ask about a product, paste a screenshot, send; then attach an order from the menu", async ({ page }) => {
   await as(page.context(), buyerToken);
   await page.goto(base + "/products/" + product.id);
-  await page.getByRole("button", { name: "สอบถามสินค้านี้ในแชท" }).click();
+  await expect(page.getByRole("button", { name: "สอบถามสินค้านี้ในแชท" })).toHaveCount(0);
+  await page.getByRole("button", { name: "แชทกับร้าน", exact: true }).click();
   const panel = page.getByRole("dialog", { name: "แชทกับร้าน" });
   await expect(panel).toBeVisible();
+  await panel.getByRole("button", { name: "แนบรูป สินค้า หรือคำสั่งซื้อ" }).click();
+  await page.getByRole("menuitem", { name: "สินค้า", exact: true }).click();
+  await page.getByRole("dialog", { name: "เลือกสินค้า", exact: true }).getByRole("button", { name: /Chat Card Stream/ }).click();
   await expect(page.locator(".chat-attach-chip")).toContainText("Chat Card Stream");
   const box = panel.getByLabel("ข้อความ");
   await pasteImage(box);

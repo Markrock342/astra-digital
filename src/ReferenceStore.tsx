@@ -41,7 +41,8 @@ import type { Order, Product, Review, User } from "./types";
 import { CategoryChips, categoryName, useCategoryParam } from "./Categories";
 import { ForgotPassword, TURNSTILE_WAIT, TurnstileBox, useAuthConfig } from "./AccountRecovery";
 import { StockWatchButton } from "./StockWatch";
-import { AskInChat } from "./ChatAttachments";
+import { ProductGallery } from "./ProductGallery";
+import { VariantStock, variantStockClass } from "./VariantStock";
 import { ShopClosedNote } from "./ShopClosed";
 import { EmailVerifyNotice, needsEmailVerification } from "./EmailVerify";
 import { ReviewReply } from "./ReviewReply";
@@ -534,7 +535,6 @@ export function ReferenceProduct({ id }: { id: string }) {
     () => new URLSearchParams(location.search).get("variant") ?? "",
   );
   const [quantity, setQuantity] = useState(1);
-  const [image, setImage] = useState(0);
   const fallback =
     product?.variants.find((v) => v.id === selected) ??
     product?.variants.find((v) => v.available) ??
@@ -595,46 +595,14 @@ export function ReferenceProduct({ id }: { id: string }) {
       go("/cart");
     }
   };
-  // Uploaded images (admin › รูปสินค้า) come first; the bundled artwork is the fallback.
-  const uploaded = product.images ?? [];
-  const imageCount = uploaded.length
-    ? uploaded.length
-    : product.art === "stream" ? 3 : product.art === "cinema" ? 2 : 1;
-  const bundled = (i: number) =>
-    "/products/" + (product.art === "stream" ? "disney" : "monomax") + (i ? "-" + i : "") + ".webp";
-  const current = Math.min(image, imageCount - 1);
   return (
     <main className="container page-main reference-product-page">
-      <Link to="/products" className="back-link">
+      <Link to="/products" className="back-link back-link-lg">
         <ArrowLeft size={16} />
         {t("สินค้าทั้งหมด")}
       </Link>
       <div className="reference-product-grid">
-        <div className="reference-gallery">
-          <div className="reference-main-image">
-            {uploaded.length ? (
-              <img src={uploaded[current].url} alt={product.name} />
-            ) : ["stream", "cinema"].includes(product.art) ? (
-              <img src={bundled(current)} alt={product.name} />
-            ) : (
-              <Art type={product.art} name={product.name} />
-            )}
-          </div>
-          {imageCount > 1 && (
-            <div className="reference-thumbnails">
-              {Array.from({ length: imageCount }, (_, i) => (
-                <button
-                  className={current === i ? "selected" : ""}
-                  key={i}
-                  onClick={() => setImage(i)}
-                  aria-label={t("รูปสินค้า ") + (i + 1)}
-                >
-                  <img src={uploaded.length ? uploaded[i].url : bundled(i)} alt="" />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <ProductGallery key={product.id} product={product} />
         <div className="reference-product-info">
           {!!product.preorder && <span className="preorder-pill">{t("สั่งจอง")}</span>}
           <h1>{product.name}</h1>
@@ -671,27 +639,20 @@ export function ReferenceProduct({ id }: { id: string }) {
             />
           )}
           {!grouped && <fieldset className="reference-variants">
-            <legend>{t("ตัวเลือก")}</legend>
+            <legend>{t("ตัวเลือกสินค้า")}</legend>
             {product.variants.map((v) => (
               <button
                 key={v.id}
-                className={variant?.id === v.id ? "selected" : ""}
+                className={(variant?.id === v.id ? "selected" : "") + variantStockClass(product, v)}
+                aria-pressed={variant?.id === v.id}
                 onClick={() => {
                   setSelected(v.id);
                   setQuantity(1);
                 }}
               >
                 <span>
-                  {v.label}
-                  <small>
-                    {product.preorder
-                      ? ""
-                      : v.stockStatus === "low"
-                        ? t("เหลือน้อย")
-                        : v.stockStatus !== "out"
-                          ? t("มีสินค้า")
-                          : t("สินค้าหมด")}
-                  </small>
+                  <span className="variant-option-name">{v.label}</span>
+                  <VariantStock product={product} variant={v} />
                   <WarrantyDays days={v.warranty_days} />
                 </span>
                 <span className="variant-price-stack">
@@ -744,7 +705,6 @@ export function ReferenceProduct({ id }: { id: string }) {
               ? t("ชำระตอนจอง ได้เลขคิว รับของในประวัติการซื้อ")
               : t("สินค้าดิจิทัล ได้รับทันทีหลังชำระเงินในหน้าประวัติการซื้อ")}
           </p>
-          <AskInChat product={{ id: product.id, name: product.name, imageUrl: product.imageUrl }} />
           {grouped && (
             <AllOptionsList
               product={product}

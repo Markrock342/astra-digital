@@ -567,17 +567,16 @@ export function ProductCard({ product }: { product: Product }) {
     (best, v) => (!best || v.price < best.price ? v : best),
     undefined,
   );
-  // One clear action under the price: solid = ready stock, outlined = preorder. The whole card
-  // is the link (options are picked on the product page), so this is a styled label, not a
-  // nested button.
-  const choose = (product.optionGroups?.length ?? 0) > 0 || product.variants.length > 1;
+  const prices = product.variants.map((v) => v.price);
+  const min = prices.length ? Math.min(...prices) : 0;
+  const max = prices.length ? Math.max(...prices) : 0;
+  const finiteStock = product.variants.every((v) => v.stockRemaining != null);
+  const remaining = product.variants.reduce((n, v) => n + (v.stockRemaining ?? 0), 0);
   const action = preorder
-    ? t("จองล่วงหน้า")
+    ? t("พรีออเดอร์")
     : soldOut
       ? t("สินค้าหมด")
-      : choose
-        ? t("เลือกตัวเลือก")
-        : t("ซื้อเลย");
+      : t("ซื้อเลย");
   return (
     <Link
       to={"/products/" + product.id}
@@ -591,19 +590,17 @@ export function ProductCard({ product }: { product: Product }) {
       </div>
       <div className="product-card-info">
         <div className="product-title">
-          <h3>{product.name}</h3>
-          <ArrowUpRight size={18} />
+          <h3 title={product.name}>{product.name}</h3>
         </div>
         <p className="product-card-price">
           <span>
             <strong>
-              {money(Math.min(...product.variants.map((v) => v.price)))}
+              {money(min)}{max > min ? " - " + money(max) : ""}
             </strong>
           </span>
           {cheapest && <WasPrice variant={cheapest} />}
           {cheapest && <DiscountBadge variant={cheapest} />}
         </p>
-        {(product.sold > 0 || product.rating?.count > 0) && (
           <div className="product-sold">
             {product.rating?.count > 0 && (
               <>
@@ -612,9 +609,9 @@ export function ProductCard({ product }: { product: Product }) {
                 <span> · </span>
               </>
             )}
+            {!preorder && finiteStock && <span>{t("เหลือ {n}", { n: remaining })} · </span>}
             {t("ขายแล้ว")}{" "}{product.sold} <span>{t("รายการ")}</span>
           </div>
-        )}
         <span
           className={
             "card-action " +

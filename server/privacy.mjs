@@ -246,7 +246,9 @@ export function createPrivacyApis({
       );
       // Checkout answers for shop-fulfilled products (e.g. a Gmail to invite) are personal data.
       run(
-        `UPDATE order_fulfilment SET inputs_enc=NULL WHERE order_id IN (SELECT id FROM orders WHERE user_id=?)`,
+        `UPDATE order_fulfilment SET inputs_enc=NULL WHERE order_id IN (
+          SELECT id FROM orders WHERE user_id=? UNION ALL SELECT id FROM reservations WHERE user_id=?)`,
+        subject.id,
         subject.id,
       );
       // Buyer details typed for receipts / tax-invoice requests are cleared; an open request is

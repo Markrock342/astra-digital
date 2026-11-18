@@ -5,8 +5,11 @@ export type CatalogVariant = {
   label: string;
   /** Integer satang */
   price: number;
-  /** Available unsold units; advisory until payment transaction */
-  stock: number;
+  /** Sellable units; null for preorder or shop fulfilment without finite stock. Advisory until payment. */
+  stockRemaining: number | null;
+  stockStatus: "in" | "low" | "out";
+  available: boolean;
+  sold: number;
 };
 
 export type CatalogRating = {

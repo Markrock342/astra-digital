@@ -51,7 +51,7 @@ const noticesOf = (s, userId) =>
 
 // ---------------------------------------------------------------- public stock
 
-test("public product JSON never contains a stock number, for any caller", async (t) => {
+test("public product JSON keeps raw inventory private while exposing sellable stock", async (t) => {
   const { s, merchant, tokens } = fixture(t);
   // A low variant (1 left) and a big one (> 10) so neither the real count nor the old cap shows.
   s.db
@@ -79,11 +79,13 @@ test("public product JSON never contains a stock number, for any caller", async 
   const low = detail.variants.find((v) => v.id === "stream-plus-30");
   assert.equal(low.stockStatus, "low");
   assert.equal(low.available, true);
+  assert.equal(low.stockRemaining, 1);
   const big = detail.variants.find((v) => v.id === "stream-plus-90");
   assert.equal(big.stockStatus, "in");
   // Preorder products can always be ordered; they have no ready stock.
   const pre = JSON.parse((await get("/api/products/cinema-max")).text).product;
   assert.ok(pre.variants.every((v) => v.available === true));
+  assert.ok(pre.variants.every((v) => v.stockRemaining === null));
 
   // Admin APIs keep the exact count.
   const adminView = s.adminOverview(merchant);

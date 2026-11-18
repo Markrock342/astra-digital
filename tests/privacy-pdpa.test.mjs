@@ -211,3 +211,15 @@ test("PDPA reject: admin can decline a request; customer stays active and may as
   );
   assert.equal(s.requestAccountDeletion(user, {}).status, "PENDING");
 });
+
+test("approved deletion clears preorder questionnaire answers as well as ordinary orders", (t) => {
+  const { s, user, admin } = fixture(t);
+  const p = s.saveProduct(admin, { name: "Privacy preorder", description: "Questionnaire privacy regression", category: "software", price: 9900, active: true, preorder: true });
+  const v = s.adminProductVariants(admin, p.id).variants[0].id;
+  const f = s.adminSetOrderQuestions(admin, p.id, { fields: [{ label: "Contact email", type: "email", required: true }] }).fields[0];
+  const order = s.createOrder(user, { variantId: v, quantity: 1, requestKey: "privacy-preorder-questions", deliveryInputs: { [f.id]: "private@example.invalid" } });
+  assert.equal(s.adminOrderDetail(admin, order.id).fulfilment.inputs.length, 1);
+  const request = s.requestAccountDeletion(user, {});
+  s.approvePrivacyDeletion(admin, request.id, { currentPassword: BOSS_PW });
+  assert.deepEqual(s.adminOrderDetail(admin, order.id).fulfilment.inputs, []);
+});

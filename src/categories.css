@@ -65,7 +65,7 @@
 .storefront-category-chip .category-icon {
   width: 26px !important;
   height: 26px !important;
-  border-radius: 999px;
+  border-radius: 4px;
 }
 .storefront-category-chip .category-icon img {
   transform: scale(1.7);

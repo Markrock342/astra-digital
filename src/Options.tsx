@@ -10,6 +10,7 @@ import { EN_STRINGS } from "./i18n-en";
 import { WasPrice } from "./Pricing";
 import type { OptionGroup, Product, Variant } from "./types";
 import "./options.css";
+import { VariantStock, variantStockClass } from "./VariantStock";
 
 const EN_OPTIONS: Record<string, string> = {
   "ล้าง": "Clear",
@@ -149,6 +150,7 @@ export function OptionPicker({
   const any = groups.some((g) => selection[g.id]);
   return (
     <div className="option-picker">
+      <h2 className="option-picker-title">{t("ตัวเลือกสินค้า")}</h2>
       {groups.map((g) => {
         const stateOf = (valueId: string) => valueState(product, groups, selection, g.id, valueId);
         const chosen = g.values.find((v) => v.id === selection[g.id]);
@@ -232,11 +234,11 @@ export function AllOptionsList({
           <li key={v.id}>
             <button
               type="button"
-              className={"all-options-row" + (v.id === selectedId ? " selected" : "") + (v.available ? "" : " is-out")}
+              className={"all-options-row" + (v.id === selectedId ? " selected" : "") + (v.available ? "" : " is-out") + variantStockClass(product, v)}
               aria-pressed={v.id === selectedId}
               onClick={() => onSelect(v)}
             >
-              <span className="all-options-label">{v.label}</span>
+              <span className="all-options-label"><span className="variant-option-name">{v.label}</span><VariantStock product={product} variant={v} /></span>
               <span className="all-options-price">
                 {!product.preorder && v.stockStatus === "out" && <small>{t("หมด")}</small>}
                 <WasPrice variant={v} />

@@ -6,7 +6,11 @@ export type Variant = {
   price: number;
   /** 0 = no warranty. */
   warranty_days?: number;
-  /** Public catalog: a status only, never a stock number. */
+  /** Sellable units; null for preorders and shop-fulfilled products without finite stock. */
+  stockRemaining?: number | null;
+  /** Purchased units for this option. */
+  sold?: number;
+  /** Public availability status. */
   stockStatus: "in" | "low" | "out";
   /** Can be ordered now (in stock, or a preorder product). */
   available: boolean;

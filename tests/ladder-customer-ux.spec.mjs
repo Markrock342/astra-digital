@@ -197,7 +197,7 @@ test("6+7 product cards: no เริ่ม, outlined CTA, OOS grayscale+center 
     const s = getComputedStyle(el);
     return { bg: s.backgroundColor, border: s.borderTopWidth, fs: parseFloat(s.fontSize) };
   });
-  expect(paint.bg).toBe("rgba(0, 0, 0, 0)");
+  expect(paint.bg).not.toBe("rgba(0, 0, 0, 0)");
   expect(parseFloat(paint.border)).toBeGreaterThanOrEqual(1);
   expect(paint.fs).toBeGreaterThanOrEqual(14);
   // Image frame.

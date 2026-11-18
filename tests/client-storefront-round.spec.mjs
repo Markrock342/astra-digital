@@ -481,11 +481,11 @@ test("11 product cards: no preorder badge, action under the price, ready vs preo
     const preorder = card("MONOMAX").locator(".card-action");
     const ready_ = card("Round Cheap Pack").locator(".card-action");
     const options = card("Round Option Pack").locator(".card-action");
-    await expect(preorder).toHaveText("จองล่วงหน้า");
+    await expect(preorder).toHaveText("พรีออเดอร์");
     await expect(preorder).toHaveAttribute("data-kind", "preorder");
     await expect(ready_).toHaveAttribute("data-kind", "ready");
     await expect(ready_).toHaveText("ซื้อเลย");
-    await expect(options).toHaveText("เลือกตัวเลือก");
+    await expect(options).toHaveText("ซื้อเลย");
     await expect(options).toHaveAttribute("data-kind", "ready");
     // Below the price.
     for (const name of ["MONOMAX", "Round Cheap Pack"]) {
@@ -494,7 +494,7 @@ test("11 product cards: no preorder badge, action under the price, ready vs preo
       expect(action.y).toBeGreaterThanOrEqual(price.y + price.height);
       expect(Math.round(action.height)).toBeGreaterThanOrEqual(44);
     }
-    // Ready and preorder share the same outlined accent frame (customer UX).
+    // Round 2: ready and preorder use a filled accent button.
     const { fill } = await accentOf(page);
     const paint = (loc) =>
       loc.evaluate((el) => {
@@ -502,10 +502,10 @@ test("11 product cards: no preorder badge, action under the price, ready vs preo
         return { bg: s.backgroundColor, border: s.borderTopColor };
       });
     const readyPaint = await paint(ready_);
-    expect(readyPaint.bg).toBe("rgba(0, 0, 0, 0)");
+    expect(readyPaint.bg).toBe(fill);
     expect(readyPaint.border).toBe(fill);
     const outlined = await paint(preorder);
-    expect(outlined.bg).toBe("rgba(0, 0, 0, 0)");
+    expect(outlined.bg).toBe(fill);
     expect(outlined.border).toBe(fill);
     expect(await noSideScroll(page)).toBe(true);
     await shot(page, "products-390-" + mode);

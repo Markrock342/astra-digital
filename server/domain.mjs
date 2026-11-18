@@ -1350,6 +1350,17 @@ export function createCommerceCore({
     const manual = row.delivery_type === "manual";
     // Option groups (option-groups.mjs): each variant names one value per group.
     const { optionGroups: groups, options } = optionGroups.publicOptions(p.id);
+    const soldByVariant = new Map(all(
+      `SELECT variant_id,SUM(quantity) AS sold FROM (
+         SELECT o.variant_id,o.quantity FROM orders o JOIN variants v ON v.id=o.variant_id
+         WHERE v.product_id=? AND o.status='DELIVERED'
+         UNION ALL
+         SELECT r.variant_id,r.quantity FROM reservations r JOIN variants v ON v.id=r.variant_id
+         WHERE v.product_id=? AND (r.status='DELIVERED' OR
+           (r.status='PREORDER' AND EXISTS (SELECT 1 FROM payments pay
+            WHERE pay.reservation_id=r.id AND pay.status='SUCCEEDED')))
+       ) GROUP BY variant_id`, p.id, p.id,
+    ).map((r) => [r.variant_id, Number(r.sold)]));
     return {
       ...p,
       optionGroups: groups,
@@ -1374,8 +1385,9 @@ export function createCommerceCore({
           user,
           at,
         ),
-        // Customers never see a stock number: only a status and whether it can be
-        // ordered now (preorder = always). Exact counts stay on the admin APIs.
+        // Only sellable stock is public; never expose inventory or credential records.
+        stockRemaining: p.preorder || manual ? null : Number(stock),
+        sold: soldByVariant.get(v.id) ?? 0,
         stockStatus: manual ? "in" : stock <= 0 ? "out" : stock <= lowAt ? "low" : "in",
         available: manual || !!p.preorder || stock > 0,
       })),
@@ -1384,10 +1396,7 @@ export function createCommerceCore({
         "SELECT AVG(r.rating) AS average,COUNT(*) AS count FROM reviews r JOIN orders o ON o.id=r.order_id JOIN variants v ON v.id=o.variant_id WHERE v.product_id=? AND r.hidden_at IS NULL",
         p.id,
       ),
-      sold: one(
-        "SELECT COALESCE(SUM(o.quantity),0) AS count FROM orders o JOIN variants v ON v.id=o.variant_id WHERE v.product_id=? AND o.status='DELIVERED'",
-        p.id,
-      ).count,
+      sold: [...soldByVariant.values()].reduce((sum, n) => sum + n, 0),
       // Preorder terms the customer sees before reserving (preorder.mjs); null = ready stock.
       preorderTerms: preorders.publicTerms(p),
     };

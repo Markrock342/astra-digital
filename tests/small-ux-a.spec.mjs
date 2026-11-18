@@ -40,7 +40,7 @@ async function as(page, token) {
 }
 const noSideScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
 
-test("storefront gets a stock status, never a number, and still sells", async ({ page }) => {
+test("storefront exposes sellable stock without inventory records and still sells", async ({ page }) => {
   for (const path of ["/api/products", "/api/products/stream-plus"]) {
     const text = await (await page.request.get(base + path)).text();
     expect(text).not.toMatch(/"stock"\s*:/);
@@ -53,7 +53,7 @@ test("storefront gets a stock status, never a number, and still sells", async ({
   const soldOut = variants.find((v) => v.id === "stream-plus-30");
   const onSale = variants.find((v) => v.available);
   expect(soldOut.stockStatus).toBe("out");
-  const options = page.getByRole("group", { name: "ตัวเลือก" });
+  const options = page.getByRole("group", { name: "ตัวเลือกสินค้า", exact: true });
   await expect(options.getByRole("button", { name: soldOut.label })).toContainText("สินค้าหมด");
   await options.getByRole("button", { name: onSale.label }).click();
   const plus = page.getByRole("button", { name: "เพิ่มจำนวน" });

@@ -108,6 +108,8 @@ test("copy mode copies the picked orders' accounts", async ({ page }) => {
   await expect(page).toHaveURL(base + "/orders");
   if (shots) await page.screenshot({ path: shots + "/copy.png", animations: "disabled" });
   await bar.getByRole("button", { name: "คัดลอก", exact: true }).click();
+  // The click starts an API request and asynchronous clipboard write; wait for completion.
+  await expect(page.getByText("คัดลอก 3 บรรทัดแล้ว", { exact: true })).toBeVisible();
   const text = await page.evaluate(() => navigator.clipboard.readText());
   const lines = text.split("\n");
   expect(lines).toHaveLength(3);

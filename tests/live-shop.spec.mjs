@@ -133,7 +133,7 @@ test("admin creates a product, prices it, opens it and imports codes", async ({
   }
 });
 
-test("customer sees a stock label, never a count or a code, and orders wait for payment", async ({
+test("customer sees sellable stock without secret codes, and orders wait for payment", async ({
   page,
 }) => {
   test.skip(!productId, "needs the product from the admin test");
@@ -156,8 +156,7 @@ test("customer sees a stock label, never a count or a code, and orders wait for 
 
   await ready(page, "/products/" + productId);
   const body = page.locator("body");
-  await expect(body).toContainText("เหลือน้อย");
-  await expect(body).not.toContainText(/เหลือ\s*\d+\s*ชิ้น/);
+  await expect(page.locator(".reference-variants")).toContainText("เหลือ 2");
   for (const code of codes) await expect(body).not.toContainText(code);
 
   await page.getByRole("button", { name: "ซื้อเลย", exact: true }).click();
