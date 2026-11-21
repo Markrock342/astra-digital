@@ -831,7 +831,10 @@ export default function Admin() {
               {newProduct && features.uploads && (
                 <PendingProductImages images={pendingImages} onChange={setPendingImages} />
               )}
-              <UsageInstructionsField defaultValue={editingProductUsage} />
+              <UsageInstructionsField
+                defaultValue={editingProductUsage}
+                productId={newProduct ? undefined : editingProduct?.id}
+              />
               {!newProduct && (
                 <>
                   <section className="reference-admin-card editor-panel">

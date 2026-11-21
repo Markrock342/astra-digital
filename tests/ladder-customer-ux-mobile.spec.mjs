@@ -9,7 +9,7 @@ import { createApp } from "../server/http.mjs";
 
 let server, service, base, admin;
 const adminPassword = randomBytes(24).toString("hex");
-const shots = process.env.SHOTS || "docs/database/evidence-customer-ux-ladder-r2";
+const shots = process.env.SHOTS || "test-results/customer-ux-ladder";
 const VIEWPORTS = [
   { name: "w320", width: 320, height: 568 },
   { name: "w390", width: 390, height: 844 },

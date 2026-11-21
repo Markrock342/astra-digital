@@ -583,3 +583,66 @@
 .reference-heading-actions:has(> .admin-receipt-link) {
   align-items: center;
 }
+
+/* Admin product form: pictures for วิธีใช้งานหลังซื้อ. */
+.usage-images-editor {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.usage-images-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.usage-images-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.usage-images-grid li {
+  position: relative;
+  aspect-ratio: 1;
+  border: 1px solid #e4e4e7;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f4f4f5;
+}
+.usage-images-grid img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.usage-images-grid .icon-button {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+}
+.usage-images-add {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  font-size: 13px;
+  color: #52525b;
+  cursor: pointer;
+}
+.usage-images-add input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.usage-images-add.is-busy {
+  cursor: progress;
+}

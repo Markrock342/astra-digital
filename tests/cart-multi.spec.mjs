@@ -111,5 +111,5 @@ test("buy now + discount code: summary → pay → done", async ({ page }) => {
   await expect(page.locator(".cart-bar")).toContainText("฿22.50");
   await page.locator(".cart-bar").getByRole("button", { name: "ชำระเงิน" }).click();
   await expect(page).toHaveURL(/\/orders\/[a-z0-9-]+$/);
-  await expect(page.getByRole("heading", { name: "สั่งซื้อสำเร็จ พร้อมรับสินค้า" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "สินค้าที่ได้รับ" })).toBeVisible();
 });

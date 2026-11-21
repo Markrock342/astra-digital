@@ -50,7 +50,7 @@ test("ready-stock order is paid on the website and shows the item", async ({ pag
   await page.goto(base + "/checkout/" + order.id);
   await page.getByRole("button", { name: /^ชำระเงิน/ }).click();
   await expect(page).toHaveURL(new RegExp("/orders/" + order.id + "$"));
-  await expect(page.getByRole("heading", { name: "สั่งซื้อสำเร็จ พร้อมรับสินค้า" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "สินค้าที่ได้รับ" })).toBeVisible();
   expect(service.orderDetail(buyer, order.id).status).toBe("DELIVERED");
 });
 

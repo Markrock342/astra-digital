@@ -82,9 +82,8 @@ test("2. customer buys, pays, receives the account and writes a review", async (
   await page.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ }).click();
   await expect(page).toHaveURL(/\/orders\/[a-z0-9-]+$/);
   firstOrderId = page.url().split("/").pop();
-  await expect(page.getByRole("heading", { name: "สั่งซื้อสำเร็จ พร้อมรับสินค้า" })).toBeVisible();
-  await page.getByRole("button", { name: /แสดงโค้ด/ }).click();
-  const delivered = await page.locator(".delivered-codes").innerText();
+  await expect(page.getByRole("heading", { name: "สินค้าที่ได้รับ" })).toBeVisible();
+  const delivered = await page.locator(".or-items").innerText();
   expect(accounts.some(([id, pw]) => delivered.includes(id) && delivered.includes(pw))).toBe(true);
 
   await page.goto(base + "/reviews?order=" + firstOrderId);
@@ -183,7 +182,7 @@ test("5. preorder: customer gets a queue number, a team member delivers, custome
   await staffContext.close();
 
   await expect(page).toHaveURL(orderUrl);
-  await expect(page.getByRole("heading", { name: "สั่งซื้อสำเร็จ พร้อมรับสินค้า" })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole("heading", { name: "สินค้าที่ได้รับ" })).toBeVisible({ timeout: 10000 });
 });
 
 test("6. live chat: customer asks, admin assigns to the team member, who replies; customer sees it live", async ({ page, browser }) => {
@@ -248,7 +247,6 @@ test("8. broken account: admin swaps it from the order page and the customer get
   await as(customer, buyerToken);
   const mine = await customer.newPage();
   await mine.goto(base + "/orders/" + firstOrderId);
-  await mine.getByRole("button", { name: /แสดงโค้ด/ }).click();
-  await expect(mine.locator(".delivered-codes")).toContainText("journey-new@stream.test");
+  await expect(mine.locator(".or-items")).toContainText("journey-new@stream.test");
   await customer.close();
 });

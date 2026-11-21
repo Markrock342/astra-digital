@@ -101,6 +101,7 @@ import { CheckoutFields, DeliveredLinks, FulfilmentCard, checkoutFieldsReady } f
 import { RebuyActions } from "./Rebuy";
 import { HistoryPage } from "./OrderList";
 import { MyReceiptsPage } from "./MyReceipts";
+import { OrderReceivedView, OrderSuccessPage, successPath } from "./OrderReceived";
 import { CartPage, CheckoutGroupPage, CheckoutPage, loadCart, saveCart, withLine, type CartLine } from "./Cart";
 import { ManualOrderNote } from "./ManualOrderNote";
 import { DiscountBadge, PriceNote, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
@@ -136,7 +137,8 @@ type Store = {
   addToCart: (variantId: string, quantity: number, only?: boolean) => void;
   refresh: () => Promise<void>;
   /** keepScroll: same-page URL changes (e.g. the /products category chips). */
-  go: (path: string, options?: { keepScroll?: boolean }) => void;
+  /** replace: swap the current history entry (the order success screen → the order page). */
+  go: (path: string, options?: { keepScroll?: boolean; replace?: boolean }) => void;
   toast: (message: string) => void;
   path: string;
   loading: boolean;
@@ -1353,15 +1355,14 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
         setCart(cart.filter((l) => l.variantId !== result.variant_id));
         sessionStorage.removeItem("astra-pay-" + id);
         await refresh();
-        toast(t("ชำระเงินสำเร็จ ได้เลขคิวแล้ว"));
+        go(successPath("/orders/" + id, true));
       }
       if (result.status === "DELIVERED") {
         setCart(cart.filter((l) => l.variantId !== result.variant_id));
         sessionStorage.removeItem("astra-pay-" + id);
         setRevealed(true);
         await refresh();
-        toast(t("ทำรายการสำเร็จ ได้รับโค้ดแล้ว"));
-        go("/orders/" + id);
+        go(successPath("/orders/" + id, false));
       }
     } catch (e) {
       setError((e as Error).message);
@@ -1400,6 +1401,8 @@ function OrderPage({ id, payment = false }: { id: string; payment?: boolean }) {
       toast(t("คัดลอกอัตโนมัติไม่ได้ กรุณาเลือกโค้ดแล้วคัดลอก"));
     }
   }
+  // Delivered (and not on the pay URL): the redesigned หน้ารับสินค้า (OrderReceived.tsx).
+  if (user && order && order.status === "DELIVERED" && !payment) return <OrderReceivedView order={order} />;
   return (
     <main className="container page-main narrow-main reference-order-page">
       {!user ? (
@@ -2492,6 +2495,7 @@ function Router() {
     );
   if (path === "/orders") return <HistoryPage />;
   if (path === "/receipts") return <MyReceiptsPage />;
+  if (path === "/order-success") return <OrderSuccessPage />;
   if (path === "/wallet" || path === "/top-up")
     return testPayments ? <WalletPage /> : <NotFound />;
   if (path === "/reviews" || path === "/credits") return <ReferenceReviews />;
@@ -2633,11 +2637,12 @@ export default function App() {
     setCart(withLine(cart, variantId, quantity, only));
   // The URL on screen, so a cancelled back/forward can be put back.
   const shownUrl = useRef(location.pathname + location.search);
-  function go(to: string, options: { keepScroll?: boolean } = {}) {
+  function go(to: string, options: { keepScroll?: boolean; replace?: boolean } = {}) {
     // A page with unsaved changes (useUnsavedChangesGuard) may cancel.
     void confirmLeave().then((ok) => {
       if (!ok) return;
-      history.pushState({}, "", to);
+      if (options.replace) history.replaceState({}, "", to);
+      else history.pushState({}, "", to);
       shownUrl.current = location.pathname + location.search;
       setPath(location.pathname);
       dispatchEvent(new Event(NAVIGATE_EVENT));

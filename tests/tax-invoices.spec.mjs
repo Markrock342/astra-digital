@@ -82,6 +82,8 @@ test("1. admin sets the company details and VAT registration", async ({ page }) 
 test("2. the customer requests a tax invoice on their delivered order", async ({ page }) => {
   await as(page.context(), buyerToken);
   await page.goto(base + "/orders/" + orderId);
+  // The receipt and tax invoice cards live in the "ใบเสร็จ" sheet of the delivered order.
+  await page.getByRole("button", { name: "ใบเสร็จ", exact: true }).click();
   const card = page.getByRole("region", { name: "ใบกำกับภาษีเต็มรูป" });
   await expect(card).toBeVisible();
   await card.getByRole("button", { name: "ขอใบกำกับภาษี" }).click();
@@ -145,6 +147,8 @@ test("3. the admin reviews the request and issues the tax invoice", async ({ pag
 test("4. the customer opens the printable ใบกำกับภาษี with its number and VAT line", async ({ page }) => {
   await as(page.context(), buyerToken);
   await page.goto(base + "/orders/" + orderId);
+  // The receipt and tax invoice cards live in the "ใบเสร็จ" sheet of the delivered order.
+  await page.getByRole("button", { name: "ใบเสร็จ", exact: true }).click();
   const card = page.getByRole("region", { name: "ใบกำกับภาษีเต็มรูป" });
   await expect(card).toContainText(invoiceNumber);
   await card.getByRole("link", { name: "ดู / พิมพ์ใบกำกับภาษี" }).click();

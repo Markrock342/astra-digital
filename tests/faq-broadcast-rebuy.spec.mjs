@@ -254,13 +254,11 @@ test("buy again goes to checkout with the same option and quantity; renew and ou
   // Warranty (used as the subscription end) inside 5 days → "ใกล้หมดอายุ? ต่ออายุ".
   const soon = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 19).replace("T", " ");
   service.db.prepare("UPDATE orders SET warranty_until=? WHERE id=?").run(soon, deliveredId);
+  // The order page itself no longer offers buy again (client, 21 Nov); the history row does.
   await page.goto(base + "/orders/" + deliveredId);
-  const actions = page.locator(".result-actions .rebuy-actions");
-  await expect(actions).toContainText("ใกล้หมดอายุ?");
-  await expect(actions.getByRole("button", { name: /^ต่ออายุ/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "สินค้าที่ได้รับ" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^ซื้อซ้ำ|^ต่ออายุ/ })).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
-  expect(await noSideScroll(page)).toBe(true);
-  await shot(page, "order-renew-390");
   await page.goto(base + "/orders");
   await expect(page.locator(".history-item", { hasText: "Rebuy Stream Plus" }).locator(".rebuy-actions")).toContainText("ใกล้หมดอายุ?");
   expect(await noSideScroll(page)).toBe(true);

@@ -109,7 +109,7 @@ test("register → notice → blocked checkout → resend cooldown → link → 
   await expect(page).toHaveURL(/\/checkout$/);
   await expect(page.locator(".email-verify-card")).toHaveCount(0);
   await page.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ }).click();
-  await expect(page.locator(".delivered-codes")).toBeVisible();
+  await expect(page.locator(".or-items")).toBeVisible();
 
   // Same link again: already verified, not an error.
   await page.goto(base + link);

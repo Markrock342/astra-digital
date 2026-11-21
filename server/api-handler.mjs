@@ -73,6 +73,7 @@ function isImageUploadPath(method, path) {
   if (method !== "POST") return false;
   return (
     /^\/api\/admin\/products\/[^/]+\/images$/.test(path) ||
+    /^\/api\/admin\/products\/[^/]+\/usage-images$/.test(path) ||
     path === "/api/admin/finance/withdrawals/proof" ||
     path === "/api/profile/avatar" ||
     path === "/api/chat/images" ||
@@ -742,6 +743,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
         // Preorder questionnaire fields (customer fills before ordering).
         if (/^\/api\/admin\/products\/[^/]+\/order-questions$/.test(path))
           return send(200, service.adminOrderQuestions(user, path.split("/")[4]));
+        if (/^\/api\/admin\/products\/[^/]+\/usage-images$/.test(path))
+          return send(200, service.adminUsageImages(user, path.split("/")[4]));
         // Option groups + variant mapping (option-groups.mjs).
         if (/^\/api\/admin\/products\/[^/]+\/options$/.test(path))
           return send(200, service.adminOptionGroups(user, path.split("/")[4]));
@@ -844,6 +847,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             200,
             await service.deleteProductImage(user, path.split("/")[4]),
           );
+        if (/^\/api\/admin\/usage-images\/[^/]+$/.test(path))
+          return send(200, await service.removeUsageImage(user, path.split("/")[4]));
         if (/^\/api\/admin\/banners\/[^/]+\/mobile-image$/.test(path))
           return send(200, await service.adminRemoveBannerMobileImage(user, path.split("/")[4]));
         if (/^\/api\/admin\/banners\/[^/]+$/.test(path))
@@ -1199,6 +1204,8 @@ export function createAPIHandler(service, { rateLimit, d1Catalog } = {}) {
             200,
             await service.addProductImage(user, path.split("/")[4], input),
           );
+        if (/^\/api\/admin\/products\/[^/]+\/usage-images$/.test(path))
+          return send(200, await service.addUsageImage(user, path.split("/")[4], input));
       }
       return send(404, { error: "ไม่พบหน้าที่ร้องขอ" });
     } catch (error) {

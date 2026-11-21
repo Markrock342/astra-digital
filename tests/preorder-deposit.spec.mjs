@@ -107,9 +107,8 @@ test("deposit: admin sets the mode → reserve with deposit → import calls →
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
   await page.setViewportSize({ width: 1440, height: 1000 });
   await progress.getByRole("button", { name: "ชำระส่วนที่เหลือ ฿70.00" }).click();
-  await expect(page.locator(".delivered-codes")).toBeVisible();
-  await expect(page.locator(".delivered-codes")).toContainText("deposit-e2e@x.test");
-  await expect(page.locator(".preorder-steps li.is-done")).toHaveCount(3);
+  await expect(page.locator(".or-items")).toBeVisible();
+  await expect(page.locator(".or-items")).toContainText("deposit-e2e@x.test");
 
   // Admin queue shows the finished row; finance shows nothing left as มัดจำค้าง.
   await as(page.context(), adminToken);
@@ -165,8 +164,8 @@ test("free: reserve without paying → first lets the deadline pass → next is 
   await expect(page.locator(".notice-panel")).toContainText("ของพร้อมแล้ว ชำระเพื่อรับสินค้า");
   await page.locator(".notice-button").first().click();
   await page.getByRole("button", { name: "ชำระ ฿100.00 เพื่อรับสินค้า" }).click();
-  await expect(page.locator(".delivered-codes")).toBeVisible();
-  await expect(page.locator(".delivered-codes")).toContainText("free-e2e@x.test");
+  await expect(page.locator(".or-items")).toBeVisible();
+  await expect(page.locator(".or-items")).toContainText("free-e2e@x.test");
 
   // Admin queue: the lapsed one shows as หมดเวลา; 390px without side scroll.
   await as(page.context(), adminToken);

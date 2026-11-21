@@ -112,12 +112,11 @@ test("customer applies the code, pays with test credit and sees the discount", a
   await page.locator(".cart-bar").getByRole("button", { name: /ชำระเงิน/ }).click();
   await expect(page).toHaveURL(/\/orders\/[a-z0-9-]+$/);
   const orderId = page.url().split("/").pop();
-  await expect(page.getByRole("heading", { name: "สั่งซื้อสำเร็จ พร้อมรับสินค้า" })).toBeVisible();
-  const breakdown = page.locator(".order-price-breakdown");
+  await expect(page.getByRole("heading", { name: "สินค้าที่ได้รับ" })).toBeVisible();
+  const breakdown = page.locator(".or-price");
   await expect(breakdown).toContainText("ราคาสินค้า");
   await expect(breakdown).toContainText("ส่วนลด (SAVE20)");
-  await expect(breakdown).toContainText("ยอดชำระ");
-  await expect(breakdown).toContainText("฿176.00");
+  await expect(page.locator(".or-product-side")).toContainText("฿176.00");
 
   // Server truth: payment == discounted total, credit charged once.
   const payment = service.db.prepare("SELECT amount FROM payments WHERE order_id=? AND status='SUCCEEDED'").get(orderId);

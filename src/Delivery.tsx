@@ -119,7 +119,7 @@ export function checkoutFieldsReady(fields: CheckoutField[], values: Record<stri
   });
 }
 
-function useCopy() {
+export function useCopy() {
   const { toast } = useStore();
   return async (value: string, done: string) => {
     try {

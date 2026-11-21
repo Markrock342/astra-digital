@@ -99,11 +99,10 @@ test("admin creates an order for an off-site transfer (desktop), customer sees t
 
   await as(page, buyerToken);
   await page.goto(base + "/orders/" + id);
-  await expect(page.getByRole("heading", { name: "สั่งซื้อสำเร็จ พร้อมรับสินค้า" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "สินค้าที่ได้รับ" })).toBeVisible();
   await expect(page.locator(".manual-order-note")).toContainText("ชำระแบบโอนนอกเว็บ");
-  await page.getByRole("button", { name: "แสดงโค้ด" }).click();
-  await expect(page.locator(".delivered-codes")).toContainText("offsite-one@stream.test");
-  await expect(page.locator(".delivered-codes")).toContainText("Pw-OFF-111");
+  await expect(page.locator(".or-items")).toContainText("offsite-one@stream.test");
+  await expect(page.locator(".or-items")).toContainText("Pw-OFF-111");
   await page.goto(base + "/orders");
   await expect(page.locator(".history-card", { hasText: "Offsite Stream" }).first()).toContainText("฿120.00");
   service.requestOrderReceipt(service.session(buyerToken), id, {
@@ -134,8 +133,7 @@ test("same flow at 390px: no side scroll on the form, the order or the customer 
   await as(page, buyerToken);
   await page.goto(base + "/orders/" + id);
   await expect(page.locator(".manual-order-note")).toBeVisible();
-  await page.getByRole("button", { name: "แสดงโค้ด" }).click();
-  await expect(page.locator(".delivered-codes")).toContainText("offsite-two@stream.test");
+  await expect(page.locator(".or-items")).toContainText("offsite-two@stream.test");
   expect(await noSideScroll(page)).toBe(true);
   await page.goto(base + "/orders");
   expect(await noSideScroll(page)).toBe(true);
