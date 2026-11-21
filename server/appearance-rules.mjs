@@ -95,7 +95,8 @@ export const DEFAULT_APPEARANCE = Object.freeze({
     subtext: pair(""),
     primary: { label: pair("สินค้าทั้งหมด", "All products"), link: "/products" },
     // Second button for signed-in customers. Empty label = no second button.
-    secondary: { label: pair("รีวิวจากลูกค้า", "Customer reviews"), link: "/reviews" },
+    // (Was "รีวิวจากลูกค้า" → /reviews; the client removed the เครดิตร้าน page from the menus.)
+    secondary: { label: pair(""), link: "" },
     // Second button for visitors who are not signed in. Empty label = no second button.
     guest: { label: pair("เข้าสู่ระบบ", "Sign in"), link: "/login" },
   },
@@ -150,7 +151,6 @@ export const DEFAULT_APPEARANCE = Object.freeze({
     description: pair(""),
     links: [
       { label: pair("สินค้าทั้งหมด", "All products"), link: "/products" },
-      { label: pair("เครดิตร้าน", "Store credit"), link: "/reviews" },
       { label: pair("ประวัติการซื้อ", "Purchase history"), link: "/orders" },
       { label: pair("ข่าวสาร", "News"), link: "/news" },
       { label: pair("เกี่ยวกับเรา", "About us"), link: "/about" },
@@ -406,7 +406,7 @@ export function normalizeAppearanceParts(input, fail) {
 }
 
 /** Version of the stored JSON. Bumped when defaults change in a way saved rows must follow. */
-export const APPEARANCE_REV = 4;
+export const APPEARANCE_REV = 5;
 /** Hero button labels that were the defaults before rev 2 (replaced by the new defaults). */
 const LEGACY_HERO_LABELS = {
   primary: ["เลือกซื้อสินค้า", ["", "Shop now"]],
@@ -430,6 +430,15 @@ export function migrateStoredAppearance(stored) {
       const def = DEFAULT_APPEARANCE.footer.links.find((l) => l.link === link);
       out.footer.links.push(JSON.parse(JSON.stringify(def)));
     }
+  }
+  // rev 5 (client, 21 Nov): "ฟังก์ชัน เครดิตร้าน ให้ลบออก" — no menu link or hero button goes to
+  // the reviews page (/reviews, /credits) any more.
+  if (rev < 5) {
+    const reviews = (link) => typeof link === "string" && /^\/(reviews|credits)(\b|[?#/]|$)/.test(link);
+    if (isObject(out.footer) && Array.isArray(out.footer.links))
+      out.footer.links = out.footer.links.filter((l) => !(isObject(l) && reviews(l.link)));
+    if (isObject(out.hero) && isObject(out.hero.secondary) && reviews(out.hero.secondary.link))
+      out.hero.secondary = { label: { th: "", en: "" }, link: "" };
   }
   // rev 4 (client, 14 Nov): the /news link still carrying the old default name is now "ข่าวสาร".
   if (rev < 4 && isObject(out.footer) && Array.isArray(out.footer.links))

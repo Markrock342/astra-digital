@@ -217,7 +217,7 @@ export function CartPage() {
                     </Link>
                     <p className="cart-line-option">
                       <span>{r.variant.label}</span>
-                      {r.product.preorder ? <span className="cart-pill">{t("สั่งจอง")}</span> : null}
+                      
                       {!ok && <span className="cart-pill is-out">{t("สินค้าหมด")}</span>}
                     </p>
                     <span className="cart-price-extra">
@@ -272,7 +272,7 @@ export function CartPage() {
               disabled={!picked.length || !shopOpen}
               onClick={() => go("/checkout")}
             >
-              {picked.length ? t("ไปชำระเงิน") : t("เลือกสินค้าที่จะชำระ")}
+              {picked.length ? t("ชำระเงิน") : t("เลือกสินค้าที่จะชำระ")}
             </button>
           </div>
         </>
@@ -392,7 +392,7 @@ export function CheckoutPage() {
                 <span>
                   {r.variant.label} · × {lines[i].quantity}
                 </span>
-                {r.product.preorder ? <span className="cart-pill">{t("สั่งจอง")}</span> : null}
+                
                 {lineDiscount(r.variant.id) > 0 && (
                   <span className="cart-pill is-deal">−{money(lineDiscount(r.variant.id))}</span>
                 )}

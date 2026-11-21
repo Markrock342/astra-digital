@@ -153,12 +153,11 @@ test("1–5 hero: plain background, shop name display title, login-aware buttons
     expect(errors).toEqual([]);
     await context.close();
   }
-  // Logged in: "สินค้าทั้งหมด" + "รีวิวจากลูกค้า".
+  // Logged in: "สินค้าทั้งหมด" only (the เครดิตร้าน / reviews page left the menus, 21 Nov).
   const { context, page } = await open(browser, { token: buyerToken });
   await ready(page);
   await expect(page.locator(".hero-cta")).toHaveText("สินค้าทั้งหมด");
-  await expect(page.locator(".hero-ghost")).toHaveText("รีวิวจากลูกค้า");
-  await expect(page.locator(".hero-ghost")).toHaveAttribute("href", "/reviews");
+  await expect(page.locator(".hero-ghost")).toHaveCount(0);
   await context.close();
   // English.
   const en = await open(browser, { lang: "en" });
@@ -308,13 +307,15 @@ test("8 menu: bottom sheet with user card, tiles, contact chips, sign out; focus
     // Tiles.
     for (const [name, href] of [
       ["สินค้าทั้งหมด", "/products"],
-      ["เครดิตร้าน", "/credits"],
       ["ประวัติการซื้อ", "/orders"],
       ["บัญชีของฉัน", "/account"],
+      ["ใบเสร็จ", "/receipts"],
       ["ข่าวสาร", "/news"],
       ["เกี่ยวกับเรา", "/about"],
     ])
       await expect(sheet.getByRole("link", { name, exact: true })).toHaveAttribute("href", href);
+    // เครดิตร้าน left the menu (client, 21 Nov).
+    await expect(sheet.getByRole("link", { name: "เครดิตร้าน", exact: true })).toHaveCount(0);
     await expect(sheet.getByRole("button", { name: "แจ้งปัญหา" })).toBeVisible();
     // Contact chips from ตั้งค่า › ร้าน.
     await expect(sheet.getByRole("link", { name: "LINE" })).toHaveAttribute("href", "https://line.me/R/ti/p/%40asiax");
