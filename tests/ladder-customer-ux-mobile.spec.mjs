@@ -4,12 +4,15 @@
 import { test, expect } from "@playwright/test";
 import { randomBytes } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createCommerce } from "../server/commerce.mjs";
 import { createApp } from "../server/http.mjs";
 
 let server, service, base, admin;
 const adminPassword = randomBytes(24).toString("hex");
-const shots = process.env.SHOTS || "test-results/customer-ux-ladder";
+// Default outside test-results: Playwright clears that folder while workers start.
+const shots = process.env.SHOTS || join(tmpdir(), "customer-ux-ladder");
 const VIEWPORTS = [
   { name: "w320", width: 320, height: 568 },
   { name: "w390", width: 390, height: 844 },
