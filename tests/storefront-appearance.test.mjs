@@ -68,10 +68,10 @@ test("defaults are today's storefront text, word for word (TH and the current EN
   const { s } = fixture(t);
   const a = s.overview().appearance;
   assert.equal(stored(s), null, "nothing stored until the admin saves");
-  // Hero buttons + links (client round, Nov 2026): "สินค้าทั้งหมด", then "รีวิวจากลูกค้า" for
-  // signed-in customers or "เข้าสู่ระบบ" for visitors.
+  // Hero buttons + links: "สินค้าทั้งหมด", then "เข้าสู่ระบบ" for visitors. Signed-in customers get no
+  // second button since the เครดิตร้าน (reviews) page left the menus (client, 21 Nov).
   assert.deepEqual(a.hero.primary, { label: { th: "สินค้าทั้งหมด", en: EN_STRINGS["สินค้าทั้งหมด"] }, link: "/products" });
-  assert.deepEqual(a.hero.secondary, { label: { th: "รีวิวจากลูกค้า", en: EN_STRINGS["รีวิวจากลูกค้า"] }, link: "/reviews" });
+  assert.deepEqual(a.hero.secondary, { label: { th: "", en: "" }, link: "" });
   assert.deepEqual(a.hero.guest, { label: { th: "เข้าสู่ระบบ", en: EN_STRINGS["เข้าสู่ระบบ"] }, link: "/login" });
   // Automatic hero title ("WELCOME TO " + shop name) / headline / footer description / SEO = empty.
   assert.deepEqual(a.hero.title, { th: "", en: "" });
@@ -93,7 +93,6 @@ test("defaults are today's storefront text, word for word (TH and the current EN
     a.footer.links.map((l) => [l.label.th, l.label.en, l.link]),
     [
       ["สินค้าทั้งหมด", "/products"],
-      ["เครดิตร้าน", "/reviews"],
       ["ประวัติการซื้อ", "/orders"],
       ["ข่าวสาร", "/news"],
       ["เกี่ยวกับเรา", "/about"],
@@ -441,7 +440,8 @@ test("rows saved before the client round keep working: missing fields default, o
   assert.deepEqual(a.hero.title, { th: "", en: "" }, "no title saved = automatic");
   assert.deepEqual(a.hero.guest, DEFAULT_APPEARANCE.hero.guest, "guest button gets its default, not hidden");
   assert.deepEqual(a.hero.primary, DEFAULT_APPEARANCE.hero.primary, "old default label upgraded");
-  assert.equal(a.hero.secondary.label.th, "ดูรีวิวของจริง", "a label the admin typed stays");
+  // rev 5: a button that still points at the reviews page is cleared (the client removed it).
+  assert.deepEqual(a.hero.secondary, { label: { th: "", en: "" }, link: "" }, "no button to the removed reviews page");
   assert.equal(a.hero.headline.th, "ช้อปเลย");
   assert.equal(a.sections.find((x) => x.id === "categories").visible, false, "home categories hidden");
   assert.equal(a.sections.find((x) => x.id === "stats").visible, false, "admin choices kept");

@@ -65,7 +65,7 @@ test("tick two of three lines, summary, pay once, one order number", async ({ pa
   await page.getByRole("checkbox", { name: /Cart Gamma/ }).click({ force: true });
   await expect(bar).toContainText("ยอดรวม 3 ชิ้น");
 
-  await bar.getByRole("button", { name: "ไปชำระเงิน" }).click();
+  await bar.getByRole("button", { name: "ชำระเงิน", exact: true }).click();
   await expect(page).toHaveURL(base + "/checkout");
   await expect(page.getByRole("heading", { name: "สรุปรายการ" })).toBeVisible();
   await expect(page.locator(".cart-line")).toHaveCount(2);

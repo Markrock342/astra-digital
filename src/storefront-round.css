@@ -900,3 +900,34 @@
     padding-top: 0;
   }
 }
+
+/* Client, 21 Nov: empty states (empty basket, "sign in to see…") — title + button only, both
+   bigger; the explanation line goes. */
+.storefront-shell .empty-state > p {
+  display: none;
+}
+.storefront-shell .empty-state h2 {
+  font-size: 22px;
+  line-height: 1.35;
+}
+.storefront-shell .empty-state .empty-icon {
+  width: 72px;
+  height: 72px;
+}
+.storefront-shell .empty-state .empty-icon svg {
+  width: 30px;
+  height: 30px;
+}
+.storefront-shell .empty-state .button {
+  min-height: 52px;
+  padding: 0 28px;
+  font-size: 17px;
+  margin-top: 8px;
+}
+/* Basket bar: "ชำระเงิน", bigger. */
+.storefront-shell .cart-bar .button {
+  min-height: 52px;
+  padding-inline: 30px;
+  font-size: 17px;
+  font-weight: 700;
+}

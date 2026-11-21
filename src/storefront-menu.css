@@ -196,3 +196,15 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* Signed-out menu (client, 21 Nov): just the two buttons — no grey box, no line above, bigger text. */
+.storefront-shell .menu-guest-card {
+  padding: 0;
+  background: none;
+  border: 0;
+}
+.storefront-shell .menu-guest-actions .button {
+  min-height: 52px;
+  font-size: 17px;
+  font-weight: 700;
+}

@@ -13,7 +13,6 @@ import {
   Newspaper,
   Package,
   Plus,
-  Star,
   type LucideIcon,
 } from "lucide-react";
 import { Link, UserAvatar, useStore, useTestPayments } from "./App";
@@ -46,7 +45,6 @@ export function StorefrontMenu({ open, onClose }: { open: boolean; onClose: () =
   const lineLink = line ? lineHref(line) : null;
   const tiles: Tile[] = [
     { label: t("สินค้าทั้งหมด"), icon: Package, to: "/products" },
-    { label: t("เครดิตร้าน"), icon: Star, to: "/credits" },
     { label: t("ประวัติการซื้อ"), icon: History, to: "/orders" },
     {
       label: t("แจ้งปัญหา"),
@@ -81,7 +79,6 @@ export function StorefrontMenu({ open, onClose }: { open: boolean; onClose: () =
         </div>
       ) : (
         <div className="menu-guest-card">
-          <p>{t("เข้าสู่ระบบเพื่อดูยอดเงินและคำสั่งซื้อ")}</p>
           <div className="menu-guest-actions">
             <Link to="/login" className="button primary">
               {t("เข้าสู่ระบบ")}
