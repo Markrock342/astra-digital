@@ -123,7 +123,7 @@ test("customer sees the refund on the order and in the wallet", async ({ page })
     { name: "astra_session", value: auth.token, url: base, httpOnly: true, sameSite: "Lax" },
   ]);
   await page.goto(base + "/orders/" + paidOrder.id);
-  await expect(page.locator(".refund-note")).toContainText("฿40.00");
+  await expect(page.locator(".or-refund")).toContainText("฿40.00");
   await page.goto(base + "/wallet");
   await expect(page.locator(".wallet-history")).toContainText("คืนเงิน");
   await expect(page.locator(".wallet-history")).toContainText("คงเหลือ");

@@ -76,6 +76,7 @@ import { createBannerApis } from "./banners.mjs";
 import { createAppearanceApis } from "./appearance.mjs";
 import { createNewsApis } from "./news.mjs";
 import { hookCheckouts } from "./checkouts.mjs";
+import { createUsageImageApis } from "./usage-images.mjs";
 import { shopTitle } from "./seo.mjs";
 import { createAboutApis } from "./about.mjs";
 import { createManualOrderApis } from "./manual-orders.mjs";
@@ -462,6 +463,18 @@ export function createCommerceCore({
     isAdmin,
     notify,
   });
+  // Pictures for วิธีใช้งานหลังซื้อ (usage-images.mjs).
+  const usageImageApis = createUsageImageApis({
+    requireAdmin: (u) => requireAdmin(u),
+    one,
+    all,
+    run,
+    tx: (fn) => tx(fn),
+    fail,
+    clean: (...a) => clean(...a),
+    audit: (...a) => audit(...a),
+    fileStore,
+  });
   const orderExtras = createOrderExtras({
     one,
     all,
@@ -477,6 +490,7 @@ export function createCommerceCore({
     orderRefundState: (...a) => orderRefundState(...a),
     taxInvoices,
     orderReceipts,
+    usageImages: (productId) => usageImageApis.usageImages(productId),
   });
   const stockLowCooldown = new Map();
   const maybeNotifyStockLow = (variantId) => {
@@ -3919,6 +3933,13 @@ export function createCommerceCore({
     adminDelivery: delivery.adminDelivery,
     adminSetDelivery: delivery.adminSetDelivery,
     adminOrderQuestions: delivery.adminOrderQuestions,
+    // วิธีใช้งานหลังซื้อ pictures (usage-images.mjs).
+    adminUsageImages: (user, productId) => {
+      requireAdmin(user);
+      return { images: usageImageApis.usageImages(productId) };
+    },
+    addUsageImage: usageImageApis.addUsageImage,
+    removeUsageImage: usageImageApis.removeUsageImage,
     adminSetOrderQuestions: delivery.adminSetOrderQuestions,
     adminSeatGroup: delivery.adminSeatGroup,
     adminSetSeatCount: delivery.adminSetSeatCount,

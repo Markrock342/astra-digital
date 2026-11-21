@@ -78,6 +78,8 @@ export function createOrderExtras({
   taxInvoices = null,
   // ใบเสร็จคำสั่งซื้อ approval gate + payment channel (order-receipts.mjs).
   orderReceipts = null,
+  // Pictures under the usage instructions (usage-images.mjs): productId → [{ id, url }].
+  usageImages = null,
 }) {
   /** Ready-stock order or preorder row, with product + option, or null. */
   function loadOrderRow(orderId) {
@@ -116,6 +118,7 @@ export function createOrderExtras({
     if (!row || row.status !== "DELIVERED") return {};
     return {
       usageInstructions: row.usage_instructions || null,
+      usageImages: usageImages ? usageImages(row.product_id) : [],
       deliveredAt: deliveredAtOf(row),
     };
   }

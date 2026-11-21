@@ -126,7 +126,7 @@ test("ID + password import checks each line, accepts a spreadsheet paste and fla
   await expect(page.getByRole("status")).toContainText("นำเข้า 2 บัญชีสำเร็จ");
 });
 
-test("customer sees a delivered ID and password masked until revealed", async ({ page }) => {
+test("customer sees the delivered ID and password in one box with one copy", async ({ page }) => {
   await page.context().addCookies([
     {
       name: "astra_session",
@@ -135,11 +135,10 @@ test("customer sees a delivered ID and password masked until revealed", async ({
     },
   ]);
   await ready(page, "/orders/" + paidPreorder.id);
-  const box = page.locator(".delivered-codes");
-  await expect(box).toContainText("ไอดี");
-  await expect(box).not.toContainText("S3cret-pw");
-  await box.getByRole("button", { name: /แสดงโค้ด/ }).click();
-  await expect(box).toContainText("viewer@example.invalid");
-  await expect(box).toContainText("S3cret-pw");
-  await expect(box.getByRole("button", { name: /คัดลอกรหัสผ่าน/ })).toBeVisible();
+  const box = page.locator(".or-items");
+  const item = box.locator(".or-item").first();
+  await expect(item).toContainText("อีเมล / ไอดี");
+  await expect(item).toContainText("viewer@example.invalid");
+  await expect(item).toContainText("S3cret-pw");
+  await expect(item.getByRole("button", { name: /คัดลอกทั้งหมด/ })).toBeVisible();
 });

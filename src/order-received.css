@@ -1,0 +1,345 @@
+/* หน้ารับสินค้า + สั่งซื้อสำเร็จ (OrderReceived.tsx). shadcn/ui Card / Sheet / Button (MIT). */
+
+/* ---------- Success screen ---------- */
+.storefront-shell .order-success {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 10px;
+  min-height: 60vh;
+  text-align: center;
+}
+.storefront-shell .order-success h1 {
+  margin: 12px 0 0;
+  font-size: 28px;
+}
+.storefront-shell .order-success p {
+  margin: 0;
+  font-size: 16px;
+  color: var(--muted);
+}
+.storefront-shell .order-success-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 112px;
+}
+.storefront-shell .order-success-disc {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: #16a34a;
+  color: #fff;
+  animation: order-success-pop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.storefront-shell .order-success-disc svg {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: order-success-check 0.35s 0.25s ease-out forwards;
+}
+.storefront-shell .order-success-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid #16a34a;
+  opacity: 0;
+  animation: order-success-ring 1.1s 0.2s ease-out both;
+}
+@keyframes order-success-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes order-success-check {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes order-success-ring {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .storefront-shell .order-success-disc,
+  .storefront-shell .order-success-disc svg,
+  .storefront-shell .order-success-ring {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ---------- Received order ---------- */
+.storefront-shell .order-received {
+  display: grid;
+  gap: 14px;
+  max-width: 720px;
+  margin-inline: auto;
+  padding-bottom: calc(120px + env(safe-area-inset-bottom));
+}
+.storefront-shell .order-received .back-link {
+  justify-self: start;
+  min-height: 44px;
+  font-size: 15px;
+}
+.storefront-shell .or-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.storefront-shell .or-product {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 14px;
+}
+.storefront-shell .or-art {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.storefront-shell .or-product-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.storefront-shell .or-product h1 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+.storefront-shell .or-option {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text);
+}
+.storefront-shell .or-meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.storefront-shell .or-meta-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+.storefront-shell .or-product-side {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+.storefront-shell .or-product-side strong {
+  font-size: 18px;
+}
+.storefront-shell .or-warranty {
+  grid-column: 1 / -1;
+}
+.storefront-shell .or-warranty:empty {
+  display: none;
+}
+.storefront-shell .or-price {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+.storefront-shell .or-price > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.storefront-shell .or-price dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.storefront-shell .or-price dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.storefront-shell .or-price .is-discount dt,
+.storefront-shell .or-price .is-discount dd {
+  color: var(--success, #15803d);
+  font-weight: 600;
+}
+.storefront-shell .or-refund {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2, var(--bg));
+  font-size: 14px;
+  font-weight: 600;
+}
+.storefront-shell .or-items h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.storefront-shell .or-item {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--raised);
+}
+.storefront-shell .or-item dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.storefront-shell .or-item dl > div {
+  display: grid;
+  gap: 1px;
+}
+.storefront-shell .or-item dt {
+  font-size: 13px;
+  color: var(--muted);
+}
+.storefront-shell .or-item dd {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.storefront-shell .or-item .or-copy {
+  justify-self: end;
+  min-height: 40px;
+}
+.storefront-shell .or-item:not(.or-item-line) .or-copy {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+.storefront-shell .or-item:not(.or-item-line) dl {
+  padding-right: 92px;
+}
+.storefront-shell .or-item-line {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.storefront-shell .or-item-line code {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.storefront-shell .or-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+.storefront-shell .or-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.storefront-shell .or-seat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: start;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+.storefront-shell .or-answers {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+}
+.storefront-shell .or-answers dt {
+  font-size: 13px;
+  color: var(--muted);
+}
+.storefront-shell .or-answers dd {
+  margin: 0;
+  font-size: 15px;
+}
+
+/* Three actions in one row. */
+.storefront-shell .or-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.storefront-shell .or-action {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-height: 76px;
+  padding: 12px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: 600 15px/1.2 inherit;
+  cursor: pointer;
+}
+.storefront-shell .or-action svg {
+  color: var(--accent-text);
+}
+.storefront-shell .or-action:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.storefront-shell .or-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.storefront-shell .or-usage {
+  display: grid;
+  gap: 12px;
+  font-size: 16px;
+  line-height: 1.7;
+}
+.storefront-shell .or-usage img {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.storefront-shell .or-receipt {
+  display: grid;
+  gap: 12px;
+}
+@media (max-width: 420px) {
+  .storefront-shell .or-card {
+    padding: 16px;
+  }
+  .storefront-shell .or-art {
+    width: 56px;
+    height: 56px;
+  }
+}

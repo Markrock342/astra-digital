@@ -43,6 +43,7 @@ import { useLive } from "./live";
 import { copyLines } from "./OrderList";
 import { PriceNote, PurchaseLimitNote, quantityCap, WasPrice } from "./Pricing";
 import { OrderReceiptCard } from "./OrderReceipts";
+import { successPath } from "./OrderReceived";
 import { ShopClosedNote, useShopOpen } from "./ShopClosed";
 import type { Order, Product, Variant } from "./types";
 import "./cart.css";
@@ -352,9 +353,11 @@ export function CheckoutPage() {
       const done = new Set(result.orders.filter((o) => o.status !== "PENDING_PAYMENT" || !testPayments).map((o) => o.variant_id));
       setCart(cart.filter((l) => !done.has(l.variantId)));
       await refresh();
-      if (testPayments && result.orders.some((o) => ["DELIVERED", "PREORDER"].includes(o.status)))
-        toast(t("ชำระเงินสำเร็จ ได้รับสินค้าแล้ว"));
-      go(result.orders.length === 1 ? "/orders/" + result.orders[0].id : "/checkouts/" + result.id);
+      const dest = result.orders.length === 1 ? "/orders/" + result.orders[0].id : "/checkouts/" + result.id;
+      const paid = result.orders.filter((o) => ["DELIVERED", "PREORDER"].includes(o.status));
+      // Paid: the short success screen first, then the order (client, 21 Nov).
+      if (testPayments && paid.length) go(successPath(dest, paid.every((o) => o.status === "PREORDER")));
+      else go(dest);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -557,7 +560,7 @@ export function groupStatus(orders: Order[]) {
 }
 
 export function CheckoutGroupPage({ id }: { id: string }) {
-  const { user, cart, setCart, refresh, toast } = useStore();
+  const { user, cart, setCart, refresh, go } = useStore();
   const testPayments = useTestPayments();
   const shopOpen = useShopOpen();
   const verifyEmail = useEmailVerifyNeeded();
@@ -610,7 +613,8 @@ export function CheckoutGroupPage({ id }: { id: string }) {
       const paidVariants = new Set(result.orders.filter((o) => ["DELIVERED", "PREORDER"].includes(o.status)).map((o) => o.variant_id));
       if (paidVariants.size) setCart(cart.filter((l) => !paidVariants.has(l.variantId)));
       await refresh();
-      if (outcome === "success") toast(t("ชำระเงินสำเร็จ ได้รับสินค้าแล้ว"));
+      if (outcome === "success" && paidVariants.size)
+        go(successPath("/checkouts/" + id, result.orders.every((o) => o.status !== "DELIVERED")), { replace: true });
     } catch (e) {
       setError((e as Error).message);
       load();

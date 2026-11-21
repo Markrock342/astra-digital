@@ -51,5 +51,5 @@ test("closed: product page, checkout and the unpaid order explain why the button
   await page.reload();
   await expect(page.locator(".shop-closed-note")).toHaveCount(0);
   await page.getByRole("button", { name: /ชำระเงิน/ }).click();
-  await expect(page.locator(".delivered-codes")).toBeVisible();
+  await expect(page.locator(".or-items .or-item").first()).toBeVisible();
 });

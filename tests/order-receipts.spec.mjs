@@ -75,6 +75,7 @@ test("account profiles + request → admin approve → print receipt (desktop)",
   await expect(page.getByText("บ้าน")).toBeVisible();
 
   await page.goto(base + "/orders/" + orderId);
+  await page.getByRole("button", { name: "ใบเสร็จ", exact: true }).click();
   await expect(page.getByRole("heading", { name: "ใบเสร็จคำสั่งซื้อ" })).toBeVisible();
   // Closed until asked: one row with the window and a button.
   await expect(page.getByText("ขอได้ภายใน 7 วันหลังชำระ")).toBeVisible();
@@ -97,6 +98,7 @@ test("account profiles + request → admin approve → print receipt (desktop)",
 
   await as(page.context(), buyerToken);
   await page.goto(base + "/orders/" + orderId);
+  await page.getByRole("button", { name: "ใบเสร็จ", exact: true }).click();
   await page.getByRole("link", { name: "ดู / พิมพ์ใบเสร็จ" }).click();
   await expect(page).toHaveURL(base + "/orders/" + orderId + "/receipt");
   await expect(page.getByRole("heading", { name: "ใบเสร็จคำสั่งซื้อ" })).toBeVisible();
@@ -119,6 +121,7 @@ test("390px: account profiles, order card, receipt page, admin queue fit without
   await expect(page.getByRole("heading", { name: "ข้อมูลใบเสร็จคำสั่งซื้อ" })).toBeVisible();
   expect(await noSideScroll(page)).toBe(true);
   await page.goto(base + "/orders/" + orderId);
+  await page.getByRole("button", { name: "ใบเสร็จ", exact: true }).click();
   await expect(page.getByRole("heading", { name: "ใบเสร็จคำสั่งซื้อ" })).toBeVisible();
   expect(await noSideScroll(page)).toBe(true);
   await page.goto(base + "/orders/" + orderId + "/receipt");

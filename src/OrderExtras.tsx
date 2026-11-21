@@ -14,14 +14,16 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   BookOpen,
+  ImagePlus,
   LoaderCircle,
   MessageSquareWarning,
   Printer,
   ReceiptText,
+  Trash2,
   X,
 } from "lucide-react";
 import { ErrorMessage, Link, useStore } from "./App";
-import { api, dateTime, money } from "./api";
+import { api, dateTime, money, uploadImage } from "./api";
 import { EN_STRINGS } from "./i18n-en";
 import { getLang, t } from "./i18n";
 import { shopName } from "./Theme";
@@ -701,7 +703,14 @@ export const firstWarrantyValue = (value: unknown) =>
 
 export const USAGE_MAX = 2000;
 
-export function UsageInstructionsField({ defaultValue }: { defaultValue?: string | null }) {
+export function UsageInstructionsField({
+  defaultValue,
+  productId,
+}: {
+  defaultValue?: string | null;
+  /** Saved product: pictures can be added (a new product gets them after its first save). */
+  productId?: string;
+}) {
   const [length, setLength] = useState((defaultValue ?? "").length);
   return (
     <section className="reference-admin-card editor-panel">
@@ -725,7 +734,100 @@ export function UsageInstructionsField({ defaultValue }: { defaultValue?: string
           </span>
         </small>
       </label>
+      {productId ? (
+        <UsageImagesEditor productId={productId} />
+      ) : (
+        <p className="field-help">บันทึกสินค้าก่อน แล้วจึงใส่รูปประกอบวิธีใช้งานได้</p>
+      )}
     </section>
+  );
+}
+
+/** รูปประกอบวิธีใช้งาน (usage-images.mjs): upload / remove, at most 6, shown under the text. */
+function UsageImagesEditor({ productId }: { productId: string }) {
+  const [images, setImages] = useState<{ id: string; url: string }[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    api<{ images: { id: string; url: string }[] }>("/admin/products/" + encodeURIComponent(productId) + "/usage-images")
+      .then((r) => setImages(r.images))
+      .catch((e: Error) => setError(e.message));
+  }, [productId]);
+  async function add(files: FileList | null) {
+    if (!files?.length) return;
+    setBusy(true);
+    setError("");
+    try {
+      for (const file of [...files]) {
+        const r = await uploadImage<{ images: { id: string; url: string }[] }>(
+          "/admin/products/" + encodeURIComponent(productId) + "/usage-images",
+          file,
+          file.type || "application/octet-stream",
+        );
+        setImages(r.images);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove(id: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await api<{ images: { id: string; url: string }[] }>("/admin/usage-images/" + encodeURIComponent(id), undefined, "DELETE");
+      setImages(r.images);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const full = (images?.length ?? 0) >= 6;
+  return (
+    <div className="usage-images-editor">
+      <div className="usage-images-head">
+        <strong>รูปประกอบวิธีใช้งาน</strong>
+        <span className="num">{images?.length ?? 0}/6</span>
+      </div>
+      <ErrorMessage message={error} />
+      <ul className="usage-images-grid">
+        {(images ?? []).map((img, i) => (
+          <li key={img.id}>
+            <img src={img.url} alt={"รูปที่ " + (i + 1)} />
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={"ลบรูปที่ " + (i + 1)}
+              disabled={busy}
+              onClick={() => void remove(img.id)}
+            >
+              <Trash2 size={15} />
+            </button>
+          </li>
+        ))}
+        {!full && (
+          <li>
+            <label className={"usage-images-add" + (busy ? " is-busy" : "")}>
+              {busy ? <LoaderCircle className="spin" size={18} /> : <ImagePlus size={18} />}
+              <span>เพิ่มรูป</span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                multiple
+                disabled={busy}
+                onChange={(e) => {
+                  void add(e.currentTarget.files);
+                  e.currentTarget.value = "";
+                }}
+              />
+            </label>
+          </li>
+        )}
+      </ul>
+      <p className="field-help">JPG / PNG / WebP ไม่เกิน 2 MB · ลูกค้าเห็นรูปใต้ข้อความวิธีใช้งานตามลำดับนี้</p>
+    </div>
   );
 }
 

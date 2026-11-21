@@ -57,6 +57,7 @@ import { ensureCannedReplies } from "./ensure-admin-fr.mjs";
 import { ensureBanners } from "./ensure-admin-fr.mjs";
 import { ensureTaxInvoices } from "./ensure-admin-fr.mjs";
 import { ensureOrderReceipts } from "./ensure-admin-fr.mjs";
+import { ensureUsageImages } from "./usage-images.mjs";
 import { ensureCheckouts } from "./checkouts.mjs";
 import { ensureOrderFulfillmentSearch } from "./orders-list.mjs";
 import { ensureNewsAbout } from "./ensure-admin-fr.mjs";
@@ -148,6 +149,7 @@ export function createCommerce(options = {}) {
   ensureDeliveryOptions(db);
   ensureNewsAbout(db);
   ensureCheckouts(db);
+  ensureUsageImages(db);
   ensureOrderFulfillmentSearch(db);
   return createCommerceCore({ ...options, db, key });
 }

@@ -88,19 +88,23 @@ test("3. after delivery the buyer sees the instructions and reports a problem th
   const order = service.createOrder(buyer, { variantId: variant.id, quantity: 1, requestKey: "extras-ui-ready-01" });
   await page.goto(base + "/checkout/" + order.id);
   await page.getByRole("button", { name: /^ชำระเงิน/ }).click();
+  // A short "สั่งซื้อสำเร็จ" screen first, then the order page replaces it.
+  await expect(page.getByRole("heading", { name: "สั่งซื้อสำเร็จ" })).toBeVisible();
   await expect(page).toHaveURL(new RegExp("/orders/" + order.id + "$"));
   deliveredId = order.id;
   const number = order.id.slice(0, 8).toUpperCase();
 
+  // แจ้งปัญหา · วิธีใช้งาน · ใบเสร็จ in one row; the instructions open in a sheet.
+  await page.getByRole("button", { name: "วิธีใช้งาน", exact: true }).click();
   const guide = page.getByLabel("วิธีใช้งานหลังซื้อ");
   await expect(guide).toBeVisible();
   await expect(guide.locator("li")).toHaveCount(2);
   await expect(guide).toContainText("<b>ห้ามเปลี่ยนรหัส</b>");
   await expect(guide.locator("b")).toHaveCount(0);
-  // Next to the delivered account.
-  await expect(page.locator(".delivered-codes")).toContainText("วิธีใช้งานหลังซื้อ");
+  await page.keyboard.press("Escape");
+  await expect(guide).toBeHidden();
 
-  await page.getByRole("button", { name: "แจ้งปัญหาบัญชีนี้" }).click();
+  await page.getByRole("button", { name: "แจ้งปัญหา", exact: true }).click();
   const panel = page.getByRole("dialog", { name: "แชทกับร้าน" });
   await expect(panel).toBeVisible();
   const box = panel.getByLabel("ข้อความ");
@@ -161,7 +165,8 @@ test("4. receipt: printable page for the buyer, linked from the order and histor
   // Only the paid + approved-receipt order offers a download link.
   await expect(page.locator(".history-item-actions .receipt-link")).toHaveCount(1);
   await page.goto(base + "/orders/" + deliveredId);
-  await page.locator(".order-meta").getByRole("link", { name: "ใบเสร็จ" }).click();
+  await page.getByRole("button", { name: "ใบเสร็จ", exact: true }).click();
+  await page.getByRole("link", { name: "ดู / พิมพ์ใบเสร็จ" }).click();
   await expect(page).toHaveURL(base + "/orders/" + deliveredId + "/receipt");
   const paper = page.locator(".receipt-paper");
   await expect(page.getByRole("heading", { name: "ใบเสร็จคำสั่งซื้อ" })).toBeVisible();
