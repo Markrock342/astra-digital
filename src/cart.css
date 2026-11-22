@@ -96,10 +96,13 @@
 }
 .storefront-shell .cart-line-main {
   display: grid;
+  /* minmax(0,1fr): a long nowrap name must not widen the column past the line. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   flex: 1;
   min-width: 0;
-  padding-right: 28px;
+  /* Clear the 44px remove button so a long name ends in … before the X. */
+  padding-right: 40px;
 }
 .storefront-shell .cart-line.is-review .cart-line-main {
   padding-right: 0;
